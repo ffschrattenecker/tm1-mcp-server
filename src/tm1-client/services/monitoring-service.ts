@@ -85,7 +85,6 @@ export class MonitoringService {
           Function: string;
           ObjectName: string;
           ObjectType?: string;
-          LockType?: string;
           ElapsedTime?: string;
           WaitTime?: string;
           Info?: string;
@@ -114,7 +113,6 @@ export class MonitoringService {
         function: t.Function ?? "",
         objectName: t.ObjectName ?? "",
         ...(t.ObjectType !== undefined ? { objectType: t.ObjectType } : {}),
-        ...(t.LockType !== undefined ? { lockType: t.LockType } : {}),
         ...(t.ElapsedTime !== undefined ? { elapsedTime: t.ElapsedTime } : {}),
         ...(t.WaitTime !== undefined ? { waitTime: t.WaitTime } : {}),
         ...(t.Info !== undefined ? { info: t.Info } : {}),

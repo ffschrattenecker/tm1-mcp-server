@@ -428,7 +428,6 @@ export interface Thread {
   objectName: string;
   elapsedTime?: string | undefined;
   objectType?: string | undefined;
-  lockType?: string | undefined;
   waitTime?: string | undefined;
   info?: string | undefined;
   context?: string | undefined;
