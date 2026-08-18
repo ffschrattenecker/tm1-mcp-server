@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **`oDBCConnection` is gone from the datasource model — TM1 has no such field.** It had
+  been in the `DataSource` type since the initial release without ever being verified, and
+  the measurement says it was never real: across two 11.8.02900.8 instances all 29 genuine
+  ODBC sources expose exactly `Type`, `dataSourceNameForServer`,
+  `dataSourceNameForClient`, `userName`, `password`, `query`, `usesUnicode` — no
+  connection-string field anywhere, and none of the DSN values is a connection string
+  either. Writing it back is worse than useless: 11.8 answers `400 Invalid data source
+  properties supplied ... unprocessed properties were: "oDBCConnection"`, and v12 accepts
+  the write and then never returns the field, so a caller who put a connection string there
+  was told nothing. `ProcessDataSource` is declared `OpenType="true"` in `$metadata`, which
+  is why the invalid property reached the server at all instead of failing schema
+  validation. The field is now out of the type, both zod schemas, the git round-trip and
+  both process diffs; the strict upsert schema rejects it at the tool boundary with a named
+  error instead of deferring to whichever way the server chooses to fail.
+- **`tm1_get_process_datasource` no longer takes `maskSecrets`.** Its only job was masking
+  `PWD=`/`UID=` pairs inside `oDBCConnection`; with that field gone the flag masked nothing.
+  The `password` field is still always redacted at the service layer. `maskSecrets` on
+  `tm1_get_process_code`, `tm1_get_process` and `tm1_export_process_to_git` is unaffected —
+  there it masks credential literals in the TI code, which is where a connection string
+  actually does show up.
+- `maskDataSourceSecrets()` and `maskConnectionString()` dropped from `src/lib/mask-secrets.ts`
+  (both existed only for the removed field). `maskCode`/`maskCodeLine` are unchanged and keep
+  the brace-quoted-value handling, now covered directly by their own tests.
+
+### Fixed
+
+- `tm1_get_process` no longer claims its datasource round-trip is lossy for ODBC/ASCII. That
+  stopped being true once `upsert_process` moved to the shared datasource schema — it accepts
+  `query` and `usesUnicode` — and the remaining field in that sentence never existed.
+
 ## [3.1.0] - 2026-08-18
 
 ### Changed

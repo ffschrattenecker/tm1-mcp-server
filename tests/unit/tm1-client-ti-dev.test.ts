@@ -325,7 +325,7 @@ describe("TM1Client – TI Development Methods", () => {
           Name: "ODBCProcess",
           DataSource: {
             Type: "ODBC",
-            oDBCConnection: "DSN=MyDB",
+            dataSourceNameForServer: "MyDB",
             query: "SELECT * FROM table1",
           },
         }),
@@ -334,7 +334,7 @@ describe("TM1Client – TI Development Methods", () => {
       const ds = await client.processes.getDataSource("ODBCProcess");
 
       expect(ds.type).toBe("ODBC");
-      expect(ds.oDBCConnection).toBe("DSN=MyDB");
+      expect(ds.dataSourceNameForServer).toBe("MyDB");
       expect(ds.query).toBe("SELECT * FROM table1");
     });
 
@@ -350,7 +350,7 @@ describe("TM1Client – TI Development Methods", () => {
 
       expect(ds).toEqual({ type: "None" });
       expect(ds).not.toHaveProperty("dataSourceNameForServer");
-      expect(ds).not.toHaveProperty("oDBCConnection");
+      expect(ds).not.toHaveProperty("query");
     });
   });
 
@@ -394,14 +394,14 @@ describe("TM1Client – TI Development Methods", () => {
 
       await client.processes.updateDataSource("ODBCProcess", {
         type: "ODBC",
-        oDBCConnection: "DSN=NewDB",
+        dataSourceNameForServer: "NewDB",
         query: "SELECT id FROM users",
       });
 
       const [, opts] = fetchSpy.mock.calls[0];
       const body = JSON.parse(opts.body);
       expect(body.DataSource.Type).toBe("ODBC");
-      expect(body.DataSource.oDBCConnection).toBe("DSN=NewDB");
+      expect(body.DataSource.dataSourceNameForServer).toBe("NewDB");
       expect(body.DataSource.query).toBe("SELECT id FROM users");
     });
 

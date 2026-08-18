@@ -43,7 +43,6 @@ export const dataSourceSchema = z.object({
   usesUnicode: z.boolean().optional(),
   userName: z.string().optional(),
   password: z.string().optional(),
-  oDBCConnection: z.string().optional(),
   query: z.string().optional(),
   view: z.string().optional(),
   subset: z.string().optional(),

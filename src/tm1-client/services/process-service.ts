@@ -668,7 +668,6 @@ export class ProcessService {
         usesUnicode?: boolean;
         userName?: string;
         password?: string;
-        oDBCConnection?: string;
         query?: string;
         view?: string;
         subset?: string;
@@ -733,9 +732,6 @@ export class ProcessService {
                 ? "[redacted]"
                 : "",
           }
-        : {}),
-      ...(ds.oDBCConnection !== undefined
-        ? { oDBCConnection: ds.oDBCConnection }
         : {}),
       ...(ds.query !== undefined ? { query: ds.query } : {}),
       ...(ds.view !== undefined ? { view: ds.view } : {}),
@@ -840,8 +836,6 @@ export class ProcessService {
       dsBody.userName = dataSource.userName;
     if (dataSource.password !== undefined)
       dsBody.password = dataSource.password;
-    if (dataSource.oDBCConnection !== undefined)
-      dsBody.oDBCConnection = dataSource.oDBCConnection;
     if (dataSource.query !== undefined) dsBody.query = dataSource.query;
     if (dataSource.view !== undefined) dsBody.view = dataSource.view;
     if (dataSource.subset !== undefined) dsBody.subset = dataSource.subset;
@@ -1060,8 +1054,6 @@ export class ProcessService {
       }
       if (ds.userName !== undefined) dsBody.userName = ds.userName;
       if (ds.password !== undefined) dsBody.password = ds.password;
-      if (ds.oDBCConnection !== undefined)
-        dsBody.oDBCConnection = ds.oDBCConnection;
       if (ds.query !== undefined) dsBody.query = ds.query;
       if (ds.view !== undefined) dsBody.view = ds.view;
       if (ds.subset !== undefined) dsBody.subset = ds.subset;

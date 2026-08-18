@@ -9,7 +9,6 @@ import type { TM1Client } from "../../src/tm1-client.js";
 import type { DataSource } from "../../src/types.js";
 import { registerGetProcessCode } from "../../src/tools/ti-development/get-process-code.js";
 import { registerGetAllProcessesCode } from "../../src/tools/ti-development/get-all-processes-code.js";
-import { registerGetProcessDatasource } from "../../src/tools/ti-development/get-process-datasource.js";
 import { registerExportProcessToPro } from "../../src/tools/ti-development/export-process-to-pro.js";
 import { registerExportProcessToGit } from "../../src/tools/ti-development/export-process-to-git.js";
 import { registerDiffProcesses } from "../../src/tools/ti-development/diff-processes.js";
@@ -527,70 +526,6 @@ describe("tm1_get_all_processes_code default cap", () => {
     expect(parsed.returned).toBe(5);
     expect(parsed.truncated).toBe(true);
     expect(parsed.count).toBe(60);
-  });
-});
-
-// Audit 2026-07-12 M1: oDBCConnection strings carry PWD=/UID= pairs and passed
-// through unmasked (tool output and git .json on disk).
-const ODBC_DS: DataSource = {
-  type: "ODBC",
-  dataSourceNameForServer: "SalesDSN",
-  userName: "svc_user",
-  oDBCConnection:
-    "Driver={SQL Server};Server=srv01;UID=conn_admin;PWD=Conn_Pw!;",
-};
-
-function clientWithDs(ds: DataSource): TM1Client {
-  return contractCheckedClient({
-    processes: {
-      getCode: async () => ({ prolog: "", metadata: "", data: "", epilog: "" }),
-      getCodeBlob: async () => "",
-      getParameters: async () => [],
-      getVariables: async () => [],
-      getDataSource: async () => ds,
-      getDeployMeta: async () => ({ hasSecurityAccess: false }),
-    },
-  } as unknown as TM1Client);
-}
-
-describe("tm1_get_process_datasource masks conn-string credentials", () => {
-  const client = clientWithDs(ODBC_DS);
-
-  it("masks PWD/UID pairs by default", async () => {
-    const text = await run(registerGetProcessDatasource, client, {
-      processName: "Load.Sales",
-    });
-    expect(text).not.toContain("Conn_Pw!");
-    expect(text).not.toContain("conn_admin");
-    expect(text).toContain("Driver={SQL Server}");
-  });
-
-  it("returns the raw connection string when maskSecrets=false", async () => {
-    const text = await run(registerGetProcessDatasource, client, {
-      processName: "Load.Sales",
-      maskSecrets: false,
-    });
-    expect(text).toContain("Conn_Pw!");
-  });
-});
-
-describe("tm1_export_process_to_git masks the datasource conn-string in .json", () => {
-  const client = clientWithDs(ODBC_DS);
-
-  it("masks PWD/UID pairs in the emitted json by default", async () => {
-    const text = await run(registerExportProcessToGit, client, {
-      processName: "Load.Sales",
-    });
-    expect(text).not.toContain("Conn_Pw!");
-    expect(text).not.toContain("conn_admin");
-  });
-
-  it("emits the raw connection string when maskSecrets=false", async () => {
-    const text = await run(registerExportProcessToGit, client, {
-      processName: "Load.Sales",
-      maskSecrets: false,
-    });
-    expect(text).toContain("Conn_Pw!");
   });
 });
 

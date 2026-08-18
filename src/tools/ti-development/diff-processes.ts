@@ -242,7 +242,6 @@ function diffDs(a: DataSource, b: DataSource) {
     // only in their query are not the same process. `password` stays out —
     // both sides read back redacted, so it can only produce noise.
     "query",
-    "oDBCConnection",
   ];
   for (const f of fields) {
     if ((a[f] ?? "") !== (b[f] ?? ""))

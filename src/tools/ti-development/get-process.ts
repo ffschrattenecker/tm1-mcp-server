@@ -2,12 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../tm1-client.js";
 import { commentStats, stripCommentBlocks } from "../../lib/strip-comments.js";
-import {
-  maskCode,
-  maskConnectionString,
-  resolveMaskSecrets,
-  MASK,
-} from "../../lib/mask-secrets.js";
+import { maskCode, resolveMaskSecrets, MASK } from "../../lib/mask-secrets.js";
 
 const TABS = ["prolog", "metadata", "data", "epilog"] as const;
 const HEAVY_MIN_LINES = 20;
@@ -18,9 +13,8 @@ export function registerGetProcess(server: McpServer, tm1Client: TM1Client) {
     "tm1_get_process",
     "Native full read of a TI process — the read-twin of tm1_upsert_process. Returns the four code " +
       "tabs, parameters, variables, datasource and the HasSecurityAccess elevation flag in one call, " +
-      "using the same field names as upsert_process. Field-name parity makes it easy to feed back into " +
-      "upsert_process, but the datasource round-trip is lossy for ODBC/ASCII: upsert_process does not " +
-      "accept the oDBCConnection/query/usesUnicode fields this read can surface. Every part is behind an " +
+      "using the same field names as upsert_process — the datasource shape is shared, so what this read " +
+      "returns can be fed straight back into upsert_process. Every part is behind an " +
       "include-flag (all default true); set a flag false to skip that part's REST call. For git " +
       "persistence use tm1_export_process_to_git instead.",
     {
@@ -165,8 +159,6 @@ export function registerGetProcess(server: McpServer, tm1Client: TM1Client) {
         if (maskSecrets) {
           if (ds.password !== undefined && ds.password !== "")
             ds.password = MASK;
-          if (ds.oDBCConnection !== undefined)
-            ds.oDBCConnection = maskConnectionString(ds.oDBCConnection);
         }
         payload.dataSource = ds;
       }

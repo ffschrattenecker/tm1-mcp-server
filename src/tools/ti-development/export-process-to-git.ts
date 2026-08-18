@@ -7,11 +7,7 @@ import { supportsCredentialExport } from "../../lib/credential-format.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { resolveLocalPath } from "../local-file.js";
 import { serializeProcessToGit } from "../../lib/git-process.js";
-import {
-  maskCode,
-  maskDataSourceSecrets,
-  resolveMaskSecrets,
-} from "../../lib/mask-secrets.js";
+import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
 
 export function registerExportProcessToGit(
   server: McpServer,
@@ -23,7 +19,7 @@ export function registerExportProcessToGit(
       "Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' (parameters, variables, datasource) plus a '{name}.ti' (Prolog/Metadata/Data/Epilog as plain code).",
       "The .ti holds the code in TM1's native `Code` representation (#region <Tab> / #endregion, CRLF, empty tabs omitted); the .json holds the structure. Code lives outside the JSON so Git diffs stay readable.",
       "Returns both file bodies (json + ti) inline by default. Pass writeToDir to persist them to disk instead: the code is then written to files and omitted from the response to avoid duplicating it into the context window; only metadata (filenames, counts, writtenTo paths) comes back. Round-trip safe with tm1_import_process_from_git.",
-      "Security: the ODBC datasource password is stripped unless includeDataSourcePassword is set (which also requires writeToDir); conn-string credential pairs (PWD=, UID=) in oDBCConnection are masked when maskSecrets is on; credentialsOmitted=true flags when a password was stripped.",
+      "Security: the ODBC datasource password is stripped unless includeDataSourcePassword is set (which also requires writeToDir); credential literals in the TI code are masked when maskSecrets is on; credentialsOmitted=true flags when a password was stripped.",
       "includeDataSourcePassword is v12-only: what v11 hands out expires with the server run, so exporting it would produce a file that looks complete and fails later.",
     ].join(" "),
     {
@@ -94,7 +90,7 @@ export function registerExportProcessToGit(
           name: processName,
           parameters,
           variables,
-          dataSource: doMask ? maskDataSourceSecrets(dataSource) : dataSource,
+          dataSource,
           hasSecurityAccess: deployMeta.hasSecurityAccess,
         },
         { includePassword: includeDataSourcePassword === true },

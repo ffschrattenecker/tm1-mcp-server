@@ -104,7 +104,6 @@ function diffDataSource(
     "userName",
     // See diff-processes.ts: the ODBC query is substance, the password is noise.
     "query",
-    "oDBCConnection",
   ];
   for (const f of fields) {
     const a = installed[f];

@@ -98,14 +98,6 @@ export function maskCode(code: string): string {
   return code.split("\n").map(maskCodeLine).join("\n");
 }
 
-// Mask credential values (PWD=…, UID=…, Password=…) inside a bare ODBC
-// connection string (DataSource.oDBCConnection). Reuses maskCodeLine so the
-// key=value masking stays in one regex; its other passes are no-ops on a
-// conn string that isn't TI code.
-export function maskConnectionString(conn: string): string {
-  return maskCodeLine(conn);
-}
-
 // Deep-mask an arbitrary JSON-ish value: any object entry whose KEY name looks
 // like a credential (isSecretName) has its value replaced with MASK; primitives
 // stay as-is and nested objects/arrays are walked recursively. Used to sanitize
@@ -124,30 +116,4 @@ export function maskSecretsDeep(value: unknown): unknown {
     return out;
   }
   return value;
-}
-
-// Copy of a TI datasource with the ODBC connection string's credential pairs
-// masked. Structural generic so tool code can pass its own DataSource type
-// without an import cycle. The password field is already redacted at the
-// service layer (ProcessService.getDataSource), so only oDBCConnection needs
-// handling here.
-//
-// The constraint is `object`, not `{ oDBCConnection?: string }`, on purpose.
-// An all-optional constraint is a WEAK TYPE: TypeScript then rejects any
-// object literal that shares no property with it — i.e. exactly the ordinary
-// datasource (a cube view, a CSV file) where this function is a no-op. The
-// only reason production compiled is that its callers pass a declared
-// DataSource whose type happens to list the optional field.
-//
-// Safety is preserved by narrowing in the body instead of in the signature:
-// `in` narrows T to `T & Record<"oDBCConnection", unknown>` (TS >= 4.9), and
-// the typeof check does the rest, so `conn` is a genuine `string` with no
-// cast. A non-string value under that key — impossible for a real DataSource,
-// possible for a caller now that the constraint is wider — falls through to
-// the untouched-input path rather than being stringified into the output.
-export function maskDataSourceSecrets<T extends object>(ds: T): T {
-  if (!("oDBCConnection" in ds)) return ds;
-  const conn: unknown = ds.oDBCConnection;
-  if (typeof conn !== "string") return ds;
-  return { ...ds, oDBCConnection: maskConnectionString(conn) };
 }

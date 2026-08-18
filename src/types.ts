@@ -290,7 +290,6 @@ export interface DataSource {
   usesUnicode?: boolean | undefined;
   userName?: string | undefined;
   password?: string | undefined;
-  oDBCConnection?: string | undefined;
   query?: string | undefined;
   view?: string | undefined;
   subset?: string | undefined;

@@ -54,11 +54,6 @@
       "reason": "Navigation property expanded only by some call paths; the recorded Elements calls did not expand it. Its shape IS recorded under the Hierarchies endpoint."
     },
     {
-      "endpoint": "GET /api/v1/Processes('*')",
-      "path": "$.DataSource.oDBCConnection",
-      "reason": "Measured on both servers: TM1 11.8 refuses oDBCConnection on an ODBC source (400 'Invalid data source properties supplied ... unprocessed properties were: \"oDBCConnection\"'), and v12 accepts the write but never returns the field. It therefore cannot be recorded from any server we can reach, while every other field of a real ODBC source now is — the live suite builds one. The fakes keep it because the field is in our DataSource model and in the git round-trip schema. Pinned by 'no reachable TM1 keeps oDBCConnection' in tests/live/process.live.test.ts."
-    },
-    {
       "endpoint": "GET /api/v1/Processes('*')/Parameters",
       "path": "$.value[].Value",
       "reason": "A TI parameter's default is numeric or string depending on its type. Only numeric defaults were recorded; the string branch is equally valid."
@@ -92,11 +87,6 @@
       "endpoint": "processes.execute",
       "path": "$.errorLogFile",
       "reason": "Set only when the run produced an error log. The recorded executions either succeeded or failed without one, so the key was never observed carrying a value."
-    },
-    {
-      "endpoint": "processes.getDataSource",
-      "path": "$.oDBCConnection",
-      "reason": "See the wire-level exception on GET /api/v1/Processes('*'): v11 rejects the property and v12 silently drops it, so no recording can contain it."
     },
     {
       "endpoint": "processes.getParameters",

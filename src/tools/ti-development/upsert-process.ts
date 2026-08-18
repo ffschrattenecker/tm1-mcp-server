@@ -7,8 +7,8 @@ import { dataSourceSchema as sharedDataSourceSchema } from "../../lib/process-pa
 
 // The same data source shape the git round-trip and check_process_code use.
 // This tool used to carry its own copy, which had drifted: it was missing
-// `query` and `oDBCConnection`, so an ODBC source could be created here but
-// its SQL could not — while tm1_get_process_datasource reads both back.
+// `query`, so an ODBC source could be created here but its SQL could not —
+// while tm1_get_process_datasource reads it back.
 // Strict, so a misspelled field is rejected instead of silently dropped.
 const dataSourceSchema = sharedDataSourceSchema.strict();
 

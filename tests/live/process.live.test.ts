@@ -480,39 +480,4 @@ describe.skipIf(!LIVE_ENABLED)("live: process data sources", () => {
       query: "SELECT 1 AS x",
     });
   });
-
-  it("no reachable TM1 keeps oDBCConnection: v11 refuses it, v12 drops it", async () => {
-    // The field is in our DataSource model and in the git round-trip schema,
-    // so what servers do with it is not a detail. Measured on both:
-    //   11.8 → 400 'Invalid data source properties supplied ... unprocessed
-    //          properties were: "oDBCConnection"'
-    //   v12  → accepts the write, then never returns the field again.
-    // So it cannot round-trip anywhere we can reach, and the contract recorded
-    // against v11 cannot contain it. v12's silent drop is the more dangerous
-    // of the two: a caller who sets a connection string there is told nothing.
-    const r = await h.call("tm1_upsert_process", {
-      processName: PROC_DS_ODBC,
-      dataSource: {
-        type: "ODBC",
-        dataSourceNameForServer: `${SANDBOX}_DSN`,
-        oDBCConnection: "DRIVER={nothing};SERVER=nowhere",
-        query: "SELECT 1 AS x",
-      },
-      mode: "upsert",
-    });
-
-    if (h.client.version === 12) {
-      expect(r.isError).toBe(false);
-      const back = await h.ok("tm1_get_process_datasource", {
-        processName: PROC_DS_ODBC,
-      });
-      // Accepted, then gone — the rest of the source survived, this one field
-      // did not.
-      expect(back.json.oDBCConnection).toBeUndefined();
-      expect(back.json.query).toBe("SELECT 1 AS x");
-    } else {
-      expect(r.isError).toBe(true);
-      expect(JSON.stringify(r.json)).toMatch(/oDBCConnection/);
-    }
-  });
 });

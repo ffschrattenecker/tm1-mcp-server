@@ -3,8 +3,6 @@ import {
   isSecretName,
   maskCode,
   maskCodeLine,
-  maskConnectionString,
-  maskDataSourceSecrets,
   maskSecretValues,
   resolveMaskSecrets,
   MASK,
@@ -117,9 +115,12 @@ describe("maskCode", () => {
   });
 });
 
-describe("maskConnectionString", () => {
+// ODBC connection strings are masked by maskCodeLine directly: TM1 has no
+// datasource field that carries one (measured 2026-08-18 — see CHANGELOG), so
+// the only place a conn string reaches us is inside TI code.
+describe("maskCodeLine — ODBC connection strings", () => {
   it("masks PWD and UID values, keeps non-credential pairs", () => {
-    const out = maskConnectionString(
+    const out = maskCodeLine(
       "Driver={SQL Server};Server=srv01;UID=admin;PWD=hunter2;Database=Sales",
     );
     expect(out).not.toContain("hunter2");
@@ -130,7 +131,7 @@ describe("maskConnectionString", () => {
   });
 
   it("masks Password= and User Id= variants case-insensitively", () => {
-    const out = maskConnectionString("server=s;user id=svc;password=S3cr3t!;");
+    const out = maskCodeLine("server=s;user id=svc;password=S3cr3t!;");
     expect(out).not.toContain("svc");
     expect(out).not.toContain("S3cr3t!");
   });
@@ -138,44 +139,7 @@ describe("maskConnectionString", () => {
   it("leaves credential-free connection strings unchanged", () => {
     const conn =
       "Driver={SQL Server};Server=srv01;Database=Sales;Trusted_Connection=yes";
-    expect(maskConnectionString(conn)).toBe(conn);
-  });
-});
-
-describe("maskDataSourceSecrets", () => {
-  it("masks oDBCConnection and preserves the other fields", () => {
-    const ds = {
-      type: "ODBC",
-      userName: "svc",
-      oDBCConnection: "DSN=Sales;UID=admin;PWD=hunter2;",
-    };
-    const out = maskDataSourceSecrets(ds);
-    expect(out.oDBCConnection).not.toContain("hunter2");
-    expect(out.oDBCConnection).toContain(MASK);
-    expect(out.type).toBe("ODBC");
-    expect(out.userName).toBe("svc");
-    // Input object untouched (copy, not mutation).
-    expect(ds.oDBCConnection).toContain("hunter2");
-  });
-
-  it("is a no-op when oDBCConnection is absent", () => {
-    const ds = { type: "TM1CubeView", view: "Default" };
-    const out = maskDataSourceSecrets(ds);
-    // Same reference back — no copy, no added key.
-    expect(out).toBe(ds);
-    expect(Object.keys(out)).toEqual(["type", "view"]);
-    // Return type stays tied to the input type: these fields are typed, not
-    // `unknown`, so a widened signature would fail the typecheck gate.
-    expect(out.type).toBe("TM1CubeView");
-    expect(out.view).toBe("Default");
-  });
-
-  it("is a no-op when oDBCConnection is present but undefined", () => {
-    const ds: { type: string; oDBCConnection?: string | undefined } = {
-      type: "ODBC",
-      oDBCConnection: undefined,
-    };
-    expect(maskDataSourceSecrets(ds)).toBe(ds);
+    expect(maskCodeLine(conn)).toBe(conn);
   });
 });
 
@@ -195,22 +159,20 @@ describe("v12 credential names", () => {
 // S6: ODBC brace-quotes a value precisely so it MAY contain the delimiter.
 // A value regex that stops at the first ';' masked "{abc" and left "def};"
 // in the output — a partial leak that looks masked.
-describe("maskConnectionString — brace-quoted values", () => {
+describe("maskCodeLine — brace-quoted connection-string values", () => {
   it("masks a braced value containing the delimiter whole", () => {
-    const out = maskConnectionString("Driver={SQL};UID=admin;PWD={abc;def};");
+    const out = maskCodeLine("Driver={SQL};UID=admin;PWD={abc;def};");
     expect(out).not.toContain("abc");
     expect(out).not.toContain("def");
     expect(out).toContain(`PWD=${MASK}`);
   });
 
   it("still masks the plain form", () => {
-    expect(maskConnectionString("PWD=hunter2;")).toBe(`PWD=${MASK};`);
+    expect(maskCodeLine("PWD=hunter2;")).toBe(`PWD=${MASK};`);
   });
 
   it("leaves a non-credential braced value alone", () => {
-    expect(maskConnectionString("Driver={SQL Server};")).toContain(
-      "{SQL Server}",
-    );
+    expect(maskCodeLine("Driver={SQL Server};")).toContain("{SQL Server}");
   });
 });
 
