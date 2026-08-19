@@ -96,71 +96,94 @@ export function hintForCode(code: TM1ErrorCode | string): string {
 
 // ── Domain models ────────────────────────────────────────────────────────────
 
-export interface Cube {
-  name: string;
-  dimensions: string[];
-  hasRules?: boolean;
-}
+// Shapes whose single definition is the Zod schema in ./schemas/ — the type is
+// `z.infer` of it, so a field can only be added or removed in one place. They
+// are imported here (other declarations below build on them) and re-exported,
+// because every consumer already imports them from this module.
+import type {
+  AuditLogDetail,
+  CellValue,
+  Chore,
+  Client,
+  Cube,
+  DataSource,
+  Dimension,
+  ElementAttributeValue,
+  ElementStats,
+  ErrorLogFile,
+  FedCellDescriptor,
+  Group,
+  Hierarchy,
+  HierarchyElement,
+  Job,
+  JobSession,
+  JobWaitingOn,
+  MdxAxis,
+  MessageLogEntry,
+  Process,
+  ProcessCode,
+  ProcessParameter,
+  ProcessVariable,
+  Session,
+  Subset,
+  Thread,
+  TransactionLogEntry,
+  ViewAxisSubsetRef,
+} from "./schemas/index.js";
 
-export interface ElementStats {
-  total: number;
-  numeric: number;
-  consolidated: number;
-  string: number;
-  maxLevel: number;
-}
+export type {
+  AuditLogDetail,
+  CellValue,
+  Chore,
+  Client,
+  Cube,
+  DataSource,
+  Dimension,
+  ElementAttributeValue,
+  ElementStats,
+  ErrorLogFile,
+  FedCellDescriptor,
+  Group,
+  Hierarchy,
+  HierarchyElement,
+  Job,
+  JobSession,
+  JobWaitingOn,
+  MdxAxis,
+  MessageLogEntry,
+  Process,
+  ProcessCode,
+  ProcessParameter,
+  ProcessVariable,
+  Session,
+  Subset,
+  Thread,
+  TransactionLogEntry,
+  ViewAxisSubsetRef,
+};
 
-export interface Dimension {
-  name: string;
-  hierarchies: string[];
-  // Populated only when getDimensions({includeElementCount: true}) is called.
-  // Map hierarchyName → element total. Cheap audit signal — avoids per-hierarchy round-trips.
-  elementCounts?: Record<string, number>;
-  // Populated only when getDimensions({includeElementStats: true}) is called.
-  // Per-hierarchy Type breakdown (N/C/S) + maxLevel. Drives orphan & double-hierarchy detection
-  // without cube/MDX dependency.
-  elementStats?: Record<string, ElementStats>;
-  // Populated only when tm1_list_dimensions({includeLastUpdated: true}) is called.
-  // Naive-local ISO (no Z) decoded from }DimensionProperties.LAST_TIME_UPDATED — a
-  // schema-change stamp. null when the dimension has no stamp.
-  lastUpdated?: string | null;
-}
-
-export interface Hierarchy {
-  name: string;
-  dimensionName: string;
-  elements: HierarchyElement[];
-}
-
-export interface HierarchyElement {
-  name: string;
-  type: "Numeric" | "String" | "Consolidated";
-  level: number;
-  parents: string[];
-  children: Array<{ name: string; weight: number }>;
-}
-
-export type CellValue = string | number | null;
-
+// NOT derived from a Zod schema, on purpose. The similarly-named schemas in
+// src/tools/schemas/ describe a DIFFERENT payload, not the same one written
+// twice — merging them would force one side to carry the other's fields:
+//   MdxResult / ViewResult  the client returns the whole cellset; the tools
+//                           publish a paginated envelope (items/offset/has_more)
+//                           because a wide view cannot cross the wire whole.
+//   CubeRules               the client returns the rule text; the tool schema is
+//                           an analysis payload (line/feeder counts, refs).
+//   ServerInfo              the tool schema keeps every section `z.unknown()`
+//                           and passthrough, since the sections differ per TM1
+//                           build; typing it here would be a lie in one place
+//                           or the other.
+// Anything else belongs in src/schemas/ — see the single-source test in
+// tests/unit/schema-single-source.test.ts.
 export interface MdxResult {
   cells: Array<{ value: CellValue; formattedValue: string }>;
   axes: MdxAxis[];
   totalCellCount: number;
 }
 
-export interface MdxAxis {
-  tuples: Array<{
-    members: Array<{ name: string; hierarchyName: string }>;
-  }>;
-}
-
 // Feeder / calculation tracing (tm1.CheckFeeders / TraceFeeders /
 // TraceCellCalculation, all v11; bound to Cube, keyed by element tuple).
-export interface FedCellDescriptor {
-  cube: string;
-  tuple: string[];
-  fed: boolean;
-}
 
 export interface FeederTraceResult {
   fedCells: FedCellDescriptor[];
@@ -185,13 +208,6 @@ export interface ViewResult {
   cells: Array<{ value: CellValue; formattedValue: string }>;
   axes: MdxAxis[];
   totalCellCount: number;
-}
-
-export interface ViewAxisSubsetRef {
-  dimensionName?: string | undefined;
-  hierarchyName?: string | undefined;
-  subsetName?: string | undefined;
-  expression?: string | undefined;
 }
 
 export interface ViewTitleRef extends ViewAxisSubsetRef {
@@ -242,57 +258,6 @@ export interface ViewDefinition {
   type: "MDX" | "Native";
   mdx?: string;
   native?: NativeViewDefinition;
-}
-
-export interface Process {
-  name: string;
-  parameters: ProcessParameter[];
-}
-
-export interface ProcessParameter {
-  name: string;
-  type: "String" | "Numeric";
-  defaultValue: string | number;
-  prompt?: string | undefined;
-}
-
-export interface ProcessVariable {
-  name: string;
-  type: "String" | "Numeric";
-  position: number;
-  startByte?: number | undefined;
-  endByte?: number | undefined;
-}
-
-export interface ProcessCode {
-  prolog: string;
-  metadata: string;
-  data: string;
-  epilog: string;
-}
-
-export interface DataSource {
-  type:
-    | "None"
-    | "TM1CubeView"
-    | "TM1DimensionSubset"
-    | "ASCII"
-    | "ODBC"
-    | "TM1Process";
-  dataSourceNameForServer?: string | undefined;
-  dataSourceNameForClient?: string | undefined;
-  asciiDelimiterType?: string | undefined;
-  asciiDelimiterChar?: string | undefined;
-  asciiQuoteCharacter?: string | undefined;
-  asciiHeaderRecords?: number | undefined;
-  asciiDecimalSeparator?: string | undefined;
-  asciiThousandSeparator?: string | undefined;
-  usesUnicode?: boolean | undefined;
-  userName?: string | undefined;
-  password?: string | undefined;
-  query?: string | undefined;
-  view?: string | undefined;
-  subset?: string | undefined;
 }
 
 /**
@@ -394,17 +359,6 @@ export type ProcessResult =
 export const PROCESS_STATUS_UNKNOWN =
   "Unknown: TM1 returned no ProcessExecuteStatusCode — the run may have completed, partially completed, or never started. Verify server state (error logs, target cube) before re-running.";
 
-export interface Chore {
-  name: string;
-  active: boolean;
-  startTime: string;
-  frequency: string;
-  processes: Array<{
-    name: string;
-    parameters: Record<string, string | number>;
-  }>;
-}
-
 export interface ElementCreate {
   name: string;
   type: "Numeric" | "String" | "Consolidated";
@@ -419,71 +373,9 @@ export interface ElementUpdate {
 
 // ── New domain models (Phase 1) ───────────────────────────────────────────────
 
-export interface Thread {
-  id: number;
-  type: string;
-  name: string;
-  state: string;
-  function: string;
-  objectName: string;
-  elapsedTime?: string | undefined;
-  objectType?: string | undefined;
-  waitTime?: string | undefined;
-  info?: string | undefined;
-  context?: string | undefined;
-}
-
-export interface Session {
-  id: string;
-  user: string;
-  active?: boolean;
-  threads: Thread[];
-}
-
-export interface JobWaitingOn {
-  id: string;
-  description: string;
-  state: string;
-}
-
-export interface JobSession {
-  id: string;
-  context?: string;
-  user?: string;
-}
-
-/** An active task on a v12 database replica (the v12 successor to Thread). */
-export interface Job {
-  id: string;
-  description: string;
-  state: string;
-  elapsedTime?: string;
-  waitTime?: string;
-  session?: JobSession;
-  waitingOn?: JobWaitingOn[];
-}
-
 export interface RuleSyntaxError {
   message: string;
   lineNumber?: number;
-}
-
-export interface MessageLogEntry {
-  timestamp: string;
-  level: string;
-  message: string;
-  /** TI error file referenced in `message`, parsed out for direct fetch. Absent when none. */
-  errorFile?: string;
-}
-
-/** One audit detail row (nested under an AuditLogEntry). */
-export interface AuditLogDetail {
-  id: number;
-  timestamp: string;
-  user: string;
-  description: string;
-  objectType: string;
-  objectName: string;
 }
 
 /** One /AuditLogEntries row; details present only when expanded. */
@@ -568,36 +460,12 @@ export interface CubeView {
   private: boolean;
 }
 
-export interface TransactionLogEntry {
-  timestamp: string;
-  user: string;
-  cubeName: string;
-  elements: string[];
-  oldValue: CellValue;
-  newValue: CellValue;
-}
-
 export interface TransactionLogResult {
   entries: TransactionLogEntry[];
   /** partial = stopped because `top` filled (older rows may exist); complete = span exhausted. */
   coverage: "complete" | "partial";
   /** Earliest timestamp actually scanned (floor of the walk / the `since` bound). */
   scannedFrom: string;
-}
-
-export interface ErrorLogFile {
-  filename: string;
-  lastUpdated?: string;
-}
-
-export interface Subset {
-  name: string;
-  dimensionName: string;
-  hierarchyName: string;
-  private: boolean;
-  expression?: string | undefined;
-  elements: string[];
-  alias?: string | undefined;
 }
 
 export interface SubsetCreate {
@@ -607,21 +475,7 @@ export interface SubsetCreate {
   alias?: string | undefined;
 }
 
-export interface ElementAttributeValue {
-  elementName: string;
-  attributeName: string;
-  value: CellValue;
-}
-
 // Security: Clients and Groups
-
-export interface Client {
-  Name: string;
-  FriendlyName?: string;
-  Type?: string;
-  Enabled?: boolean;
-  Groups?: { Name: string }[];
-}
 
 export interface ClientCreate {
   name: string;
@@ -634,9 +488,4 @@ export interface ClientUpdate {
   password?: string | undefined;
   friendlyName?: string | undefined;
   enabled?: boolean | undefined;
-}
-
-export interface Group {
-  Name: string;
-  Clients?: { Name: string }[];
 }

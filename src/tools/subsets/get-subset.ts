@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { READ_ONLY } from "../annotations.js";
-import { SubsetItemSchema } from "../schemas/items.js";
+import { SubsetSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 export const registerGetSubset = defineTool({
   name: "tm1_get_subset",
   description:
     "Get a single TM1 subset with its MDX expression (if any) and resolved element list. Use isPrivate=true for private subsets.",
   annotations: READ_ONLY,
-  output: SubsetItemSchema,
+  output: SubsetSchema,
   input: {
     dimensionName: z.string().describe("Dimension name"),
     hierarchyName: z.string().describe("Hierarchy name"),

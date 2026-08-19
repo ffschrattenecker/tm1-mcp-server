@@ -63,6 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stopped being true once `upsert_process` moved to the shared datasource schema — it accepts
   `query` and `usesUnicode` — and the remaining field in that sentence never existed.
 
+- **`tm1_list_dimensions` publishes `lastUpdated`.** With `includeLastUpdated: true` (or
+  `changedSince`) the handler attaches a `lastUpdated` field per dimension, but the declared
+  output schema never listed it. Since the schema is strict, a client validating against the
+  published JSON Schema rejects the whole response with "must NOT have additional
+  properties" — the same failure class the 3.0.x schema-completeness fixes closed. Found by
+  merging the two definitions of the dimension shape (see below), which is exactly the kind
+  of gap having them in two files hid.
+
 - **Internal (no client-visible change): a tool's metadata now lives in exactly one
   place.** A tool used to be
   spread across four sites — the `server.tool(...)` call, an `ANNOTATION_MAP` entry, an
@@ -87,6 +95,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deleted 105 one-line `export function registerX(...)` wrappers that were all covered, so
   the denominator shrank while the uncovered count stayed put (547 before, 546 after).
   `coverage-thresholds.json` records the reason.
+
+- **Internal (no client-visible change): each wire shape is defined once.** The same shapes
+  were written twice — a hand-kept interface in `src/types.ts` for the TM1 client, and a
+  hand-kept Zod object in `src/tools/schemas/items-*.ts` for the published outputSchema —
+  with nothing linking them. That is how `lockType` and `oDBCConnection` sat in the read
+  shape for months and why removing each meant editing two unrelated files. The Zod object
+  is now the definition, in the new layer-neutral `src/schemas/`, and the TypeScript type is
+  `z.infer` of it: 24 duplicated shapes collapsed (`Thread`, `Session`, `Job`, `Cube`,
+  `Dimension`, `Process`, `Chore`, `DataSource`, `Client`, `Group`, the log entries, …).
+  `src/types.ts` re-exports every derived type, so no import path changed. Where a tool
+  publishes a projection of the canonical shape it now derives it (`CubeItemSchema =
+  CubeSchema.partial({ dimensions: true })`) instead of restating the fields.
+
+  Four shapes stay separate on purpose — `MdxResult`, `ViewResult`, `CubeRules` and
+  `ServerInfo`, where the tool payload genuinely differs from the client's — with the reason
+  recorded next to the declarations. `tests/unit/schema-single-source.test.ts` fails if a new
+  interface starts duplicating a tool schema, or if `src/schemas/` ever imports from the
+  layers that consume it.
 
 ## [3.1.0] - 2026-08-18
 

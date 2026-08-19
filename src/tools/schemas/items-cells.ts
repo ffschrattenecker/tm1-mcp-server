@@ -3,16 +3,8 @@
 import { z } from "zod";
 
 import { CellValueSchema } from "./items-common.js";
-
-export const MdxAxisSchema = z.object({
-  tuples: z.array(
-    z.object({
-      members: z.array(
-        z.object({ name: z.string(), hierarchyName: z.string() }),
-      ),
-    }),
-  ),
-});
+export { MdxAxisSchema } from "../../schemas/cells.js";
+import { MdxAxisSchema } from "../../schemas/cells.js";
 
 // tm1_get_view returns the same page-envelope shape as tm1_execute_mdx
 // (axes + paginated cell `items`), plus the cube/view it executed. Cells

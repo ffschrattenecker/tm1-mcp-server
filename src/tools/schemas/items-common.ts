@@ -3,8 +3,13 @@
 // enums/unions and the uniform mutation envelope without a cycle.
 import { z } from "zod";
 
-export const ELEMENT_TYPE = z.enum(["Numeric", "String", "Consolidated"]);
-export const PARAM_TYPE = z.enum(["String", "Numeric"]);
+// Canonical domain primitives — defined once in src/schemas/ and re-exported
+// here so the per-category item schemas keep their existing import path.
+export {
+  CellValueSchema,
+  ELEMENT_TYPE,
+  PARAM_TYPE,
+} from "../../schemas/common.js";
 
 // Outcome axis of a TI run — mirrors `ProcessOutcome` in src/types.ts, where
 // the measured status-code mapping is documented. All three non-success values
@@ -18,9 +23,6 @@ export const PROCESS_OUTCOME = z.enum([
   "rolled_back",
   "indeterminate",
 ]);
-
-// Hoisted: shared by transaction-log entries and MDX/cell tools below.
-export const CellValueSchema = z.union([z.string(), z.number(), z.null()]);
 
 // ── Phase 2h: uniform mutation envelope ──────────────────────────────────────
 // Every create/update/delete/execute tool returns {success: true, ...identifying fields}

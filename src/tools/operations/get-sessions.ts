@@ -7,7 +7,7 @@ import {
   type Column,
 } from "../format.js";
 import { READ_ONLY } from "../annotations.js";
-import { SessionItemSchema } from "../schemas/items.js";
+import { SessionSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { pageShapeFor } from "../schemas/common.js";
 
@@ -20,7 +20,7 @@ export const registerGetSessions = defineTool({
   ],
   annotations: READ_ONLY,
   output: {
-    ...pageShapeFor(SessionItemSchema),
+    ...pageShapeFor(SessionSchema),
     summary: z
       .object({
         namedUsers: z.number().int(),

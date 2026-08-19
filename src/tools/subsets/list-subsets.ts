@@ -2,7 +2,7 @@ import { z } from "zod";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
 import { FORMAT_SCHEMA, pageResponse, type Column } from "../format.js";
 import { READ_ONLY } from "../annotations.js";
-import { SubsetItemSchema } from "../schemas/items.js";
+import { SubsetSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { pageShapeFor } from "../schemas/common.js";
 
@@ -11,7 +11,7 @@ export const registerListSubsets = defineTool({
   description:
     "List public + private subsets of a TM1 hierarchy. Returns names, scope (public/private), MDX expression preview, and alias. Paginated (default 50/page).",
   annotations: READ_ONLY,
-  output: pageShapeFor(SubsetItemSchema),
+  output: pageShapeFor(SubsetSchema),
   input: {
     dimensionName: z.string().describe("Dimension name"),
     hierarchyName: z

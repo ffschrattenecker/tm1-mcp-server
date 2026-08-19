@@ -47,7 +47,29 @@ truth for any contributor adding TM1 calls or new tools.
 │  src/session-manager.ts                       │  cookie auth + keepalive
 │  src/tm1-client/dispatcher.ts                 │  undici TLS dispatcher
 └──────────────────────────────────────────────┘
+
+        ┌──────────────────────────────────────┐
+        │  src/schemas/                        │  imported by BOTH the tool
+        │  canonical Zod wire shapes           │  layer and the client; imports
+        │  (types = z.infer of them)           │  neither. See below.
+        └──────────────────────────────────────┘
 ```
+
+## One definition per wire shape
+
+A shape both layers need — `Thread`, `Cube`, `DataSource`, the log entries —
+lives exactly once, as a Zod object under `src/schemas/`, and its TypeScript
+type is `z.infer` of that object. `src/types.ts` re-exports the derived types;
+`src/tools/schemas/items-*.ts` re-export the schemas, deriving a projection
+where the published payload is a relaxed version of the canonical one
+(`CubeItemSchema = CubeSchema.partial({ dimensions: true })`).
+
+This replaced a hand-kept interface and a hand-kept Zod object per shape, with
+nothing linking them: `lockType` and `oDBCConnection` both sat in the read shape
+for months without ever being on the wire, and removing each meant finding two
+unrelated files. `src/schemas/` must not import from `src/tools/`,
+`src/tm1-client/` or `src/types.ts` — `tests/unit/schema-single-source.test.ts`
+enforces that, and fails when a new interface starts duplicating a tool schema.
 
 ## Transports and the readonly/readwrite gate
 

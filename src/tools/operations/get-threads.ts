@@ -7,7 +7,7 @@ import {
   type Column,
 } from "../format.js";
 import { DESTRUCTIVE, READ_ONLY } from "../annotations.js";
-import { MutationResultSchema, ThreadItemSchema } from "../schemas/items.js";
+import { MutationResultSchema, ThreadSchema } from "../schemas/items.js";
 import { type ToolRegistrar, defineTool } from "../define-tool.js";
 import { pageShapeFor } from "../schemas/common.js";
 
@@ -17,7 +17,7 @@ const registerListThreads = defineTool({
     "List active threads on the TM1 server (running processes, chores, MDX queries, etc.). Paginated (default 50/page). (v11 only)",
   annotations: READ_ONLY,
   enabled: (tm1Client) => tm1Client.version === 11,
-  output: pageShapeFor(ThreadItemSchema),
+  output: pageShapeFor(ThreadSchema),
   input: { ...PAGINATION_SCHEMA, ...FORMAT_SCHEMA },
   handler: async ({ limit, offset, fetchAll, format }, tm1Client) => {
     const threads = await tm1Client.monitoring.getThreads();

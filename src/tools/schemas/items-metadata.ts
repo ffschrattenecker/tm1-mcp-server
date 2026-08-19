@@ -1,34 +1,45 @@
 // Metadata-domain item/result schemas: cubes, dimensions, hierarchies,
 // elements, attributes, rules, cube stats and hierarchy navigation.
 import { z } from "zod";
+export {
+  ElementAttributeValueSchema,
+  ElementStatsSchema,
+} from "../../schemas/metadata.js";
+import {
+  CubeSchema,
+  DimensionSchema,
+  HierarchyElementSchema as HierarchyElementBase,
+  HierarchySchema as HierarchyBase,
+} from "../../schemas/metadata.js";
 
-import { ELEMENT_TYPE } from "./items-common.js";
-
-export const CubeItemSchema = z.object({
-  name: z.string(),
+// Published list item = the canonical shape with the projections tm1_list_cubes
+// offers made optional. Derived, so a new cube field cannot reach the client
+// without appearing here.
+export const CubeItemSchema = CubeSchema.partial({
   // Omitted when caller sets includeDimensions=false on tm1_list_cubes.
-  dimensions: z.array(z.string()).optional(),
-  // Present only when caller sets includeRules=true on tm1_list_cubes.
-  hasRules: z.boolean().optional(),
+  dimensions: true,
 });
 
-export const ElementStatsSchema = z.object({
+// `lastUpdated` is only attached when the caller asks for it — but it IS part
+// of the payload then, so the published schema has to carry it (a strict
+// schema that omits it makes the client reject the whole response).
+export const DimensionItemSchema = DimensionSchema;
+
+// parents/children are omitted when the caller passes compact=true to
+// tm1_get_hierarchy.
+export const HierarchyElementSchema = HierarchyElementBase.partial({
+  parents: true,
+  children: true,
+});
+
+// The tool wraps the canonical hierarchy in a page envelope.
+export const HierarchySchema = HierarchyBase.extend({
+  elements: z.array(HierarchyElementSchema),
   total: z.number().int(),
-  numeric: z.number().int(),
-  consolidated: z.number().int(),
-  string: z.number().int(),
-  maxLevel: z.number().int(),
-});
-
-export const DimensionItemSchema = z.object({
-  name: z.string(),
-  hierarchies: z.array(z.string()),
-  // Present only when tm1_list_dimensions includeElementCount=true.
-  // Map hierarchyName → total.
-  elementCounts: z.record(z.string(), z.number().int()).optional(),
-  // Present only when tm1_list_dimensions includeElementStats=true.
-  // Map hierarchyName → {total, numeric, consolidated, string, maxLevel}.
-  elementStats: z.record(z.string(), ElementStatsSchema).optional(),
+  offset: z.number().int(),
+  has_more: z.boolean(),
+  // true when the topN cap clipped the (post-filter) element set — raise topN.
+  truncated: z.boolean(),
 });
 
 export const BulkUpsertElementsResultSchema = z.object({
@@ -43,12 +54,6 @@ export const BulkUpsertElementsResultSchema = z.object({
   }),
 });
 
-export const ElementAttributeValueSchema = z.object({
-  elementName: z.string(),
-  attributeName: z.string(),
-  value: z.union([z.string(), z.number(), z.null()]),
-});
-
 // Attribute *definition* (as returned by listAttributes) — distinct from a
 // per-element attribute *value* above. Used by tm1_list_element_attributes.
 export const ElementAttributeDefinitionSchema = z.object({
@@ -56,32 +61,6 @@ export const ElementAttributeDefinitionSchema = z.object({
   type: z
     .enum(["Numeric", "String", "Alias"])
     .describe("Attribute storage type"),
-});
-
-export const HierarchyElementSchema = z.object({
-  name: z.string(),
-  type: ELEMENT_TYPE,
-  level: z.number().int(),
-  // parents/children omitted when caller passes compact=true to tm1_get_hierarchy.
-  parents: z.array(z.string()).optional(),
-  children: z
-    .array(z.object({ name: z.string(), weight: z.number() }))
-    .optional(),
-});
-
-// tm1_get_hierarchy returns a bare hierarchy, not a Page<T>, so its paging
-// fields live here. `total` is the filtered element count (exact: server-side
-// @odata.count when the window was pushed down, post-filter length otherwise);
-// `truncated` is the pre-paging spelling of `has_more`.
-export const HierarchySchema = z.object({
-  name: z.string(),
-  dimensionName: z.string(),
-  elements: z.array(HierarchyElementSchema),
-  total: z.number().int(),
-  offset: z.number().int(),
-  has_more: z.boolean(),
-  // true when the topN cap clipped the (post-filter) element set — raise topN.
-  truncated: z.boolean(),
 });
 
 export const CubeRulesSchema = z.object({

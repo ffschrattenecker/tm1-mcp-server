@@ -7,7 +7,7 @@ import {
   type Column,
 } from "../format.js";
 import { DESTRUCTIVE, READ_ONLY } from "../annotations.js";
-import { JobItemSchema, MutationResultSchema } from "../schemas/items.js";
+import { JobSchema, MutationResultSchema } from "../schemas/items.js";
 import { type ToolRegistrar, defineTool } from "../define-tool.js";
 import { pageShapeFor } from "../schemas/common.js";
 
@@ -19,7 +19,7 @@ const registerListJobs = defineTool({
     "List active jobs (Activity) on a TM1 v12 database — the running tasks that replaced v11 threads. Paginated (default 50/page). (v12 only)",
   annotations: READ_ONLY,
   enabled: (tm1Client) => tm1Client.version === 12,
-  output: pageShapeFor(JobItemSchema),
+  output: pageShapeFor(JobSchema),
   input: { ...PAGINATION_SCHEMA, ...FORMAT_SCHEMA },
   handler: async ({ limit, offset, fetchAll, format }, tm1Client) => {
     const jobs = await tm1Client.monitoring.getJobs();

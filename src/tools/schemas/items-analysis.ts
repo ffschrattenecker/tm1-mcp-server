@@ -2,6 +2,8 @@
 // feeder/calc tracing, code/rule search, audits, v12-readiness and the
 // callgraph-cache invalidation result.
 import { z } from "zod";
+export { FedCellDescriptorSchema } from "../../schemas/cells.js";
+import { FedCellDescriptorSchema } from "../../schemas/cells.js";
 
 import { CellValueSchema } from "./items-common.js";
 
@@ -27,12 +29,6 @@ export const InvalidateCallgraphCacheResultSchema = z.object({
 //   - global rank   {mode:'globalRanking', rankBy, ranking[], ...}  (start omitted)
 // Modeled as one passthrough schema with all fields optional except none.
 // ── Feeder / calculation tracing (v11 cell diagnostics) ─────────────────────
-
-export const FedCellDescriptorSchema = z.object({
-  cube: z.string(),
-  tuple: z.array(z.string()),
-  fed: z.boolean(),
-});
 
 export const CheckFeedersResultSchema = z.object({
   count: z.number().int(),

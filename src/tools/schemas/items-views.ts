@@ -1,17 +1,11 @@
 // View-domain schemas: list item and the view-definition (MDX/Native) result.
 import { z } from "zod";
+import { ViewAxisSubsetRefSchema } from "../../schemas/views.js";
 
 export const ViewItemSchema = z.object({
   name: z.string(),
   mdx: z.string().optional(),
   private: z.boolean(),
-});
-
-const ViewAxisSubsetRefSchema = z.object({
-  dimensionName: z.string().optional(),
-  hierarchyName: z.string().optional(),
-  subsetName: z.string().optional(),
-  expression: z.string().optional(),
 });
 
 const ViewTitleRefSchema = ViewAxisSubsetRefSchema.extend({

@@ -1,23 +1,28 @@
 // Process/TI-domain schemas: parameters, variables, code tabs, datasource,
 // get/execute/diff/upsert/copy results plus .pro & git import/export shapes.
 import { z } from "zod";
+export {
+  ProcessParameterSchema,
+  ProcessVariableSchema,
+} from "../../schemas/processes.js";
+import {
+  DataSourceSchema as DataSourceBase,
+  ProcessCodeSchema as ProcessCodeBase,
+  ProcessParameterSchema,
+  ProcessSchema,
+  ProcessVariableSchema,
+} from "../../schemas/processes.js";
 
-import { PARAM_TYPE, PROCESS_OUTCOME } from "./items-common.js";
+// Omitted when caller passes fields=['name'] to tm1_list_processes.
+export const ProcessItemSchema = ProcessSchema.partial({ parameters: true });
 
-export const ProcessParameterSchema = z.object({
-  name: z.string(),
-  type: PARAM_TYPE,
-  defaultValue: z.union([z.string(), z.number()]),
-  prompt: z.string().optional(),
+// `hint` is a tool-side addition: guidance attached when the code could not be
+// read in full, never part of the stored process.
+export const ProcessCodeSchema = ProcessCodeBase.extend({
+  hint: z.string().optional(),
 });
 
-export const ProcessVariableSchema = z.object({
-  name: z.string(),
-  type: PARAM_TYPE,
-  position: z.number().int(),
-  startByte: z.number().int().optional(),
-  endByte: z.number().int().optional(),
-});
+import { PROCESS_OUTCOME } from "./items-common.js";
 
 export const CompileErrorSchema = z.object({
   lineNumber: z.number().int().optional(),
@@ -25,46 +30,10 @@ export const CompileErrorSchema = z.object({
   message: z.string(),
 });
 
-export const ProcessItemSchema = z.object({
-  name: z.string(),
-  // Omitted when caller passes fields=['name'] to tm1_list_processes for compact output.
-  parameters: z.array(ProcessParameterSchema).optional(),
-});
-
-export const ProcessCodeSchema = z.object({
-  prolog: z.string(),
-  metadata: z.string(),
-  data: z.string(),
-  epilog: z.string(),
-  hint: z.string().optional(),
-});
-
-export const DataSourceSchema = z
-  .object({
-    type: z.enum([
-      "None",
-      "TM1CubeView",
-      "TM1DimensionSubset",
-      "ASCII",
-      "ODBC",
-      "TM1Process",
-    ]),
-    dataSourceNameForServer: z.string().optional(),
-    dataSourceNameForClient: z.string().optional(),
-    asciiDelimiterType: z.string().optional(),
-    asciiDelimiterChar: z.string().optional(),
-    asciiQuoteCharacter: z.string().optional(),
-    asciiHeaderRecords: z.number().int().optional(),
-    asciiDecimalSeparator: z.string().optional(),
-    asciiThousandSeparator: z.string().optional(),
-    usesUnicode: z.boolean().optional(),
-    userName: z.string().optional(),
-    password: z.string().optional(),
-    query: z.string().optional(),
-    view: z.string().optional(),
-    subset: z.string().optional(),
-  })
-  .passthrough();
+// Published as passthrough: `ProcessDataSource` is an OpenType entity, so a
+// server may hand back fields this shape does not model and rejecting them
+// would fail the whole call. The field set itself is the canonical one.
+export const DataSourceSchema = DataSourceBase.passthrough();
 
 // tm1_get_process — every section is gated by an include-flag, so all fields
 // except `name` are optional. The code tabs sit at the TOP level (the handler

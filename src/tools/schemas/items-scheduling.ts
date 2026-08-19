@@ -1,21 +1,10 @@
 // Scheduling-domain schema: chore list item for tm1_list_chores.
 import { z } from "zod";
+import { ChoreSchema } from "../../schemas/scheduling.js";
 
-export const ChoreItemSchema = z.object({
-  name: z.string(),
-  active: z.boolean(),
-  startTime: z.string(),
-  frequency: z.string(),
-  // In compact mode (tm1_list_chores compact=true) the full processes[] array
-  // is replaced by processCount. Both fields are therefore optional at schema
-  // level; the tool guarantees exactly one is present.
-  processes: z
-    .array(
-      z.object({
-        name: z.string(),
-        parameters: z.record(z.string(), z.union([z.string(), z.number()])),
-      }),
-    )
-    .optional(),
+// In compact mode (tm1_list_chores compact=true) the full processes[] array is
+// replaced by processCount, so both are optional at schema level; the tool
+// guarantees exactly one is present.
+export const ChoreItemSchema = ChoreSchema.partial({ processes: true }).extend({
   processCount: z.number().int().optional(),
 });
