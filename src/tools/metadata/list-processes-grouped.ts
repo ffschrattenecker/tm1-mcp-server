@@ -5,6 +5,7 @@ import {
   payloadResponse,
   renderTable,
   type Column,
+  columnsOf,
 } from "../format.js";
 import { ProcessesGroupedResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -105,9 +106,9 @@ export const registerListProcessesGrouped = defineTool({
       groups,
     };
     type GroupRow = (typeof groups)[number];
-    const columns: Column<GroupRow>[] = [
-      { header: "prefix", get: (g) => g.prefix },
-      { header: "count", get: (g) => g.count },
+    const columns = columnsOf<GroupRow>([
+      "prefix",
+      "count",
       ...(includeNames
         ? [
             {
@@ -116,7 +117,7 @@ export const registerListProcessesGrouped = defineTool({
             } as Column<GroupRow>,
           ]
         : []),
-    ];
+    ]);
     return payloadResponse(
       payload,
       format,

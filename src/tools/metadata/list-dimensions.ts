@@ -5,7 +5,12 @@ import {
 } from "../../tm1-client/services/dimension-service.js";
 import { compareByName } from "../../tm1-client/services/odata-page.js";
 import { PAGINATION_SCHEMA, paginate, pageFromServer } from "../pagination.js";
-import { FORMAT_SCHEMA, pageResponse, type Column } from "../format.js";
+import {
+  FORMAT_SCHEMA,
+  pageResponse,
+  type Column,
+  columnsOf,
+} from "../format.js";
 import { DimensionItemSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -138,9 +143,9 @@ export const registerListDimensions = defineTool({
         ? pageFromServer(dimensions, serverTotal, offset)
         : paginate(dimensions, limit, offset, fetchAll);
     type Row = (typeof dimensions)[number];
-    const columns: Column<Row>[] = [
-      { header: "name", get: (d) => d.name },
-      { header: "hierarchies", get: (d) => d.hierarchies },
+    const columns = columnsOf<Row>([
+      "name",
+      "hierarchies",
       ...(includeElementStats
         ? [
             {
@@ -156,15 +161,8 @@ export const registerListDimensions = defineTool({
               } as Column<Row>,
             ]
           : []),
-      ...(wantLastUpdated
-        ? [
-            {
-              header: "lastUpdated",
-              get: (d: Row) => d.lastUpdated ?? null,
-            } as Column<Row>,
-          ]
-        : []),
-    ];
+      ...(wantLastUpdated ? (["lastUpdated"] as const) : []),
+    ]);
     return pageResponse(page, format, { title: "Dimensions", columns });
   },
 });

@@ -3,7 +3,7 @@ import {
   FORMAT_SCHEMA,
   payloadResponse,
   renderTable,
-  type Column,
+  columnsOf,
 } from "../format.js";
 import { ElementAttributeValueSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -33,10 +33,10 @@ export const registerGetElementAttributeValues = defineTool({
     );
     const payload = { dimensionName, elementName, attributes: values };
     type Row = (typeof values)[number];
-    const columns: Column<Row>[] = [
+    const columns = columnsOf<Row>([
       { header: "attribute", get: (a) => a.attributeName },
-      { header: "value", get: (a) => a.value ?? "" },
-    ];
+      "value",
+    ]);
     return payloadResponse(
       payload,
       format,

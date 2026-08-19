@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { compileUserRegex } from "../../lib/safe-regex.js";
-import { FORMAT_SCHEMA, wrappedPageResponse, type Column } from "../format.js";
+import { FORMAT_SCHEMA, wrappedPageResponse, columnsOf } from "../format.js";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
 import { READ_ONLY } from "../annotations.js";
 import { SearchRulesResultSchema } from "../schemas/items.js";
@@ -162,11 +162,7 @@ export const registerSearchRules = defineTool({
       includeFeeders,
       ...page,
     };
-    const columns: Column<Match>[] = [
-      { header: "cube", get: (m) => m.cube },
-      { header: "line", get: (m) => m.line },
-      { header: "text", get: (m) => m.text },
-    ];
+    const columns = columnsOf<Match>(["cube", "line", "text"]);
     return wrappedPageResponse(wrapper, page, format, {
       title: `Rules search: ${pattern}`,
       columns,

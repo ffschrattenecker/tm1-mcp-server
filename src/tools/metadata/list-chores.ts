@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Chore } from "../../types.js";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
-import { FORMAT_SCHEMA, pageResponse, type Column } from "../format.js";
+import { FORMAT_SCHEMA, pageResponse, columnsOf } from "../format.js";
 import { ChoreItemSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -62,11 +62,11 @@ export const registerListChores = defineTool({
       : filtered;
     const page = paginate(projected, limit, offset, fetchAll);
     type Row = (typeof projected)[number];
-    const columns: Column<Row>[] = [
-      { header: "name", get: (c) => c.name },
-      { header: "active", get: (c) => c.active },
-      { header: "startTime", get: (c) => c.startTime },
-      { header: "frequency", get: (c) => c.frequency },
+    const columns = columnsOf<Row>([
+      "name",
+      "active",
+      "startTime",
+      "frequency",
       {
         header: "processes",
         get: (c) =>
@@ -74,7 +74,7 @@ export const registerListChores = defineTool({
             ? c.processes.map((p) => p.name).join(", ")
             : `${c.processCount} (compact)`,
       },
-    ];
+    ]);
     return pageResponse(page, format, { title: "Chores", columns });
   },
 });

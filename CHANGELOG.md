@@ -114,6 +114,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interface starts duplicating a tool schema, or if `src/schemas/` ever imports from the
   layers that consume it.
 
+- **Internal (no client-visible change): Markdown tables name their fields instead of
+  restating them.** Every tool offering `format: "markdown"` carried its own column list —
+  about 100 `{ header: "name", get: (r) => r.name }` literals across 29 files, none of which
+  the compiler could tie back to the row type, so a renamed field left a table quietly
+  printing empty cells. `columnsOf()` (`src/tools/format.ts`) takes the field name instead
+  and the key is `keyof Row`, which makes that rename a compile error; explicit
+  `{ header, get }` entries still pass through unchanged for the ~18 columns that really are
+  projections. 83 literals collapsed. Together with the schema consolidation above, renaming
+  a field in `src/schemas/` now fails the build at every table that printed it.
+
+  `(r) => r.field ?? ""` collapsed too: the escaper already renders null/undefined as an
+  empty cell and `??` leaves `0`/`false` untouched, so the plain field name renders the same
+  bytes. `tests/unit/columns.test.ts` pins that equivalence rather than leaving it as a
+  claim.
+
+  Coverage floors rise (lines 67, statements 66, functions 61) — deleting ~83 one-line
+  getters raised the function ratio past the ratchet's slack, which is the gate working as
+  designed.
+
 ## [3.1.0] - 2026-08-18
 
 ### Changed

@@ -3,7 +3,7 @@ import {
   FORMAT_SCHEMA,
   payloadResponse,
   renderTable,
-  type Column,
+  columnsOf,
 } from "../format.js";
 import { ProcessVariableSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -26,13 +26,13 @@ export const registerGetProcessVariables = defineTool({
     const variables = await tm1Client.processes.getVariables(processName);
     const payload = { processName, variables };
     type Row = (typeof variables)[number];
-    const columns: Column<Row>[] = [
-      { header: "name", get: (v) => v.name },
-      { header: "type", get: (v) => v.type },
-      { header: "position", get: (v) => v.position },
-      { header: "startByte", get: (v) => v.startByte ?? "" },
-      { header: "endByte", get: (v) => v.endByte ?? "" },
-    ];
+    const columns = columnsOf<Row>([
+      "name",
+      "type",
+      "position",
+      "startByte",
+      "endByte",
+    ]);
     return payloadResponse(
       payload,
       format,

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FORMAT_SCHEMA, wrappedPageResponse, type Column } from "../format.js";
+import { FORMAT_SCHEMA, wrappedPageResponse, columnsOf } from "../format.js";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
 import { FindOrphanDimensionsResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -59,10 +59,7 @@ export const registerFindOrphanDimensions = defineTool({
       includeControl,
       ...page,
     };
-    const columns: Column<Orphan>[] = [
-      { header: "name", get: (o) => o.name },
-      { header: "hierarchies", get: (o) => o.hierarchies },
-    ];
+    const columns = columnsOf<Orphan>(["name", "hierarchies"]);
     return wrappedPageResponse(wrapper, page, format, {
       title: "Orphan dimensions",
       columns,

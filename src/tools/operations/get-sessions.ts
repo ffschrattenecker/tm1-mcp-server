@@ -4,7 +4,7 @@ import {
   FORMAT_SCHEMA,
   pageResponse,
   payloadResponse,
-  type Column,
+  columnsOf,
 } from "../format.js";
 import { READ_ONLY } from "../annotations.js";
 import { SessionSchema } from "../schemas/items.js";
@@ -87,12 +87,12 @@ export const registerGetSessions = defineTool({
       : filtered.map((s) => ({ ...s, threads: [] }));
     const page = paginate(projected, limit, offset, fetchAll);
     type Row = (typeof projected)[number];
-    const columns: Column<Row>[] = [
-      { header: "id", get: (s) => s.id },
-      { header: "user", get: (s) => s.user ?? "" },
-      { header: "active", get: (s) => s.active ?? "" },
+    const columns = columnsOf<Row>([
+      "id",
+      "user",
+      "active",
       { header: "threads", get: (s) => s.threads?.length ?? 0 },
-    ];
+    ]);
     return pageResponse(page, format, { title: "Sessions", columns });
   },
 });

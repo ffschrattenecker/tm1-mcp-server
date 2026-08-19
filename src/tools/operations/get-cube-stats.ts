@@ -5,7 +5,7 @@ import {
   FORMAT_SCHEMA,
   payloadResponse,
   renderTable,
-  type Column,
+  columnsOf,
 } from "../format.js";
 import {
   fetchCubeStats,
@@ -103,14 +103,14 @@ export const registerGetCubeStats = defineTool({
       items,
       ...(statsUnavailable ? { statsUnavailable } : {}),
     };
-    const columns: Column<CubeStatsItem>[] = [
+    const columns = columnsOf<CubeStatsItem>([
       { header: "cube", get: (i) => i.cubeName },
-      { header: "memoryTotal", get: (i) => i.memoryTotal ?? "" },
-      { header: "populatedNumeric", get: (i) => i.populatedNumeric ?? "" },
-      { header: "fedCells", get: (i) => i.fedCells ?? "" },
-      { header: "feederEfficiency", get: (i) => i.feederEfficiency ?? "" },
-      { header: "error", get: (i) => i.error ?? "" },
-    ];
+      "memoryTotal",
+      "populatedNumeric",
+      "fedCells",
+      "feederEfficiency",
+      "error",
+    ]);
     return payloadResponse(
       payload,
       format,

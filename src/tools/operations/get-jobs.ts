@@ -4,7 +4,7 @@ import {
   actionResponse,
   FORMAT_SCHEMA,
   pageResponse,
-  type Column,
+  columnsOf,
 } from "../format.js";
 import { DESTRUCTIVE, READ_ONLY } from "../annotations.js";
 import { JobSchema, MutationResultSchema } from "../schemas/items.js";
@@ -25,12 +25,12 @@ const registerListJobs = defineTool({
     const jobs = await tm1Client.monitoring.getJobs();
     const page = paginate(jobs, limit, offset, fetchAll);
     type Row = (typeof jobs)[number];
-    const columns: Column<Row>[] = [
-      { header: "id", get: (j) => j.id },
-      { header: "description", get: (j) => j.description },
-      { header: "state", get: (j) => j.state },
-      { header: "elapsedTime", get: (j) => j.elapsedTime ?? "" },
-    ];
+    const columns = columnsOf<Row>([
+      "id",
+      "description",
+      "state",
+      "elapsedTime",
+    ]);
     return pageResponse(page, format, { title: "Jobs", columns });
   },
 });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
-import { FORMAT_SCHEMA, wrappedPageResponse, type Column } from "../format.js";
+import { FORMAT_SCHEMA, wrappedPageResponse, columnsOf } from "../format.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { FilenameItemSchema } from "../schemas/items.js";
@@ -76,7 +76,7 @@ export const registerSearchFiles = defineTool({
       ...page,
     };
     type Row = (typeof names)[number];
-    const columns: Column<Row>[] = [{ header: "filename", get: (f) => f }];
+    const columns = columnsOf<Row>([{ header: "filename", get: (f) => f }]);
     return wrappedPageResponse(wrapper, page, format, {
       title: `File search results in /${path ?? ""}`,
       columns,

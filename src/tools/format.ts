@@ -30,6 +30,34 @@ export interface Column<T> {
   get: (row: T) => unknown;
 }
 
+/**
+ * A column is either a field name — rendered as itself, under its own name —
+ * or a full {header, get} pair for the cases that need one (a header that
+ * differs from the field, a projection, a computed value).
+ */
+export type ColumnSpec<T> = (keyof T & string) | Column<T>;
+
+/**
+ * Build the column list for a Markdown table.
+ *
+ * Most columns just print a field, and writing that out per column meant ~100
+ * `{ header: "name", get: (r) => r.name }` literals across the tool files, none
+ * of which the compiler could tie back to the row type — a renamed field left a
+ * table quietly printing empty cells. Naming the field instead makes the key
+ * `keyof Row`, so the rename becomes a compile error.
+ *
+ * `(r) => r.field ?? ""` is deliberately NOT needed: renderTable's escaper
+ * already prints null/undefined as an empty cell, and `??` leaves 0/false
+ * untouched, so the plain field name renders identically.
+ */
+export function columnsOf<T>(specs: readonly ColumnSpec<T>[]): Column<T>[] {
+  return specs.map((spec) =>
+    typeof spec === "string"
+      ? { header: spec, get: (row: T) => row[spec] }
+      : spec,
+  );
+}
+
 function mdEscape(v: unknown): string {
   if (v === null || v === undefined) return "";
   const s =

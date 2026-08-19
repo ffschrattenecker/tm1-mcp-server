@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
-import { FORMAT_SCHEMA, pageResponse, type Column } from "../format.js";
+import { FORMAT_SCHEMA, pageResponse, columnsOf } from "../format.js";
 import { GroupItemSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -33,8 +33,8 @@ export const registerListGroups = defineTool({
       : page.items;
     const projectedPage = { ...page, items };
     type Row = (typeof items)[number];
-    const columns: Column<Row>[] = [
-      { header: "Name", get: (g) => g.Name },
+    const columns = columnsOf<Row>([
+      "Name",
       {
         header: "Clients",
         get: (g) =>
@@ -42,7 +42,7 @@ export const registerListGroups = defineTool({
             ? `${g.clientCount} (count)`
             : (g.Clients ?? []).join(", "),
       },
-    ];
+    ]);
     return pageResponse(projectedPage, format, { title: "Groups", columns });
   },
 });

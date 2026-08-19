@@ -3,7 +3,7 @@ import {
   FORMAT_SCHEMA,
   payloadResponse,
   renderTable,
-  type Column,
+  columnsOf,
 } from "../format.js";
 import { DescendantsResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -82,12 +82,7 @@ export const registerGetDescendants = defineTool({
       truncated,
     };
     type Row = (typeof result.descendants)[number];
-    const columns: Column<Row>[] = [
-      { header: "name", get: (d) => d.name },
-      { header: "type", get: (d) => d.type },
-      { header: "level", get: (d) => d.level },
-      { header: "depth", get: (d) => d.depth },
-    ];
+    const columns = columnsOf<Row>(["name", "type", "level", "depth"]);
     return payloadResponse(
       result,
       format,

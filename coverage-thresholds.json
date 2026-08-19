@@ -12,16 +12,16 @@
     "buffer so an unrelated refactor that shaves a covered line does not red the build.",
     "target = informational only, never fails a build.",
     "",
-    "2026-08-19: functions 60 -> 57. NOT a coverage regression — the defineTool",
-    "migration deleted 105 one-line `export function registerX(...)` wrappers that",
-    "were all covered, so the denominator shrank while the UNCOVERED function count",
-    "stayed put (547 before, 546 after). Same code exercised, smaller pool, lower",
-    "ratio. Raise it again by testing real handlers, not by restoring wrappers."
+    "2026-08-19: the defineTool migration deleted 105 one-line `export function",
+    "registerX(...)` wrappers (all covered) and columnsOf() deleted ~83 one-line",
+    "column getters (mostly uncovered). Both changed the DENOMINATOR without",
+    "changing which code is exercised — functions dipped 60 -> 57 on the first,",
+    "then climbed to 63 on the second, which is why the floor lands at 61."
   ],
   "floors": {
-    "lines": 66,
-    "statements": 65,
-    "functions": 57,
+    "lines": 67,
+    "statements": 66,
+    "functions": 61,
     "branches": 57
   },
   "slack": 5,

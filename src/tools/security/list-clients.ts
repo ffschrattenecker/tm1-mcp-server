@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Client } from "../../types.js";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
-import { FORMAT_SCHEMA, pageResponse, type Column } from "../format.js";
+import { FORMAT_SCHEMA, pageResponse, columnsOf } from "../format.js";
 import { ClientItemSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -83,11 +83,11 @@ export const registerListClients = defineTool({
     const page = paginate(clients, limit, offset, fetchAll);
     const projectedItems = project(page.items, fields, groupCount === true);
     const projectedPage = { ...page, items: projectedItems };
-    const columns: Column<ProjectedClient>[] = [
-      { header: "Name", get: (c) => c.Name },
-      { header: "FriendlyName", get: (c) => c.FriendlyName ?? "" },
-      { header: "Type", get: (c) => c.Type ?? "" },
-      { header: "Enabled", get: (c) => c.Enabled ?? "" },
+    const columns = columnsOf<ProjectedClient>([
+      "Name",
+      "FriendlyName",
+      "Type",
+      "Enabled",
       {
         header: "Groups",
         get: (c) =>
@@ -95,7 +95,7 @@ export const registerListClients = defineTool({
             ? `${c.groupCount} (count)`
             : (c.Groups ?? []).join(", "),
       },
-    ];
+    ]);
     return pageResponse(projectedPage, format, { title: "Clients", columns });
   },
 });

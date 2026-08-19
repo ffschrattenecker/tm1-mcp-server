@@ -3,7 +3,7 @@ import {
   FORMAT_SCHEMA,
   payloadResponse,
   renderTable,
-  type Column,
+  columnsOf,
 } from "../format.js";
 import { ProcessParameterSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -26,12 +26,7 @@ export const registerGetProcessParameters = defineTool({
     const params = await tm1Client.processes.getParameters(processName);
     const payload = { processName, parameters: params };
     type Row = (typeof params)[number];
-    const columns: Column<Row>[] = [
-      { header: "name", get: (p) => p.name },
-      { header: "type", get: (p) => p.type },
-      { header: "defaultValue", get: (p) => p.defaultValue },
-      { header: "prompt", get: (p) => p.prompt ?? "" },
-    ];
+    const columns = columnsOf<Row>(["name", "type", "defaultValue", "prompt"]);
     return payloadResponse(
       payload,
       format,

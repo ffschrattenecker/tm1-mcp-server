@@ -3,7 +3,7 @@ import {
   FORMAT_SCHEMA,
   payloadResponse,
   renderTable,
-  type Column,
+  columnsOf,
 } from "../format.js";
 import { MessageLogEntrySchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -63,12 +63,12 @@ export const registerGetMessageLog = defineTool({
     });
     const payload = { count: filtered.length, entries: filtered };
     type Row = (typeof filtered)[number];
-    const columns: Column<Row>[] = [
-      { header: "timestamp", get: (e) => e.timestamp },
-      { header: "level", get: (e) => e.level },
-      { header: "message", get: (e) => e.message },
-      { header: "errorFile", get: (e) => e.errorFile ?? "" },
-    ];
+    const columns = columnsOf<Row>([
+      "timestamp",
+      "level",
+      "message",
+      "errorFile",
+    ]);
     return payloadResponse(
       payload,
       format,

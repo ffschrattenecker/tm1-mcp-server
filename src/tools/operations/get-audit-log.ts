@@ -3,7 +3,7 @@ import {
   FORMAT_SCHEMA,
   payloadResponse,
   renderTable,
-  type Column,
+  columnsOf,
 } from "../format.js";
 import { AuditLogEntrySchema } from "../schemas/items.js";
 import { READ_ONLY, withVersion } from "../annotations.js";
@@ -69,13 +69,13 @@ export const registerGetAuditLog = defineTool({
     });
     const payload = { count: entries.length, entries };
     type Row = (typeof entries)[number];
-    const columns: Column<Row>[] = [
-      { header: "timestamp", get: (e) => e.timestamp },
-      { header: "user", get: (e) => e.user },
-      { header: "objectType", get: (e) => e.objectType },
-      { header: "objectName", get: (e) => e.objectName },
-      { header: "description", get: (e) => e.description },
-    ];
+    const columns = columnsOf<Row>([
+      "timestamp",
+      "user",
+      "objectType",
+      "objectName",
+      "description",
+    ]);
     return payloadResponse(
       payload,
       format,

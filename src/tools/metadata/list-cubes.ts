@@ -12,7 +12,12 @@ import {
   pageFromServer,
   type Page,
 } from "../pagination.js";
-import { FORMAT_SCHEMA, pageResponse, type Column } from "../format.js";
+import {
+  FORMAT_SCHEMA,
+  pageResponse,
+  type Column,
+  columnsOf,
+} from "../format.js";
 
 type CubeOut = Pick<Cube, "name"> &
   Partial<Pick<Cube, "dimensions" | "hasRules">>;
@@ -146,16 +151,11 @@ export const registerListCubes = defineTool({
       page = paginate(await fullScan(), limit, offset, fetchAll);
     }
 
-    const columns: Column<CubeOut>[] = [
-      { header: "name", get: (c) => c.name },
-      ...(includeDimensions
-        ? [
-            {
-              header: "dimensions",
-              get: (c: CubeOut) => c.dimensions ?? [],
-            } as Column<CubeOut>,
-          ]
-        : []),
+    const columns = columnsOf<CubeOut>([
+      "name",
+      // `?? []` would be redundant: an absent array and an empty one both
+      // render as an empty cell.
+      ...(includeDimensions ? (["dimensions"] as const) : []),
       ...(includeRules
         ? [
             {
@@ -164,7 +164,7 @@ export const registerListCubes = defineTool({
             } as Column<CubeOut>,
           ]
         : []),
-    ];
+    ]);
     return pageResponse(page, format, { title: "Cubes", columns });
   },
 });

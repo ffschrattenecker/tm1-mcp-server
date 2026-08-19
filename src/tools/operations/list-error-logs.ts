@@ -3,7 +3,7 @@ import {
   FORMAT_SCHEMA,
   pageResponse,
   wrappedPageResponse,
-  type Column,
+  columnsOf,
 } from "../format.js";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
 import { ErrorLogFileSchema, ErrorLogGroupSchema } from "../schemas/items.js";
@@ -163,14 +163,14 @@ export const registerListErrorLogs = defineTool({
         groupCount: allGroups.length,
         ...groupPage,
       };
-      const groupColumns: Column<ErrorGroup>[] = [
-        { header: "process", get: (g) => g.process },
-        { header: "count", get: (g) => g.count },
-        { header: "firstSeen", get: (g) => g.firstSeen ?? "" },
-        { header: "lastSeen", get: (g) => g.lastSeen ?? "" },
-        { header: "spanDays", get: (g) => g.spanDays },
-        { header: "perDay", get: (g) => g.perDay },
-      ];
+      const groupColumns = columnsOf<ErrorGroup>([
+        "process",
+        "count",
+        "firstSeen",
+        "lastSeen",
+        "spanDays",
+        "perDay",
+      ]);
       return wrappedPageResponse(wrapper, groupPage, format, {
         title: "Error log summary (by process)",
         columns: groupColumns,
@@ -179,16 +179,14 @@ export const registerListErrorLogs = defineTool({
 
     const page = paginate(files, limit, offset, fetchAll);
     type Row = (typeof files)[number];
-    const columns: Column<Row>[] = [
-      { header: "filename", get: (f) => f.filename },
-      // v11 OData exposes no LastUpdated on this entity; derive it from the
-      // timestamp embedded in the filename so the column is not always empty.
+    const columns = columnsOf<Row>([
+      "filename",
       {
         header: "lastUpdated",
         get: (f) =>
           f.lastUpdated ?? formatTs(parseLogName(f.filename).ts) ?? "",
       },
-    ];
+    ]);
     return pageResponse(page, format, { title: "Error logs", columns });
   },
 });

@@ -6,7 +6,7 @@ import {
   FORMAT_SCHEMA,
   payloadResponse,
   renderTable,
-  type Column,
+  columnsOf,
 } from "../format.js";
 
 export const registerGetAncestors = defineTool({
@@ -38,10 +38,7 @@ export const registerGetAncestors = defineTool({
       elementName,
     );
     type Row = (typeof result.ancestors)[number];
-    const columns: Column<Row>[] = [
-      { header: "name", get: (a) => a.name },
-      { header: "level", get: (a) => a.level },
-    ];
+    const columns = columnsOf<Row>(["name", "level"]);
     return payloadResponse(result, format, (r) => {
       const pathLines = r.paths
         .map((p, i) => `${i + 1}. ${p.join(" → ")}`)

@@ -3,7 +3,7 @@ import {
   FORMAT_SCHEMA,
   payloadResponse,
   renderTable,
-  type Column,
+  columnsOf,
 } from "../format.js";
 import { READ_ONLY } from "../annotations.js";
 import { TransactionLogEntrySchema } from "../schemas/items.js";
@@ -58,14 +58,14 @@ export const registerGetTransactionLog = defineTool({
       });
     const payload = { count: entries.length, coverage, scannedFrom, entries };
     type Row = (typeof entries)[number];
-    const columns: Column<Row>[] = [
-      { header: "timestamp", get: (e) => e.timestamp },
-      { header: "user", get: (e) => e.user },
+    const columns = columnsOf<Row>([
+      "timestamp",
+      "user",
       { header: "cube", get: (e) => e.cubeName },
-      { header: "elements", get: (e) => e.elements },
+      "elements",
       { header: "old", get: (e) => e.oldValue },
       { header: "new", get: (e) => e.newValue },
-    ];
+    ]);
     return payloadResponse(
       payload,
       format,

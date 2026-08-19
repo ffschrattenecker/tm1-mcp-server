@@ -8,7 +8,7 @@ import {
   pageFromServer,
   type Page,
 } from "../pagination.js";
-import { FORMAT_SCHEMA, pageResponse, type Column } from "../format.js";
+import { FORMAT_SCHEMA, pageResponse, columnsOf } from "../format.js";
 import { ProcessItemSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -135,8 +135,8 @@ export const registerListProcesses = defineTool({
       page = paginate(await fullScan(), limit, offset, fetchAll);
     }
 
-    const columns: Column<Row>[] = [
-      { header: "name", get: (p) => p.name },
+    const columns = columnsOf<Row>([
+      "name",
       {
         header: "parameters",
         get: (p) =>
@@ -144,7 +144,7 @@ export const registerListProcesses = defineTool({
             ? (p.parameters?.map((x) => x.name).join(", ") ?? "")
             : "—",
       },
-    ];
+    ]);
     return pageResponse(page, format, { title: "Processes", columns });
   },
 });

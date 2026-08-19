@@ -4,7 +4,7 @@ import {
   actionResponse,
   FORMAT_SCHEMA,
   pageResponse,
-  type Column,
+  columnsOf,
 } from "../format.js";
 import { DESTRUCTIVE, READ_ONLY } from "../annotations.js";
 import { MutationResultSchema, ThreadSchema } from "../schemas/items.js";
@@ -23,13 +23,13 @@ const registerListThreads = defineTool({
     const threads = await tm1Client.monitoring.getThreads();
     const page = paginate(threads, limit, offset, fetchAll);
     type Row = (typeof threads)[number];
-    const columns: Column<Row>[] = [
-      { header: "id", get: (t) => t.id },
-      { header: "name", get: (t) => t.name },
-      { header: "state", get: (t) => t.state },
-      { header: "function", get: (t) => t.function },
-      { header: "objectName", get: (t) => t.objectName },
-    ];
+    const columns = columnsOf<Row>([
+      "id",
+      "name",
+      "state",
+      "function",
+      "objectName",
+    ]);
     return pageResponse(page, format, { title: "Threads", columns });
   },
 });

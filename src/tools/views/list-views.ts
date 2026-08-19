@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
-import { FORMAT_SCHEMA, pageResponse, type Column } from "../format.js";
+import { FORMAT_SCHEMA, pageResponse, columnsOf } from "../format.js";
 import { READ_ONLY } from "../annotations.js";
 import { ViewItemSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
@@ -21,11 +21,11 @@ export const registerListViews = defineTool({
     const views = await tm1Client.views.list(cubeName);
     const page = paginate(views, limit, offset, fetchAll);
     type Row = (typeof views)[number];
-    const columns: Column<Row>[] = [
-      { header: "name", get: (v) => v.name },
+    const columns = columnsOf<Row>([
+      "name",
       { header: "scope", get: (v) => (v.private ? "private" : "public") },
-      { header: "mdx", get: (v) => v.mdx ?? "" },
-    ];
+      "mdx",
+    ]);
     return pageResponse(page, format, {
       title: `Views of ${cubeName}`,
       columns,

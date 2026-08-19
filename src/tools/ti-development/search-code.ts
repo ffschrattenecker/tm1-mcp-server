@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { compileUserRegex } from "../../lib/safe-regex.js";
 import { maskCodeLine, resolveMaskSecrets } from "../../lib/mask-secrets.js";
-import { FORMAT_SCHEMA, wrappedPageResponse, type Column } from "../format.js";
+import { FORMAT_SCHEMA, wrappedPageResponse, columnsOf } from "../format.js";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
 import { READ_ONLY } from "../annotations.js";
 import { SearchCodeResultSchema } from "../schemas/items.js";
@@ -164,10 +164,10 @@ export const registerSearchCode = defineTool({
         matchCount: totalMatches,
         ...groupPage,
       };
-      const groupColumns: Column<{ [k: string]: string | number }>[] = [
+      const groupColumns = columnsOf<{ [k: string]: string | number }>([
         { header: groupBy, get: (g) => g[groupBy] },
-        { header: "matchCount", get: (g) => g.matchCount },
-      ];
+        "matchCount",
+      ]);
       return wrappedPageResponse(groupWrapper, groupPage, format, {
         title: `Search: ${pattern} (grouped by ${groupBy})`,
         columns: groupColumns,
@@ -238,12 +238,7 @@ export const registerSearchCode = defineTool({
       excludeCommented,
       ...page,
     };
-    const columns: Column<Match>[] = [
-      { header: "process", get: (m) => m.process },
-      { header: "tab", get: (m) => m.tab },
-      { header: "line", get: (m) => m.line },
-      { header: "text", get: (m) => m.text },
-    ];
+    const columns = columnsOf<Match>(["process", "tab", "line", "text"]);
     return wrappedPageResponse(wrapper, page, format, {
       title: `Search: ${pattern}`,
       columns,

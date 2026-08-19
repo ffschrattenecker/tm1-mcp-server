@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
-import { FORMAT_SCHEMA, pageResponse, type Column } from "../format.js";
+import { FORMAT_SCHEMA, pageResponse, columnsOf } from "../format.js";
 import { READ_ONLY } from "../annotations.js";
 import { SubsetSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
@@ -27,12 +27,12 @@ export const registerListSubsets = defineTool({
     const subsets = await tm1Client.subsets.list(dimensionName, hierarchyName);
     const page = paginate(subsets, limit, offset, fetchAll);
     type Row = (typeof subsets)[number];
-    const columns: Column<Row>[] = [
-      { header: "name", get: (s) => s.name },
+    const columns = columnsOf<Row>([
+      "name",
       { header: "scope", get: (s) => (s.private ? "private" : "public") },
-      { header: "alias", get: (s) => s.alias ?? "" },
-      { header: "expression", get: (s) => s.expression ?? "" },
-    ];
+      "alias",
+      "expression",
+    ]);
     return pageResponse(page, format, {
       title: `Subsets of ${dimensionName}/${hierarchyName}`,
       columns,

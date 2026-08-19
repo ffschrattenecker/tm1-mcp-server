@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
-import { FORMAT_SCHEMA, pageResponse, type Column } from "../format.js";
+import { FORMAT_SCHEMA, pageResponse, columnsOf } from "../format.js";
 import { ElementAttributeDefinitionSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -30,10 +30,7 @@ export const registerListElementAttributes = defineTool({
     );
     const page = paginate(attributes, limit, offset, fetchAll);
     type Row = (typeof attributes)[number];
-    const columns: Column<Row>[] = [
-      { header: "name", get: (a) => a.name },
-      { header: "type", get: (a) => a.type },
-    ];
+    const columns = columnsOf<Row>(["name", "type"]);
     return pageResponse(page, format, {
       title: `Element attributes of ${dimensionName}/${hierarchyName}`,
       columns,
