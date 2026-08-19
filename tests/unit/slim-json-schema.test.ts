@@ -6,6 +6,7 @@ import { z } from "zod";
 import type pino from "pino";
 import { slimJsonSchema } from "../../src/lib/slim-json-schema.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
+import "../../src/tools/metadata/list-cubes.js";
 
 const SAFE_INT_MIN = -9007199254740991;
 const SAFE_INT_MAX = 9007199254740991;
@@ -167,7 +168,8 @@ describe("tools/list advertises slimmed schemas", () => {
     offset: z.number().int().min(0).optional().describe("Rows to skip"),
   };
 
-  // Real tool name so ANNOTATION_MAP / OUTPUT_SCHEMA_MAP entries resolve.
+  // Real tool name so its declared annotation + outputSchema resolve. The
+  // import above pulls in the defineTool() spec that declares them.
   const TOOL = "tm1_list_cubes";
   const handler = () => ({ content: [{ type: "text" as const, text: "{}" }] });
 

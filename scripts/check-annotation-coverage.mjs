@@ -36,25 +36,33 @@ function readAnnotationKeys() {
 
 const registered = scanTools(toolsDir);
 const registeredNames = new Set(registered.map((t) => t.name));
+// Tools built with defineTool() carry their annotation in the spec literal —
+// the TS type makes it mandatory, so there is nothing here to police. A map
+// entry for one of them is stale by definition (two sources of truth, and the
+// spec is the one the Proxy reads).
+const inlineNames = new Set(
+  registered.filter((t) => t.inline).map((t) => t.name),
+);
 const annotationKeys = readAnnotationKeys();
 
 const missing = [];
 for (const t of registered) {
-  if (!annotationKeys.has(t.name)) {
+  if (!t.inline && !annotationKeys.has(t.name)) {
     missing.push(t);
   }
 }
 
 const unused = [];
 for (const key of annotationKeys) {
-  if (!registeredNames.has(key)) {
+  if (!registeredNames.has(key) || inlineNames.has(key)) {
     unused.push(key);
   }
 }
 
 if (missing.length === 0 && unused.length === 0) {
   console.log(
-    `check-annotation-coverage: OK (${registered.length} tools, ${annotationKeys.size} annotations)`,
+    `check-annotation-coverage: OK (${registered.length} tools — ${inlineNames.size} inline via defineTool, ` +
+      `${annotationKeys.size} in ANNOTATION_MAP)`,
   );
   process.exit(0);
 }
@@ -70,7 +78,7 @@ if (missing.length > 0) {
     `\nFix: add an entry to ANNOTATION_MAP in src/tools/annotation-map.ts`,
   );
   console.error(
-    `     Pick one of: READ_ONLY | IDEMPOTENT_WRITE | WRITE | DESTRUCTIVE`,
+    `     or migrate the tool to defineTool() and declare annotations there.`,
   );
 }
 
@@ -82,7 +90,8 @@ if (unused.length > 0) {
     console.error(`  - ${k}`);
   }
   console.error(
-    `\nFix: remove the stale key, or restore the missing server.tool() registration.`,
+    `\nFix: remove the stale key. (A tool migrated to defineTool() declares its own\n` +
+      `     annotation — its ANNOTATION_MAP entry must go.)`,
   );
 }
 

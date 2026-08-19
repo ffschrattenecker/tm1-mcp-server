@@ -7,7 +7,16 @@ import type { TM1Client } from "../../src/tm1-client.js";
 import { registerAllTools } from "../../src/tools/index.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import { paginate } from "../../src/tools/pagination.js";
-import { OUTPUT_SCHEMA_MAP } from "../../src/tools/output-schema-map.js";
+// Resolved view: a tool declares its outputSchema either in a defineTool()
+// spec or in OUTPUT_SCHEMA_MAP, and these assertions must hold either way.
+// registerAllTools is imported above, so every spec has been defined.
+import { allToolMetadata } from "../../src/tools/tool-metadata.js";
+
+const OUTPUT_SCHEMAS = new Map(
+  [...allToolMetadata()].flatMap(([name, meta]) =>
+    meta.outputSchema === undefined ? [] : [[name, meta.outputSchema] as const],
+  ),
+);
 
 // OUTPUT_SCHEMA_MAP entries are either a ZodRawShape (legacy) or a full
 // ZodTypeAny (used when the schema relies on .passthrough() / .catchall(),
@@ -17,6 +26,16 @@ function asSchema(entry: ZodRawShape | ZodTypeAny): ZodTypeAny {
   return typeof entry === "object" && entry !== null && "_def" in entry
     ? (entry as ZodTypeAny)
     : z.object(entry);
+}
+
+// Parseable schema for a tool, or a loud failure — every tool named in this
+// suite is expected to declare one.
+function schemaOf(toolName: string): ZodTypeAny {
+  const entry = OUTPUT_SCHEMAS.get(toolName);
+  if (entry === undefined) {
+    throw new Error(`${toolName} declares no output schema`);
+  }
+  return asSchema(entry);
 }
 
 // Minimal fixtures matching each item schema. Kept inline so the test fails
@@ -105,10 +124,10 @@ function registeredToolNames(): Set<string> {
   return names;
 }
 
-describe("OUTPUT_SCHEMA_MAP", () => {
-  it("every OUTPUT_SCHEMA_MAP key is a registered tool (no orphaned schemas)", () => {
+describe("declared output schemas", () => {
+  it("every declared output schema belongs to a registered tool (no orphans)", () => {
     const registered = registeredToolNames();
-    const orphans = Object.keys(OUTPUT_SCHEMA_MAP).filter(
+    const orphans = [...OUTPUT_SCHEMAS.keys()].filter(
       (k) => !registered.has(k),
     );
     expect(orphans).toEqual([]);
@@ -116,9 +135,7 @@ describe("OUTPUT_SCHEMA_MAP", () => {
 
   for (const [toolName, items] of Object.entries(SAMPLES)) {
     it(`${toolName}: paginated output validates against schema`, () => {
-      const entry = OUTPUT_SCHEMA_MAP[toolName];
-      expect(entry, `missing schema for ${toolName}`).toBeDefined();
-      const schema = asSchema(entry);
+      const schema = schemaOf(toolName);
       const page = paginate(items, 50, 0);
       const result = schema.safeParse(page);
       if (!result.success) {
@@ -130,7 +147,7 @@ describe("OUTPUT_SCHEMA_MAP", () => {
   }
 
   it("tm1_list_files: paginated output (with `path`) validates against schema", () => {
-    const schema = asSchema(OUTPUT_SCHEMA_MAP.tm1_list_files);
+    const schema = schemaOf("tm1_list_files");
     const payload = { path: "Subdir", ...paginate(["a.csv", "b.csv"], 50, 0) };
     const result = schema.safeParse(payload);
     expect(result.success).toBe(true);
@@ -140,7 +157,7 @@ describe("OUTPUT_SCHEMA_MAP", () => {
   // tasks and was rejected by the strict output schema (surfaced as isError
   // via the drift pre-validation). Both branches must conform.
   it("tm1_analyze_chore_graph: not-found warning payload validates against schema", () => {
-    const schema = asSchema(OUTPUT_SCHEMA_MAP.tm1_analyze_chore_graph);
+    const schema = schemaOf("tm1_analyze_chore_graph");
     const payload = {
       choreName: "ZZZ_missing",
       tasks: [],
@@ -156,7 +173,7 @@ describe("OUTPUT_SCHEMA_MAP", () => {
   });
 
   it("tm1_list_sessions: compact-mode summary output validates against schema", () => {
-    const schema = asSchema(OUTPUT_SCHEMA_MAP.tm1_list_sessions);
+    const schema = schemaOf("tm1_list_sessions");
     const payload = {
       total: 3,
       count: 0,
@@ -603,9 +620,7 @@ describe("OUTPUT_SCHEMA_MAP", () => {
 
   for (const [toolName, payload] of Object.entries(PHASE2_SAMPLES)) {
     it(`${toolName}: structured output validates against schema`, () => {
-      const entry = OUTPUT_SCHEMA_MAP[toolName];
-      expect(entry, `missing schema for ${toolName}`).toBeDefined();
-      const result = asSchema(entry).safeParse(payload);
+      const result = schemaOf(toolName).safeParse(payload);
       if (!result.success) {
         throw new Error(
           `${toolName} validation failed: ${JSON.stringify(result.error.issues, null, 2)}`,

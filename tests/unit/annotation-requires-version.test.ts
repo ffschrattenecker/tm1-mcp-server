@@ -5,7 +5,10 @@ import {
   withVersion,
   type Tm1ToolAnnotations,
 } from "../../src/tools/annotations.js";
-import { ANNOTATION_MAP } from "../../src/tools/annotation-map.js";
+// Resolved view, so a tool that moves its annotation into a defineTool() spec
+// keeps being checked here without an edit.
+import "../../src/tools/index.js";
+import { toolMetadata } from "../../src/tools/tool-metadata.js";
 
 describe("R2-21: requiresVersion annotation extension", () => {
   describe("withVersion()", () => {
@@ -29,7 +32,7 @@ describe("R2-21: requiresVersion annotation extension", () => {
     });
   });
 
-  describe("ANNOTATION_MAP version tags", () => {
+  describe("requiresVersion tags", () => {
     const v11OnlyTools = [
       "tm1_check_v12_readiness",
       "tm1_diff_process_with_file",
@@ -44,9 +47,9 @@ describe("R2-21: requiresVersion annotation extension", () => {
     ];
 
     it.each(v11OnlyTools)("%s is tagged requiresVersion='v11'", (tool) => {
-      const annot = ANNOTATION_MAP[tool];
-      expect(annot, `${tool} missing from ANNOTATION_MAP`).toBeDefined();
-      expect(annot.requiresVersion).toBe("v11");
+      const annot = toolMetadata(tool)?.annotations;
+      expect(annot, `${tool} declares no annotation`).toBeDefined();
+      expect(annot?.requiresVersion).toBe("v11");
     });
 
     it("untagged tools have no requiresVersion field (version-agnostic)", () => {
@@ -57,12 +60,12 @@ describe("R2-21: requiresVersion annotation extension", () => {
         "tm1_get_cell_value",
       ];
       for (const tool of sample) {
-        expect(ANNOTATION_MAP[tool]?.requiresVersion).toBeUndefined();
+        expect(toolMetadata(tool)?.annotations.requiresVersion).toBeUndefined();
       }
     });
 
     it("requiresVersion field is JSON-serializable (survives wire transport)", () => {
-      const annot = ANNOTATION_MAP["tm1_install_pro_bundle"];
+      const annot = toolMetadata("tm1_install_pro_bundle")?.annotations;
       const roundTrip = JSON.parse(JSON.stringify(annot));
       expect(roundTrip.requiresVersion).toBe("v11");
       expect(roundTrip.idempotentHint).toBe(true);

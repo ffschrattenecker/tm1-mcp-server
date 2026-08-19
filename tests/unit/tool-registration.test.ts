@@ -3,13 +3,26 @@ import { contractCheckedClient } from "../helpers/service-contract.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type pino from "pino";
 import type { TM1Client } from "../../src/tm1-client.js";
-import { ANNOTATION_MAP } from "../../src/tools/annotation-map.js";
-import { OUTPUT_SCHEMA_MAP } from "../../src/tools/output-schema-map.js";
 import { registerAllTools } from "../../src/tools/index.js";
+// Resolved view over both declaration sites — a tool declares its annotation
+// and outputSchema either in a defineTool() spec or in the legacy maps, and
+// this suite must not care which. Evaluated after the import above, so every
+// tool module's top-level defineTool() call has run.
+import { allToolMetadata } from "../../src/tools/tool-metadata.js";
 import {
   withAnnotations,
   deriveTitle,
 } from "../../src/tools/with-annotations.js";
+
+const TOOL_META = allToolMetadata();
+const ANNOTATIONS = new Map(
+  [...TOOL_META].map(([name, meta]) => [name, meta.annotations]),
+);
+const OUTPUT_SCHEMAS = new Map(
+  [...TOOL_META].flatMap(([name, meta]) =>
+    meta.outputSchema === undefined ? [] : [[name, meta.outputSchema]],
+  ),
+);
 
 const mockLogger = {
   info: vi.fn(),
@@ -51,15 +64,15 @@ function collectRegisteredNames(mode: "readwrite" | "readonly"): Set<string> {
 }
 
 describe("#9 map reconciliation", () => {
-  it("registered tool names === ANNOTATION_MAP keys (no orphans, no gaps)", () => {
+  it("registered tool names === declared annotations (no orphans, no gaps)", () => {
     const registered = collectRegisteredNames("readwrite");
-    const annotated = new Set(Object.keys(ANNOTATION_MAP));
+    const annotated = new Set([...ANNOTATIONS.keys()]);
     expect([...registered].sort()).toEqual([...annotated].sort());
   });
 
-  it("OUTPUT_SCHEMA_MAP keys ⊆ registered tools (every schema'd tool is registered)", () => {
+  it("declared output schemas ⊆ registered tools (every schema'd tool is registered)", () => {
     const registered = collectRegisteredNames("readwrite");
-    const schemaKeys = Object.keys(OUTPUT_SCHEMA_MAP);
+    const schemaKeys = [...OUTPUT_SCHEMAS.keys()];
     const missing = schemaKeys.filter((k) => !registered.has(k));
     expect(missing).toEqual([]);
   });
@@ -129,7 +142,7 @@ describe("L9 output-schema drift guard", () => {
       return {} as ReturnType<typeof server.registerTool>;
     }) as typeof server.registerTool;
     const wrapped = withAnnotations(server, mockLogger, "readwrite");
-    // Real tool name so ANNOTATION_MAP + OUTPUT_SCHEMA_MAP entries exist.
+    // Real tool name so its declared annotation + outputSchema resolve.
     (wrapped.tool as (...a: unknown[]) => unknown)(name, "fake", {}, handler);
     if (!captured) throw new Error("tool was not registered");
     return captured;
@@ -173,7 +186,7 @@ describe("#8 readonly mode", () => {
   it("only readOnlyHint=true tools are registered in readonly mode", () => {
     const registered = collectRegisteredNames("readonly");
     const readOnlyNames = new Set(
-      Object.entries(ANNOTATION_MAP)
+      [...ANNOTATIONS]
         .filter(([, annot]) => annot.readOnlyHint)
         .map(([name]) => name),
     );
@@ -182,7 +195,7 @@ describe("#8 readonly mode", () => {
 
   it("write tools are NOT registered in readonly mode", () => {
     const registered = collectRegisteredNames("readonly");
-    const writeNames = Object.entries(ANNOTATION_MAP)
+    const writeNames = [...ANNOTATIONS]
       .filter(([, annot]) => !annot.readOnlyHint)
       .map(([name]) => name);
     for (const name of writeNames) {

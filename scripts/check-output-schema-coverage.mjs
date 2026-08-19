@@ -40,12 +40,18 @@ function readSchemaKeys() {
   return keys;
 }
 
-const registeredNames = new Set(scanTools(toolsDir).map((t) => t.name));
+const registered = scanTools(toolsDir);
+const registeredNames = new Set(registered.map((t) => t.name));
+// A defineTool() tool declares its outputSchema in the spec; a leftover map
+// entry is a second source of truth the Proxy never reads.
+const inlineNames = new Set(
+  registered.filter((t) => t.inline).map((t) => t.name),
+);
 const schemaKeys = readSchemaKeys();
 
 const stale = [];
 for (const key of schemaKeys) {
-  if (!registeredNames.has(key)) stale.push(key);
+  if (!registeredNames.has(key) || inlineNames.has(key)) stale.push(key);
 }
 
 if (stale.length === 0) {
@@ -62,5 +68,7 @@ for (const k of stale.sort()) console.error(`  - ${k}`);
 console.error(
   `\nFix: remove the stale key from OUTPUT_SCHEMA_MAP in src/tools/output-schema-map.ts,`,
 );
-console.error(`     or restore the missing server.tool() registration.`);
+console.error(
+  `     A tool migrated to defineTool() declares \`output\` in its spec — drop the key.`,
+);
 process.exit(1);

@@ -27,10 +27,11 @@ import {
   wrappedPageResponse,
 } from "../../src/tools/format.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
-import {
-  MARKDOWN_CAPABLE_TOOLS,
-  OUTPUT_SCHEMA_MAP,
-} from "../../src/tools/output-schema-map.js";
+// Importing the tool barrel runs every top-level defineTool() call, so the
+// resolved view below covers tools that declare their schema in a spec as well
+// as those still listed in OUTPUT_SCHEMA_MAP.
+import "../../src/tools/index.js";
+import { allToolMetadata } from "../../src/tools/tool-metadata.js";
 
 const mockLogger = {
   info: vi.fn(),
@@ -193,19 +194,24 @@ describe("end-to-end over the SDK", () => {
   });
 });
 
-describe("OUTPUT_SCHEMA_MAP coverage", () => {
-  // Which tools belong in MARKDOWN_CAPABLE_TOOLS is policed against the source
-  // by scripts/check-markdown-schema-coverage.mjs. What that script cannot see
-  // is whether the resulting schema actually validates a markdown response —
-  // that needs the built Zod object, so it is checked here.
+describe("markdown-capable schema coverage", () => {
+  // WHICH tools are markdown-capable is policed against the source by
+  // scripts/check-markdown-schema-coverage.mjs (legacy registrations) and by
+  // defineTool itself (migrated ones derive it from `format` in the input).
+  // What neither can see is whether the resulting schema actually validates a
+  // markdown response — that needs the built Zod object, so it is checked here.
+  const markdownCapableTools = [...allToolMetadata()]
+    .filter(([, meta]) => strictVariants(meta.outputSchema as object))
+    .map(([name]) => name);
+
   it("covers a non-trivial number of tools", () => {
-    expect(MARKDOWN_CAPABLE_TOOLS.size).toBeGreaterThan(30);
+    expect(markdownCapableTools.length).toBeGreaterThan(30);
   });
 
-  it.each([...MARKDOWN_CAPABLE_TOOLS])(
+  it.each(markdownCapableTools)(
     "%s accepts a markdown-only payload",
     (tool) => {
-      const entry = OUTPUT_SCHEMA_MAP[tool];
+      const entry = allToolMetadata().get(tool)?.outputSchema;
       expect(entry, `${tool} has no output schema`).toBeDefined();
       expect(
         strictVariants(entry as object),

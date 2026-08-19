@@ -17,7 +17,7 @@
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { walk } from "./lib/scan-tools.mjs";
+import { walk, toolSpans } from "./lib/scan-tools.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -28,25 +28,33 @@ const mapPath = join(toolsDir, "output-schema-map.ts");
 // input shape. Attribution is per REGISTRATION, not per file: get-threads.ts
 // registers both tm1_list_threads (paginated, format-capable) and
 // tm1_cancel_thread (neither), so a file-level check would flag the wrong set.
-// Each registration owns the source from its `server.tool(` to the next one.
-const TOOL_NAME_RE = /server\.tool\(\s*"(tm1_[a-z0-9_]+)"/g;
-
+// Each registration owns the source from its opening marker to the next one.
+//
+// defineTool() registrations are exempt: markdownCapable() is applied there
+// from the presence of `format` in the input shape, so capability cannot drift
+// from declaration — there is nothing left to declare.
 function formatCapableTools() {
   const names = new Set();
   for (const file of walk(toolsDir)) {
     const src = readFileSync(file, "utf8");
     if (!src.includes("FORMAT_SCHEMA")) continue;
-    const hits = [];
-    let m;
-    const re = new RegExp(TOOL_NAME_RE.source, "g");
-    while ((m = re.exec(src)) !== null) {
-      hits.push({ name: m[1], start: m.index });
-    }
-    for (let i = 0; i < hits.length; i++) {
-      const end = i + 1 < hits.length ? hits[i + 1].start : src.length;
-      if (src.slice(hits[i].start, end).includes("FORMAT_SCHEMA")) {
-        names.add(hits[i].name);
+    for (const span of toolSpans(src)) {
+      if (span.inline) continue;
+      if (src.slice(span.start, span.end).includes("FORMAT_SCHEMA")) {
+        names.add(span.name);
       }
+    }
+  }
+  return names;
+}
+
+// Names that must NOT appear in MARKDOWN_CAPABLE_TOOLS because their spec
+// already derives it.
+function inlineTools() {
+  const names = new Set();
+  for (const file of walk(toolsDir)) {
+    for (const span of toolSpans(readFileSync(file, "utf8"))) {
+      if (span.inline) names.add(span.name);
     }
   }
   return names;
@@ -72,9 +80,12 @@ function declaredMarkdownTools() {
 
 const actual = formatCapableTools();
 const declared = declaredMarkdownTools();
+const inline = inlineTools();
 
 const missing = [...actual].filter((n) => !declared.has(n)).sort();
-const extra = [...declared].filter((n) => !actual.has(n)).sort();
+const extra = [...declared]
+  .filter((n) => !actual.has(n) || inline.has(n))
+  .sort();
 
 if (missing.length === 0 && extra.length === 0) {
   console.log(
@@ -90,7 +101,11 @@ for (const n of missing) {
   console.error(`  - ${n} accepts FORMAT_SCHEMA but is not markdown-capable`);
 }
 for (const n of extra) {
-  console.error(`  - ${n} is listed but no longer accepts FORMAT_SCHEMA`);
+  console.error(
+    inline.has(n)
+      ? `  - ${n} is listed but uses defineTool(), which derives it`
+      : `  - ${n} is listed but no longer accepts FORMAT_SCHEMA`,
+  );
 }
 console.error(
   `\nFix: update MARKDOWN_CAPABLE_TOOLS in src/tools/output-schema-map.ts so it`,

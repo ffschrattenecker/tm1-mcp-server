@@ -26,7 +26,6 @@ import {
   CompileErrorSchema,
   CopyProcessResultSchema,
   AuditLogEntrySchema,
-  CubeItemSchema,
   CubeRulesSchema,
   CubeStatsResultSchema,
   DataSourceSchema,
@@ -56,7 +55,6 @@ import {
   MutationResultSchema,
   ObjectUsageResultSchema,
   DataFlowResultSchema,
-  AncestorsResultSchema,
   GetProcessResultSchema,
   ProcessCodeBundleSchema,
   ProcessCodeSchema,
@@ -118,7 +116,6 @@ const searchFilePageShape = {
 export const MARKDOWN_CAPABLE_TOOLS: ReadonlySet<string> = new Set([
   "tm1_execute_mdx",
   "tm1_find_orphan_dimensions",
-  "tm1_get_ancestors",
   "tm1_get_audit_log",
   "tm1_get_client",
   "tm1_get_cube_stats",
@@ -134,7 +131,6 @@ export const MARKDOWN_CAPABLE_TOOLS: ReadonlySet<string> = new Set([
   "tm1_get_view",
   "tm1_list_chores",
   "tm1_list_clients",
-  "tm1_list_cubes",
   "tm1_list_dimensions",
   "tm1_list_element_attributes",
   "tm1_list_error_logs",
@@ -153,7 +149,6 @@ export const MARKDOWN_CAPABLE_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 const RAW_OUTPUT_SCHEMA_MAP: Record<string, ZodRawShape | ZodTypeAny> = {
-  tm1_list_cubes: pageShapeFor(CubeItemSchema),
   tm1_list_dimensions: pageShapeFor(DimensionItemSchema),
   tm1_list_processes: pageShapeFor(ProcessItemSchema),
   tm1_list_chores: pageShapeFor(ChoreItemSchema),
@@ -354,7 +349,6 @@ const RAW_OUTPUT_SCHEMA_MAP: Record<string, ZodRawShape | ZodTypeAny> = {
   ),
 
   // ── Phase 2i: hierarchy navigation, server snapshots, diagnostics ────────
-  tm1_get_ancestors: asOutputSchema(AncestorsResultSchema),
   tm1_get_descendants: asOutputSchema(DescendantsResultSchema),
   tm1_get_server_state: asOutputSchema(ServerStateResultSchema),
   tm1_list_processes_grouped: asOutputSchema(ProcessesGroupedResultSchema),
@@ -374,7 +368,6 @@ const RAW_OUTPUT_SCHEMA_MAP: Record<string, ZodRawShape | ZodTypeAny> = {
   tm1_create_native_view: asOutputSchema(MutationResultSchema),
   tm1_delete_chore: asOutputSchema(MutationResultSchema),
   tm1_delete_client: asOutputSchema(MutationResultSchema),
-  tm1_delete_cube: asOutputSchema(MutationResultSchema),
   tm1_delete_dimension: asOutputSchema(MutationResultSchema),
   tm1_delete_hierarchy: asOutputSchema(MutationResultSchema),
   tm1_delete_view: asOutputSchema(MutationResultSchema),

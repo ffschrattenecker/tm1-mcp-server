@@ -63,6 +63,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stopped being true once `upsert_process` moved to the shared datasource schema — it accepts
   `query` and `usesUnicode` — and the remaining field in that sentence never existed.
 
+- **Internal: tools may now declare their metadata in one place.** A tool used to be spread
+  across four sites — the `server.tool(...)` call, an `ANNOTATION_MAP` entry, an
+  `OUTPUT_SCHEMA_MAP` entry, and membership in `MARKDOWN_CAPABLE_TOOLS` — with four of the
+  repo's lint gates existing only to keep those name-keyed maps in step. `defineTool()`
+  (`src/tools/define-tool.ts`) puts name, description, input, output schema, annotations and
+  handler in a single literal and derives what the maps required by hand: `markdownCapable()`
+  from the presence of `format` in the input shape, and `asOutputSchema()` routing so a
+  `.passthrough()` schema keeps `additionalProperties: true`. Both forms register through the
+  same Proxy and resolve through the new `src/tools/tool-metadata.ts`, so migration is
+  file-by-file and nothing downstream cares which form a tool uses. `tm1_list_cubes`,
+  `tm1_get_ancestors` and `tm1_delete_cube` are migrated; the gates now report inline tools
+  separately and flag a leftover map entry for one of them. No wire-format change.
+
 ## [3.1.0] - 2026-08-18
 
 ### Changed

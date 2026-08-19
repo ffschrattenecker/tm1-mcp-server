@@ -18,7 +18,7 @@
 import { readFileSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { walk, TOOL_RE } from "./lib/scan-tools.mjs";
+import { walk, TOOL_RE, toolSpans } from "./lib/scan-tools.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -144,20 +144,31 @@ function findSchemaBrace(src, from) {
 
 const offenders = [];
 
+// Where the input shape starts, per registration form:
+//   server.tool(name, desc, { … })  — the first `{` after name+description
+//   defineTool({ …, input: { … } }) — the `{` after the `input:` key
+// Both are located with findSchemaBrace so a `{` inside a description literal
+// is never mistaken for the shape.
+function inputBraceOf(src, span) {
+  const body = src.slice(span.start, span.end);
+  if (span.inline) {
+    const m = /\binput:\s*\{/.exec(body);
+    return m === null ? -1 : findSchemaBrace(src, span.start + m.index);
+  }
+  const m = new RegExp(TOOL_RE.source).exec(body);
+  return m === null
+    ? -1
+    : findSchemaBrace(src, span.start + m.index + m[0].length);
+}
+
 for (const file of walk(toolsDir)) {
   const src = readFileSync(file, "utf8");
-  const re = new RegExp(TOOL_RE.source, "g");
-  let m;
-  while ((m = re.exec(src)) !== null) {
-    const toolName = m[1];
-    // The schema object is the argument after the description; it is the first
-    // `{` following the matched name+description that isn't inside a string or
-    // comment (a `{` in the description literal must not be mistaken for it).
-    const open = findSchemaBrace(src, re.lastIndex);
+  for (const span of toolSpans(src)) {
+    const open = inputBraceOf(src, span);
     if (open === -1) continue;
     const keys = topLevelKeys(src, open);
     if (keys.includes("name")) {
-      offenders.push({ tool: toolName, file: relative(root, file) });
+      offenders.push({ tool: span.name, file: relative(root, file) });
     }
   }
 }

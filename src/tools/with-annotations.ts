@@ -3,8 +3,7 @@ import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
 import { slimJsonSchema } from "../lib/slim-json-schema.js";
-import { ANNOTATION_MAP } from "./annotation-map.js";
-import { OUTPUT_SCHEMA_MAP } from "./output-schema-map.js";
+import { toolMetadata } from "./tool-metadata.js";
 import { strictVariants } from "./schemas/markdown-capable.js";
 import {
   formatTm1ErrorResult,
@@ -119,10 +118,10 @@ function installToolsListSlimming(server: McpServer): void {
 }
 
 // Wrap McpServer so every server.tool(name, desc, schema, cb) call:
-//   1) injects the matching annotation from ANNOTATION_MAP
+//   1) injects the matching annotation (defineTool spec or ANNOTATION_MAP)
 //   2) wraps the callback so thrown errors become uniform JSON results
 //      and existing isError results get reshaped to include `hint`
-//   3) when OUTPUT_SCHEMA_MAP has an entry for the tool, attaches outputSchema
+//   3) when the tool declares an outputSchema, attaches it
 //   4) when mode="readonly", silently skips tools without readOnlyHint
 // Also installs the tools/list schema slimmer (see installToolsListSlimming) —
 // it has to be in place before the first registration triggers the SDK's lazy
@@ -305,16 +304,19 @@ export function withAnnotations(
         const name = args[0] as string;
         const description = args[1] as string;
         const inputSchema = args[2];
-        const annot = ANNOTATION_MAP[name];
+        // Resolved view over both declaration sites — a defineTool() spec or
+        // the legacy name-keyed maps. See ./tool-metadata.ts.
+        const meta = toolMetadata(name);
+        const annot = meta?.annotations;
         if (!annot) {
           throw new Error(
-            `Tool "${name}" registered without annotation — add it to ANNOTATION_MAP in src/tools/annotation-map.ts`,
+            `Tool "${name}" registered without annotation — declare it via defineTool() in the tool file, or add it to ANNOTATION_MAP in src/tools/annotation-map.ts`,
           );
         }
         if (mode === "readonly" && !annot.readOnlyHint) {
           return;
         }
-        const outputSchema = OUTPUT_SCHEMA_MAP[name];
+        const outputSchema = meta.outputSchema;
         const wrappedCb = wrapCb(name, args[3] as ToolCallback, outputSchema);
         const config: Record<string, unknown> = {
           title: deriveTitle(name),

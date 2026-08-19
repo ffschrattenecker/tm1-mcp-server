@@ -120,7 +120,12 @@ and a token, and a failing build is a stronger signal than a green shield.
   service.
 - **Tools** are registered under `src/tools/<category>/` and wired in
   `src/tools/index.ts`. Each tool declares `readOnlyHint` / `destructiveHint` /
-  `idempotentHint` annotations (`src/tools/annotation-map.ts`).
+  `idempotentHint` annotations. New tools use `defineTool()`
+  (`src/tools/define-tool.ts`), which keeps name, description, input, output
+  schema, annotations and handler in a single literal; older tools still declare
+  those through `src/tools/annotation-map.ts` and `src/tools/output-schema-map.ts`.
+  Both resolve through `src/tools/tool-metadata.ts`, so nothing downstream needs
+  to know which form a tool uses.
 - **Output schemas** are strict (`additionalProperties: false`) — when a handler
   returns a new field, add it to the matching schema in `src/tools/schemas/`, or
   the SDK rejects the payload.

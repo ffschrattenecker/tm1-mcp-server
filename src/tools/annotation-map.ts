@@ -85,11 +85,9 @@ export const ANNOTATION_MAP: Record<string, Tm1ToolAnnotations> = {
   tm1_delete_file: DESTRUCTIVE,
 
   // metadata
-  tm1_get_ancestors: READ_ONLY,
   tm1_get_descendants: READ_ONLY,
   tm1_get_hierarchy: READ_ONLY,
   tm1_list_chores: READ_ONLY,
-  tm1_list_cubes: READ_ONLY,
   tm1_list_dimensions: READ_ONLY,
   tm1_list_processes: READ_ONLY,
   tm1_list_processes_grouped: READ_ONLY,
@@ -99,7 +97,6 @@ export const ANNOTATION_MAP: Record<string, Tm1ToolAnnotations> = {
   tm1_check_cube_rule: READ_ONLY,
   tm1_clear_cube: DESTRUCTIVE,
   tm1_create_cube: WRITE,
-  tm1_delete_cube: DESTRUCTIVE,
   tm1_get_all_cube_rules: READ_ONLY,
   tm1_get_cube_rules: READ_ONLY,
   tm1_get_cube_stats: READ_ONLY,

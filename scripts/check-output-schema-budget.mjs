@@ -38,6 +38,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 
 const mapPath = join(root, "dist", "tools", "output-schema-map.js");
+// Tools migrated to defineTool() keep their outputSchema in the spec, not in
+// the map. Importing the tool barrel runs every top-level defineTool() call, so
+// allSpecs() then holds them and the measured total stays the whole wire cost.
+const toolsIndexPath = join(root, "dist", "tools", "index.js");
+const defineToolPath = join(root, "dist", "tools", "define-tool.js");
 const slimPath = join(root, "dist", "lib", "slim-json-schema.js");
 const sdkServerDir = join(
   root,
@@ -79,12 +84,12 @@ function build(reason) {
   }
 }
 
-if (!existsSync(mapPath) || !existsSync(slimPath)) {
+if (![mapPath, slimPath, toolsIndexPath, defineToolPath].every(existsSync)) {
   build("dist not built");
 } else if (newestSrcMtimeMs() > statSync(mapPath).mtimeMs) {
   build("dist stale vs src");
 }
-for (const p of [mapPath, slimPath]) {
+for (const p of [mapPath, slimPath, toolsIndexPath, defineToolPath]) {
   if (!existsSync(p)) {
     console.error(
       `check-output-schema-budget: expected ${p} after build, not found.`,
@@ -112,13 +117,21 @@ try {
 }
 const { OUTPUT_SCHEMA_MAP } = await import(pathToFileURL(mapPath).href);
 const { slimJsonSchema } = await import(pathToFileURL(slimPath).href);
+await import(pathToFileURL(toolsIndexPath).href);
+const { allSpecs } = await import(pathToFileURL(defineToolPath).href);
+
+const publishedSchemas = new Map(Object.entries(OUTPUT_SCHEMA_MAP));
+for (const [name, spec] of allSpecs()) {
+  if (spec.outputSchema !== undefined)
+    publishedSchemas.set(name, spec.outputSchema);
+}
 
 // Same options McpServer passes when it serializes outputSchema for tools/list.
 const JSON_SCHEMA_OPTS = { strictUnions: true, pipeStrategy: "output" };
 
 const rows = [];
 let total = 0;
-for (const [name, schema] of Object.entries(OUTPUT_SCHEMA_MAP)) {
+for (const [name, schema] of publishedSchemas) {
   const obj = normalizeObjectSchema(schema);
   const jsonSchema = slimJsonSchema(toJsonSchemaCompat(obj, JSON_SCHEMA_OPTS));
   const bytes = Buffer.byteLength(JSON.stringify(jsonSchema), "utf8");

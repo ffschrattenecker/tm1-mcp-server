@@ -23,7 +23,10 @@ const root = join(here, "..");
 const toolsDir = join(root, "src", "tools");
 const indexPath = join(toolsDir, "index.ts");
 
-const EXPORT_RE = /export\s+function\s+(register[A-Za-z0-9_]+)\s*\(/g;
+// Two registrar forms: the legacy `export function registerX(server, tm1)` and
+// the migrated `export const registerX = defineTool({...})`.
+const EXPORT_RE =
+  /export\s+(?:function\s+(register[A-Za-z0-9_]+)\s*\(|const\s+(register[A-Za-z0-9_]+)\s*=)/g;
 
 const indexSrc = readFileSync(indexPath, "utf8");
 const missing = [];
@@ -34,7 +37,7 @@ for (const file of walk(toolsDir)) {
   let m;
   const re = new RegExp(EXPORT_RE.source, "g");
   while ((m = re.exec(src)) !== null) {
-    const name = m[1];
+    const name = m[1] ?? m[2];
     // Word-boundary match so registerFoo doesn't satisfy registerFooBar.
     const referenced = new RegExp(`\\b${name}\\b`).test(indexSrc);
     if (!referenced) {
