@@ -32,6 +32,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `maskDataSourceSecrets()` and `maskConnectionString()` dropped from `src/lib/mask-secrets.ts`
   (both existed only for the removed field). `maskCode`/`maskCodeLine` are unchanged and keep
   the brace-quoted-value handling, now covered directly by their own tests.
+- **`lockType` is gone from the thread shape — no TM1 thread ever carried it.** Like
+  `oDBCConnection` it had been in the read shape since the initial release without ever
+  being on the wire: `LockType` is not a property of the `Thread` entity in the v11
+  `$metadata`, and across both 11.8.02900.8 instances every real thread returns exactly
+  fourteen fields — `ID`, `Type`, `Name`, `Context`, `State`, `Function`, `ObjectType`,
+  `ObjectName`, `RLocks`, `IXLocks`, `WLocks`, `ElapsedTime`, `WaitTime`, `Info`. There is
+  no lock *type* among them, so the key was never populated and the mapping that copied it
+  was dead code. Removed from the `Thread` type, from the session-embedded thread shape
+  behind `tm1_list_sessions`, and from `ThreadItemSchema`, which backs `tm1_list_threads`.
+  The lock state TM1 does report lives in the `RLocks`/`IXLocks`/`WLocks` counts, which this
+  server has never surfaced on either tool — unchanged here, and a separate question.
 
 ### Fixed
 

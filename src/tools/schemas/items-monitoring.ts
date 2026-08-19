@@ -107,7 +107,6 @@ export const ThreadItemSchema = z.object({
   objectName: z.string(),
   elapsedTime: z.string().optional(),
   objectType: z.string().optional(),
-
   waitTime: z.string().optional(),
   info: z.string().optional(),
   context: z.string().optional(),
