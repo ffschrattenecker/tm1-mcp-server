@@ -46,6 +46,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`errorLogFile` was never filled in — the execute calls omitted the `$expand`.** Both
+  `tm1_execute_process` and the internal save-data run read `ErrorLogFile.Filename` off the
+  `ExecuteWithReturn` response, but `ErrorLogFile` is a *navigation* property on
+  `ProcessExecuteResult`, and OData does not serialize one unless it is expanded. Measured on
+  11.8.02900.8 and 12.5.9 with a process that aborts: without the expand both answer exactly
+  `{"ProcessExecuteStatusCode":"Aborted"}` and the key is absent; with it both add
+  `{"ErrorLogFile":{"Filename":...}}` — `TM1ProcessError_….log` on v11,
+  `ProcessLog_….jsonl` on v12. So every failed run since the field was introduced reported
+  `errorLogFile: undefined` and left the caller to find the log by hand. Both call sites now
+  request `$expand=ErrorLogFile`, and a unit test asserts the expand rather than just the
+  path, so it cannot be dropped again. The filename feeds straight into
+  `tm1_get_error_log_content`.
+
 - `tm1_get_process` no longer claims its datasource round-trip is lossy for ODBC/ASCII. That
   stopped being true once `upsert_process` moved to the shared datasource schema — it accepts
   `query` and `usesUnicode` — and the remaining field in that sentence never existed.

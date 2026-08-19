@@ -109,6 +109,30 @@ describe("TM1Client – Process Execution Methods", () => {
       expect(opts.method).toBe("POST");
     });
 
+    // ErrorLogFile is a NavigationProperty on ProcessExecuteResult, so TM1 omits
+    // it entirely unless it is expanded — measured on 11.8.02900.8 and 12.5.9,
+    // where the unexpanded response carries ProcessExecuteStatusCode and nothing
+    // else. Without this the errorLogFile field is dead on every result, so the
+    // expand is asserted, not merely present.
+    it("expands ErrorLogFile — without it the filename is never serialized", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockResponse({
+          ProcessExecuteStatusCode: "Aborted",
+          ErrorLogFile: {
+            Filename: "TM1ProcessError_20260819171009_79128800_ImportData.log",
+          },
+        }),
+      );
+
+      const result = await client.processes.execute("ImportData");
+
+      expect(result.errorLogFile).toBe(
+        "TM1ProcessError_20260819171009_79128800_ImportData.log",
+      );
+      const [url] = fetchSpy.mock.calls[0];
+      expect(url).toContain("$expand=ErrorLogFile");
+    });
+
     it("reports HasMinorErrors as committed-with-errors, with status + error log (HTTP 200)", async () => {
       // ExecuteWithReturn answers HTTP 200 even for partial failures — the
       // real outcome is only visible in ProcessExecuteStatusCode. The old
@@ -377,6 +401,8 @@ describe("TM1Client – Process Execution Methods", () => {
 
       const [url, opts] = fetchSpy.mock.calls[0];
       expect(url).toContain("/api/v1/ExecuteProcessWithReturn");
+      // Same navigation-property rule as execute(): no expand, no filename.
+      expect(url).toContain("$expand=ErrorLogFile");
       expect(opts.method).toBe("POST");
       const body = JSON.parse(opts.body);
       expect(body.Process.PrologProcedure).toBe("SaveDataAll;");

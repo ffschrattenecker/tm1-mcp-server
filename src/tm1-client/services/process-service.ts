@@ -190,14 +190,20 @@ export class ProcessService {
   /**
    * Execute a TI process with optional parameters. opts.timeoutMs overrides
    * the 30s default for long-running TI runs.
-   * POST /api/v1/Processes('{name}')/tm1.ExecuteWithReturn
+   * POST /api/v1/Processes('{name}')/tm1.ExecuteWithReturn?$expand=ErrorLogFile
    */
   async execute(
     processName: string,
     params?: Record<string, string | number>,
     opts?: RequestOptions,
   ): Promise<ProcessResult> {
-    const path = `/api/v1/Processes('${enc(processName)}')/tm1.ExecuteWithReturn`;
+    // $expand=ErrorLogFile is REQUIRED, not an optimization: ErrorLogFile is a
+    // navigation property on ProcessExecuteResult, so an unexpanded call returns
+    // only ProcessExecuteStatusCode and the filename is silently absent. Measured
+    // on 11.8.02900.8 and 12.5.9 — both omit the key entirely without it, and both
+    // return {"Filename": ...} with it (v11 `TM1ProcessError_*.log`, v12
+    // `ProcessLog_*.jsonl`).
+    const path = `/api/v1/Processes('${enc(processName)}')/tm1.ExecuteWithReturn?$expand=ErrorLogFile`;
     const body: {
       Parameters?: Array<{ Name: string; Value: string | number }>;
     } = {};
@@ -276,7 +282,14 @@ export class ProcessService {
       const response = await this.http.request<{
         ProcessExecuteStatusCode?: string;
         ErrorLogFile?: { Filename?: string } | null;
-      }>("POST", "/api/v1/ExecuteProcessWithReturn", body, opts);
+      }>(
+        "POST",
+        // See executeProcess: without $expand the ErrorLogFile nav property is
+        // never serialized, on either version.
+        "/api/v1/ExecuteProcessWithReturn?$expand=ErrorLogFile",
+        body,
+        opts,
+      );
       return classifyExecution(
         response?.ProcessExecuteStatusCode,
         response?.ErrorLogFile?.Filename,
