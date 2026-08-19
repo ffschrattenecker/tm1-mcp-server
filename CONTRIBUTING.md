@@ -40,13 +40,10 @@ This chains:
 | Types            | `npm run typecheck`                 | `tsc --noEmit`, strict flags on                                    |
 | Types (tests)    | `npm run typecheck:tests`           | `tests/` under the same strict flags (`tsconfig.test.json`)        |
 | API shape        | `npm run lint:no-flat-api`          | new TM1 calls go through a service, not flat client                |
-| Annotations      | `npm run lint:annotations`          | every tool declares its MCP hint annotations                       |
-| Output schemas   | `npm run lint:output-schema`        | every tool has a registered strict output schema                   |
 | Schema budget    | `npm run lint:output-schema-budget` | serialized output schemas stay within the byte budget              |
 | Registration     | `npm run lint:tool-registration`    | every `register*` is wired into `src/tools/index.ts`               |
 | Input naming     | `npm run lint:input-naming`         | no tool takes a bare top-level `name` input (use `<entity>Name`)   |
 | Envelope         | `npm run lint:mutation-envelope`    | mutation tools return via `actionResponse()`, not hand-rolled      |
-| Markdown schema  | `npm run lint:markdown-schema`      | tools taking `format` declare a schema that can carry the table    |
 | Wire contracts   | `npm run contracts:verify`\*        | the live server still matches the recorded response shapes         |
 | Lint             | `npm run lint:eslint`               | ESLint over `src/` and `tests/`                                    |
 | Tests + coverage | `npm run coverage:check`            | full `vitest` suite under coverage, then the coverage ratchet gate |
@@ -120,12 +117,11 @@ and a token, and a failing build is a stronger signal than a green shield.
   service.
 - **Tools** are registered under `src/tools/<category>/` and wired in
   `src/tools/index.ts`. Each tool declares `readOnlyHint` / `destructiveHint` /
-  `idempotentHint` annotations. New tools use `defineTool()`
+  `idempotentHint` annotations. Every tool is built with `defineTool()`
   (`src/tools/define-tool.ts`), which keeps name, description, input, output
-  schema, annotations and handler in a single literal; older tools still declare
-  those through `src/tools/annotation-map.ts` and `src/tools/output-schema-map.ts`.
-  Both resolve through `src/tools/tool-metadata.ts`, so nothing downstream needs
-  to know which form a tool uses.
+  schema, annotations and handler in a single literal. There are no name-keyed
+  metadata maps: `markdownCapable()` and `asOutputSchema()` are applied from the
+  spec, and the TypeScript type is what makes annotations mandatory.
 - **Output schemas** are strict (`additionalProperties: false`) — when a handler
   returns a new field, add it to the matching schema in `src/tools/schemas/`, or
   the SDK rejects the payload.

@@ -1,6 +1,4 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { TM1Client } from "../../tm1-client.js";
 import {
   checkName,
   parseMajorVersion,
@@ -10,6 +8,9 @@ import {
 } from "../../lib/naming/rules.js";
 import { elementViolationFilter } from "../../lib/naming/odata-filter.js";
 import { isControlName } from "../../lib/control-name.js";
+import { AuditNamingResultSchema } from "../schemas/items.js";
+import { READ_ONLY } from "../annotations.js";
+import { defineTool } from "../define-tool.js";
 
 interface Finding {
   objectKind: ObjectKind;
@@ -48,84 +49,87 @@ interface TruncatedElementGroup {
   scannedCount: number;
 }
 
-export function registerAuditNaming(server: McpServer, tm1Client: TM1Client) {
-  server.tool(
-    "tm1_audit_naming",
+export const registerAuditNaming = defineTool({
+  name: "tm1_audit_naming",
+  description:
     "Bulk-scan TM1 objects against IBM PA 2.0/3.1 naming conventions; reports hard violations only " +
-      "(reserved chars, control-prefix misuse, 256-char limit, element leading +/-, TAB in v12 names, " +
-      "invalid process-variable identifiers). Auto-detects TM1 version; element scan paginated per hierarchy " +
-      "(default cap 100k, oversized hierarchies reported in elementsTruncated).",
+    "(reserved chars, control-prefix misuse, 256-char limit, element leading +/-, TAB in v12 names, " +
+    "invalid process-variable identifiers). Auto-detects TM1 version; element scan paginated per hierarchy " +
+    "(default cap 100k, oversized hierarchies reported in elementsTruncated).",
+  annotations: READ_ONLY,
+  output: AuditNamingResultSchema,
+  input: {
+    scope: z
+      .array(z.enum(SCOPE_VALUES))
+      .optional()
+      .describe(
+        "Object kinds to audit. Default: cubes, dimensions, hierarchies, elements, " +
+          "processes, chores. Element scan is per (dimension, hierarchy), paginated via " +
+          "$top/$skip; oversized hierarchies are truncated at maxElementsPerDim and " +
+          "reported in elementsTruncated. 'processVariables' triggers per-process variable " +
+          "scans; 'views'/'subsets' do per-cube/per-hier listings.",
+      ),
+    includeControl: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe("Include control objects ('}'-prefix). Default false."),
+    maxFindings: z
+      .number()
+      .int()
+      .min(1)
+      .max(10000)
+      .optional()
+      .default(500)
+      .describe(
+        "Cap on returned findings (default 500). Summary counters reflect the full scan.",
+      ),
+    versionOverride: z
+      .enum(["11", "12"])
+      .optional()
+      .describe(
+        "Override auto-detected TM1 major version. Use '12' to apply v12-only rules (e.g., TAB " +
+          "in element names) against a v11 server.",
+      ),
+    elementsPageSize: z
+      .number()
+      .int()
+      .min(1000)
+      .max(100000)
+      .optional()
+      .default(25000)
+      .describe(
+        "Page size for paging through violating elements. Bounded to keep each response " +
+          "well below the V8 string limit (~512 MB). Default 25000.",
+      ),
+    maxElementsPerDim: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .default(100000)
+      .describe(
+        "Per-(dimension, hierarchy) cap on VIOLATING elements returned. The server checks " +
+          "every element against the rules, so the whole hierarchy is always examined; this " +
+          "bounds how many offenders come back. A hit of the cap is reported under " +
+          "`elementsTruncated`. Default 100000.",
+      ),
+    summary: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe(
+        "Aggregate findings instead of returning per-object detail. When true, " +
+          "swaps the `findings` array for `findingsByGroup` — one entry per " +
+          "(objectKind, parent) group with `ruleBreakdown`, `sampleNames` (up to 3), " +
+          "and `totalCount`. Recommended for audit reports on large models (e.g. dims " +
+          "with thousands of element findings) where per-object detail is not needed " +
+          "and `maxFindings`-capped output would be misleading. `truncated` is " +
+          "always false in summary mode since no findings are dropped.",
+      ),
+  },
+  handler: async (
     {
-      scope: z
-        .array(z.enum(SCOPE_VALUES))
-        .optional()
-        .describe(
-          "Object kinds to audit. Default: cubes, dimensions, hierarchies, elements, " +
-            "processes, chores. Element scan is per (dimension, hierarchy), paginated via " +
-            "$top/$skip; oversized hierarchies are truncated at maxElementsPerDim and " +
-            "reported in elementsTruncated. 'processVariables' triggers per-process variable " +
-            "scans; 'views'/'subsets' do per-cube/per-hier listings.",
-        ),
-      includeControl: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe("Include control objects ('}'-prefix). Default false."),
-      maxFindings: z
-        .number()
-        .int()
-        .min(1)
-        .max(10000)
-        .optional()
-        .default(500)
-        .describe(
-          "Cap on returned findings (default 500). Summary counters reflect the full scan.",
-        ),
-      versionOverride: z
-        .enum(["11", "12"])
-        .optional()
-        .describe(
-          "Override auto-detected TM1 major version. Use '12' to apply v12-only rules (e.g., TAB " +
-            "in element names) against a v11 server.",
-        ),
-      elementsPageSize: z
-        .number()
-        .int()
-        .min(1000)
-        .max(100000)
-        .optional()
-        .default(25000)
-        .describe(
-          "Page size for paging through violating elements. Bounded to keep each response " +
-            "well below the V8 string limit (~512 MB). Default 25000.",
-        ),
-      maxElementsPerDim: z
-        .number()
-        .int()
-        .min(1)
-        .optional()
-        .default(100000)
-        .describe(
-          "Per-(dimension, hierarchy) cap on VIOLATING elements returned. The server checks " +
-            "every element against the rules, so the whole hierarchy is always examined; this " +
-            "bounds how many offenders come back. A hit of the cap is reported under " +
-            "`elementsTruncated`. Default 100000.",
-        ),
-      summary: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe(
-          "Aggregate findings instead of returning per-object detail. When true, " +
-            "swaps the `findings` array for `findingsByGroup` — one entry per " +
-            "(objectKind, parent) group with `ruleBreakdown`, `sampleNames` (up to 3), " +
-            "and `totalCount`. Recommended for audit reports on large models (e.g. dims " +
-            "with thousands of element findings) where per-object detail is not needed " +
-            "and `maxFindings`-capped output would be misleading. `truncated` is " +
-            "always false in summary mode since no findings are dropped.",
-        ),
-    },
-    async ({
       scope,
       includeControl,
       maxFindings,
@@ -133,287 +137,287 @@ export function registerAuditNaming(server: McpServer, tm1Client: TM1Client) {
       elementsPageSize,
       maxElementsPerDim,
       summary,
-    }) => {
-      const activeScope: ReadonlyArray<Scope> =
-        scope && scope.length > 0 ? scope : SCOPE_DEFAULT;
-      const want = (s: Scope) => activeScope.includes(s);
-
-      const serverInfo = await tm1Client.server.getInfo();
-      const detectedMajor: TM1MajorVersion = parseMajorVersion(
-        serverInfo.productVersion,
-      );
-      const major: TM1MajorVersion = versionOverride
-        ? (Number(versionOverride) as TM1MajorVersion)
-        : detectedMajor;
-
-      const findings: Finding[] = [];
-      const scanned: Record<string, number> = {
-        cubes: 0,
-        dimensions: 0,
-        hierarchies: 0,
-        elements: 0,
-        processes: 0,
-        processVariables: 0,
-        chores: 0,
-        views: 0,
-        subsets: 0,
-      };
-
-      const addIfInvalid = (
-        name: string,
-        kind: ObjectKind,
-        parent?: string,
-      ): void => {
-        const violations = checkName(name, kind, major);
-        if (violations.length === 0) return;
-        const f: Finding = { objectKind: kind, objectName: name, violations };
-        if (parent !== undefined) f.parent = parent;
-        findings.push(f);
-      };
-
-      // ── Cubes ──────────────────────────────────────────────────────────
-      if (want("cubes")) {
-        const cubes = await tm1Client.cubes.list();
-        const filtered = includeControl
-          ? cubes
-          : cubes.filter((c) => !isControlName(c.name));
-        scanned.cubes = filtered.length;
-        for (const c of filtered) addIfInvalid(c.name, "cube");
-      }
-
-      // ── Dimensions + Hierarchies + (later) Elements/Subsets ───────────
-      const needDims =
-        want("dimensions") ||
-        want("hierarchies") ||
-        want("elements") ||
-        want("subsets");
-      let dimensionsForChildren:
-        | Array<{
-            name: string;
-            hierarchies: string[];
-            elementCounts?: Record<string, number> | undefined;
-          }>
-        | undefined;
-      if (needDims) {
-        // With elements in scope, ask for the per-hierarchy element totals in
-        // this same request. TM1 answers a nested $count without listing the
-        // elements, so the scope figures cost nothing here — versus one probe
-        // request per hierarchy, which on a 107-hierarchy model was 107 round
-        // trips for a number the list could have carried.
-        const dims = await tm1Client.dimensions.list(
-          want("elements") ? { includeElementCount: true } : {},
-        );
-        const filtered = includeControl
-          ? dims
-          : dims.filter((d) => !isControlName(d.name));
-        // Always reflect dims we fetched/traversed — even when "dimensions" is
-        // not in scope, the hierarchy / element / subset walk visited them, so
-        // reporting 0 would understate the scan footprint.
-        scanned.dimensions = filtered.length;
-        if (want("dimensions")) {
-          for (const d of filtered) addIfInvalid(d.name, "dimension");
-        }
-        if (want("hierarchies")) {
-          let hierCount = 0;
-          for (const d of filtered) {
-            for (const h of d.hierarchies) {
-              hierCount++;
-              addIfInvalid(h, "hierarchy", d.name);
-            }
-          }
-          scanned.hierarchies = hierCount;
-        }
-        dimensionsForChildren = filtered.map((d) => ({
-          name: d.name,
-          hierarchies: d.hierarchies,
-          elementCounts: d.elementCounts,
-        }));
-      }
-
-      // ── Elements (per-dim/per-hierarchy, filtered server-side) ─────────
-      // Every element rule is character-based, so TM1 evaluates them: the
-      // scan asks for the names that MIGHT violate one and checks only those
-      // (see src/lib/naming/odata-filter.ts). Downloading every name cost
-      // 15.2 MB on a single 171k-element dimension and 66 MB across a real
-      // model, and capped the audit at maxElementsPerDim — beyond which it
-      // examined a prefix of the dimension and said so. Now the server looks
-      // at all of them, and the cap bounds the number of REPORTED violations
-      // instead of the number examined.
-      //
-      // The filter is a prefilter, never the verdict: checkName still decides
-      // on every candidate, so an over-wide filter costs rows and nothing
-      // more. Its soundness — never omitting a name checkName would flag — is
-      // pinned by tests/unit/naming-odata-filter.test.ts and by the live
-      // suite, which plants a violating element and expects it back.
-      const elementsTruncated: TruncatedElementGroup[] = [];
-      let totalElementsInScope = 0;
-      if (want("elements") && dimensionsForChildren) {
-        let elemCount = 0;
-        for (const d of dimensionsForChildren) {
-          for (const h of d.hierarchies) {
-            const {
-              names,
-              total,
-              scanned: scannedHere,
-              truncated,
-            } = await tm1Client.elements.scanElementNames(d.name, h, {
-              pageSize: elementsPageSize,
-              maxScan: maxElementsPerDim,
-              filter: elementViolationFilter(major),
-              ...(d.elementCounts?.[h] !== undefined
-                ? { scopeTotal: d.elementCounts[h] }
-                : {}),
-            });
-            totalElementsInScope += total;
-            // `scanned` counts what was EXAMINED, which is now the whole
-            // hierarchy — the server applied the rules to every element and
-            // returned the candidates. Counting the candidates instead would
-            // report "5 elements scanned" for a 171k dimension with 5
-            // offenders.
-            elemCount += scannedHere;
-            for (const name of names) {
-              addIfInvalid(name, "element", `${d.name} / ${h}`);
-            }
-            if (truncated) {
-              elementsTruncated.push({
-                dimension: d.name,
-                hierarchy: h,
-                elementCount: total,
-                scannedCount: scannedHere,
-              });
-            }
-          }
-        }
-        scanned.elements = elemCount;
-      }
-
-      // ── Subsets (per dim/hier list) ────────────────────────────────────
-      if (want("subsets") && dimensionsForChildren) {
-        let count = 0;
-        for (const d of dimensionsForChildren) {
-          for (const h of d.hierarchies) {
-            const subs = await tm1Client.subsets.list(d.name, h);
-            for (const s of subs) {
-              if (!includeControl && isControlName(s.name)) continue;
-              count++;
-              addIfInvalid(s.name, "subset", `${d.name} / ${h}`);
-            }
-          }
-        }
-        scanned.subsets = count;
-      }
-
-      // ── Processes + (optional) variables ───────────────────────────────
-      let processNames: string[] = [];
-      if (want("processes") || want("processVariables")) {
-        const procs = await tm1Client.processes.list();
-        processNames = (
-          includeControl ? procs : procs.filter((p) => !isControlName(p.name))
-        ).map((p) => p.name);
-      }
-      if (want("processes")) {
-        scanned.processes = processNames.length;
-        for (const p of processNames) addIfInvalid(p, "process");
-      }
-      if (want("processVariables")) {
-        let count = 0;
-        for (const p of processNames) {
-          const vars = await tm1Client.processes.getVariables(p);
-          for (const v of vars) {
-            count++;
-            addIfInvalid(v.name, "processVariable", p);
-          }
-        }
-        scanned.processVariables = count;
-      }
-
-      // ── Chores ─────────────────────────────────────────────────────────
-      if (want("chores")) {
-        const chores = await tm1Client.chores.list();
-        const filtered = includeControl
-          ? chores
-          : chores.filter((c) => !isControlName(c.name));
-        scanned.chores = filtered.length;
-        for (const c of filtered) addIfInvalid(c.name, "chore");
-      }
-
-      // ── Views (per-cube) ───────────────────────────────────────────────
-      if (want("views")) {
-        const cubes = await tm1Client.cubes.list();
-        const filteredCubes = includeControl
-          ? cubes
-          : cubes.filter((c) => !isControlName(c.name));
-        let count = 0;
-        for (const c of filteredCubes) {
-          const views = await tm1Client.views.list(c.name);
-          for (const v of views) {
-            if (!includeControl && isControlName(v.name)) continue;
-            count++;
-            addIfInvalid(v.name, "view", c.name);
-          }
-        }
-        scanned.views = count;
-      }
-
-      // ── Aggregate + sort ───────────────────────────────────────────────
-      const byKind: Record<string, number> = {};
-      const byRule: Record<string, number> = {};
-      for (const f of findings) {
-        byKind[f.objectKind] = (byKind[f.objectKind] ?? 0) + 1;
-        for (const v of f.violations)
-          byRule[v.rule] = (byRule[v.rule] ?? 0) + 1;
-      }
-
-      findings.sort((a, b) => {
-        if (a.objectKind !== b.objectKind)
-          return a.objectKind.localeCompare(b.objectKind);
-        return a.objectName.localeCompare(b.objectName);
-      });
-
-      const truncated = !summary && findings.length > maxFindings;
-      const trimmed = findings.slice(0, maxFindings);
-
-      const totalScanned = Object.values(scanned).reduce((a, b) => a + b, 0);
-      const status = findings.length === 0 ? "pass" : "fail";
-
-      const findingsByGroup = summary
-        ? buildFindingsByGroup(findings)
-        : undefined;
-
-      const payload: Record<string, unknown> = {
-        status,
-        productVersion: serverInfo.productVersion,
-        detectedMajor,
-        appliedMajor: major,
-        scope: activeScope,
-        includeControl,
-        scanned,
-        totalScanned,
-        invalidCount: findings.length,
-        summary: { byKind, byRule },
-        truncated,
-        elementsTruncated,
-        totalElementsInScope,
-        rulesetSource:
-          "IBM PA naming-conventions (2.0 + 3.1) — hard rules only (server-reserved chars, control prefix, length 256, element leading +/-, TAB in v12 elements, process-var identifier).",
-      };
-      if (summary) {
-        payload.findingsByGroup = findingsByGroup;
-      } else {
-        payload.findings = trimmed;
-      }
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(payload),
-          },
-        ],
-      };
     },
-  );
-}
+    tm1Client,
+  ) => {
+    const activeScope: ReadonlyArray<Scope> =
+      scope && scope.length > 0 ? scope : SCOPE_DEFAULT;
+    const want = (s: Scope) => activeScope.includes(s);
+
+    const serverInfo = await tm1Client.server.getInfo();
+    const detectedMajor: TM1MajorVersion = parseMajorVersion(
+      serverInfo.productVersion,
+    );
+    const major: TM1MajorVersion = versionOverride
+      ? (Number(versionOverride) as TM1MajorVersion)
+      : detectedMajor;
+
+    const findings: Finding[] = [];
+    const scanned: Record<string, number> = {
+      cubes: 0,
+      dimensions: 0,
+      hierarchies: 0,
+      elements: 0,
+      processes: 0,
+      processVariables: 0,
+      chores: 0,
+      views: 0,
+      subsets: 0,
+    };
+
+    const addIfInvalid = (
+      name: string,
+      kind: ObjectKind,
+      parent?: string,
+    ): void => {
+      const violations = checkName(name, kind, major);
+      if (violations.length === 0) return;
+      const f: Finding = { objectKind: kind, objectName: name, violations };
+      if (parent !== undefined) f.parent = parent;
+      findings.push(f);
+    };
+
+    // ── Cubes ──────────────────────────────────────────────────────────
+    if (want("cubes")) {
+      const cubes = await tm1Client.cubes.list();
+      const filtered = includeControl
+        ? cubes
+        : cubes.filter((c) => !isControlName(c.name));
+      scanned.cubes = filtered.length;
+      for (const c of filtered) addIfInvalid(c.name, "cube");
+    }
+
+    // ── Dimensions + Hierarchies + (later) Elements/Subsets ───────────
+    const needDims =
+      want("dimensions") ||
+      want("hierarchies") ||
+      want("elements") ||
+      want("subsets");
+    let dimensionsForChildren:
+      | Array<{
+          name: string;
+          hierarchies: string[];
+          elementCounts?: Record<string, number> | undefined;
+        }>
+      | undefined;
+    if (needDims) {
+      // With elements in scope, ask for the per-hierarchy element totals in
+      // this same request. TM1 answers a nested $count without listing the
+      // elements, so the scope figures cost nothing here — versus one probe
+      // request per hierarchy, which on a 107-hierarchy model was 107 round
+      // trips for a number the list could have carried.
+      const dims = await tm1Client.dimensions.list(
+        want("elements") ? { includeElementCount: true } : {},
+      );
+      const filtered = includeControl
+        ? dims
+        : dims.filter((d) => !isControlName(d.name));
+      // Always reflect dims we fetched/traversed — even when "dimensions" is
+      // not in scope, the hierarchy / element / subset walk visited them, so
+      // reporting 0 would understate the scan footprint.
+      scanned.dimensions = filtered.length;
+      if (want("dimensions")) {
+        for (const d of filtered) addIfInvalid(d.name, "dimension");
+      }
+      if (want("hierarchies")) {
+        let hierCount = 0;
+        for (const d of filtered) {
+          for (const h of d.hierarchies) {
+            hierCount++;
+            addIfInvalid(h, "hierarchy", d.name);
+          }
+        }
+        scanned.hierarchies = hierCount;
+      }
+      dimensionsForChildren = filtered.map((d) => ({
+        name: d.name,
+        hierarchies: d.hierarchies,
+        elementCounts: d.elementCounts,
+      }));
+    }
+
+    // ── Elements (per-dim/per-hierarchy, filtered server-side) ─────────
+    // Every element rule is character-based, so TM1 evaluates them: the
+    // scan asks for the names that MIGHT violate one and checks only those
+    // (see src/lib/naming/odata-filter.ts). Downloading every name cost
+    // 15.2 MB on a single 171k-element dimension and 66 MB across a real
+    // model, and capped the audit at maxElementsPerDim — beyond which it
+    // examined a prefix of the dimension and said so. Now the server looks
+    // at all of them, and the cap bounds the number of REPORTED violations
+    // instead of the number examined.
+    //
+    // The filter is a prefilter, never the verdict: checkName still decides
+    // on every candidate, so an over-wide filter costs rows and nothing
+    // more. Its soundness — never omitting a name checkName would flag — is
+    // pinned by tests/unit/naming-odata-filter.test.ts and by the live
+    // suite, which plants a violating element and expects it back.
+    const elementsTruncated: TruncatedElementGroup[] = [];
+    let totalElementsInScope = 0;
+    if (want("elements") && dimensionsForChildren) {
+      let elemCount = 0;
+      for (const d of dimensionsForChildren) {
+        for (const h of d.hierarchies) {
+          const {
+            names,
+            total,
+            scanned: scannedHere,
+            truncated,
+          } = await tm1Client.elements.scanElementNames(d.name, h, {
+            pageSize: elementsPageSize,
+            maxScan: maxElementsPerDim,
+            filter: elementViolationFilter(major),
+            ...(d.elementCounts?.[h] !== undefined
+              ? { scopeTotal: d.elementCounts[h] }
+              : {}),
+          });
+          totalElementsInScope += total;
+          // `scanned` counts what was EXAMINED, which is now the whole
+          // hierarchy — the server applied the rules to every element and
+          // returned the candidates. Counting the candidates instead would
+          // report "5 elements scanned" for a 171k dimension with 5
+          // offenders.
+          elemCount += scannedHere;
+          for (const name of names) {
+            addIfInvalid(name, "element", `${d.name} / ${h}`);
+          }
+          if (truncated) {
+            elementsTruncated.push({
+              dimension: d.name,
+              hierarchy: h,
+              elementCount: total,
+              scannedCount: scannedHere,
+            });
+          }
+        }
+      }
+      scanned.elements = elemCount;
+    }
+
+    // ── Subsets (per dim/hier list) ────────────────────────────────────
+    if (want("subsets") && dimensionsForChildren) {
+      let count = 0;
+      for (const d of dimensionsForChildren) {
+        for (const h of d.hierarchies) {
+          const subs = await tm1Client.subsets.list(d.name, h);
+          for (const s of subs) {
+            if (!includeControl && isControlName(s.name)) continue;
+            count++;
+            addIfInvalid(s.name, "subset", `${d.name} / ${h}`);
+          }
+        }
+      }
+      scanned.subsets = count;
+    }
+
+    // ── Processes + (optional) variables ───────────────────────────────
+    let processNames: string[] = [];
+    if (want("processes") || want("processVariables")) {
+      const procs = await tm1Client.processes.list();
+      processNames = (
+        includeControl ? procs : procs.filter((p) => !isControlName(p.name))
+      ).map((p) => p.name);
+    }
+    if (want("processes")) {
+      scanned.processes = processNames.length;
+      for (const p of processNames) addIfInvalid(p, "process");
+    }
+    if (want("processVariables")) {
+      let count = 0;
+      for (const p of processNames) {
+        const vars = await tm1Client.processes.getVariables(p);
+        for (const v of vars) {
+          count++;
+          addIfInvalid(v.name, "processVariable", p);
+        }
+      }
+      scanned.processVariables = count;
+    }
+
+    // ── Chores ─────────────────────────────────────────────────────────
+    if (want("chores")) {
+      const chores = await tm1Client.chores.list();
+      const filtered = includeControl
+        ? chores
+        : chores.filter((c) => !isControlName(c.name));
+      scanned.chores = filtered.length;
+      for (const c of filtered) addIfInvalid(c.name, "chore");
+    }
+
+    // ── Views (per-cube) ───────────────────────────────────────────────
+    if (want("views")) {
+      const cubes = await tm1Client.cubes.list();
+      const filteredCubes = includeControl
+        ? cubes
+        : cubes.filter((c) => !isControlName(c.name));
+      let count = 0;
+      for (const c of filteredCubes) {
+        const views = await tm1Client.views.list(c.name);
+        for (const v of views) {
+          if (!includeControl && isControlName(v.name)) continue;
+          count++;
+          addIfInvalid(v.name, "view", c.name);
+        }
+      }
+      scanned.views = count;
+    }
+
+    // ── Aggregate + sort ───────────────────────────────────────────────
+    const byKind: Record<string, number> = {};
+    const byRule: Record<string, number> = {};
+    for (const f of findings) {
+      byKind[f.objectKind] = (byKind[f.objectKind] ?? 0) + 1;
+      for (const v of f.violations) byRule[v.rule] = (byRule[v.rule] ?? 0) + 1;
+    }
+
+    findings.sort((a, b) => {
+      if (a.objectKind !== b.objectKind)
+        return a.objectKind.localeCompare(b.objectKind);
+      return a.objectName.localeCompare(b.objectName);
+    });
+
+    const truncated = !summary && findings.length > maxFindings;
+    const trimmed = findings.slice(0, maxFindings);
+
+    const totalScanned = Object.values(scanned).reduce((a, b) => a + b, 0);
+    const status = findings.length === 0 ? "pass" : "fail";
+
+    const findingsByGroup = summary
+      ? buildFindingsByGroup(findings)
+      : undefined;
+
+    const payload: Record<string, unknown> = {
+      status,
+      productVersion: serverInfo.productVersion,
+      detectedMajor,
+      appliedMajor: major,
+      scope: activeScope,
+      includeControl,
+      scanned,
+      totalScanned,
+      invalidCount: findings.length,
+      summary: { byKind, byRule },
+      truncated,
+      elementsTruncated,
+      totalElementsInScope,
+      rulesetSource:
+        "IBM PA naming-conventions (2.0 + 3.1) — hard rules only (server-reserved chars, control prefix, length 256, element leading +/-, TAB in v12 elements, process-var identifier).",
+    };
+    if (summary) {
+      payload.findingsByGroup = findingsByGroup;
+    } else {
+      payload.findings = trimmed;
+    }
+
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(payload),
+        },
+      ],
+    };
+  },
+});
 
 const SAMPLE_SIZE = 3;
 

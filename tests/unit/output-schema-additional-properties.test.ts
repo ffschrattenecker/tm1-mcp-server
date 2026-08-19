@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { OUTPUT_SCHEMA_MAP } from "../../src/tools/output-schema-map.js";
+// Output schemas come from the defineTool() specs; the barrel import runs them.
+import "../../src/tools/index.js";
+import { specFor } from "../../src/tools/define-tool.js";
 
 // Regression guard for the "data must NOT have additional properties" bug.
 //
@@ -59,11 +61,12 @@ const TOOLS_WITH_EXTRAS: string[] = [
   "tm1_analyze_callgraph",
 ];
 
-describe("OUTPUT_SCHEMA_MAP — JSON Schema additionalProperties", () => {
+describe("output schemas — JSON Schema additionalProperties", () => {
   for (const toolName of TOOLS_WITH_EXTRAS) {
     it(`${toolName}: published JSON Schema permits additional properties`, () => {
-      const entry = OUTPUT_SCHEMA_MAP[toolName];
+      const entry = specFor(toolName)?.outputSchema;
       expect(entry, `missing schema for ${toolName}`).toBeDefined();
+      if (entry === undefined) return;
       const schema = asSchema(entry);
       const json = zodToJsonSchema(schema, { strictUnions: true }) as {
         additionalProperties?: boolean | object;

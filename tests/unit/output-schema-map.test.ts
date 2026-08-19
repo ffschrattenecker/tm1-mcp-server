@@ -7,13 +7,12 @@ import type { TM1Client } from "../../src/tm1-client.js";
 import { registerAllTools } from "../../src/tools/index.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import { paginate } from "../../src/tools/pagination.js";
-// Resolved view: a tool declares its outputSchema either in a defineTool()
-// spec or in OUTPUT_SCHEMA_MAP, and these assertions must hold either way.
-// registerAllTools is imported above, so every spec has been defined.
-import { allToolMetadata } from "../../src/tools/tool-metadata.js";
+// Output schemas come from the defineTool() specs; registerAllTools is
+// imported above, so every spec has been defined.
+import { allSpecs } from "../../src/tools/define-tool.js";
 
 const OUTPUT_SCHEMAS = new Map(
-  [...allToolMetadata()].flatMap(([name, meta]) =>
+  [...allSpecs()].flatMap(([name, meta]) =>
     meta.outputSchema === undefined ? [] : [[name, meta.outputSchema] as const],
   ),
 );

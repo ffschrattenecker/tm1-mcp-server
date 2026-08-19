@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ToolRegistrar } from "./define-tool.js";
 import type { TM1Client } from "../tm1-client.js";
 
 // Metadata tools
@@ -142,8 +143,6 @@ import { registerRemoveClientGroup } from "./security/remove-client-group.js";
 // previous design kept a second hand-ordered call block that drifted from the
 // import order; this array is the only call site. check-tool-registration.mjs
 // fails the build if a `register*` export under src/tools/ is missing here.
-type ToolRegistrar = (server: McpServer, tm1Client: TM1Client) => void;
-
 const REGISTRARS: ToolRegistrar[] = [
   // Metadata
   registerListCubes,

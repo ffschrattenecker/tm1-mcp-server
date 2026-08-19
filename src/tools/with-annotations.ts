@@ -3,7 +3,7 @@ import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
 import { slimJsonSchema } from "../lib/slim-json-schema.js";
-import { toolMetadata } from "./tool-metadata.js";
+import { specFor } from "./define-tool.js";
 import { strictVariants } from "./schemas/markdown-capable.js";
 import {
   formatTm1ErrorResult,
@@ -118,7 +118,7 @@ function installToolsListSlimming(server: McpServer): void {
 }
 
 // Wrap McpServer so every server.tool(name, desc, schema, cb) call:
-//   1) injects the matching annotation (defineTool spec or ANNOTATION_MAP)
+//   1) injects the annotation declared in the tool's defineTool() spec
 //   2) wraps the callback so thrown errors become uniform JSON results
 //      and existing isError results get reshaped to include `hint`
 //   3) when the tool declares an outputSchema, attaches it
@@ -304,19 +304,17 @@ export function withAnnotations(
         const name = args[0] as string;
         const description = args[1] as string;
         const inputSchema = args[2];
-        // Resolved view over both declaration sites — a defineTool() spec or
-        // the legacy name-keyed maps. See ./tool-metadata.ts.
-        const meta = toolMetadata(name);
-        const annot = meta?.annotations;
+        const spec = specFor(name);
+        const annot = spec?.annotations;
         if (!annot) {
           throw new Error(
-            `Tool "${name}" registered without annotation — declare it via defineTool() in the tool file, or add it to ANNOTATION_MAP in src/tools/annotation-map.ts`,
+            `Tool "${name}" registered without a spec — build it with defineTool() (src/tools/define-tool.ts) instead of calling server.tool directly.`,
           );
         }
         if (mode === "readonly" && !annot.readOnlyHint) {
           return;
         }
-        const outputSchema = meta.outputSchema;
+        const outputSchema = spec.outputSchema;
         const wrappedCb = wrapCb(name, args[3] as ToolCallback, outputSchema);
         const config: Record<string, unknown> = {
           title: deriveTitle(name),

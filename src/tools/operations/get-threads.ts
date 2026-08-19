@@ -1,6 +1,4 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { TM1Client } from "../../tm1-client.js";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
 import {
   actionResponse,
@@ -8,45 +6,54 @@ import {
   pageResponse,
   type Column,
 } from "../format.js";
+import { DESTRUCTIVE, READ_ONLY } from "../annotations.js";
+import { MutationResultSchema, ThreadItemSchema } from "../schemas/items.js";
+import { type ToolRegistrar, defineTool } from "../define-tool.js";
+import { pageShapeFor } from "../schemas/common.js";
 
-export function registerGetThreads(
-  server: McpServer,
-  tm1Client: TM1Client,
-): void {
-  if (tm1Client.version !== 11) return;
-
-  server.tool(
-    "tm1_list_threads",
+const registerListThreads = defineTool({
+  name: "tm1_list_threads",
+  description:
     "List active threads on the TM1 server (running processes, chores, MDX queries, etc.). Paginated (default 50/page). (v11 only)",
-    { ...PAGINATION_SCHEMA, ...FORMAT_SCHEMA },
-    async ({ limit, offset, fetchAll, format }) => {
-      const threads = await tm1Client.monitoring.getThreads();
-      const page = paginate(threads, limit, offset, fetchAll);
-      type Row = (typeof threads)[number];
-      const columns: Column<Row>[] = [
-        { header: "id", get: (t) => t.id },
-        { header: "name", get: (t) => t.name },
-        { header: "state", get: (t) => t.state },
-        { header: "function", get: (t) => t.function },
-        { header: "objectName", get: (t) => t.objectName },
-      ];
-      return pageResponse(page, format, { title: "Threads", columns });
-    },
-  );
+  annotations: READ_ONLY,
+  enabled: (tm1Client) => tm1Client.version === 11,
+  output: pageShapeFor(ThreadItemSchema),
+  input: { ...PAGINATION_SCHEMA, ...FORMAT_SCHEMA },
+  handler: async ({ limit, offset, fetchAll, format }, tm1Client) => {
+    const threads = await tm1Client.monitoring.getThreads();
+    const page = paginate(threads, limit, offset, fetchAll);
+    type Row = (typeof threads)[number];
+    const columns: Column<Row>[] = [
+      { header: "id", get: (t) => t.id },
+      { header: "name", get: (t) => t.name },
+      { header: "state", get: (t) => t.state },
+      { header: "function", get: (t) => t.function },
+      { header: "objectName", get: (t) => t.objectName },
+    ];
+    return pageResponse(page, format, { title: "Threads", columns });
+  },
+});
 
-  server.tool(
-    "tm1_cancel_thread",
-    [
-      "Cancel a running TM1 server thread by its ID. Use tm1_list_threads to find the ID.",
-      "Non-idempotent: cancelling a finished thread errors. Before: tm1_list_threads to confirm the thread is still running.",
-      "(v11 only)",
-    ].join(" "),
-    {
-      id: z.number().int().describe("Thread ID to cancel"),
-    },
-    async ({ id }) => {
-      await tm1Client.monitoring.cancelThread(id);
-      return actionResponse({ success: true, threadId: id });
-    },
-  );
-}
+const registerCancelThread = defineTool({
+  name: "tm1_cancel_thread",
+  description: [
+    "Cancel a running TM1 server thread by its ID. Use tm1_list_threads to find the ID.",
+    "Non-idempotent: cancelling a finished thread errors. Before: tm1_list_threads to confirm the thread is still running.",
+    "(v11 only)",
+  ],
+  annotations: DESTRUCTIVE,
+  enabled: (tm1Client) => tm1Client.version === 11,
+  output: MutationResultSchema,
+  input: {
+    id: z.number().int().describe("Thread ID to cancel"),
+  },
+  handler: async ({ id }, tm1Client) => {
+    await tm1Client.monitoring.cancelThread(id);
+    return actionResponse({ success: true, threadId: id });
+  },
+});
+
+export const registerGetThreads: ToolRegistrar = (server, tm1Client) => {
+  registerListThreads(server, tm1Client);
+  registerCancelThread(server, tm1Client);
+};

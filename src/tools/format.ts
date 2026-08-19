@@ -7,8 +7,8 @@
 // like Kiro) and as `structuredContent: { markdown }` (read by clients like
 // Claude Code, which discard `content` whenever structuredContent is present).
 // Shipping it only one way makes format:"markdown" a no-op on one of them.
-// Every tool exposing FORMAT_SCHEMA must therefore wrap its outputSchema in
-// `markdownCapable()` — see ./schemas/markdown-capable.ts for the why.
+// defineTool() applies `markdownCapable()` automatically to any tool whose
+// input shape carries `format` — see ./schemas/markdown-capable.ts for the why.
 import { z } from "zod";
 import type { Page } from "./pagination.js";
 
@@ -172,7 +172,7 @@ export function payloadResponse<T>(
 // Action-result helper for non-paginated mutation tools (delete/clear/
 // toggle/etc.) that return a flat {success, ...meta} payload. JSON-only;
 // no markdown variant since one-liner action results don't benefit from a
-// table view. structuredContent is attached so output-schema-map roundtrip
+// table view. structuredContent is attached so the declared-schema roundtrip
 // is satisfied without the Proxy re-parsing the JSON body.
 export function actionResponse<T extends object>(payload: T): TextResult {
   return {

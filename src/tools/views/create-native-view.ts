@@ -1,7 +1,8 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { TM1Client } from "../../tm1-client.js";
 import { actionResponse } from "../format.js";
+import { MutationResultSchema } from "../schemas/items.js";
+import { WRITE } from "../annotations.js";
+import { defineTool } from "../define-tool.js";
 
 const AXIS_SPEC = z.object({
   dimension: z.string().describe("Dimension name"),
@@ -37,50 +38,50 @@ const TITLE_SPEC = AXIS_SPEC.extend({
     ),
 });
 
-export function registerCreateNativeView(
-  server: McpServer,
-  tm1Client: TM1Client,
-): void {
-  server.tool(
-    "tm1_create_native_view",
+export const registerCreateNativeView = defineTool({
+  name: "tm1_create_native_view",
+  description:
     "Create a public native (subset-based) view on a cube — the classic view type used as TI process datasource " +
-      "(TM1CubeView) and for zero-suppressed exports. Every cube dimension must appear in exactly one of " +
-      "columns/rows/titles, each axis entry with exactly one subset source: a registered subset name, an MDX " +
-      "expression, or an explicit element list (the latter two create anonymous subsets). " +
-      "For MDX-defined views use tm1_create_mdx_view instead.",
+    "(TM1CubeView) and for zero-suppressed exports. Every cube dimension must appear in exactly one of " +
+    "columns/rows/titles, each axis entry with exactly one subset source: a registered subset name, an MDX " +
+    "expression, or an explicit element list (the latter two create anonymous subsets). " +
+    "For MDX-defined views use tm1_create_mdx_view instead.",
+  annotations: WRITE,
+  output: MutationResultSchema,
+  input: {
+    cubeName: z.string().describe("Cube the view belongs to"),
+    viewName: z.string().describe("New view name"),
+    columns: z
+      .array(AXIS_SPEC)
+      .min(1)
+      .describe("Column axis, one entry per dimension"),
+    rows: z
+      .array(AXIS_SPEC)
+      .min(1)
+      .describe("Row axis, one entry per dimension"),
+    titles: z
+      .array(TITLE_SPEC)
+      .optional()
+      .describe(
+        "Title (context) dimensions, each with a required selected element",
+      ),
+    suppressEmptyColumns: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe("Suppress columns where all cells are empty/zero"),
+    suppressEmptyRows: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe("Suppress rows where all cells are empty/zero"),
+    formatString: z
+      .string()
+      .optional()
+      .describe("Cell format string, e.g. '0.#########'"),
+  },
+  handler: async (
     {
-      cubeName: z.string().describe("Cube the view belongs to"),
-      viewName: z.string().describe("New view name"),
-      columns: z
-        .array(AXIS_SPEC)
-        .min(1)
-        .describe("Column axis, one entry per dimension"),
-      rows: z
-        .array(AXIS_SPEC)
-        .min(1)
-        .describe("Row axis, one entry per dimension"),
-      titles: z
-        .array(TITLE_SPEC)
-        .optional()
-        .describe(
-          "Title (context) dimensions, each with a required selected element",
-        ),
-      suppressEmptyColumns: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe("Suppress columns where all cells are empty/zero"),
-      suppressEmptyRows: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe("Suppress rows where all cells are empty/zero"),
-      formatString: z
-        .string()
-        .optional()
-        .describe("Cell format string, e.g. '0.#########'"),
-    },
-    async ({
       cubeName,
       viewName,
       columns,
@@ -89,16 +90,17 @@ export function registerCreateNativeView(
       suppressEmptyColumns,
       suppressEmptyRows,
       formatString,
-    }) => {
-      await tm1Client.views.createNative(cubeName, viewName, {
-        columns,
-        rows,
-        titles,
-        suppressEmptyColumns,
-        suppressEmptyRows,
-        formatString,
-      });
-      return actionResponse({ success: true, cubeName, viewName });
     },
-  );
-}
+    tm1Client,
+  ) => {
+    await tm1Client.views.createNative(cubeName, viewName, {
+      columns,
+      rows,
+      titles,
+      suppressEmptyColumns,
+      suppressEmptyRows,
+      formatString,
+    });
+    return actionResponse({ success: true, cubeName, viewName });
+  },
+});

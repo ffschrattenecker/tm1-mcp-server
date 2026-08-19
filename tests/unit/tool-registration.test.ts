@@ -4,17 +4,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type pino from "pino";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerAllTools } from "../../src/tools/index.js";
-// Resolved view over both declaration sites — a tool declares its annotation
-// and outputSchema either in a defineTool() spec or in the legacy maps, and
-// this suite must not care which. Evaluated after the import above, so every
-// tool module's top-level defineTool() call has run.
-import { allToolMetadata } from "../../src/tools/tool-metadata.js";
+// Every tool declares its annotation and output schema in its defineTool()
+// spec; the import above has run them all.
+import { allSpecs } from "../../src/tools/define-tool.js";
 import {
   withAnnotations,
   deriveTitle,
 } from "../../src/tools/with-annotations.js";
 
-const TOOL_META = allToolMetadata();
+const TOOL_META = allSpecs();
 const ANNOTATIONS = new Map(
   [...TOOL_META].map(([name, meta]) => [name, meta.annotations]),
 );
@@ -179,6 +177,24 @@ describe("L9 output-schema drift guard", () => {
     };
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toEqual(good);
+  });
+});
+
+describe("spec completeness", () => {
+  // The deleted map-coverage gates asserted that no schema entry outlived its
+  // tool and vice versa. With the metadata inside the spec, the only half of
+  // that which can still go wrong is a tool shipping WITHOUT an output schema —
+  // `output` is the one optional field. Every tool is expected to declare one.
+  it("every registered tool declares an output schema", () => {
+    const registered = collectRegisteredNames("readwrite");
+    const missing = [...registered].filter((name) => !OUTPUT_SCHEMAS.has(name));
+    expect(missing).toEqual([]);
+  });
+
+  it("no spec exists for a tool that is never registered", () => {
+    const registered = collectRegisteredNames("readwrite");
+    const orphans = [...ANNOTATIONS.keys()].filter((n) => !registered.has(n));
+    expect(orphans).toEqual([]);
   });
 });
 

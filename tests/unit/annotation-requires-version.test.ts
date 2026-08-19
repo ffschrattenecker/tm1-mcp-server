@@ -5,10 +5,9 @@ import {
   withVersion,
   type Tm1ToolAnnotations,
 } from "../../src/tools/annotations.js";
-// Resolved view, so a tool that moves its annotation into a defineTool() spec
-// keeps being checked here without an edit.
+// Annotations live in the defineTool() specs; the barrel import runs them.
 import "../../src/tools/index.js";
-import { toolMetadata } from "../../src/tools/tool-metadata.js";
+import { specFor } from "../../src/tools/define-tool.js";
 
 describe("R2-21: requiresVersion annotation extension", () => {
   describe("withVersion()", () => {
@@ -47,7 +46,7 @@ describe("R2-21: requiresVersion annotation extension", () => {
     ];
 
     it.each(v11OnlyTools)("%s is tagged requiresVersion='v11'", (tool) => {
-      const annot = toolMetadata(tool)?.annotations;
+      const annot = specFor(tool)?.annotations;
       expect(annot, `${tool} declares no annotation`).toBeDefined();
       expect(annot?.requiresVersion).toBe("v11");
     });
@@ -60,12 +59,12 @@ describe("R2-21: requiresVersion annotation extension", () => {
         "tm1_get_cell_value",
       ];
       for (const tool of sample) {
-        expect(toolMetadata(tool)?.annotations.requiresVersion).toBeUndefined();
+        expect(specFor(tool)?.annotations.requiresVersion).toBeUndefined();
       }
     });
 
     it("requiresVersion field is JSON-serializable (survives wire transport)", () => {
-      const annot = toolMetadata("tm1_install_pro_bundle")?.annotations;
+      const annot = specFor("tm1_install_pro_bundle")?.annotations;
       const roundTrip = JSON.parse(JSON.stringify(annot));
       expect(roundTrip.requiresVersion).toBe("v11");
       expect(roundTrip.idempotentHint).toBe(true);

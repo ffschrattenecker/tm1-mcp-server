@@ -1,61 +1,59 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { TM1Client } from "../../tm1-client.js";
 import { withToolHint } from "../error-format.js";
+import { CheckFeedersResultSchema } from "../schemas/items.js";
+import { READ_ONLY, withVersion } from "../annotations.js";
+import { defineTool } from "../define-tool.js";
 
-export function registerCheckFeeders(
-  server: McpServer,
-  tm1Client: TM1Client,
-): void {
-  server.tool(
-    "tm1_check_feeders",
-    [
-      "Check the feeders of a cell: verifies feeder coverage for the cells underlying this cell and returns the problematic ones with a fed flag — fed=false marks a broken or missing feeder (the classic cause of empty consolidated/rule cells). An empty result means no feeder problems were detected (live-verified on 11.8: fully-fed areas return []).",
-      "Per-cell runtime check; complements tm1_audit_feeders (static rule analysis).",
-      "Elements address the default hierarchy, in cube dimension order (discover with tm1_list_cubes).",
-      "v11 only. Related: tm1_trace_feeders (statements involved), tm1_trace_cell_calculation (why has this cell value X).",
-    ].join(" "),
-    {
-      cubeName: z.string().describe("Name of the TM1 cube"),
-      elements: z
-        .array(z.string())
-        .describe(
-          "Element names for each dimension of the cube, in cube dimension order",
-        ),
-      timeoutMs: z
-        .number()
-        .int()
-        .min(1000)
-        .max(3600000)
-        .optional()
-        .describe(
-          "Override the default request timeout (ms, 1000–3600000). Checks over deep consolidations can be slow.",
-        ),
-    },
-    async ({ cubeName, elements, timeoutMs }, extra) => {
-      const fedCells = await withToolHint(
-        tm1Client.cells.checkFeeders(cubeName, elements, {
-          signal: extra?.signal,
-          ...(timeoutMs ? { timeoutMs } : {}),
-        }),
-        `CheckFeeders failed for cube '${cubeName}'. Verify dimension order/elements via tm1_list_cubes; alternate hierarchies are not supported. On v12 this action is unavailable.`,
-      );
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                count: fedCells.length,
-                unfedCount: fedCells.filter((c) => !c.fed).length,
-                fedCells,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
-  );
-}
+export const registerCheckFeeders = defineTool({
+  name: "tm1_check_feeders",
+  description: [
+    "Check the feeders of a cell: verifies feeder coverage for the cells underlying this cell and returns the problematic ones with a fed flag — fed=false marks a broken or missing feeder (the classic cause of empty consolidated/rule cells). An empty result means no feeder problems were detected (live-verified on 11.8: fully-fed areas return []).",
+    "Per-cell runtime check; complements tm1_audit_feeders (static rule analysis).",
+    "Elements address the default hierarchy, in cube dimension order (discover with tm1_list_cubes).",
+    "v11 only. Related: tm1_trace_feeders (statements involved), tm1_trace_cell_calculation (why has this cell value X).",
+  ],
+  annotations: withVersion(READ_ONLY, "v11"),
+  output: CheckFeedersResultSchema,
+  input: {
+    cubeName: z.string().describe("Name of the TM1 cube"),
+    elements: z
+      .array(z.string())
+      .describe(
+        "Element names for each dimension of the cube, in cube dimension order",
+      ),
+    timeoutMs: z
+      .number()
+      .int()
+      .min(1000)
+      .max(3600000)
+      .optional()
+      .describe(
+        "Override the default request timeout (ms, 1000–3600000). Checks over deep consolidations can be slow.",
+      ),
+  },
+  handler: async ({ cubeName, elements, timeoutMs }, tm1Client, extra) => {
+    const fedCells = await withToolHint(
+      tm1Client.cells.checkFeeders(cubeName, elements, {
+        signal: extra?.signal,
+        ...(timeoutMs ? { timeoutMs } : {}),
+      }),
+      `CheckFeeders failed for cube '${cubeName}'. Verify dimension order/elements via tm1_list_cubes; alternate hierarchies are not supported. On v12 this action is unavailable.`,
+    );
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(
+            {
+              count: fedCells.length,
+              unfedCount: fedCells.filter((c) => !c.fed).length,
+              fedCells,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  },
+});

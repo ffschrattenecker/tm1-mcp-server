@@ -2,6 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type pino from "pino";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
+// A real tool name is used below so its defineTool() spec resolves; the barrel
+// import is what runs the spec definitions.
+import "../../src/tools/index.js";
 
 const mockLogger = {
   info: vi.fn(),

@@ -27,11 +27,9 @@ import {
   wrappedPageResponse,
 } from "../../src/tools/format.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
-// Importing the tool barrel runs every top-level defineTool() call, so the
-// resolved view below covers tools that declare their schema in a spec as well
-// as those still listed in OUTPUT_SCHEMA_MAP.
+// Importing the tool barrel runs every top-level defineTool() call.
 import "../../src/tools/index.js";
-import { allToolMetadata } from "../../src/tools/tool-metadata.js";
+import { allSpecs } from "../../src/tools/define-tool.js";
 
 const mockLogger = {
   info: vi.fn(),
@@ -200,7 +198,7 @@ describe("markdown-capable schema coverage", () => {
   // defineTool itself (migrated ones derive it from `format` in the input).
   // What neither can see is whether the resulting schema actually validates a
   // markdown response — that needs the built Zod object, so it is checked here.
-  const markdownCapableTools = [...allToolMetadata()]
+  const markdownCapableTools = [...allSpecs()]
     .filter(([, meta]) => strictVariants(meta.outputSchema as object))
     .map(([name]) => name);
 
@@ -211,7 +209,7 @@ describe("markdown-capable schema coverage", () => {
   it.each(markdownCapableTools)(
     "%s accepts a markdown-only payload",
     (tool) => {
-      const entry = allToolMetadata().get(tool)?.outputSchema;
+      const entry = allSpecs().get(tool)?.outputSchema;
       expect(entry, `${tool} has no output schema`).toBeDefined();
       expect(
         strictVariants(entry as object),

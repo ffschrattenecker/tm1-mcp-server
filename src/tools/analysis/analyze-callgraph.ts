@@ -1,6 +1,4 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { TM1Client } from "../../tm1-client.js";
 import { buildIndexFromTM1 } from "../../lib/callgraph/tm1-adapter.js";
 import {
   buildCallGraph,
@@ -17,6 +15,9 @@ import {
   maskCodeLine,
   resolveMaskSecrets,
 } from "../../lib/mask-secrets.js";
+import { CallgraphResultSchema } from "../schemas/items.js";
+import { READ_ONLY } from "../annotations.js";
+import { defineTool } from "../define-tool.js";
 
 function maskParams(params: readonly CallParam[]): CallParam[] {
   return params.map((p) =>
@@ -329,69 +330,69 @@ export function globalRanking(
   };
 }
 
-export function registerAnalyzeCallgraph(
-  server: McpServer,
-  tm1Client: TM1Client,
-) {
-  server.tool(
-    "tm1_analyze_callgraph",
+export const registerAnalyzeCallgraph = defineTool({
+  name: "tm1_analyze_callgraph",
+  description:
     "Build a process call graph (ExecuteProcess/RunProcess) for a TI process. direction='downstream' shows what `start` calls (with parameter env propagation: literal/passthrough/dynamic). direction='upstream' shows callers. Returns nested JSON tree. Omit `start` for a global ranking: every process ranked by outgoing (fan-out) or incoming (fan-in) call counts — answers 'which process triggers/is triggered by the most others' without a per-process traversal. ExecuteProcess/RunProcess calls whose target is a computed expression or process parameter (not statically resolvable) are surfaced per node via `unresolvedCalls` (full/compact) or `unresolvedCount` (summary) — flagged, not resolved.",
+  annotations: READ_ONLY,
+  output: CallgraphResultSchema,
+  input: {
+    start: z
+      .string()
+      .optional()
+      .describe(
+        "Process name to start traversal from. Omit for global ranking across all processes.",
+      ),
+    direction: z.enum(["downstream", "upstream"]).default("downstream"),
+    maxDepth: z.number().int().min(1).max(50).optional().default(20),
+    includeSystem: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe(
+        "Include TM1 control objects (names starting with '}') in graph. Default: false.",
+      ),
+    includeControl: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe(
+        "Index control processes/cubes/chores (broader graph). Default: false.",
+      ),
+    mode: z
+      .enum(["full", "summary", "compact"])
+      .optional()
+      .default("full")
+      .describe(
+        "Output mode. 'full' returns nested tree with incomingEdge/env/effectiveParams (large for deep graphs). 'summary' returns flat per-process aggregates (occurrences, depthMin/Max, cycle/depthLimit flags) for triage. 'compact' returns the nested tree but only {process, cycle?, depthLimitReached?, children[]} — drops params, env, snippets, effectiveParams. Use compact for structural overviews where call shape matters but param values do not.",
+      ),
+    maskSecrets: z
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        "Redact param values whose name matches /pass|pwd|secret|token|key|credential|auth/i to '***'. Also masks the inline snippet. Default: true. Set false only when debugging credential propagation locally.",
+      ),
+    rankBy: z
+      .enum(["outgoing", "incoming"])
+      .optional()
+      .default("outgoing")
+      .describe(
+        "Global-ranking mode only (when `start` is omitted). 'outgoing' ranks by fan-out (most ExecuteProcess call sites), 'incoming' by fan-in (most called). Default: outgoing.",
+      ),
+    topN: z
+      .number()
+      .int()
+      .positive()
+      .max(1000)
+      .optional()
+      .default(50)
+      .describe(
+        "Global-ranking mode only: cap on ranked processes returned (default 50).",
+      ),
+  },
+  handler: async (
     {
-      start: z
-        .string()
-        .optional()
-        .describe(
-          "Process name to start traversal from. Omit for global ranking across all processes.",
-        ),
-      direction: z.enum(["downstream", "upstream"]).default("downstream"),
-      maxDepth: z.number().int().min(1).max(50).optional().default(20),
-      includeSystem: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe(
-          "Include TM1 control objects (names starting with '}') in graph. Default: false.",
-        ),
-      includeControl: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe(
-          "Index control processes/cubes/chores (broader graph). Default: false.",
-        ),
-      mode: z
-        .enum(["full", "summary", "compact"])
-        .optional()
-        .default("full")
-        .describe(
-          "Output mode. 'full' returns nested tree with incomingEdge/env/effectiveParams (large for deep graphs). 'summary' returns flat per-process aggregates (occurrences, depthMin/Max, cycle/depthLimit flags) for triage. 'compact' returns the nested tree but only {process, cycle?, depthLimitReached?, children[]} — drops params, env, snippets, effectiveParams. Use compact for structural overviews where call shape matters but param values do not.",
-        ),
-      maskSecrets: z
-        .boolean()
-        .optional()
-        .default(true)
-        .describe(
-          "Redact param values whose name matches /pass|pwd|secret|token|key|credential|auth/i to '***'. Also masks the inline snippet. Default: true. Set false only when debugging credential propagation locally.",
-        ),
-      rankBy: z
-        .enum(["outgoing", "incoming"])
-        .optional()
-        .default("outgoing")
-        .describe(
-          "Global-ranking mode only (when `start` is omitted). 'outgoing' ranks by fan-out (most ExecuteProcess call sites), 'incoming' by fan-in (most called). Default: outgoing.",
-        ),
-      topN: z
-        .number()
-        .int()
-        .positive()
-        .max(1000)
-        .optional()
-        .default(50)
-        .describe(
-          "Global-ranking mode only: cap on ranked processes returned (default 50).",
-        ),
-    },
-    async ({
       start,
       direction,
       maxDepth,
@@ -401,75 +402,76 @@ export function registerAnalyzeCallgraph(
       maskSecrets: maskSecretsRequested,
       rankBy,
       topN,
-    }) => {
-      // A model-supplied `maskSecrets:false` only takes effect when the
-      // operator allowed it via TM1_ALLOW_UNMASKED_SECRETS.
-      const maskSecrets = resolveMaskSecrets(maskSecretsRequested);
-      const index = await buildIndexFromTM1(tm1Client, { includeControl });
+    },
+    tm1Client,
+  ) => {
+    // A model-supplied `maskSecrets:false` only takes effect when the
+    // operator allowed it via TM1_ALLOW_UNMASKED_SECRETS.
+    const maskSecrets = resolveMaskSecrets(maskSecretsRequested);
+    const index = await buildIndexFromTM1(tm1Client, { includeControl });
 
-      if (start === undefined || start === "") {
-        const result = globalRanking(index, { rankBy, topN, includeSystem });
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ mode: "globalRanking", ...result }),
-            },
-          ],
-        };
-      }
-
-      const lc = start.toLowerCase();
-      if (
-        !index.processParams.has(lc) &&
-        !index.bySourceProcess.has(lc) &&
-        !index.byProcess.has(lc)
-      ) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                warning: `Process "${start}" not found in index.`,
-                indexedProcessCount: index.processParams.size,
-              }),
-            },
-          ],
-        };
-      }
-      const tree = buildCallGraph(index, start, {
-        direction,
-        maxDepth,
-        includeSystem,
-      });
-      let payload: Record<string, unknown>;
-      if (mode === "summary") {
-        payload = {
-          start,
-          direction,
-          mode,
-          maskSecrets,
-          summary: summarize(tree),
-        };
-      } else if (mode === "compact") {
-        payload = { start, direction, mode, tree: serializeCompact(tree) };
-      } else {
-        payload = {
-          start,
-          direction,
-          mode,
-          maskSecrets,
-          tree: serializeNode(tree, maskSecrets),
-        };
-      }
+    if (start === undefined || start === "") {
+      const result = globalRanking(index, { rankBy, topN, includeSystem });
       return {
         content: [
           {
             type: "text" as const,
-            text: JSON.stringify(payload),
+            text: JSON.stringify({ mode: "globalRanking", ...result }),
           },
         ],
       };
-    },
-  );
-}
+    }
+
+    const lc = start.toLowerCase();
+    if (
+      !index.processParams.has(lc) &&
+      !index.bySourceProcess.has(lc) &&
+      !index.byProcess.has(lc)
+    ) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              warning: `Process "${start}" not found in index.`,
+              indexedProcessCount: index.processParams.size,
+            }),
+          },
+        ],
+      };
+    }
+    const tree = buildCallGraph(index, start, {
+      direction,
+      maxDepth,
+      includeSystem,
+    });
+    let payload: Record<string, unknown>;
+    if (mode === "summary") {
+      payload = {
+        start,
+        direction,
+        mode,
+        maskSecrets,
+        summary: summarize(tree),
+      };
+    } else if (mode === "compact") {
+      payload = { start, direction, mode, tree: serializeCompact(tree) };
+    } else {
+      payload = {
+        start,
+        direction,
+        mode,
+        maskSecrets,
+        tree: serializeNode(tree, maskSecrets),
+      };
+    }
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(payload),
+        },
+      ],
+    };
+  },
+});

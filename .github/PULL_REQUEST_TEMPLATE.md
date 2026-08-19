@@ -16,6 +16,6 @@
 - [ ] `npm run verify` passes (typecheck, lint gates, full test suite)
 - [ ] Tests added/updated for the change
 - [ ] New TM1 REST calls go through a service under `src/tm1-client/services/` (not flat client methods)
-- [ ] New tools have annotations (`src/tools/annotation-map.ts`) and an output schema (`src/tools/output-schema-map.ts`)
+- [ ] New tools are built with `defineTool()` (`src/tools/define-tool.ts`) and declare annotations + an output schema in the spec
 - [ ] Docs/README updated if behavior or tool surface changed
 - [ ] No secrets, credentials, or internal paths committed

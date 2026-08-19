@@ -54,10 +54,22 @@ export interface ToolSpec<I extends ZodRawShape> {
   output?: ZodObject<ZodRawShape> | ZodRawShape;
   /** MCP behavior hints — one of the presets in ./annotations.js. */
   annotations: Tm1ToolAnnotations;
-  /** Handler. Receives the parsed args and the shared TM1 client. */
+  /**
+   * Registration gate for tools that exist on one TM1 generation only (v11
+   * threads vs v12 jobs, v11-only save_data). Returning false skips the tool
+   * entirely — it never appears in tools/list. This is deliberately separate
+   * from the `requiresVersion` annotation, which is a client-facing HINT and
+   * is also carried by tools that stay registered on both generations.
+   */
+  enabled?: (tm1Client: TM1Client) => boolean;
+  /**
+   * Handler. Receives the parsed args, the shared TM1 client, and the SDK's
+   * per-call extra (abort signal, request metadata).
+   */
   handler: (
     args: Parameters<ToolCallback<I>>[0],
     tm1Client: TM1Client,
+    extra: Parameters<ToolCallback<I>>[1],
   ) => ReturnType<ToolCallback<I>>;
 }
 
@@ -122,11 +134,14 @@ export function defineTool<I extends ZodRawShape>(
   });
 
   return (server, tm1Client) => {
+    if (spec.enabled && !spec.enabled(tm1Client)) return;
     // ToolCallback<I> is a conditional type over an unresolved generic, so TS
-    // cannot check the arity-narrowed lambda against it — the cast asserts what
-    // the ToolSpec.handler signature already pins down (same args, same return).
-    const cb = ((args: Parameters<ToolCallback<I>>[0]) =>
-      spec.handler(args, tm1Client)) as unknown as ToolCallback<I>;
+    // cannot check the lambda against it — the cast asserts what the
+    // ToolSpec.handler signature already pins down (same args, same return).
+    const cb = ((
+      args: Parameters<ToolCallback<I>>[0],
+      extra: Parameters<ToolCallback<I>>[1],
+    ) => spec.handler(args, tm1Client, extra)) as unknown as ToolCallback<I>;
     server.tool(spec.name, description, spec.input, cb);
   };
 }

@@ -1,6 +1,4 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { TM1Client } from "../../tm1-client.js";
 import { parseRules } from "../../lib/callgraph/rulesParser.js";
 import { extractBracketLists } from "../../lib/feeders/brackets.js";
 import {
@@ -23,6 +21,9 @@ import {
   type StatsUnavailableReason,
 } from "../../lib/cube-stats/fetcher.js";
 import { isControlName } from "../../lib/control-name.js";
+import { AuditFeedersResultSchema } from "../schemas/items.js";
+import { READ_ONLY } from "../annotations.js";
+import { defineTool } from "../define-tool.js";
 
 type FindingRule =
   | "wildcard_bracket"
@@ -67,84 +68,87 @@ interface RuntimeUnavailable {
   cubes: number;
 }
 
-export function registerAuditFeeders(server: McpServer, tm1Client: TM1Client) {
-  server.tool(
-    "tm1_audit_feeders",
+export const registerAuditFeeders = defineTool({
+  name: "tm1_audit_feeders",
+  description:
     "Static heuristics (S1–S5) scan cube rules for overfeeding: wildcard brackets, feeders into consolidated " +
-      "elements, over-broad feeders, DB() without skipcheck, orphan feeders. " +
-      "mode='runtime' returns StatsByCube fed/populated ratio + memory stats; mode='both' runs both and escalates static findings with runtime evidence. " +
-      "Where }StatsByCube is absent (TM1 v12) or unreadable, runtime evidence is reported as `runtimeUnavailable` and the static half still runs.",
+    "elements, over-broad feeders, DB() without skipcheck, orphan feeders. " +
+    "mode='runtime' returns StatsByCube fed/populated ratio + memory stats; mode='both' runs both and escalates static findings with runtime evidence. " +
+    "Where }StatsByCube is absent (TM1 v12) or unreadable, runtime evidence is reported as `runtimeUnavailable` and the static half still runs.",
+  annotations: READ_ONLY,
+  output: AuditFeedersResultSchema,
+  input: {
+    cubes: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "Restrict the scan to these cube names. Default: every non-control cube with rules.",
+      ),
+    topN: z
+      .number()
+      .int()
+      .min(1)
+      .max(10000)
+      .optional()
+      .default(50)
+      .describe(
+        "Cap on returned findings (summary counters reflect the full scan). Default 50.",
+      ),
+    includeControl: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe("Include control objects ('}'-prefix). Default false."),
+    s1MinPinnedRatio: z
+      .number()
+      .min(0)
+      .max(1)
+      .optional()
+      .default(0.5)
+      .describe(
+        "S1 ratio-fallback gate (only used when no rule shares any element with the feeder.RHS): flag when (feederConstraintCount / cubeTotalDims) < this value. Default 0.5. Rule-paired comparison (feeder.pinned < matchedRule.pinned) is preferred when a match is found.",
+      ),
+    mode: z
+      .enum(["static", "runtime", "both"])
+      .optional()
+      .default("static")
+      .describe(
+        "static: rule-text heuristics only (default). runtime: }StatsByCube cube-level findings only (no static scan). both: static scan + runtime evidence + severity escalation on overlap.",
+      ),
+    fedRatioThreshold: z
+      .number()
+      .min(1)
+      .optional()
+      .default(50)
+      .describe(
+        "Runtime: flag cube (severity hint) when fedCells / populatedNumeric ≥ this value. Default 50 — community rule of thumb for 'suspicious' (tm1forum/Cubewise; some use 20). Raise to 100 to only flag definite overfeeding.",
+      ),
+    fedRatioEvidenceThreshold: z
+      .number()
+      .min(1)
+      .optional()
+      .default(100)
+      .describe(
+        "Runtime: escalate cube_high_fed_ratio to severity 'evidence' when fedCells / populatedNumeric ≥ this value. Default 100 — community consensus for definite overfeeding. Must be ≥ fedRatioThreshold to take effect.",
+      ),
+    memoryThresholdMb: z
+      .number()
+      .min(0)
+      .optional()
+      .default(1024)
+      .describe(
+        "Runtime: flag cube when memoryTotal (MB) ≥ this value. Default 1024 (1 GiB).",
+      ),
+    severityThreshold: z
+      .enum(["none", "hint", "evidence"])
+      .optional()
+      .default("hint")
+      .describe(
+        "pass/fail boundary on `status`. none: always pass. hint (default): fail on any finding. evidence: fail only when runtime evidence is present — useful for CI gates that should not block on static-only hints.",
+      ),
+  },
+  handler: async (
     {
-      cubes: z
-        .array(z.string())
-        .optional()
-        .describe(
-          "Restrict the scan to these cube names. Default: every non-control cube with rules.",
-        ),
-      topN: z
-        .number()
-        .int()
-        .min(1)
-        .max(10000)
-        .optional()
-        .default(50)
-        .describe(
-          "Cap on returned findings (summary counters reflect the full scan). Default 50.",
-        ),
-      includeControl: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe("Include control objects ('}'-prefix). Default false."),
-      s1MinPinnedRatio: z
-        .number()
-        .min(0)
-        .max(1)
-        .optional()
-        .default(0.5)
-        .describe(
-          "S1 ratio-fallback gate (only used when no rule shares any element with the feeder.RHS): flag when (feederConstraintCount / cubeTotalDims) < this value. Default 0.5. Rule-paired comparison (feeder.pinned < matchedRule.pinned) is preferred when a match is found.",
-        ),
-      mode: z
-        .enum(["static", "runtime", "both"])
-        .optional()
-        .default("static")
-        .describe(
-          "static: rule-text heuristics only (default). runtime: }StatsByCube cube-level findings only (no static scan). both: static scan + runtime evidence + severity escalation on overlap.",
-        ),
-      fedRatioThreshold: z
-        .number()
-        .min(1)
-        .optional()
-        .default(50)
-        .describe(
-          "Runtime: flag cube (severity hint) when fedCells / populatedNumeric ≥ this value. Default 50 — community rule of thumb for 'suspicious' (tm1forum/Cubewise; some use 20). Raise to 100 to only flag definite overfeeding.",
-        ),
-      fedRatioEvidenceThreshold: z
-        .number()
-        .min(1)
-        .optional()
-        .default(100)
-        .describe(
-          "Runtime: escalate cube_high_fed_ratio to severity 'evidence' when fedCells / populatedNumeric ≥ this value. Default 100 — community consensus for definite overfeeding. Must be ≥ fedRatioThreshold to take effect.",
-        ),
-      memoryThresholdMb: z
-        .number()
-        .min(0)
-        .optional()
-        .default(1024)
-        .describe(
-          "Runtime: flag cube when memoryTotal (MB) ≥ this value. Default 1024 (1 GiB).",
-        ),
-      severityThreshold: z
-        .enum(["none", "hint", "evidence"])
-        .optional()
-        .default("hint")
-        .describe(
-          "pass/fail boundary on `status`. none: always pass. hint (default): fail on any finding. evidence: fail only when runtime evidence is present — useful for CI gates that should not block on static-only hints.",
-        ),
-    },
-    async ({
       cubes,
       topN,
       includeControl,
@@ -154,379 +158,380 @@ export function registerAuditFeeders(server: McpServer, tm1Client: TM1Client) {
       fedRatioEvidenceThreshold,
       memoryThresholdMb,
       severityThreshold,
-    }) => {
-      const serverInfo = await tm1Client.server.getInfo();
-      // withDimensions: the static scan needs each rule-bearing cube's
-      // dimension order. Expanded here it costs nothing extra; fetched per
-      // cube it was one GET per cube with rules.
-      const all = await tm1Client.cubes.getAllRules({
-        includeControl,
-        withDimensions: true,
-      });
-      const targetSet = cubes && cubes.length > 0 ? new Set(cubes) : null;
-
-      const skipcheckMap = new Map<string, boolean>();
-      for (const c of all) {
-        if (!c.rulesText) continue;
-        skipcheckMap.set(
-          c.cubeName.toLowerCase(),
-          parseRules(c.rulesText).hasSkipcheck,
-        );
-      }
-      const lookupSkipcheck = (cubeName: string): boolean | null => {
-        const v = skipcheckMap.get(cubeName.toLowerCase());
-        return v === undefined ? null : v;
-      };
-
-      const elementTypeCache = new ElementTypeCache(tm1Client.hierarchies);
-
-      const findings: Finding[] = [];
-      const scannedCubeNames: string[] = [];
-      let cubesScanned = 0;
-      let feederLinesScanned = 0;
-      let dimResolveFailures = 0;
-      const wantsStatic = mode === "static" || mode === "both";
-
-      for (const c of all) {
-        if (targetSet && !targetSet.has(c.cubeName)) continue;
-        if (!includeControl && isControlName(c.cubeName)) continue;
-        cubesScanned++;
-        scannedCubeNames.push(c.cubeName);
-        if (!c.rulesText || c.rulesText.trim() === "") continue;
-        if (!wantsStatic) continue;
-
-        const ast = parseRules(c.rulesText);
-
-        // Normal path: the names rode along on the bulk rules request. The
-        // per-cube fetch stays as a fallback for a server that answered
-        // without the expansion — a missing dimension list would silently
-        // change every ratio below, so it is worth one request to avoid.
-        let cubeDimNames: string[] = c.dimensions ?? [];
-        if (cubeDimNames.length === 0) {
-          try {
-            cubeDimNames = await tm1Client.cubes.getDimensionNames(c.cubeName);
-          } catch {
-            dimResolveFailures++;
-          }
-        }
-        const cubeDimCount = cubeDimNames.length;
-
-        const ruleLhs = [];
-        for (const line of ast.lines) {
-          if (line.section !== "rules") continue;
-          if (line.isBlank || line.isComment) continue;
-          const lists = extractBracketLists(line.trimmed);
-          if (lists.length === 0) continue;
-          ruleLhs.push(lists[0]!);
-        }
-
-        for (const line of ast.lines) {
-          if (line.section !== "feeders") continue;
-          if (line.isBlank || line.isComment) continue;
-          if (/^feeders\s*;?\s*$/i.test(line.trimmed)) continue;
-          // Multi-line feeders place `=>` and the RHS on a continuation line.
-          // The preceding feeder's LHS already covered it — skip so we don't
-          // re-score the RHS bracket as if it were the LHS.
-          if (/^=>/.test(line.trimmed)) continue;
-          const lists = extractBracketLists(line.trimmed);
-          if (lists.length === 0) continue;
-          feederLinesScanned++;
-          const feederLhs = lists[0]!;
-
-          let lhsRuleHit: FindingRule | null = null;
-          let lhsDetail: string | undefined;
-
-          if (detectWildcardBracket(feederLhs)) {
-            lhsRuleHit = "wildcard_bracket";
-          } else {
-            const cons = await detectFeederToConsolidated(
-              feederLhs,
-              cubeDimNames,
-              elementTypeCache,
-            );
-            if (cons) {
-              lhsRuleHit = "feeder_to_consolidated";
-              lhsDetail = `${cons.dim}:${cons.elem}`;
-            } else if (!isCrossCubeDbFeeder(line.trimmed)) {
-              // Cross-cube DB-feeders: rule lives in target cube; S4 covers
-              // their DB-feeder risk so skip S1 here.
-              // Pair by feeder.RHS ⇄ rule.LHS — the feeder marks cells the
-              // rule writes, so the target bracket is the right signal.
-              // Falls back to feeder.LHS when RHS isn't a plain bracket.
-              const feederRhs = lists.length > 1 ? lists[1]! : null;
-              const matchBracket = feederRhs ?? feederLhs;
-              const matchedRule = findMatchingRule(matchBracket, ruleLhs);
-              if (matchedRule) {
-                if (detectBroaderThanMatchedRule(feederLhs, matchedRule)) {
-                  lhsRuleHit = "feeder_broader_than_rule";
-                  lhsDetail = `pins ${feederLhs.entries.length} vs rule ${matchedRule.entries.length}`;
-                }
-              } else if (
-                detectBroaderThanRule(feederLhs, cubeDimCount, s1MinPinnedRatio)
-              ) {
-                lhsRuleHit = "feeder_broader_than_rule";
-                lhsDetail = `pins ${feederLhs.entries.length}/${cubeDimCount} dims (no matching rule — ratio fallback)`;
-              }
-            }
-            if (!lhsRuleHit) {
-              if (!isCrossCubeDbFeeder(line.trimmed)) {
-                // Cross-cube DB-feeders: target rules live in another cube,
-                // so a local orphan check can't see them. S4 covers the
-                // DB-skipcheck risk; skip S5 here to avoid false orphans.
-                // Orphan check uses feeder.RHS (target cells) so it pairs
-                // with rule.LHS (cells the rule writes) — feeder.LHS uses
-                // different elements in the idiomatic 1:1 pattern.
-                const feederRhs = lists.length > 1 ? lists[1]! : null;
-                const orphanBracket = feederRhs ?? feederLhs;
-                if (detectOrphanFeeder(orphanBracket, ruleLhs)) {
-                  lhsRuleHit = "orphan_feeder";
-                }
-              }
-            }
-          }
-
-          if (lhsRuleHit) {
-            findings.push({
-              cube: c.cubeName,
-              line: line.lineIndex + 1,
-              severity: "hint",
-              rule: lhsRuleHit,
-              feeder: line.trimmed,
-              ...(lhsDetail !== undefined ? { detail: lhsDetail } : {}),
-            });
-          }
-
-          const dbTarget = detectDbFeederWithoutSkipcheck(
-            line.trimmed,
-            lookupSkipcheck,
-          );
-          if (dbTarget) {
-            findings.push({
-              cube: c.cubeName,
-              line: line.lineIndex + 1,
-              severity: "hint",
-              rule: "db_feeder_without_skipcheck",
-              feeder: line.trimmed,
-              detail: dbTarget,
-            });
-          }
-        }
-      }
-
-      // ─── Runtime evidence (mode: runtime | both) ────────────────────────
-      const wantsRuntime = mode === "runtime" || mode === "both";
-      const runtimeStats: Record<string, RuntimeStats> = {};
-      let runtimeAvailableCount = 0;
-      let runtimeFailureCount = 0;
-      let runtimeUnavailable: RuntimeUnavailable | undefined;
-
-      if (wantsRuntime && scannedCubeNames.length > 0) {
-        // Cap in-flight }StatsByCube MDX calls so a large model can't flood TM1's
-        // worker pool with hundreds of simultaneous requests.
-        const settled = await mapSettledWithConcurrency(
-          scannedCubeNames,
-          10,
-          (name) => fetchCubeStats(tm1Client, name),
-        );
-        // Tracks a failure that is about the server/account rather than the
-        // cube, so it can be reported once (see runtimeUnavailable below).
-        const unavailableReasons = new Set<StatsUnavailableReason>();
-        let unavailableSample: CubeStatsUnavailableError | undefined;
-        let unavailableCount = 0;
-
-        for (let i = 0; i < settled.length; i++) {
-          const cubeName = scannedCubeNames[i]!;
-          const r = settled[i]!;
-          if (r.status !== "fulfilled") {
-            runtimeFailureCount++;
-            const err: unknown = r.reason;
-            const unavailable =
-              err instanceof CubeStatsUnavailableError ? err : null;
-            if (unavailable) {
-              unavailableReasons.add(unavailable.reason);
-              unavailableSample ??= unavailable;
-              unavailableCount++;
-            }
-            runtimeStats[cubeName] = {
-              available: false,
-              memoryTotal: null,
-              memoryMb: null,
-              fedCells: null,
-              populatedNumeric: null,
-              fedToPopulatedRatio: null,
-              feederMemoryRatio: null,
-              error: unavailable ? unavailable.message : String(r.reason),
-            };
-            continue;
-          }
-          const stats: CubeStatsItem = r.value;
-          const memoryTotal =
-            typeof stats.memoryTotal === "number" ? stats.memoryTotal : null;
-          const memoryMb =
-            memoryTotal !== null
-              ? Number((memoryTotal / 1_048_576).toFixed(2))
-              : null;
-          const fedCells =
-            typeof stats.fedCells === "number" ? stats.fedCells : null;
-          const populatedNumeric =
-            typeof stats.populatedNumeric === "number"
-              ? stats.populatedNumeric
-              : null;
-          const fedToPopulatedRatio = computeFedToPopulatedRatio(stats);
-          const feederMemoryRatio = computeFeederMemoryRatio(stats);
-          const stat: RuntimeStats = {
-            available: true,
-            memoryTotal,
-            memoryMb,
-            fedCells,
-            populatedNumeric,
-            fedToPopulatedRatio,
-            feederMemoryRatio,
-          };
-          runtimeStats[cubeName] = stat;
-          runtimeAvailableCount++;
-
-          // Cube-level findings. Fed-ratio severity follows community
-          // calibration: ≥ threshold (50) = suspicious hint, ≥ evidence
-          // threshold (100) = definite overfeeding.
-          if (
-            fedToPopulatedRatio !== null &&
-            fedToPopulatedRatio >= fedRatioThreshold
-          ) {
-            const definite =
-              fedRatioEvidenceThreshold >= fedRatioThreshold &&
-              fedToPopulatedRatio >= fedRatioEvidenceThreshold;
-            findings.push({
-              cube: cubeName,
-              line: 0,
-              severity: definite ? "evidence" : "hint",
-              rule: "cube_high_fed_ratio",
-              feeder: "",
-              detail: `fed/populated=${fedToPopulatedRatio.toFixed(1)}x (fed ${fedCells ?? "?"} / populated ${populatedNumeric ?? "?"})`,
-            });
-          }
-          if (memoryMb !== null && memoryMb >= memoryThresholdMb) {
-            findings.push({
-              cube: cubeName,
-              line: 0,
-              severity: "evidence",
-              rule: "cube_high_memory",
-              feeder: "",
-              detail: `${memoryMb} MB`,
-            });
-          }
-        }
-
-        // Every cube failed the same server- or account-wide way: say it once
-        // and drop the N identical per-cube copies. The static half (mode
-        // 'both') is untouched — it needs no stats cube.
-        if (
-          unavailableSample &&
-          unavailableCount === scannedCubeNames.length &&
-          unavailableReasons.size === 1
-        ) {
-          runtimeUnavailable = {
-            reason: unavailableSample.reason,
-            message: unavailableSample.message,
-            cubes: unavailableCount,
-          };
-          for (const name of scannedCubeNames) delete runtimeStats[name];
-        }
-
-        // Escalate static findings on cubes with runtime evidence.
-        const evidenceCubes = new Set<string>();
-        for (const f of findings) {
-          if (
-            f.severity === "evidence" &&
-            (f.rule === "cube_high_fed_ratio" || f.rule === "cube_high_memory")
-          ) {
-            evidenceCubes.add(f.cube);
-          }
-        }
-        for (const f of findings) {
-          if (f.severity === "hint" && evidenceCubes.has(f.cube)) {
-            f.severity = "evidence";
-          }
-        }
-      }
-
-      const byRule: Record<FindingRule, number> = {
-        wildcard_bracket: 0,
-        feeder_to_consolidated: 0,
-        feeder_broader_than_rule: 0,
-        db_feeder_without_skipcheck: 0,
-        orphan_feeder: 0,
-        cube_high_fed_ratio: 0,
-        cube_high_memory: 0,
-      };
-      const bySeverity: Record<Severity, number> = { hint: 0, evidence: 0 };
-      const byCube: Record<string, number> = {};
-      for (const f of findings) {
-        byRule[f.rule]++;
-        bySeverity[f.severity]++;
-        byCube[f.cube] = (byCube[f.cube] ?? 0) + 1;
-      }
-
-      findings.sort(
-        (a, b) =>
-          a.cube.localeCompare(b.cube) ||
-          a.line - b.line ||
-          a.rule.localeCompare(b.rule),
-      );
-      const truncated = findings.length > topN;
-      const trimmed = findings.slice(0, topN);
-
-      let status: "pass" | "fail";
-      if (severityThreshold === "none") {
-        status = "pass";
-      } else if (severityThreshold === "evidence") {
-        status = bySeverity.evidence > 0 ? "fail" : "pass";
-      } else {
-        status = findings.length > 0 ? "fail" : "pass";
-      }
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                status,
-                productVersion: serverInfo.productVersion,
-                mode,
-                includeControl,
-                s1MinPinnedRatio,
-                fedRatioThreshold,
-                fedRatioEvidenceThreshold,
-                memoryThresholdMb,
-                severityThreshold,
-                scanned: {
-                  cubes: cubesScanned,
-                  feederLines: feederLinesScanned,
-                  dimResolveFailures,
-                  runtimeAvailable: runtimeAvailableCount,
-                  runtimeFailures: runtimeFailureCount,
-                },
-                invalidCount: findings.length,
-                summary: { byRule, bySeverity, byCube },
-                truncated: { findings: truncated },
-                findings: trimmed,
-                runtimeUnavailable,
-                runtimeStats: wantsRuntime ? runtimeStats : undefined,
-                rulesetSource:
-                  "Static heuristics S1 (feeder_broader_than_rule), S2 (feeder_to_consolidated), " +
-                  "S3 (wildcard_bracket), S4 (db_feeder_without_skipcheck), S5 (orphan_feeder). " +
-                  "Runtime evidence: cube_high_fed_ratio + cube_high_memory via }StatsByCube.",
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
     },
-  );
-}
+    tm1Client,
+  ) => {
+    const serverInfo = await tm1Client.server.getInfo();
+    // withDimensions: the static scan needs each rule-bearing cube's
+    // dimension order. Expanded here it costs nothing extra; fetched per
+    // cube it was one GET per cube with rules.
+    const all = await tm1Client.cubes.getAllRules({
+      includeControl,
+      withDimensions: true,
+    });
+    const targetSet = cubes && cubes.length > 0 ? new Set(cubes) : null;
+
+    const skipcheckMap = new Map<string, boolean>();
+    for (const c of all) {
+      if (!c.rulesText) continue;
+      skipcheckMap.set(
+        c.cubeName.toLowerCase(),
+        parseRules(c.rulesText).hasSkipcheck,
+      );
+    }
+    const lookupSkipcheck = (cubeName: string): boolean | null => {
+      const v = skipcheckMap.get(cubeName.toLowerCase());
+      return v === undefined ? null : v;
+    };
+
+    const elementTypeCache = new ElementTypeCache(tm1Client.hierarchies);
+
+    const findings: Finding[] = [];
+    const scannedCubeNames: string[] = [];
+    let cubesScanned = 0;
+    let feederLinesScanned = 0;
+    let dimResolveFailures = 0;
+    const wantsStatic = mode === "static" || mode === "both";
+
+    for (const c of all) {
+      if (targetSet && !targetSet.has(c.cubeName)) continue;
+      if (!includeControl && isControlName(c.cubeName)) continue;
+      cubesScanned++;
+      scannedCubeNames.push(c.cubeName);
+      if (!c.rulesText || c.rulesText.trim() === "") continue;
+      if (!wantsStatic) continue;
+
+      const ast = parseRules(c.rulesText);
+
+      // Normal path: the names rode along on the bulk rules request. The
+      // per-cube fetch stays as a fallback for a server that answered
+      // without the expansion — a missing dimension list would silently
+      // change every ratio below, so it is worth one request to avoid.
+      let cubeDimNames: string[] = c.dimensions ?? [];
+      if (cubeDimNames.length === 0) {
+        try {
+          cubeDimNames = await tm1Client.cubes.getDimensionNames(c.cubeName);
+        } catch {
+          dimResolveFailures++;
+        }
+      }
+      const cubeDimCount = cubeDimNames.length;
+
+      const ruleLhs = [];
+      for (const line of ast.lines) {
+        if (line.section !== "rules") continue;
+        if (line.isBlank || line.isComment) continue;
+        const lists = extractBracketLists(line.trimmed);
+        if (lists.length === 0) continue;
+        ruleLhs.push(lists[0]!);
+      }
+
+      for (const line of ast.lines) {
+        if (line.section !== "feeders") continue;
+        if (line.isBlank || line.isComment) continue;
+        if (/^feeders\s*;?\s*$/i.test(line.trimmed)) continue;
+        // Multi-line feeders place `=>` and the RHS on a continuation line.
+        // The preceding feeder's LHS already covered it — skip so we don't
+        // re-score the RHS bracket as if it were the LHS.
+        if (/^=>/.test(line.trimmed)) continue;
+        const lists = extractBracketLists(line.trimmed);
+        if (lists.length === 0) continue;
+        feederLinesScanned++;
+        const feederLhs = lists[0]!;
+
+        let lhsRuleHit: FindingRule | null = null;
+        let lhsDetail: string | undefined;
+
+        if (detectWildcardBracket(feederLhs)) {
+          lhsRuleHit = "wildcard_bracket";
+        } else {
+          const cons = await detectFeederToConsolidated(
+            feederLhs,
+            cubeDimNames,
+            elementTypeCache,
+          );
+          if (cons) {
+            lhsRuleHit = "feeder_to_consolidated";
+            lhsDetail = `${cons.dim}:${cons.elem}`;
+          } else if (!isCrossCubeDbFeeder(line.trimmed)) {
+            // Cross-cube DB-feeders: rule lives in target cube; S4 covers
+            // their DB-feeder risk so skip S1 here.
+            // Pair by feeder.RHS ⇄ rule.LHS — the feeder marks cells the
+            // rule writes, so the target bracket is the right signal.
+            // Falls back to feeder.LHS when RHS isn't a plain bracket.
+            const feederRhs = lists.length > 1 ? lists[1]! : null;
+            const matchBracket = feederRhs ?? feederLhs;
+            const matchedRule = findMatchingRule(matchBracket, ruleLhs);
+            if (matchedRule) {
+              if (detectBroaderThanMatchedRule(feederLhs, matchedRule)) {
+                lhsRuleHit = "feeder_broader_than_rule";
+                lhsDetail = `pins ${feederLhs.entries.length} vs rule ${matchedRule.entries.length}`;
+              }
+            } else if (
+              detectBroaderThanRule(feederLhs, cubeDimCount, s1MinPinnedRatio)
+            ) {
+              lhsRuleHit = "feeder_broader_than_rule";
+              lhsDetail = `pins ${feederLhs.entries.length}/${cubeDimCount} dims (no matching rule — ratio fallback)`;
+            }
+          }
+          if (!lhsRuleHit) {
+            if (!isCrossCubeDbFeeder(line.trimmed)) {
+              // Cross-cube DB-feeders: target rules live in another cube,
+              // so a local orphan check can't see them. S4 covers the
+              // DB-skipcheck risk; skip S5 here to avoid false orphans.
+              // Orphan check uses feeder.RHS (target cells) so it pairs
+              // with rule.LHS (cells the rule writes) — feeder.LHS uses
+              // different elements in the idiomatic 1:1 pattern.
+              const feederRhs = lists.length > 1 ? lists[1]! : null;
+              const orphanBracket = feederRhs ?? feederLhs;
+              if (detectOrphanFeeder(orphanBracket, ruleLhs)) {
+                lhsRuleHit = "orphan_feeder";
+              }
+            }
+          }
+        }
+
+        if (lhsRuleHit) {
+          findings.push({
+            cube: c.cubeName,
+            line: line.lineIndex + 1,
+            severity: "hint",
+            rule: lhsRuleHit,
+            feeder: line.trimmed,
+            ...(lhsDetail !== undefined ? { detail: lhsDetail } : {}),
+          });
+        }
+
+        const dbTarget = detectDbFeederWithoutSkipcheck(
+          line.trimmed,
+          lookupSkipcheck,
+        );
+        if (dbTarget) {
+          findings.push({
+            cube: c.cubeName,
+            line: line.lineIndex + 1,
+            severity: "hint",
+            rule: "db_feeder_without_skipcheck",
+            feeder: line.trimmed,
+            detail: dbTarget,
+          });
+        }
+      }
+    }
+
+    // ─── Runtime evidence (mode: runtime | both) ────────────────────────
+    const wantsRuntime = mode === "runtime" || mode === "both";
+    const runtimeStats: Record<string, RuntimeStats> = {};
+    let runtimeAvailableCount = 0;
+    let runtimeFailureCount = 0;
+    let runtimeUnavailable: RuntimeUnavailable | undefined;
+
+    if (wantsRuntime && scannedCubeNames.length > 0) {
+      // Cap in-flight }StatsByCube MDX calls so a large model can't flood TM1's
+      // worker pool with hundreds of simultaneous requests.
+      const settled = await mapSettledWithConcurrency(
+        scannedCubeNames,
+        10,
+        (name) => fetchCubeStats(tm1Client, name),
+      );
+      // Tracks a failure that is about the server/account rather than the
+      // cube, so it can be reported once (see runtimeUnavailable below).
+      const unavailableReasons = new Set<StatsUnavailableReason>();
+      let unavailableSample: CubeStatsUnavailableError | undefined;
+      let unavailableCount = 0;
+
+      for (let i = 0; i < settled.length; i++) {
+        const cubeName = scannedCubeNames[i]!;
+        const r = settled[i]!;
+        if (r.status !== "fulfilled") {
+          runtimeFailureCount++;
+          const err: unknown = r.reason;
+          const unavailable =
+            err instanceof CubeStatsUnavailableError ? err : null;
+          if (unavailable) {
+            unavailableReasons.add(unavailable.reason);
+            unavailableSample ??= unavailable;
+            unavailableCount++;
+          }
+          runtimeStats[cubeName] = {
+            available: false,
+            memoryTotal: null,
+            memoryMb: null,
+            fedCells: null,
+            populatedNumeric: null,
+            fedToPopulatedRatio: null,
+            feederMemoryRatio: null,
+            error: unavailable ? unavailable.message : String(r.reason),
+          };
+          continue;
+        }
+        const stats: CubeStatsItem = r.value;
+        const memoryTotal =
+          typeof stats.memoryTotal === "number" ? stats.memoryTotal : null;
+        const memoryMb =
+          memoryTotal !== null
+            ? Number((memoryTotal / 1_048_576).toFixed(2))
+            : null;
+        const fedCells =
+          typeof stats.fedCells === "number" ? stats.fedCells : null;
+        const populatedNumeric =
+          typeof stats.populatedNumeric === "number"
+            ? stats.populatedNumeric
+            : null;
+        const fedToPopulatedRatio = computeFedToPopulatedRatio(stats);
+        const feederMemoryRatio = computeFeederMemoryRatio(stats);
+        const stat: RuntimeStats = {
+          available: true,
+          memoryTotal,
+          memoryMb,
+          fedCells,
+          populatedNumeric,
+          fedToPopulatedRatio,
+          feederMemoryRatio,
+        };
+        runtimeStats[cubeName] = stat;
+        runtimeAvailableCount++;
+
+        // Cube-level findings. Fed-ratio severity follows community
+        // calibration: ≥ threshold (50) = suspicious hint, ≥ evidence
+        // threshold (100) = definite overfeeding.
+        if (
+          fedToPopulatedRatio !== null &&
+          fedToPopulatedRatio >= fedRatioThreshold
+        ) {
+          const definite =
+            fedRatioEvidenceThreshold >= fedRatioThreshold &&
+            fedToPopulatedRatio >= fedRatioEvidenceThreshold;
+          findings.push({
+            cube: cubeName,
+            line: 0,
+            severity: definite ? "evidence" : "hint",
+            rule: "cube_high_fed_ratio",
+            feeder: "",
+            detail: `fed/populated=${fedToPopulatedRatio.toFixed(1)}x (fed ${fedCells ?? "?"} / populated ${populatedNumeric ?? "?"})`,
+          });
+        }
+        if (memoryMb !== null && memoryMb >= memoryThresholdMb) {
+          findings.push({
+            cube: cubeName,
+            line: 0,
+            severity: "evidence",
+            rule: "cube_high_memory",
+            feeder: "",
+            detail: `${memoryMb} MB`,
+          });
+        }
+      }
+
+      // Every cube failed the same server- or account-wide way: say it once
+      // and drop the N identical per-cube copies. The static half (mode
+      // 'both') is untouched — it needs no stats cube.
+      if (
+        unavailableSample &&
+        unavailableCount === scannedCubeNames.length &&
+        unavailableReasons.size === 1
+      ) {
+        runtimeUnavailable = {
+          reason: unavailableSample.reason,
+          message: unavailableSample.message,
+          cubes: unavailableCount,
+        };
+        for (const name of scannedCubeNames) delete runtimeStats[name];
+      }
+
+      // Escalate static findings on cubes with runtime evidence.
+      const evidenceCubes = new Set<string>();
+      for (const f of findings) {
+        if (
+          f.severity === "evidence" &&
+          (f.rule === "cube_high_fed_ratio" || f.rule === "cube_high_memory")
+        ) {
+          evidenceCubes.add(f.cube);
+        }
+      }
+      for (const f of findings) {
+        if (f.severity === "hint" && evidenceCubes.has(f.cube)) {
+          f.severity = "evidence";
+        }
+      }
+    }
+
+    const byRule: Record<FindingRule, number> = {
+      wildcard_bracket: 0,
+      feeder_to_consolidated: 0,
+      feeder_broader_than_rule: 0,
+      db_feeder_without_skipcheck: 0,
+      orphan_feeder: 0,
+      cube_high_fed_ratio: 0,
+      cube_high_memory: 0,
+    };
+    const bySeverity: Record<Severity, number> = { hint: 0, evidence: 0 };
+    const byCube: Record<string, number> = {};
+    for (const f of findings) {
+      byRule[f.rule]++;
+      bySeverity[f.severity]++;
+      byCube[f.cube] = (byCube[f.cube] ?? 0) + 1;
+    }
+
+    findings.sort(
+      (a, b) =>
+        a.cube.localeCompare(b.cube) ||
+        a.line - b.line ||
+        a.rule.localeCompare(b.rule),
+    );
+    const truncated = findings.length > topN;
+    const trimmed = findings.slice(0, topN);
+
+    let status: "pass" | "fail";
+    if (severityThreshold === "none") {
+      status = "pass";
+    } else if (severityThreshold === "evidence") {
+      status = bySeverity.evidence > 0 ? "fail" : "pass";
+    } else {
+      status = findings.length > 0 ? "fail" : "pass";
+    }
+
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(
+            {
+              status,
+              productVersion: serverInfo.productVersion,
+              mode,
+              includeControl,
+              s1MinPinnedRatio,
+              fedRatioThreshold,
+              fedRatioEvidenceThreshold,
+              memoryThresholdMb,
+              severityThreshold,
+              scanned: {
+                cubes: cubesScanned,
+                feederLines: feederLinesScanned,
+                dimResolveFailures,
+                runtimeAvailable: runtimeAvailableCount,
+                runtimeFailures: runtimeFailureCount,
+              },
+              invalidCount: findings.length,
+              summary: { byRule, bySeverity, byCube },
+              truncated: { findings: truncated },
+              findings: trimmed,
+              runtimeUnavailable,
+              runtimeStats: wantsRuntime ? runtimeStats : undefined,
+              rulesetSource:
+                "Static heuristics S1 (feeder_broader_than_rule), S2 (feeder_to_consolidated), " +
+                "S3 (wildcard_bracket), S4 (db_feeder_without_skipcheck), S5 (orphan_feeder). " +
+                "Runtime evidence: cube_high_fed_ratio + cube_high_memory via }StatsByCube.",
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  },
+});
 
 /**
  * Cross-cube DB-feeder: the feeder line writes into another cube via DB(...).

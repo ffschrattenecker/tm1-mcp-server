@@ -63,18 +63,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stopped being true once `upsert_process` moved to the shared datasource schema — it accepts
   `query` and `usesUnicode` — and the remaining field in that sentence never existed.
 
-- **Internal: tools may now declare their metadata in one place.** A tool used to be spread
-  across four sites — the `server.tool(...)` call, an `ANNOTATION_MAP` entry, an
+- **Internal (no client-visible change): a tool's metadata now lives in exactly one
+  place.** A tool used to be
+  spread across four sites — the `server.tool(...)` call, an `ANNOTATION_MAP` entry, an
   `OUTPUT_SCHEMA_MAP` entry, and membership in `MARKDOWN_CAPABLE_TOOLS` — with four of the
-  repo's lint gates existing only to keep those name-keyed maps in step. `defineTool()`
-  (`src/tools/define-tool.ts`) puts name, description, input, output schema, annotations and
-  handler in a single literal and derives what the maps required by hand: `markdownCapable()`
-  from the presence of `format` in the input shape, and `asOutputSchema()` routing so a
-  `.passthrough()` schema keeps `additionalProperties: true`. Both forms register through the
-  same Proxy and resolve through the new `src/tools/tool-metadata.ts`, so migration is
-  file-by-file and nothing downstream cares which form a tool uses. `tm1_list_cubes`,
-  `tm1_get_ancestors` and `tm1_delete_cube` are migrated; the gates now report inline tools
-  separately and flag a leftover map entry for one of them. No wire-format change.
+  eight lint gates existing only to keep those name-keyed maps in step with the
+  registrations. All 114 tools now use `defineTool()` (`src/tools/define-tool.ts`), which
+  holds name, description, input, output schema, annotations, an optional version gate and
+  the handler in a single literal, and derives what the maps needed spelled out by hand:
+  `markdownCapable()` from the presence of `format` in the input shape, and
+  `asOutputSchema()` routing so a `.passthrough()` schema keeps `additionalProperties: true`.
+  `annotation-map.ts` and `output-schema-map.ts` are deleted, and with them
+  `lint:annotations`, `lint:output-schema` and `lint:markdown-schema` — the remaining gates
+  (`lint:tool-registration`, `lint:output-schema-budget`, `lint:input-naming`,
+  `lint:mutation-envelope`, `lint:no-flat-api`) all still run. Adding a tool is now two
+  files: the tool and the `REGISTRARS` line.
+
+  No wire-format change, and the byte budget is the proof: 114 tools and 60220 bytes of
+  serialized `outputSchema` before and after, `docs/TOOLS.md` and the README table
+  regenerate byte-identical.
+
+  The `functions` coverage floor drops 60 → 57. That is not a regression: the migration
+  deleted 105 one-line `export function registerX(...)` wrappers that were all covered, so
+  the denominator shrank while the uncovered count stayed put (547 before, 546 after).
+  `coverage-thresholds.json` records the reason.
 
 ## [3.1.0] - 2026-08-18
 

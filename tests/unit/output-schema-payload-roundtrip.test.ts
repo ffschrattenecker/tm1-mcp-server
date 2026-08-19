@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
-import { OUTPUT_SCHEMA_MAP } from "../../src/tools/output-schema-map.js";
+// Output schemas come from the defineTool() specs; the barrel import runs them.
+import "../../src/tools/index.js";
+import { specFor } from "../../src/tools/define-tool.js";
 import {
   ObjectUsageResultSchema,
   SearchCodeResultSchema,
@@ -23,6 +25,15 @@ function asSchema(entry: ZodRawShape | ZodTypeAny): ZodTypeAny {
   return typeof entry === "object" && entry !== null && "_def" in entry
     ? (entry as ZodTypeAny)
     : z.object(entry);
+}
+
+// Parseable schema for a tool, or a loud failure.
+function schemaOf(toolName: string): ZodTypeAny {
+  const entry = specFor(toolName)?.outputSchema;
+  if (entry === undefined) {
+    throw new Error(`${toolName} declares no output schema`);
+  }
+  return asSchema(entry);
 }
 
 describe("strict outputSchemas accept real handler payloads", () => {
@@ -86,7 +97,7 @@ describe("strict outputSchemas accept real handler payloads", () => {
   });
 
   it("tm1_search_code: groupBy='process' payload (group items, no truncated/maskSecrets)", () => {
-    const schema = asSchema(OUTPUT_SCHEMA_MAP.tm1_search_code);
+    const schema = schemaOf("tm1_search_code");
     const payload = {
       pattern: "ExecuteProcess",
       caseSensitive: false,
@@ -134,7 +145,7 @@ describe("strict outputSchemas accept real handler payloads", () => {
   });
 
   it("tm1_list_error_logs: groupBy='process' payload (group items + wrapper fields)", () => {
-    const schema = asSchema(OUTPUT_SCHEMA_MAP.tm1_list_error_logs);
+    const schema = schemaOf("tm1_list_error_logs");
     const payload = {
       groupBy: "process",
       totalFiles: 500,
@@ -169,7 +180,7 @@ describe("strict outputSchemas accept real handler payloads", () => {
   it("tm1_import_process_from_git: success payload (action, processName, parsed counts)", () => {
     // Guards the dedicated ImportProcessFromGitResultSchema mapping — this used
     // to point at ImportProFileResultSchema and pass only by coincidence.
-    const schema = asSchema(OUTPUT_SCHEMA_MAP.tm1_import_process_from_git);
+    const schema = schemaOf("tm1_import_process_from_git");
     const payload = {
       action: "created",
       processName: "Load.Assumptions",
@@ -188,7 +199,7 @@ describe("strict outputSchemas accept real handler payloads", () => {
   });
 
   it("tm1_get_all_cube_rules: summary payload (count, returned, truncated, summary metrics)", () => {
-    const schema = asSchema(OUTPUT_SCHEMA_MAP.tm1_get_all_cube_rules);
+    const schema = schemaOf("tm1_get_all_cube_rules");
     const payload = {
       count: 7,
       countIsExact: true,

@@ -1,7 +1,8 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { TM1Client } from "../../tm1-client.js";
 import { actionResponse } from "../format.js";
+import { MutationResultSchema } from "../schemas/items.js";
+import { WRITE } from "../annotations.js";
+import { defineTool } from "../define-tool.js";
 
 // TM1's chore endpoint rejects DateTimeOffset strings without a UTC marker. If the caller
 // omits the offset we append 'Z' and report it back so they can fix the input upstream.
@@ -25,57 +26,56 @@ const ChoreStepSchema = z.object({
     .default([]),
 });
 
-export function registerCreateChore(
-  server: McpServer,
-  tm1Client: TM1Client,
-): void {
-  server.tool(
-    "tm1_create_chore",
-    [
-      "Create a new TM1 chore with a schedule and list of TI processes to run.",
-      "Fails if a chore with the same name already exists; use tm1_update_chore for idempotent edits.",
-      "After: tm1_toggle_chore to activate scheduling, tm1_execute_chore to run immediately.",
-    ].join(" "),
+export const registerCreateChore = defineTool({
+  name: "tm1_create_chore",
+  description: [
+    "Create a new TM1 chore with a schedule and list of TI processes to run.",
+    "Fails if a chore with the same name already exists; use tm1_update_chore for idempotent edits.",
+    "After: tm1_toggle_chore to activate scheduling, tm1_execute_chore to run immediately.",
+  ],
+  annotations: WRITE,
+  output: MutationResultSchema,
+  input: {
+    choreName: z.string().describe("Chore name"),
+    startTime: z
+      .string()
+      .describe(
+        "Start time in ISO 8601 format with timezone (Z or ±HH:MM). If no offset is given, UTC ('Z') is auto-appended. Example: '2025-01-01T06:00:00Z'.",
+      ),
+    active: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe("Whether to activate the chore immediately (default: false)"),
+    dstSensitive: z
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        "Whether the schedule adjusts for daylight saving time (default: true)",
+      ),
+    executionMode: z
+      .enum(["SingleCommit", "MultipleCommit"])
+      .optional()
+      .default("MultipleCommit")
+      .describe(
+        "SingleCommit: all steps in one transaction. MultipleCommit: each step commits independently.",
+      ),
+    frequency: z
+      .object({
+        days: z.number().int().min(0).default(1),
+        hours: z.number().int().min(0).max(23).default(0),
+        minutes: z.number().int().min(0).max(59).default(0),
+        seconds: z.number().int().min(0).max(59).default(0),
+      })
+      .describe("How often the chore runs"),
+    steps: z
+      .array(ChoreStepSchema)
+      .min(1)
+      .describe("Ordered list of TI processes to execute"),
+  },
+  handler: async (
     {
-      choreName: z.string().describe("Chore name"),
-      startTime: z
-        .string()
-        .describe(
-          "Start time in ISO 8601 format with timezone (Z or ±HH:MM). If no offset is given, UTC ('Z') is auto-appended. Example: '2025-01-01T06:00:00Z'.",
-        ),
-      active: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe("Whether to activate the chore immediately (default: false)"),
-      dstSensitive: z
-        .boolean()
-        .optional()
-        .default(true)
-        .describe(
-          "Whether the schedule adjusts for daylight saving time (default: true)",
-        ),
-      executionMode: z
-        .enum(["SingleCommit", "MultipleCommit"])
-        .optional()
-        .default("MultipleCommit")
-        .describe(
-          "SingleCommit: all steps in one transaction. MultipleCommit: each step commits independently.",
-        ),
-      frequency: z
-        .object({
-          days: z.number().int().min(0).default(1),
-          hours: z.number().int().min(0).max(23).default(0),
-          minutes: z.number().int().min(0).max(59).default(0),
-          seconds: z.number().int().min(0).max(59).default(0),
-        })
-        .describe("How often the chore runs"),
-      steps: z
-        .array(ChoreStepSchema)
-        .min(1)
-        .describe("Ordered list of TI processes to execute"),
-    },
-    async ({
       choreName,
       startTime,
       active,
@@ -83,29 +83,30 @@ export function registerCreateChore(
       executionMode,
       frequency,
       steps,
-    }) => {
-      const { value: normalizedStartTime, coerced } = coerceUtc(startTime);
-      await tm1Client.chores.create({
-        name: choreName,
-        startTime: normalizedStartTime,
-        active,
-        dstSensitive,
-        executionMode,
-        frequency,
-        steps,
-      });
-      return actionResponse({
-        success: true,
-        name: choreName,
-        stepCount: steps.length,
-        active,
-        startTime: normalizedStartTime,
-        ...(coerced
-          ? {
-              warning: `startTime had no timezone offset; auto-appended 'Z' → '${normalizedStartTime}'. Pass an explicit offset to silence this.`,
-            }
-          : {}),
-      });
     },
-  );
-}
+    tm1Client,
+  ) => {
+    const { value: normalizedStartTime, coerced } = coerceUtc(startTime);
+    await tm1Client.chores.create({
+      name: choreName,
+      startTime: normalizedStartTime,
+      active,
+      dstSensitive,
+      executionMode,
+      frequency,
+      steps,
+    });
+    return actionResponse({
+      success: true,
+      name: choreName,
+      stepCount: steps.length,
+      active,
+      startTime: normalizedStartTime,
+      ...(coerced
+        ? {
+            warning: `startTime had no timezone offset; auto-appended 'Z' → '${normalizedStartTime}'. Pass an explicit offset to silence this.`,
+          }
+        : {}),
+    });
+  },
+});

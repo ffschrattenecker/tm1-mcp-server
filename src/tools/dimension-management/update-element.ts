@@ -1,7 +1,8 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { TM1Client } from "../../tm1-client.js";
 import { actionResponse } from "../format.js";
+import { IDEMPOTENT_WRITE } from "../annotations.js";
+import { MutationResultSchema } from "../schemas/items.js";
+import { defineTool } from "../define-tool.js";
 const updateSchema = z.object({
   newName: z.string().optional().describe("New name for the element"),
   type: z
@@ -14,24 +15,28 @@ const updateSchema = z.object({
     .describe("New child components for consolidated elements"),
 });
 
-export function registerUpdateElement(server: McpServer, tm1Client: TM1Client) {
-  server.tool(
-    "tm1_update_element",
+export const registerUpdateElement = defineTool({
+  name: "tm1_update_element",
+  description:
     "Update an existing element in a TM1 dimension hierarchy (name, type, or components)",
-    {
-      dimensionName: z.string().describe("Name of the dimension"),
-      hierarchyName: z.string().describe("Name of the hierarchy"),
-      elementName: z.string().describe("Current name of the element to update"),
-      update: updateSchema.describe("Fields to update on the element"),
-    },
-    async ({ dimensionName, hierarchyName, elementName, update }) => {
-      await tm1Client.elements.update(
-        dimensionName,
-        hierarchyName,
-        elementName,
-        update,
-      );
-      return actionResponse({ success: true, elementName });
-    },
-  );
-}
+  annotations: IDEMPOTENT_WRITE,
+  output: MutationResultSchema,
+  input: {
+    dimensionName: z.string().describe("Name of the dimension"),
+    hierarchyName: z.string().describe("Name of the hierarchy"),
+    elementName: z.string().describe("Current name of the element to update"),
+    update: updateSchema.describe("Fields to update on the element"),
+  },
+  handler: async (
+    { dimensionName, hierarchyName, elementName, update },
+    tm1Client,
+  ) => {
+    await tm1Client.elements.update(
+      dimensionName,
+      hierarchyName,
+      elementName,
+      update,
+    );
+    return actionResponse({ success: true, elementName });
+  },
+});

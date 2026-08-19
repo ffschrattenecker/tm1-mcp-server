@@ -1,24 +1,22 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { TM1Client } from "../../tm1-client.js";
 import { actionResponse } from "../format.js";
+import { MutationResultSchema } from "../schemas/items.js";
+import { WRITE } from "../annotations.js";
+import { defineTool } from "../define-tool.js";
 
-export function registerCreateDimension(
-  server: McpServer,
-  tm1Client: TM1Client,
-): void {
-  server.tool(
-    "tm1_create_dimension",
-    [
-      "Create a new TM1 dimension with a default hierarchy of the same name.",
-      "Fails if the dimension already exists. After: tm1_create_element / tm1_bulk_upsert_elements to populate, tm1_create_hierarchy for alternate hierarchies.",
-    ].join(" "),
-    {
-      dimensionName: z.string().describe("Dimension name"),
-    },
-    async ({ dimensionName }) => {
-      await tm1Client.dimensions.create(dimensionName);
-      return actionResponse({ success: true, dimensionName });
-    },
-  );
-}
+export const registerCreateDimension = defineTool({
+  name: "tm1_create_dimension",
+  description: [
+    "Create a new TM1 dimension with a default hierarchy of the same name.",
+    "Fails if the dimension already exists. After: tm1_create_element / tm1_bulk_upsert_elements to populate, tm1_create_hierarchy for alternate hierarchies.",
+  ],
+  annotations: WRITE,
+  output: MutationResultSchema,
+  input: {
+    dimensionName: z.string().describe("Dimension name"),
+  },
+  handler: async ({ dimensionName }, tm1Client) => {
+    await tm1Client.dimensions.create(dimensionName);
+    return actionResponse({ success: true, dimensionName });
+  },
+});

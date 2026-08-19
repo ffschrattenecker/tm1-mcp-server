@@ -1,14 +1,15 @@
 import { promises as fs } from "node:fs";
 import { resolveLocalPath } from "../local-file.js";
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { TM1Client } from "../../tm1-client.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { parseProFile } from "../../lib/pro-parser.js";
 import {
   buildProcessEnv,
   type ProcessEnv,
 } from "../../lib/callgraph/variableEnv.js";
+import { READ_ONLY } from "../annotations.js";
+import { ValidateProcessRefsResultSchema } from "../schemas/items.js";
+import { defineTool } from "../define-tool.js";
 
 interface RefIssue {
   kind: "cube" | "dimension";
@@ -170,158 +171,159 @@ function scanArg2(
   return found;
 }
 
-export function registerValidateProcessRefs(
-  server: McpServer,
-  tm1Client: TM1Client,
-) {
-  server.tool(
-    "tm1_validate_process_refs",
+export const registerValidateProcessRefs = defineTool({
+  name: "tm1_validate_process_refs",
+  description:
     "Scan a TI process (live, by name, or from .pro) for cube/dimension references in well-known TI functions (CellGetN/S, CellPutN/S, ViewCreate, DimensionElementInsertDirect, AttrPutS, etc.) and verify each name resolves on the server. TM1 lets syntactically valid code reference non-existent objects — this catches the gap between compile and runtime.",
-    {
-      processName: z
-        .string()
-        .optional()
-        .describe("Validate an installed process by name"),
-      filePath: z
-        .string()
-        .optional()
-        .describe(
-          "Validate a .pro file (absolute host path). Disabled unless TM1_LOCAL_FILE_ROOT is set; the path must resolve within that directory. Otherwise pass 'content' inline.",
-        ),
-      content: z.string().optional().describe("Validate raw .pro content"),
-      includeControl: z
-        .boolean()
-        .optional()
-        .default(true)
-        .describe(
-          "Include control objects ('}'-prefixed) as valid targets. Default true.",
-        ),
-    },
-    async ({ processName, filePath, content, includeControl }) => {
-      if (!processName && !filePath && !content) {
-        throw new TM1Error({
-          code: TM1ErrorCode.VALIDATION_ERROR,
-          message: "Provide processName, filePath, or content",
-        });
-      }
+  annotations: READ_ONLY,
+  output: ValidateProcessRefsResultSchema,
+  input: {
+    processName: z
+      .string()
+      .optional()
+      .describe("Validate an installed process by name"),
+    filePath: z
+      .string()
+      .optional()
+      .describe(
+        "Validate a .pro file (absolute host path). Disabled unless TM1_LOCAL_FILE_ROOT is set; the path must resolve within that directory. Otherwise pass 'content' inline.",
+      ),
+    content: z.string().optional().describe("Validate raw .pro content"),
+    includeControl: z
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        "Include control objects ('}'-prefixed) as valid targets. Default true.",
+      ),
+  },
+  handler: async (
+    { processName, filePath, content, includeControl },
+    tm1Client,
+  ) => {
+    if (!processName && !filePath && !content) {
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message: "Provide processName, filePath, or content",
+      });
+    }
 
-      let code: {
-        prolog: string;
-        metadata: string;
-        data: string;
-        epilog: string;
+    let code: {
+      prolog: string;
+      metadata: string;
+      data: string;
+      epilog: string;
+    };
+    let resolvedName = processName ?? "";
+    if (processName) {
+      code = await tm1Client.processes.getCode(processName);
+    } else {
+      let body = content ?? "";
+      if (!body && filePath) {
+        body = await fs.readFile(resolveLocalPath(filePath), "utf8");
+      }
+      const parsed = parseProFile(body);
+      code = {
+        prolog: parsed.prolog,
+        metadata: parsed.metadata,
+        data: parsed.data,
+        epilog: parsed.epilog,
       };
-      let resolvedName = processName ?? "";
-      if (processName) {
-        code = await tm1Client.processes.getCode(processName);
-      } else {
-        let body = content ?? "";
-        if (!body && filePath) {
-          body = await fs.readFile(resolveLocalPath(filePath), "utf8");
-        }
-        const parsed = parseProFile(body);
-        code = {
-          prolog: parsed.prolog,
-          metadata: parsed.metadata,
-          data: parsed.data,
-          epilog: parsed.epilog,
-        };
-        resolvedName = parsed.name ?? "(from-file)";
+      resolvedName = parsed.name ?? "(from-file)";
+    }
+
+    // Variable env across all tabs in runtime order: a prolog assignment
+    // like sCube = 'Sales'; makes CellGetN(sCube, ...) resolvable. Params
+    // are unknown here (only code is fetched), so param-fed identifiers
+    // stay unresolvable — conservative.
+    const env = buildProcessEnv(TABS.map((t) => code[t]).join("\n"), []);
+    const resolveIdent = (raw: string) => identLiteral(raw, env);
+
+    const cubeRefs = new Map<
+      string,
+      { tab: Tab; line: number; context: string }
+    >();
+    const dimRefs = new Map<
+      string,
+      { tab: Tab; line: number; context: string }
+    >();
+    for (const tab of TABS) {
+      const c = code[tab];
+      if (!c) continue;
+      for (const [name, info] of scanCode(c, tab, CUBE_FN_RE)) {
+        if (!cubeRefs.has(name)) cubeRefs.set(name, info);
       }
-
-      // Variable env across all tabs in runtime order: a prolog assignment
-      // like sCube = 'Sales'; makes CellGetN(sCube, ...) resolvable. Params
-      // are unknown here (only code is fetched), so param-fed identifiers
-      // stay unresolvable — conservative.
-      const env = buildProcessEnv(TABS.map((t) => code[t]).join("\n"), []);
-      const resolveIdent = (raw: string) => identLiteral(raw, env);
-
-      const cubeRefs = new Map<
-        string,
-        { tab: Tab; line: number; context: string }
-      >();
-      const dimRefs = new Map<
-        string,
-        { tab: Tab; line: number; context: string }
-      >();
-      for (const tab of TABS) {
-        const c = code[tab];
-        if (!c) continue;
-        for (const [name, info] of scanCode(c, tab, CUBE_FN_RE)) {
-          if (!cubeRefs.has(name)) cubeRefs.set(name, info);
-        }
-        for (const [name, info] of scanCode(
-          c,
-          tab,
-          CUBE_FN_IDENT_RE,
-          resolveIdent,
-        )) {
-          if (!cubeRefs.has(name)) cubeRefs.set(name, info);
-        }
-        for (const [name, info] of scanArg2(c, tab, CUBE_ARG2_FN_RE, env)) {
-          if (!cubeRefs.has(name)) cubeRefs.set(name, info);
-        }
-        for (const [name, info] of scanCode(c, tab, DIM_FN_RE)) {
-          if (!dimRefs.has(name)) dimRefs.set(name, info);
-        }
-        for (const [name, info] of scanCode(
-          c,
-          tab,
-          DIM_FN_IDENT_RE,
-          resolveIdent,
-        )) {
-          if (!dimRefs.has(name)) dimRefs.set(name, info);
-        }
-        for (const [name, info] of scanArg2(c, tab, DIM_ARG2_FN_RE, env)) {
-          if (!dimRefs.has(name)) dimRefs.set(name, info);
-        }
+      for (const [name, info] of scanCode(
+        c,
+        tab,
+        CUBE_FN_IDENT_RE,
+        resolveIdent,
+      )) {
+        if (!cubeRefs.has(name)) cubeRefs.set(name, info);
       }
-
-      const [cubes, dims] = await Promise.all([
-        tm1Client.cubes.list(),
-        tm1Client.dimensions.list(),
-      ]);
-      const cubeNames = new Set(
-        cubes
-          .filter((c) => includeControl || !c.name.startsWith("}"))
-          .map((c) => c.name.toLowerCase()),
-      );
-      const dimNames = new Set(
-        dims
-          .filter((d) => includeControl || !d.name.startsWith("}"))
-          .map((d) => d.name.toLowerCase()),
-      );
-
-      const issues: RefIssue[] = [];
-      for (const [name, info] of cubeRefs) {
-        if (!cubeNames.has(name.toLowerCase())) {
-          issues.push({ kind: "cube", name, ...info });
-        }
+      for (const [name, info] of scanArg2(c, tab, CUBE_ARG2_FN_RE, env)) {
+        if (!cubeRefs.has(name)) cubeRefs.set(name, info);
       }
-      for (const [name, info] of dimRefs) {
-        if (!dimNames.has(name.toLowerCase())) {
-          issues.push({ kind: "dimension", name, ...info });
-        }
+      for (const [name, info] of scanCode(c, tab, DIM_FN_RE)) {
+        if (!dimRefs.has(name)) dimRefs.set(name, info);
       }
+      for (const [name, info] of scanCode(
+        c,
+        tab,
+        DIM_FN_IDENT_RE,
+        resolveIdent,
+      )) {
+        if (!dimRefs.has(name)) dimRefs.set(name, info);
+      }
+      for (const [name, info] of scanArg2(c, tab, DIM_ARG2_FN_RE, env)) {
+        if (!dimRefs.has(name)) dimRefs.set(name, info);
+      }
+    }
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                processName: resolvedName,
-                cubeRefsScanned: cubeRefs.size,
-                dimensionRefsScanned: dimRefs.size,
-                unresolved: issues.length,
-                issues,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
-  );
-}
+    const [cubes, dims] = await Promise.all([
+      tm1Client.cubes.list(),
+      tm1Client.dimensions.list(),
+    ]);
+    const cubeNames = new Set(
+      cubes
+        .filter((c) => includeControl || !c.name.startsWith("}"))
+        .map((c) => c.name.toLowerCase()),
+    );
+    const dimNames = new Set(
+      dims
+        .filter((d) => includeControl || !d.name.startsWith("}"))
+        .map((d) => d.name.toLowerCase()),
+    );
+
+    const issues: RefIssue[] = [];
+    for (const [name, info] of cubeRefs) {
+      if (!cubeNames.has(name.toLowerCase())) {
+        issues.push({ kind: "cube", name, ...info });
+      }
+    }
+    for (const [name, info] of dimRefs) {
+      if (!dimNames.has(name.toLowerCase())) {
+        issues.push({ kind: "dimension", name, ...info });
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(
+            {
+              processName: resolvedName,
+              cubeRefsScanned: cubeRefs.size,
+              dimensionRefsScanned: dimRefs.size,
+              unresolved: issues.length,
+              issues,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  },
+});

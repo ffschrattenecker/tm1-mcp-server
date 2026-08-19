@@ -18,7 +18,7 @@
 import { readFileSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { walk, TOOL_RE, toolSpans } from "./lib/scan-tools.mjs";
+import { walk, toolSpans } from "./lib/scan-tools.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
@@ -144,21 +144,12 @@ function findSchemaBrace(src, from) {
 
 const offenders = [];
 
-// Where the input shape starts, per registration form:
-//   server.tool(name, desc, { … })  — the first `{` after name+description
-//   defineTool({ …, input: { … } }) — the `{` after the `input:` key
-// Both are located with findSchemaBrace so a `{` inside a description literal
-// is never mistaken for the shape.
+// The input shape is the object after the `input:` key. findSchemaBrace is what
+// keeps a `{` inside a description literal from being mistaken for it.
 function inputBraceOf(src, span) {
   const body = src.slice(span.start, span.end);
-  if (span.inline) {
-    const m = /\binput:\s*\{/.exec(body);
-    return m === null ? -1 : findSchemaBrace(src, span.start + m.index);
-  }
-  const m = new RegExp(TOOL_RE.source).exec(body);
-  return m === null
-    ? -1
-    : findSchemaBrace(src, span.start + m.index + m[0].length);
+  const m = /\binput:\s*\{/.exec(body);
+  return m === null ? -1 : findSchemaBrace(src, span.start + m.index);
 }
 
 for (const file of walk(toolsDir)) {

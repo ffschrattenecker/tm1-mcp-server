@@ -1,12 +1,13 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { TM1Client } from "../../tm1-client.js";
 import type {
   ProcessParameter,
   ProcessVariable,
   DataSource,
 } from "../../types.js";
 import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
+import { DiffProcessesResultSchema } from "../schemas/items.js";
+import { READ_ONLY } from "../annotations.js";
+import { defineTool } from "../define-tool.js";
 
 // ── LCS line diff ─────────────────────────────────────────────────────────────
 
@@ -257,100 +258,100 @@ function diffDs(a: DataSource, b: DataSource) {
 const ALL_TABS = ["prolog", "metadata", "data", "epilog"] as const;
 type Tab = (typeof ALL_TABS)[number];
 
-export function registerDiffProcesses(server: McpServer, tm1Client: TM1Client) {
-  server.tool(
-    "tm1_diff_processes",
-    [
-      "Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog).",
-      "Returns per-tab identical flag, line counts, and unified diff hunks for changed tabs.",
-      "Also diffs parameters, variables, and datasource.",
-      "Analogue of tm1_diff_process_with_file but server-side — no .pro file needed.",
-    ].join(" "),
-    {
-      processA: z.string().describe("First process name (case-sensitive)"),
-      processB: z.string().describe("Second process name (case-sensitive)"),
-      tabs: z
-        .array(z.enum(["prolog", "metadata", "data", "epilog"]))
-        .optional()
-        .describe("Tabs to diff (default: all four)"),
-      contextLines: z
-        .number()
-        .int()
-        .min(0)
-        .max(10)
-        .optional()
-        .default(3)
-        .describe(
-          "Lines of context around each changed hunk (default 3, max 10)",
-        ),
-      maskSecrets: z
-        .boolean()
-        .optional()
-        .default(true)
-        .describe(
-          "Redact credential literals on BOTH sides before diffing (so a cred present on only one side can't leak via the diff). " +
-            "Masks the password arg of ODBCOpen() and quoted values assigned to credential-named identifiers (pPwd, sToken, …). " +
-            "Default: true. Set false only when explicitly auditing credentials.",
-        ),
-    },
-    async ({ processA, processB, tabs, contextLines, maskSecrets }) => {
-      const diffTabs: readonly Tab[] =
-        tabs && tabs.length > 0 ? tabs : ALL_TABS;
-      const mask = resolveMaskSecrets(maskSecrets)
-        ? maskCode
-        : (s: string) => s;
+export const registerDiffProcesses = defineTool({
+  name: "tm1_diff_processes",
+  description: [
+    "Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog).",
+    "Returns per-tab identical flag, line counts, and unified diff hunks for changed tabs.",
+    "Also diffs parameters, variables, and datasource.",
+    "Analogue of tm1_diff_process_with_file but server-side — no .pro file needed.",
+  ],
+  annotations: READ_ONLY,
+  output: DiffProcessesResultSchema,
+  input: {
+    processA: z.string().describe("First process name (case-sensitive)"),
+    processB: z.string().describe("Second process name (case-sensitive)"),
+    tabs: z
+      .array(z.enum(["prolog", "metadata", "data", "epilog"]))
+      .optional()
+      .describe("Tabs to diff (default: all four)"),
+    contextLines: z
+      .number()
+      .int()
+      .min(0)
+      .max(10)
+      .optional()
+      .default(3)
+      .describe(
+        "Lines of context around each changed hunk (default 3, max 10)",
+      ),
+    maskSecrets: z
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        "Redact credential literals on BOTH sides before diffing (so a cred present on only one side can't leak via the diff). " +
+          "Masks the password arg of ODBCOpen() and quoted values assigned to credential-named identifiers (pPwd, sToken, …). " +
+          "Default: true. Set false only when explicitly auditing credentials.",
+      ),
+  },
+  handler: async (
+    { processA, processB, tabs, contextLines, maskSecrets },
+    tm1Client,
+  ) => {
+    const diffTabs: readonly Tab[] = tabs && tabs.length > 0 ? tabs : ALL_TABS;
+    const mask = resolveMaskSecrets(maskSecrets) ? maskCode : (s: string) => s;
 
-      const [codeA, codeB, paramsA, paramsB, varsA, varsB, dsA, dsB] =
-        await Promise.all([
-          tm1Client.processes.getCode(processA),
-          tm1Client.processes.getCode(processB),
-          tm1Client.processes.getParameters(processA),
-          tm1Client.processes.getParameters(processB),
-          tm1Client.processes.getVariables(processA),
-          tm1Client.processes.getVariables(processB),
-          tm1Client.processes.getDataSource(processA),
-          tm1Client.processes.getDataSource(processB),
-        ]);
+    const [codeA, codeB, paramsA, paramsB, varsA, varsB, dsA, dsB] =
+      await Promise.all([
+        tm1Client.processes.getCode(processA),
+        tm1Client.processes.getCode(processB),
+        tm1Client.processes.getParameters(processA),
+        tm1Client.processes.getParameters(processB),
+        tm1Client.processes.getVariables(processA),
+        tm1Client.processes.getVariables(processB),
+        tm1Client.processes.getDataSource(processA),
+        tm1Client.processes.getDataSource(processB),
+      ]);
 
-      const tabResults: Record<string, ReturnType<typeof tabCodeDiff>> = {};
-      for (const tab of diffTabs) {
-        tabResults[tab] = tabCodeDiff(
-          mask(codeA[tab] ?? ""),
-          mask(codeB[tab] ?? ""),
-          contextLines,
-        );
-      }
+    const tabResults: Record<string, ReturnType<typeof tabCodeDiff>> = {};
+    for (const tab of diffTabs) {
+      tabResults[tab] = tabCodeDiff(
+        mask(codeA[tab] ?? ""),
+        mask(codeB[tab] ?? ""),
+        contextLines,
+      );
+    }
 
-      const parameters = diffParams(paramsA, paramsB);
-      const variables = diffVars(varsA, varsB);
-      const dataSource = diffDs(dsA, dsB);
+    const parameters = diffParams(paramsA, paramsB);
+    const variables = diffVars(varsA, varsB);
+    const dataSource = diffDs(dsA, dsB);
 
-      const identical =
-        Object.values(tabResults).every((t) => t.identical) &&
-        parameters.identical &&
-        variables.identical &&
-        dataSource.identical;
+    const identical =
+      Object.values(tabResults).every((t) => t.identical) &&
+      parameters.identical &&
+      variables.identical &&
+      dataSource.identical;
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                processA,
-                processB,
-                identical,
-                tabs: tabResults,
-                parameters,
-                variables,
-                dataSource,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
-  );
-}
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(
+            {
+              processA,
+              processB,
+              identical,
+              tabs: tabResults,
+              parameters,
+              variables,
+              dataSource,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  },
+});

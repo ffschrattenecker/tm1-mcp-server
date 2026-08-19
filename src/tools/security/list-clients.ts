@@ -1,9 +1,11 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { TM1Client } from "../../tm1-client.js";
 import type { Client } from "../../types.js";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
 import { FORMAT_SCHEMA, pageResponse, type Column } from "../format.js";
+import { ClientItemSchema } from "../schemas/items.js";
+import { READ_ONLY } from "../annotations.js";
+import { defineTool } from "../define-tool.js";
+import { pageShapeFor } from "../schemas/common.js";
 
 const FIELD_KEYS = [
   "name",
@@ -51,45 +53,49 @@ function project(
   });
 }
 
-export function registerListClients(server: McpServer, tm1Client: TM1Client) {
-  server.tool(
-    "tm1_list_clients",
+export const registerListClients = defineTool({
+  name: "tm1_list_clients",
+  description:
     "List TM1 clients (users). Defaults return name, friendly name, enabled state, and full Groups[]. Use fields=['name','type'] for a lean projection or groupCount=true to replace the Groups[] array with an integer count (large savings when groups>>10).",
-    {
-      ...PAGINATION_SCHEMA,
-      ...FORMAT_SCHEMA,
-      fields: z
-        .array(z.enum(FIELD_KEYS))
-        .optional()
-        .describe(
-          "Projection: subset of ['name','friendlyName','type','enabled','groups','groupCount']. Omit for full default payload.",
-        ),
-      groupCount: z
-        .boolean()
-        .optional()
-        .describe(
-          "If true, replace the per-client Groups[] array with an integer groupCount. Combine with fields=['name','groupCount'] for the smallest payload.",
-        ),
-    },
-    async ({ limit, offset, fetchAll, format, fields, groupCount }) => {
-      const clients = await tm1Client.security.listClients();
-      const page = paginate(clients, limit, offset, fetchAll);
-      const projectedItems = project(page.items, fields, groupCount === true);
-      const projectedPage = { ...page, items: projectedItems };
-      const columns: Column<ProjectedClient>[] = [
-        { header: "Name", get: (c) => c.Name },
-        { header: "FriendlyName", get: (c) => c.FriendlyName ?? "" },
-        { header: "Type", get: (c) => c.Type ?? "" },
-        { header: "Enabled", get: (c) => c.Enabled ?? "" },
-        {
-          header: "Groups",
-          get: (c) =>
-            c.groupCount !== undefined
-              ? `${c.groupCount} (count)`
-              : (c.Groups ?? []).join(", "),
-        },
-      ];
-      return pageResponse(projectedPage, format, { title: "Clients", columns });
-    },
-  );
-}
+  annotations: READ_ONLY,
+  output: pageShapeFor(ClientItemSchema),
+  input: {
+    ...PAGINATION_SCHEMA,
+    ...FORMAT_SCHEMA,
+    fields: z
+      .array(z.enum(FIELD_KEYS))
+      .optional()
+      .describe(
+        "Projection: subset of ['name','friendlyName','type','enabled','groups','groupCount']. Omit for full default payload.",
+      ),
+    groupCount: z
+      .boolean()
+      .optional()
+      .describe(
+        "If true, replace the per-client Groups[] array with an integer groupCount. Combine with fields=['name','groupCount'] for the smallest payload.",
+      ),
+  },
+  handler: async (
+    { limit, offset, fetchAll, format, fields, groupCount },
+    tm1Client,
+  ) => {
+    const clients = await tm1Client.security.listClients();
+    const page = paginate(clients, limit, offset, fetchAll);
+    const projectedItems = project(page.items, fields, groupCount === true);
+    const projectedPage = { ...page, items: projectedItems };
+    const columns: Column<ProjectedClient>[] = [
+      { header: "Name", get: (c) => c.Name },
+      { header: "FriendlyName", get: (c) => c.FriendlyName ?? "" },
+      { header: "Type", get: (c) => c.Type ?? "" },
+      { header: "Enabled", get: (c) => c.Enabled ?? "" },
+      {
+        header: "Groups",
+        get: (c) =>
+          c.groupCount !== undefined
+            ? `${c.groupCount} (count)`
+            : (c.Groups ?? []).join(", "),
+      },
+    ];
+    return pageResponse(projectedPage, format, { title: "Clients", columns });
+  },
+});

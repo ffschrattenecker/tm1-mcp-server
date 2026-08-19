@@ -30,9 +30,6 @@ jobs:
       - name: Lint (no flat TM1 API)
         run: npm run lint:no-flat-api
 
-      - name: Lint (annotation coverage)
-        run: npm run lint:annotations
-
       - name: Lint (ESLint)
         run: npm run lint:eslint
 
@@ -47,11 +44,8 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Schema gates: coverage + registration parse src; the byte-budget gate
-      # measures the compiled dist payload, so all three run after Build.
-      - name: Lint (output-schema coverage)
-        run: npm run lint:output-schema
-
+      # Schema gates: registration parses src; the byte-budget gate measures
+      # the compiled dist payload, so both run after Build.
       - name: Lint (output-schema byte budget)
         run: npm run lint:output-schema-budget
 

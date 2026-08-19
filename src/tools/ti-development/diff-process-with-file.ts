@@ -1,8 +1,6 @@
 import { promises as fs } from "node:fs";
 import { resolveLocalPath } from "../local-file.js";
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { TM1Client } from "../../tm1-client.js";
 import type {
   ProcessParameter,
   ProcessVariable,
@@ -11,6 +9,9 @@ import type {
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { parseProFile } from "../../lib/pro-parser.js";
 import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
+import { DiffProcessResultSchema } from "../schemas/items.js";
+import { READ_ONLY, withVersion } from "../annotations.js";
+import { defineTool } from "../define-tool.js";
 
 interface TabDiff {
   tab: "prolog" | "metadata" | "data" | "epilog";
@@ -114,113 +115,105 @@ function diffDataSource(
   return { identical: diffs.length === 0, differences: diffs };
 }
 
-export function registerDiffProcessWithFile(
-  server: McpServer,
-  tm1Client: TM1Client,
-) {
-  server.tool(
-    "tm1_diff_process_with_file",
+export const registerDiffProcessWithFile = defineTool({
+  name: "tm1_diff_process_with_file",
+  description:
     "Compare an installed TI process on the server against a local .pro file. Returns per-tab identical flags + line counts, parameter diff (added/removed/changed), variable diff, and datasource diff. Use before tm1_import_pro_file to preview what will change.",
-    {
-      filePath: z
-        .string()
-        .optional()
-        .describe(
-          "Absolute path to the .pro file on the MCP server host. Disabled unless TM1_LOCAL_FILE_ROOT is set; the path must resolve within that directory. Otherwise pass 'content' inline.",
-        ),
-      content: z
-        .string()
-        .optional()
-        .describe("Raw .pro file content as string"),
-      processName: z
-        .string()
-        .optional()
-        .describe("Override process name. Default: from .pro 602 line."),
-      maskSecrets: z
-        .boolean()
-        .optional()
-        .default(true)
-        .describe(
-          "Redact credential literals on BOTH sides before diffing (so a cred present on only one side can't leak via the diff). " +
-            "Masks the password arg of ODBCOpen() and quoted values assigned to credential-named identifiers (pPwd, sToken, …). " +
-            "Default: true. Set false only when explicitly auditing credentials.",
-        ),
-    },
-    async ({ filePath, content, processName, maskSecrets }) => {
-      if (!filePath && !content) {
-        throw new TM1Error({
-          code: TM1ErrorCode.VALIDATION_ERROR,
-          message: "Provide filePath or content",
-        });
-      }
-      let body = content ?? "";
-      if (!body && filePath) {
-        body = await fs.readFile(resolveLocalPath(filePath), "utf8");
-      }
+  annotations: withVersion(READ_ONLY, "v11"),
+  output: DiffProcessResultSchema,
+  input: {
+    filePath: z
+      .string()
+      .optional()
+      .describe(
+        "Absolute path to the .pro file on the MCP server host. Disabled unless TM1_LOCAL_FILE_ROOT is set; the path must resolve within that directory. Otherwise pass 'content' inline.",
+      ),
+    content: z.string().optional().describe("Raw .pro file content as string"),
+    processName: z
+      .string()
+      .optional()
+      .describe("Override process name. Default: from .pro 602 line."),
+    maskSecrets: z
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        "Redact credential literals on BOTH sides before diffing (so a cred present on only one side can't leak via the diff). " +
+          "Masks the password arg of ODBCOpen() and quoted values assigned to credential-named identifiers (pPwd, sToken, …). " +
+          "Default: true. Set false only when explicitly auditing credentials.",
+      ),
+  },
+  handler: async (
+    { filePath, content, processName, maskSecrets },
+    tm1Client,
+  ) => {
+    if (!filePath && !content) {
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message: "Provide filePath or content",
+      });
+    }
+    let body = content ?? "";
+    if (!body && filePath) {
+      body = await fs.readFile(resolveLocalPath(filePath), "utf8");
+    }
 
-      const parsed = parseProFile(body);
-      const name = processName ?? parsed.name;
-      if (!name) {
-        throw new TM1Error({
-          code: TM1ErrorCode.VALIDATION_ERROR,
-          message: "Process name not found in .pro and no override provided",
-        });
-      }
+    const parsed = parseProFile(body);
+    const name = processName ?? parsed.name;
+    if (!name) {
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message: "Process name not found in .pro and no override provided",
+      });
+    }
 
-      const [installedCode, installedParams, installedVars, installedDs] =
-        await Promise.all([
-          tm1Client.processes.getCode(name),
-          tm1Client.processes.getParameters(name),
-          tm1Client.processes.getVariables(name),
-          tm1Client.processes.getDataSource(name),
-        ]);
+    const [installedCode, installedParams, installedVars, installedDs] =
+      await Promise.all([
+        tm1Client.processes.getCode(name),
+        tm1Client.processes.getParameters(name),
+        tm1Client.processes.getVariables(name),
+        tm1Client.processes.getDataSource(name),
+      ]);
 
-      const mask = resolveMaskSecrets(maskSecrets)
-        ? maskCode
-        : (s: string) => s;
-      const tabs = [
-        tabDiff("prolog", mask(installedCode.prolog), mask(parsed.prolog)),
-        tabDiff(
-          "metadata",
-          mask(installedCode.metadata),
-          mask(parsed.metadata),
-        ),
-        tabDiff("data", mask(installedCode.data), mask(parsed.data)),
-        tabDiff("epilog", mask(installedCode.epilog), mask(parsed.epilog)),
-      ];
-      const params = diffParams(installedParams, parsed.parameters);
-      const variables = diffVars(installedVars, parsed.variables);
-      const dataSource = diffDataSource(installedDs, parsed.dataSource);
+    const mask = resolveMaskSecrets(maskSecrets) ? maskCode : (s: string) => s;
+    const tabs = [
+      tabDiff("prolog", mask(installedCode.prolog), mask(parsed.prolog)),
+      tabDiff("metadata", mask(installedCode.metadata), mask(parsed.metadata)),
+      tabDiff("data", mask(installedCode.data), mask(parsed.data)),
+      tabDiff("epilog", mask(installedCode.epilog), mask(parsed.epilog)),
+    ];
+    const params = diffParams(installedParams, parsed.parameters);
+    const variables = diffVars(installedVars, parsed.variables);
+    const dataSource = diffDataSource(installedDs, parsed.dataSource);
 
-      const allIdentical =
-        tabs.every((t) => t.identical) &&
-        params.added.length === 0 &&
-        params.removed.length === 0 &&
-        params.changed.length === 0 &&
-        variables.added.length === 0 &&
-        variables.removed.length === 0 &&
-        variables.changed.length === 0 &&
-        dataSource.identical;
+    const allIdentical =
+      tabs.every((t) => t.identical) &&
+      params.added.length === 0 &&
+      params.removed.length === 0 &&
+      params.changed.length === 0 &&
+      variables.added.length === 0 &&
+      variables.removed.length === 0 &&
+      variables.changed.length === 0 &&
+      dataSource.identical;
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                processName: name,
-                identical: allIdentical,
-                tabs,
-                parameters: params,
-                variables,
-                dataSource,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
-  );
-}
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify(
+            {
+              processName: name,
+              identical: allIdentical,
+              tabs,
+              parameters: params,
+              variables,
+              dataSource,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  },
+});

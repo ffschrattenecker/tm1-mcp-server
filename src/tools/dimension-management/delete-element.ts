@@ -1,26 +1,27 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { TM1Client } from "../../tm1-client.js";
 import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { actionResponse } from "../format.js";
-export function registerDeleteElement(server: McpServer, tm1Client: TM1Client) {
-  server.tool(
-    "tm1_delete_element",
+import { DESTRUCTIVE } from "../annotations.js";
+import { MutationResultSchema } from "../schemas/items.js";
+import { defineTool } from "../define-tool.js";
+export const registerDeleteElement = defineTool({
+  name: "tm1_delete_element",
+  description:
     "Delete an element from a TM1 dimension hierarchy. Irreversible — pass confirm=<element name verbatim>.",
-    {
-      dimensionName: z.string().describe("Name of the dimension"),
-      hierarchyName: z.string().describe("Name of the hierarchy"),
-      elementName: z.string().describe("Name of the element to delete"),
-      ...CONFIRM_SCHEMA,
-    },
-    async ({ dimensionName, hierarchyName, elementName, confirm }) => {
-      requireConfirm(confirm, elementName, "element");
-      await tm1Client.elements.delete(
-        dimensionName,
-        hierarchyName,
-        elementName,
-      );
-      return actionResponse({ success: true, elementName });
-    },
-  );
-}
+  annotations: DESTRUCTIVE,
+  output: MutationResultSchema,
+  input: {
+    dimensionName: z.string().describe("Name of the dimension"),
+    hierarchyName: z.string().describe("Name of the hierarchy"),
+    elementName: z.string().describe("Name of the element to delete"),
+    ...CONFIRM_SCHEMA,
+  },
+  handler: async (
+    { dimensionName, hierarchyName, elementName, confirm },
+    tm1Client,
+  ) => {
+    requireConfirm(confirm, elementName, "element");
+    await tm1Client.elements.delete(dimensionName, hierarchyName, elementName);
+    return actionResponse({ success: true, elementName });
+  },
+});

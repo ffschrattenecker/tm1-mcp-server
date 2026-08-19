@@ -37,10 +37,8 @@ const BUDGET_BYTES = 65_000;
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 
-const mapPath = join(root, "dist", "tools", "output-schema-map.js");
-// Tools migrated to defineTool() keep their outputSchema in the spec, not in
-// the map. Importing the tool barrel runs every top-level defineTool() call, so
-// allSpecs() then holds them and the measured total stays the whole wire cost.
+// Importing the tool barrel runs every top-level defineTool() call, so
+// allSpecs() then holds every published outputSchema.
 const toolsIndexPath = join(root, "dist", "tools", "index.js");
 const defineToolPath = join(root, "dist", "tools", "define-tool.js");
 const slimPath = join(root, "dist", "lib", "slim-json-schema.js");
@@ -84,12 +82,12 @@ function build(reason) {
   }
 }
 
-if (![mapPath, slimPath, toolsIndexPath, defineToolPath].every(existsSync)) {
+if (![slimPath, toolsIndexPath, defineToolPath].every(existsSync)) {
   build("dist not built");
-} else if (newestSrcMtimeMs() > statSync(mapPath).mtimeMs) {
+} else if (newestSrcMtimeMs() > statSync(toolsIndexPath).mtimeMs) {
   build("dist stale vs src");
 }
-for (const p of [mapPath, slimPath, toolsIndexPath, defineToolPath]) {
+for (const p of [slimPath, toolsIndexPath, defineToolPath]) {
   if (!existsSync(p)) {
     console.error(
       `check-output-schema-budget: expected ${p} after build, not found.`,
@@ -115,15 +113,15 @@ try {
   console.error(String(err?.message ?? err));
   process.exit(1);
 }
-const { OUTPUT_SCHEMA_MAP } = await import(pathToFileURL(mapPath).href);
 const { slimJsonSchema } = await import(pathToFileURL(slimPath).href);
 await import(pathToFileURL(toolsIndexPath).href);
 const { allSpecs } = await import(pathToFileURL(defineToolPath).href);
 
-const publishedSchemas = new Map(Object.entries(OUTPUT_SCHEMA_MAP));
+const publishedSchemas = new Map();
 for (const [name, spec] of allSpecs()) {
-  if (spec.outputSchema !== undefined)
+  if (spec.outputSchema !== undefined) {
     publishedSchemas.set(name, spec.outputSchema);
+  }
 }
 
 // Same options McpServer passes when it serializes outputSchema for tools/list.
