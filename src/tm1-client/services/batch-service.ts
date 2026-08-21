@@ -19,6 +19,17 @@
 // is the server's native behaviour, so per-item success/failure reporting is
 // preserved rather than collapsed into one all-or-nothing result.
 //
+// Scope: exactly one consumer today — `ElementService.bulkUpsert`
+// (`element-service.ts`), which folds the per-element writes of
+// tm1_bulk_upsert_elements into one round-trip. It stays a service of its own
+// rather than moving into ElementService for two reasons that outlive the
+// single caller: `$batch` is the one endpoint bound to no TM1 object type, so
+// it belongs to no other service by the rule in docs/ARCHITECTURE.md; and the
+// `supported` verdict below is CONNECTION-scoped, probed once and reused, so it
+// cannot live inside a per-object-type service without being re-probed per
+// caller. `TM1Client` exposes it as `client.batch` for the live suite, which
+// asserts the probe's behaviour directly.
+//
 // See docs/ARCHITECTURE.md for the layering.
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { classifyHttpError } from "../http.js";

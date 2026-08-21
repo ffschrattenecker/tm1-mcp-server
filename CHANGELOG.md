@@ -151,6 +151,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   getters raised the function ratio past the ratchet's slack, which is the gate working as
   designed.
 
+- **Internal (no client-visible change): two spent codemods deleted, `BatchService`'s scope
+  written down.** `scripts/codemod-mutation-envelope.mjs` and
+  `scripts/codemod-remove-dead-trycatch.mjs` were one-shot migrations that had already run;
+  what they enforced is now a gate (`lint:mutation-envelope`) or simply the shape of the
+  code, so 357 lines of tooling sat in `scripts/` looking like something you might need to
+  run. `BatchService` has exactly one consumer (`ElementService.bulkUpsert`), which reads as
+  an oversized abstraction until you know why it is not folded in: `$batch` is bound to no
+  TM1 object type, and its `supported` verdict is connection-scoped rather than per-caller.
+  Both reasons now stand in the file header instead of in someone's memory.
+
 ## [3.1.0] - 2026-08-18
 
 ### Changed
