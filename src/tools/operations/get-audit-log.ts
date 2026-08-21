@@ -14,8 +14,11 @@ export const registerGetAuditLog = defineTool({
   description:
     "Fetch recent TM1 audit log entries (metadata/security changes: who changed what, when), newest first. " +
     "Requires AuditLogOn=T in tm1s.cfg — an empty result on an active server usually means auditing is disabled " +
-    "(check auditLogEnabled in tm1_get_server_info).",
+    "(check auditLogEnabled in tm1_get_server_info). (v11 only)",
   annotations: withVersion(READ_ONLY, "v11"),
+  // v12 deprecated AuditLogEntry/AuditLogEntries in 12.0.0 and serves an empty
+  // collection with no successor endpoint, so the tool can only mislead there.
+  enabled: (tm1Client) => tm1Client.version === 11,
   output: {
     count: z.number().int(),
     entries: z.array(AuditLogEntrySchema),

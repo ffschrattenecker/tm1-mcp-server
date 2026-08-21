@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import { registerGetJobs } from "../../src/tools/operations/get-jobs.js";
 import { registerGetThreads } from "../../src/tools/operations/get-threads.js";
 import { registerSaveData } from "../../src/tools/operations/save-data.js";
+import { registerGetAuditLog } from "../../src/tools/operations/get-audit-log.js";
+import { registerGetMessageLog } from "../../src/tools/operations/get-message-log.js";
+import { registerGetTransactionLog } from "../../src/tools/operations/get-transaction-log.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 
@@ -13,7 +16,7 @@ function mockServer() {
   return { server, names };
 }
 const clientWith = (version: 11 | 12) =>
-  ({ version, monitoring: {} }) as unknown as TM1Client;
+  ({ version, monitoring: {}, server: {} }) as unknown as TM1Client;
 
 describe("version-gated monitoring tools", () => {
   it("v12 registers job tools and no thread tools", () => {
@@ -42,4 +45,25 @@ describe("version-gated monitoring tools", () => {
     registerSaveData(v12.server, clientWith(12));
     expect(v12.names).toEqual([]);
   });
+
+  // v12 deprecated AuditLogEntry, MessageLogEntry and TransactionLogEntry in
+  // 12.0.0. The collections still answer 200 but always empty, and there is no
+  // successor endpoint — measured 2026-08-21 against 12.5.9 (0 rows) with
+  // 11.8.02900.8 as control (37,655 message log rows). Serving an empty list
+  // reads as "nothing happened", so the tools are gated off instead.
+  it.each([
+    ["tm1_get_audit_log", registerGetAuditLog],
+    ["tm1_get_message_log", registerGetMessageLog],
+    ["tm1_get_transaction_log", registerGetTransactionLog],
+  ])(
+    "registers %s on v11 only (v12 deprecated the log endpoint)",
+    (name, register) => {
+      const v11 = mockServer();
+      register(v11.server, clientWith(11));
+      expect(v11.names).toEqual([name]);
+      const v12 = mockServer();
+      register(v12.server, clientWith(12));
+      expect(v12.names).toEqual([]);
+    },
+  );
 });

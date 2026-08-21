@@ -6,14 +6,18 @@ import {
   columnsOf,
 } from "../format.js";
 import { MessageLogEntrySchema } from "../schemas/items.js";
-import { READ_ONLY } from "../annotations.js";
+import { READ_ONLY, withVersion } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 
 export const registerGetMessageLog = defineTool({
   name: "tm1_get_message_log",
   description:
-    "Fetch recent TM1 server message log entries, newest first. Useful for debugging TI process errors. The `filter`/`level`/`since` filters are applied SERVER-SIDE, so a matching entry is found even when it is older than the newest `top` rows (no false 'no error found'). When an entry references a TI error file, the parsed filename is surfaced as `errorFile` — pass it straight to tm1_get_error_log_content to read the failure detail.",
-  annotations: READ_ONLY,
+    "Fetch recent TM1 server message log entries, newest first. Useful for debugging TI process errors. The `filter`/`level`/`since` filters are applied SERVER-SIDE, so a matching entry is found even when it is older than the newest `top` rows (no false 'no error found'). When an entry references a TI error file, the parsed filename is surfaced as `errorFile` — pass it straight to tm1_get_error_log_content to read the failure detail. (v11 only)",
+  annotations: withVersion(READ_ONLY, "v11"),
+  // v12 deprecated MessageLogEntry/MessageLogEntries (and the MessageLog /
+  // TailMessageLog functions) in 12.0.0; all of them serve empty with no
+  // successor endpoint.
+  enabled: (tm1Client) => tm1Client.version === 11,
   output: {
     count: z.number().int(),
     entries: z.array(MessageLogEntrySchema),

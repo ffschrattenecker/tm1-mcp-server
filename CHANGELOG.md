@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`tm1_get_audit_log`, `tm1_get_message_log` and `tm1_get_transaction_log` are v11-only
+  and no longer registered on v12.** All three read entity sets that v12 marks
+  `Core.RevisionKind/Deprecated` at 12.0.0 — `AuditLogEntry`/`AuditLogEntries`,
+  `MessageLogEntry`/`MessageLogEntries` (plus the `MessageLog` and `TailMessageLog`
+  functions) and `TransactionLogEntry`/`TransactionLogEntries` (plus `TransactionLog` and
+  `TailTransactionLog`) — and v12 serves every one of them as an empty collection with no
+  successor endpoint. Measured against 12.5.9: `$count` is `0` on all three, and the
+  function forms return empty too, on an instance that had live sessions, processes and
+  repeated logins; the same probe against 11.8.02900.8 returns 37,655 message log rows.
+  An empty list is indistinguishable from "nothing was logged", so the tools now gate off
+  the way `tm1_list_threads` and `tm1_save_data` already do rather than answering with a
+  silent nothing. `tm1_get_message_log` and `tm1_get_transaction_log` also gained the
+  `requiresVersion: "v11"` annotation they were missing; `tm1_get_audit_log` had the
+  annotation but no gate. The `tm1_diagnose_process`, `tm1_audit_cube` and
+  `tm1_server_health` prompts mark the affected steps as v11-only.
+
 ### Removed
 
 - **`oDBCConnection` is gone from the datasource model — TM1 has no such field.** It had
