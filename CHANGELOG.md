@@ -9,6 +9,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`tm1_execute_chore` reports how the chore ended instead of always claiming
+  success.** It answered `{success: true}` whenever the HTTP call did not throw, so a chore
+  whose step failed reported a clean run — the same fail-open T-4 closed for processes. On
+  v12 12.5.0 and up it now runs `tm1.ExecuteWithReturn` (with `$expand=ErrorLogFile`, which
+  is required: `ErrorLogFile` is a navigation property, so without it the filename is
+  silently absent) and returns `{success, outcome, choreErrorStatus, errorLogFile}`. This
+  costs no extra waiting — `tm1.Execute` was already synchronous, which is why the tool has
+  always offered a one-hour `timeoutMs`; the status was simply thrown away.
+
+  The commit semantics were measured against 12.5.9, with the identical TI bodies run as
+  standalone processes as a control, and they are **not** the process ones:
+
+  | TI in the step | standalone process | as a chore step |
+  | --- | --- | --- |
+  | `ItemReject` | `CompletedWithMessages`, committed | `CompletedSuccessfully`, committed |
+  | `ProcessQuit` | `QuitCalled`, committed | `CompletedWithMessages`, committed |
+  | `ProcessError` | `Aborted`, **rolled back** | `CompletedWithMessages`, **committed** |
+  | `CellPutN` into a missing cube | `Aborted`, **rolled back** | `CompletedWithMessages`, **committed** |
+  | `ProcessRollback` | `RollbackCalled`, rolled back | `ProcessRollbackCalled`, rolled back |
+
+  A step that aborts therefore COMMITS its writes inside a chore. Running chore statuses
+  through the process classifier would report `rolled_back` for a run that committed — an
+  invitation to re-run it and duplicate the data — so `classifyChoreExecution`
+  (`chore-status.ts`) is a separate table and `ChoreOutcome` a separate type. `QuitCalled`,
+  `Aborted` and `RollbackCalled` are declared in `tm1.ChoreExecuteStatusCode` but no exit
+  path produced them at chore level; they classify as `indeterminate` rather than being
+  guessed from their names, which the ProcessError row shows to be unsafe.
+
+- **Two corrections to what `tm1_execute_chore` and `tm1_create_chore` told callers.**
+  Chores do **not** fail-fast: with a failing step first and a clean writer second, the
+  second step ran and committed in every measured case, in both execution modes — the tool
+  description said the opposite. And `ExecutionMode` does not decide whether a failing step
+  stops the chore; it decides only how far a `ProcessRollback` reaches (`SingleCommit`
+  discards everything the chore had written up to that point, `MultipleCommit` only the
+  rolling-back step).
+
+- On a server without `tm1.ExecuteWithReturn` on Chore — v11 entirely, v12 before 12.5.0 —
+  the chore still runs and the result carries `statusUnavailable: true` with
+  `outcome: "indeterminate"`, rather than the old blanket success. That variant deliberately
+  does not set the MCP `isError` flag: on v11 it is every chore run, and a known API
+  limitation is not a failure. Detection is by attempt, not by version sniffing: the action
+  is called, and a 404 — which is also what a missing chore returns, distinguishable only by
+  error prose this codebase does not parse — falls back to `tm1.Execute`. If that runs, the
+  chore existed, which proves the 404 was about the action; the verdict is then remembered
+  per connection. If the chore really was missing, the retry 404s too and the error surfaces
+  unchanged.
+
 - **`tm1_get_audit_log`, `tm1_get_message_log` and `tm1_get_transaction_log` are v11-only
   and no longer registered on v12.** All three read entity sets that v12 marks
   `Core.RevisionKind/Deprecated` at 12.0.0 — `AuditLogEntry`/`AuditLogEntries`,

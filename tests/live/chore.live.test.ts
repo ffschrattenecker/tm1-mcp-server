@@ -134,13 +134,30 @@ describe.skipIf(!LIVE_ENABLED)("live: chore lifecycle", () => {
     expect(String(item.startTime)).toContain("2099-06-15");
   });
 
-  it("execute_chore runs it once on demand", async () => {
+  it("execute_chore runs it once on demand and reports how it ended", async () => {
     // Chore is deactivated; on-demand execute bypasses the schedule.
     const r = await h.ok("tm1_execute_chore", {
       choreName: CHORE,
       confirm: CHORE,
     });
-    expect(r.json).toMatchObject({ success: true, choreName: CHORE });
+    // What comes back depends on the server, and both answers are correct:
+    // v12 12.5.0+ has tm1.ExecuteWithReturn on Chore and reports a real status
+    // (this chore's step is `nX = 1;`, so a clean one); anything older cannot
+    // report at all and says so rather than claiming success. The commit
+    // semantics behind the status live in chore-exit-status.live.test.ts.
+    if (r.json?.statusUnavailable === true) {
+      expect(r.json).toMatchObject({
+        success: false,
+        outcome: "indeterminate",
+      });
+      expect(r.json.choreErrorStatus).toMatch(/12\.5\.0/);
+    } else {
+      expect(r.json).toMatchObject({
+        success: true,
+        outcome: "succeeded",
+        choreErrorStatus: "CompletedSuccessfully",
+      });
+    }
   });
 
   it("analyze_chore_graph returns task structure", async () => {

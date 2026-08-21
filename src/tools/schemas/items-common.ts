@@ -24,6 +24,17 @@ export const PROCESS_OUTCOME = z.enum([
   "indeterminate",
 ]);
 
+// Same four words for a chore, and a DIFFERENT mapping behind them — see
+// tm1-client/services/chore-status.ts for the measured table. Kept as its own
+// enum rather than an alias so nobody can wire a chore status through the
+// process classifier by autocomplete.
+export const CHORE_OUTCOME = z.enum([
+  "succeeded",
+  "completed_with_errors",
+  "rolled_back",
+  "indeterminate",
+]);
+
 // ── Phase 2h: uniform mutation envelope ──────────────────────────────────────
 // Every create/update/delete/execute tool returns {success: true, ...identifying fields}
 // on success. Passthrough so per-tool extras (cellsWritten, parameterCount,

@@ -359,6 +359,98 @@ export type ProcessResult =
 export const PROCESS_STATUS_UNKNOWN =
   "Unknown: TM1 returned no ProcessExecuteStatusCode — the run may have completed, partially completed, or never started. Verify server state (error logs, target cube) before re-running.";
 
+/**
+ * Outcome of a CHORE run. Deliberately the same four words as
+ * `ProcessOutcome`, because the question is the same one — was anything
+ * committed — but the mapping behind them is NOT the process mapping and must
+ * never be reused across the two. Measured on 12.5.9; see
+ * `tm1-client/services/chore-status.ts` for the table.
+ *
+ * The headline: a step that calls `ProcessError` COMMITS its writes when it
+ * runs inside a chore, while the identical process run on its own rolls them
+ * back. Anyone who assumes the process semantics carry over gets that backwards.
+ */
+export type ChoreOutcome =
+  "succeeded" | "completed_with_errors" | "rolled_back" | "indeterminate";
+
+/**
+ * Result of a chore run. Same discriminated-union shape as `ProcessResult` so
+ * neither `success` nor `outcome` can drift from the status.
+ *
+ * `statusUnavailable` is the one field with no `ProcessResult` counterpart: on
+ * a server without `tm1.ExecuteWithReturn` on Chore (v11 entirely, and v12
+ * before 12.5.0) the chore still RUNS, but the API reports nothing back. That
+ * is not a failure and not a success — it is the absence of an answer, and it
+ * has to be distinguishable from both.
+ */
+export type ChoreResult =
+  | {
+      success: true;
+      outcome: "succeeded";
+      /** Pinned: the only status a clean chore run carries. */
+      choreErrorStatus: "CompletedSuccessfully";
+      /**
+       * Always present on v12 — a chore writes a `ChoreLog_*.jsonl` even when
+       * nothing went wrong, so unlike a process's error log its PRESENCE says
+       * nothing about the outcome. Read the status, not this field.
+       */
+      errorLogFile?: string | undefined;
+      statusUnavailable?: false | undefined;
+    }
+  | {
+      success: false;
+      outcome: "completed_with_errors";
+      /**
+       * TM1's status code, in practice `CompletedWithMessages`. **The chore's
+       * writes were COMMITTED, including those of the step that failed** —
+       * measured, and the opposite of what the same TI does standalone. Do not
+       * re-run blindly.
+       */
+      choreErrorStatus: string;
+      errorLogFile?: string | undefined;
+      statusUnavailable?: false | undefined;
+    }
+  | {
+      success: false;
+      outcome: "rolled_back";
+      /**
+       * TM1's status code, in practice `ProcessRollbackCalled`. HOW MUCH was
+       * discarded depends on the chore's `ExecutionMode`: `SingleCommit`
+       * discards everything the chore had written up to that point,
+       * `MultipleCommit` only the rolling-back step. Later steps still run and
+       * still commit under both.
+       */
+      choreErrorStatus: string;
+      errorLogFile?: string | undefined;
+      statusUnavailable?: false | undefined;
+    }
+  | {
+      success: false;
+      outcome: "indeterminate";
+      /** Says why the outcome is unknown — the only channel for that here. */
+      choreErrorStatus: string;
+      errorLogFile?: string | undefined;
+      /**
+       * true = this server cannot report chore status at all (no
+       * `tm1.ExecuteWithReturn` on Chore). The chore ran; nothing is known
+       * about how it ended. Distinct from "ran and the answer was unreadable".
+       */
+      statusUnavailable?: boolean | undefined;
+    };
+
+/**
+ * Status text for a chore that ran on a server which cannot report back.
+ */
+export const CHORE_STATUS_UNAVAILABLE =
+  "Unknown: this TM1 build has no tm1.ExecuteWithReturn on Chore (v11, and v12 before 12.5.0), so the chore was started and no status was returned. It may have completed, partially completed, or failed. Check the chore's steps with tm1_get_message_log (v11) or the target cubes before re-running.";
+
+/**
+ * Status text used when a server that DOES support the action answers without
+ * a `ChoreExecuteStatusCode`.
+ */
+export const CHORE_STATUS_UNKNOWN =
+  "Unknown: TM1 returned no ChoreExecuteStatusCode — the chore may have completed, partially completed, or never started. Verify server state before re-running.";
+
 export interface ElementCreate {
   name: string;
   type: "Numeric" | "String" | "Consolidated";

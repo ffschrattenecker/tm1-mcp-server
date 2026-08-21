@@ -59,7 +59,9 @@ export const registerCreateChore = defineTool({
       .optional()
       .default("MultipleCommit")
       .describe(
-        "SingleCommit: all steps in one transaction. MultipleCommit: each step commits independently.",
+        "SingleCommit: the chore commits once at the end. MultipleCommit: each step commits independently. " +
+          "Measured (12.5.9): the mode changes only how far a ProcessRollback reaches — under SingleCommit it discards everything the chore wrote up to that point, under MultipleCommit only the rolling-back step. " +
+          "Under NEITHER mode does a failing step stop the chore: later steps still run and still commit.",
       ),
     frequency: z
       .object({
