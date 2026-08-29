@@ -2,12 +2,14 @@ import { promises as fs } from "node:fs";
 import { resolveLocalPath } from "../local-file.js";
 import { z } from "zod";
 import type {
+  IgnoredColumn,
   ProcessParameter,
   ProcessVariable,
   DataSource,
 } from "../../types.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { parseProFile } from "../../lib/pro-parser.js";
+import { ignoredColumnsOf } from "../../lib/variables-ui-data.js";
 import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
 import { DiffProcessResultSchema } from "../schemas/items.js";
 import { READ_ONLY, withVersion } from "../annotations.js";
@@ -83,6 +85,42 @@ function diffVars(installed: ProcessVariable[], file: ProcessVariable[]) {
   }
   for (const name of a.keys()) if (!b.has(name)) removed.push(name);
   return { added, removed, changed };
+}
+
+// A column set to "Ignore" has no variable, so diffVars cannot see it: without
+// this the .pro and the installed process look identical even when they skip
+// different columns.
+function diffIgnoredColumns(installed: IgnoredColumn[], file: IgnoredColumn[]) {
+  const a = new Map(installed.map((c) => [c.position, c]));
+  const b = new Map(file.map((c) => [c.position, c]));
+  const added: number[] = [];
+  const removed: number[] = [];
+  const renamed: Array<{
+    position: number;
+    installed?: string;
+    file?: string;
+  }> = [];
+  for (const [position, fc] of b) {
+    const ic = a.get(position);
+    if (!ic) {
+      added.push(position);
+      continue;
+    }
+    if (ic.name !== fc.name)
+      renamed.push({
+        position,
+        ...(ic.name !== undefined ? { installed: ic.name } : {}),
+        ...(fc.name !== undefined ? { file: fc.name } : {}),
+      });
+  }
+  for (const position of a.keys()) if (!b.has(position)) removed.push(position);
+  return {
+    identical:
+      added.length === 0 && removed.length === 0 && renamed.length === 0,
+    added,
+    removed,
+    renamed,
+  };
 }
 
 function diffDataSource(
@@ -167,11 +205,11 @@ export const registerDiffProcessWithFile = defineTool({
       });
     }
 
-    const [installedCode, installedParams, installedVars, installedDs] =
+    const [installedCode, installedParams, installedLayout, installedDs] =
       await Promise.all([
         tm1Client.processes.getCode(name),
         tm1Client.processes.getParameters(name),
-        tm1Client.processes.getVariables(name),
+        tm1Client.processes.getVariableLayout(name),
         tm1Client.processes.getDataSource(name),
       ]);
 
@@ -183,7 +221,11 @@ export const registerDiffProcessWithFile = defineTool({
       tabDiff("epilog", mask(installedCode.epilog), mask(parsed.epilog)),
     ];
     const params = diffParams(installedParams, parsed.parameters);
-    const variables = diffVars(installedVars, parsed.variables);
+    const variables = diffVars(installedLayout.variables, parsed.variables);
+    const ignoredColumns = diffIgnoredColumns(
+      installedLayout.ignoredColumns,
+      ignoredColumnsOf(parsed.variablesUIData),
+    );
     const dataSource = diffDataSource(installedDs, parsed.dataSource);
 
     const allIdentical =
@@ -194,6 +236,7 @@ export const registerDiffProcessWithFile = defineTool({
       variables.added.length === 0 &&
       variables.removed.length === 0 &&
       variables.changed.length === 0 &&
+      ignoredColumns.identical &&
       dataSource.identical;
 
     return {
@@ -207,6 +250,7 @@ export const registerDiffProcessWithFile = defineTool({
               tabs,
               parameters: params,
               variables,
+              ignoredColumns,
               dataSource,
             },
             null,

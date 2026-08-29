@@ -13,7 +13,7 @@ import { defineTool } from "../define-tool.js";
 export const registerExportProcessToGit = defineTool({
   name: "tm1_export_process_to_git",
   description: [
-    "Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' (parameters, variables, datasource) plus a '{name}.ti' (Prolog/Metadata/Data/Epilog as plain code).",
+    "Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' (parameters, variables, ignored datasource columns, datasource) plus a '{name}.ti' (Prolog/Metadata/Data/Epilog as plain code).",
     "The .ti holds the code in TM1's native `Code` representation (#region <Tab> / #endregion, CRLF, empty tabs omitted); the .json holds the structure. Code lives outside the JSON so Git diffs stay readable.",
     "Returns both file bodies (json + ti) inline by default. Pass writeToDir to persist them to disk instead: the code is then written to files and omitted from the response to avoid duplicating it into the context window; only metadata (filenames, counts, writtenTo paths) comes back. Round-trip safe with tm1_import_process_from_git.",
     "Security: the ODBC datasource password is stripped unless includeDataSourcePassword is set (which also requires writeToDir); credential literals in the TI code are masked when maskSecrets is on; credentialsOmitted=true flags when a password was stripped.",
@@ -68,11 +68,11 @@ export const registerExportProcessToGit = defineTool({
           "includeDataSourcePassword is v12-only. On v11 the exported credential stops working when the TM1 service restarts, and the .json gives no sign of it. To clone a process with its password inside this instance use tm1_copy_process; to deploy elsewhere or later, export without the password and pass dataSourcePassword to tm1_import_process_from_git.",
       });
     }
-    const [codeBlob, parameters, variables, dataSource, deployMeta] =
+    const [codeBlob, parameters, layout, dataSource, deployMeta] =
       await Promise.all([
         tm1Client.processes.getCodeBlob(processName),
         tm1Client.processes.getParameters(processName),
-        tm1Client.processes.getVariables(processName),
+        tm1Client.processes.getVariableLayout(processName),
         tm1Client.processes.getDataSource(processName, {
           includeSecrets: includeDataSourcePassword === true,
         }),
@@ -86,7 +86,10 @@ export const registerExportProcessToGit = defineTool({
       {
         name: processName,
         parameters,
-        variables,
+        variables: layout.variables,
+        ...(layout.variablesUIData !== undefined
+          ? { variablesUIData: layout.variablesUIData }
+          : {}),
         dataSource,
         hasSecurityAccess: deployMeta.hasSecurityAccess,
       },
@@ -133,7 +136,7 @@ export const registerExportProcessToGit = defineTool({
             jsonFileName,
             tiFileName,
             parameterCount: parameters.length,
-            variableCount: variables.length,
+            variableCount: layout.variables.length,
             dataSourceType: dataSource.type,
             credentialsOmitted,
             hasSecurityAccess: deployMeta.hasSecurityAccess,

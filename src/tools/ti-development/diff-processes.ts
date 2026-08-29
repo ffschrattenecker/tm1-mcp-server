@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type {
+  IgnoredColumn,
   ProcessParameter,
   ProcessVariable,
   DataSource,
@@ -225,6 +226,39 @@ function diffVars(a: ProcessVariable[], b: ProcessVariable[]) {
   };
 }
 
+// Columns set to "Ignore" carry no variable, so diffVars above cannot see
+// them: two processes differing only in which columns they skip would otherwise
+// come back identical.
+function diffIgnoredColumns(a: IgnoredColumn[], b: IgnoredColumn[]) {
+  const ma = new Map(a.map((c) => [c.position, c]));
+  const mb = new Map(b.map((c) => [c.position, c]));
+  const added: number[] = [];
+  const removed: number[] = [];
+  const renamed: Array<{ position: number; a?: string; b?: string }> = [];
+  for (const [position, cb] of mb) {
+    const ca = ma.get(position);
+    if (!ca) {
+      added.push(position);
+      continue;
+    }
+    if (ca.name !== cb.name)
+      renamed.push({
+        position,
+        ...(ca.name !== undefined ? { a: ca.name } : {}),
+        ...(cb.name !== undefined ? { b: cb.name } : {}),
+      });
+  }
+  for (const position of ma.keys())
+    if (!mb.has(position)) removed.push(position);
+  return {
+    identical:
+      added.length === 0 && removed.length === 0 && renamed.length === 0,
+    added,
+    removed,
+    renamed,
+  };
+}
+
 function diffDs(a: DataSource, b: DataSource) {
   const diffs: string[] = [];
   const fields: Array<keyof DataSource> = [
@@ -308,8 +342,8 @@ export const registerDiffProcesses = defineTool({
         tm1Client.processes.getCode(processB),
         tm1Client.processes.getParameters(processA),
         tm1Client.processes.getParameters(processB),
-        tm1Client.processes.getVariables(processA),
-        tm1Client.processes.getVariables(processB),
+        tm1Client.processes.getVariableLayout(processA),
+        tm1Client.processes.getVariableLayout(processB),
         tm1Client.processes.getDataSource(processA),
         tm1Client.processes.getDataSource(processB),
       ]);
@@ -324,13 +358,18 @@ export const registerDiffProcesses = defineTool({
     }
 
     const parameters = diffParams(paramsA, paramsB);
-    const variables = diffVars(varsA, varsB);
+    const variables = diffVars(varsA.variables, varsB.variables);
+    const ignoredColumns = diffIgnoredColumns(
+      varsA.ignoredColumns,
+      varsB.ignoredColumns,
+    );
     const dataSource = diffDs(dsA, dsB);
 
     const identical =
       Object.values(tabResults).every((t) => t.identical) &&
       parameters.identical &&
       variables.identical &&
+      ignoredColumns.identical &&
       dataSource.identical;
 
     return {
@@ -345,6 +384,7 @@ export const registerDiffProcesses = defineTool({
               tabs: tabResults,
               parameters,
               variables,
+              ignoredColumns,
               dataSource,
             },
             null,

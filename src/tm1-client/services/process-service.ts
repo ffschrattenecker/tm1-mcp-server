@@ -7,6 +7,7 @@ import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type {
   CompileResult,
   DataSource,
+  IgnoredColumn,
   Process,
   ProcessCheckInput,
   ProcessCode,
@@ -21,6 +22,7 @@ import {
   rethrowIfSystemicOrDenied,
 } from "./fallback.js";
 import { classifyExecution } from "./process-status.js";
+import { ignoredColumnsOf } from "../../lib/variables-ui-data.js";
 import {
   filterClause,
   nameFilterPredicates,
@@ -34,6 +36,33 @@ import {
 // OData key encoder: double ' per OData literal rules, then percent-encode.
 const enc = (s: string): string =>
   encodeURIComponent(String(s).replace(/'/g, "''"));
+
+interface RawProcessVariable {
+  Name: string;
+  Type: string;
+  Position: number;
+  StartByte?: number;
+  EndByte?: number;
+}
+
+function decodeVariable(v: RawProcessVariable): ProcessVariable {
+  return {
+    name: v.Name,
+    type: v.Type === "Numeric" ? "Numeric" : "String",
+    position: v.Position,
+    ...(v.StartByte !== undefined ? { startByte: v.StartByte } : {}),
+    ...(v.EndByte !== undefined ? { endByte: v.EndByte } : {}),
+  };
+}
+
+/** Variables of a process together with the datasource columns it ignores. */
+export interface ProcessVariableLayout {
+  variables: ProcessVariable[];
+  /** Columns set to "Ignore"; empty when the process has none. */
+  ignoredColumns: IgnoredColumn[];
+  /** Raw `VariablesUIData`, for callers that write it back unchanged. */
+  variablesUIData?: string[];
+}
 
 export interface ProcessListOpts extends NameFilterOpts {
   /** Set to slice server-side. Only legal when every active filter is in NameFilterOpts. */
@@ -384,8 +413,49 @@ export class ProcessService {
     delete source["@odata.etag"];
     delete source["Attributes"];
     delete source["LocalizedAttributes"];
+    // `UIData` and `VariablesUIData` are undeclared in $metadata on both
+    // versions, so the plain GET above never returns them. Without the second
+    // request the copy silently loses every ignored datasource column (the
+    // ignore flag lives ONLY in VariablesUIData) and the Architect action
+    // settings — measured on 11.8 and 12.5.
+    const ui = await this.getUIData(sourceName);
+    if (ui.uiData !== undefined) source.UIData = ui.uiData;
+    if (ui.variablesUIData !== undefined)
+      source.VariablesUIData = ui.variablesUIData;
     source.Name = targetName;
     await this.http.request<void>("POST", "/api/v1/Processes", source);
+  }
+
+  /**
+   * The two UI-only properties TM1 stores but does not declare: `UIData`
+   * (Architect cube/data action settings) and `VariablesUIData` (per-column
+   * state, including which columns are ignored). Both have to be named in
+   * `$select`; a server that rejects the query shape yields an empty result
+   * rather than an error, since neither is required to use the process.
+   */
+  async getUIData(processName: string): Promise<{
+    uiData?: string;
+    variablesUIData?: string[];
+  }> {
+    const path =
+      `/api/v1/Processes('${enc(processName)}')` +
+      `?$select=UIData,VariablesUIData`;
+    try {
+      const r = await this.http.request<{
+        UIData?: string;
+        VariablesUIData?: string[];
+      }>("GET", path);
+      return {
+        ...(r.UIData !== undefined ? { uiData: r.UIData } : {}),
+        ...(r.VariablesUIData !== undefined
+          ? { variablesUIData: r.VariablesUIData }
+          : {}),
+      };
+    } catch (e) {
+      rethrowIfSystemic(e);
+      if (!isUnsupportedQueryShape(e)) throw e;
+      return {};
+    }
   }
 
   /**
@@ -861,24 +931,49 @@ export class ProcessService {
    * GET /api/v1/Processes('{name}')/Variables
    */
   async getVariables(processName: string): Promise<ProcessVariable[]> {
-    const path = `/api/v1/Processes('${enc(processName)}')/Variables`;
-    const response = await this.http.request<{
-      value: Array<{
-        Name: string;
-        Type: string;
-        Position: number;
-        StartByte?: number;
-        EndByte?: number;
-      }>;
-    }>("GET", path);
+    return (await this.getVariableLayout(processName)).variables;
+  }
 
-    return response.value.map((v): ProcessVariable => ({
-      name: v.Name,
-      type: v.Type === "Numeric" ? "Numeric" : "String",
-      position: v.Position,
-      ...(v.StartByte !== undefined ? { startByte: v.StartByte } : {}),
-      ...(v.EndByte !== undefined ? { endByte: v.EndByte } : {}),
-    }));
+  /**
+   * Variables PLUS the columns the process ignores, in one request.
+   *
+   * `Variables` alone is an incomplete picture of the datasource: a column set
+   * to "Ignore" carries no variable and is simply absent from the list, which
+   * is why the remaining positions have gaps. The ignore flag lives in
+   * `VariablesUIData` — one entry per source column, undeclared in $metadata on
+   * both versions, so it must be named in `$select`.
+   *
+   * GET /api/v1/Processes('{name}')?$select=Variables,VariablesUIData
+   */
+  async getVariableLayout(processName: string): Promise<ProcessVariableLayout> {
+    const path =
+      `/api/v1/Processes('${enc(processName)}')` +
+      `?$select=Variables,VariablesUIData`;
+    try {
+      const r = await this.http.request<{
+        Variables?: RawProcessVariable[];
+        VariablesUIData?: string[];
+      }>("GET", path);
+      return {
+        variables: (r.Variables ?? []).map(decodeVariable),
+        ignoredColumns: ignoredColumnsOf(r.VariablesUIData),
+        ...(r.VariablesUIData !== undefined
+          ? { variablesUIData: r.VariablesUIData }
+          : {}),
+      };
+    } catch (e) {
+      rethrowIfSystemic(e);
+      if (!isUnsupportedQueryShape(e)) throw e;
+      // A server that will not answer the $select still answers the plain
+      // collection — variables without the ignore information beat no answer.
+      const response = await this.http.request<{
+        value: RawProcessVariable[];
+      }>("GET", `/api/v1/Processes('${enc(processName)}')/Variables`);
+      return {
+        variables: response.value.map(decodeVariable),
+        ignoredColumns: [],
+      };
+    }
   }
 
   /**
@@ -917,16 +1012,7 @@ export class ProcessService {
     for (const p of response.value) {
       // A process without variables comes back with the property omitted
       // rather than as an empty array.
-      byProcess.set(
-        p.Name,
-        (p.Variables ?? []).map((v): ProcessVariable => ({
-          name: v.Name,
-          type: v.Type === "Numeric" ? "Numeric" : "String",
-          position: v.Position,
-          ...(v.StartByte !== undefined ? { startByte: v.StartByte } : {}),
-          ...(v.EndByte !== undefined ? { endByte: v.EndByte } : {}),
-        })),
-      );
+      byProcess.set(p.Name, (p.Variables ?? []).map(decodeVariable));
     }
     return byProcess;
   }
@@ -939,9 +1025,10 @@ export class ProcessService {
   async updateVariables(
     processName: string,
     vars: ProcessVariable[],
+    variablesUIData?: string[],
   ): Promise<void> {
     const path = `/api/v1/Processes('${enc(processName)}')`;
-    const body = {
+    const body: Record<string, unknown> = {
       Variables: vars.map((v) => ({
         Name: v.name,
         Type: v.type,
@@ -950,6 +1037,11 @@ export class ProcessService {
         EndByte: v.endByte ?? 0,
       })),
     };
+    // Patching Variables alone leaves whatever VariablesUIData the process
+    // already has (measured on 12.5), which is right for an edit that keeps the
+    // column layout and wrong for one that changes it — hence the explicit
+    // parameter for callers that carry the source layout (git/.pro import).
+    if (variablesUIData !== undefined) body.VariablesUIData = variablesUIData;
     await this.http.request<void>("PATCH", path, body);
   }
 

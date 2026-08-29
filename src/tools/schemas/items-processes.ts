@@ -2,11 +2,13 @@
 // get/execute/diff/upsert/copy results plus .pro & git import/export shapes.
 import { z } from "zod";
 export {
+  IgnoredColumnSchema,
   ProcessParameterSchema,
   ProcessVariableSchema,
 } from "../../schemas/processes.js";
 import {
   DataSourceSchema as DataSourceBase,
+  IgnoredColumnSchema,
   ProcessCodeSchema as ProcessCodeBase,
   ProcessParameterSchema,
   ProcessSchema,
@@ -46,6 +48,9 @@ export const GetProcessResultSchema = z.object({
   epilog: z.string().optional(),
   parameters: z.array(ProcessParameterSchema).optional(),
   variables: z.array(ProcessVariableSchema).optional(),
+  // Datasource columns set to "Ignore": they carry no variable and so are
+  // absent from `variables`, which is what leaves gaps in the positions.
+  ignoredColumns: z.array(IgnoredColumnSchema).optional(),
   dataSource: DataSourceSchema.optional(),
   hasSecurityAccess: z.boolean().optional(),
   hint: z.string().optional(),
@@ -104,6 +109,7 @@ export const DiffProcessResultSchema = z
     tabs: z.unknown(),
     parameters: z.unknown(),
     variables: z.unknown(),
+    ignoredColumns: z.unknown(),
     dataSource: z.unknown(),
   })
   .passthrough();
@@ -190,6 +196,7 @@ export const DiffProcessesResultSchema = z
     tabs: z.unknown(),
     parameters: z.unknown(),
     variables: z.unknown(),
+    ignoredColumns: z.unknown(),
     dataSource: z.unknown(),
   })
   .passthrough();

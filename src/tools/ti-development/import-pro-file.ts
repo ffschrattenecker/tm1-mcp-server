@@ -155,9 +155,17 @@ export const registerImportProFile = defineTool({
         `Parameter update failed for '${processName}'. Code applied but parameters missing. Inspect parsed parameters and re-run tm1_upsert_process with mode=update + parameters=[...] to recover.`,
       );
     }
-    if (parsed.variables.length > 0) {
+    // Ignored columns live only in the UI data, so a file can carry column
+    // layout with an empty variable list — patch on either.
+    if (parsed.variables.length > 0 || parsed.variablesUIData.length > 0) {
       await withToolHint(
-        tm1Client.processes.updateVariables(processName, parsed.variables),
+        tm1Client.processes.updateVariables(
+          processName,
+          parsed.variables,
+          parsed.variablesUIData.length > 0
+            ? parsed.variablesUIData
+            : undefined,
+        ),
         `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
       );
     }

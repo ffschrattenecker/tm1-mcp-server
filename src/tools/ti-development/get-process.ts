@@ -13,7 +13,8 @@ export const registerGetProcess = defineTool({
   name: "tm1_get_process",
   description:
     "Native full read of a TI process — the read-twin of tm1_upsert_process. Returns the four code " +
-    "tabs, parameters, variables, datasource and the HasSecurityAccess elevation flag in one call, " +
+    "tabs, parameters, variables (plus any datasource columns set to Ignore, which carry no variable) " +
+    "and the HasSecurityAccess elevation flag in one call, " +
     "using the same field names as upsert_process — the datasource shape is shared, so what this read " +
     "returns can be fed straight back into upsert_process. Every part is behind an " +
     "include-flag (all default true); set a flag false to skip that part's REST call. For git " +
@@ -86,14 +87,14 @@ export const registerGetProcess = defineTool({
 
     // All enabled fetches run in parallel; disabled flags resolve to
     // undefined so the destructuring below stays positional.
-    const [code, parameters, variables, dataSourceRaw, deployMeta] =
+    const [code, parameters, varLayout, dataSourceRaw, deployMeta] =
       await Promise.all([
         includeCode ? tm1Client.processes.getCode(processName) : undefined,
         includeParameters
           ? tm1Client.processes.getParameters(processName)
           : undefined,
         includeVariables
-          ? tm1Client.processes.getVariables(processName)
+          ? tm1Client.processes.getVariableLayout(processName)
           : undefined,
         includeDataSource
           ? tm1Client.processes.getDataSource(processName)
@@ -157,7 +158,14 @@ export const registerGetProcess = defineTool({
     }
 
     if (parameters !== undefined) payload.parameters = parameters;
-    if (variables !== undefined) payload.variables = variables;
+    if (varLayout !== undefined) {
+      payload.variables = varLayout.variables;
+      // Only reported when there are any: an ignored column is the reason the
+      // remaining positions have gaps, and staying silent invites the reader to
+      // treat the gap as a bug.
+      if (varLayout.ignoredColumns.length > 0)
+        payload.ignoredColumns = varLayout.ignoredColumns;
+    }
     if (dataSourceRaw !== undefined) {
       const ds = dataSourceRaw;
       if (maskSecrets) {

@@ -54,6 +54,10 @@ const stubs = {
   getVariables: async () => [
     { name: "v1", type: "Numeric" as const, position: 1 },
   ],
+  getVariableLayout: async () => ({
+    variables: [{ name: "v1", type: "Numeric" as const, position: 1 }],
+    ignoredColumns: [],
+  }),
   getDataSource: async () => ({ type: "None" as const }),
   getDeployMeta: async () => ({ hasSecurityAccess: true }),
 };

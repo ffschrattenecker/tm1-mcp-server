@@ -14,7 +14,7 @@ export const registerExportProcessToPro = defineTool({
   name: "tm1_export_process_to_pro",
   description: [
     "Reverse of tm1_import_pro_file: serialize a TM1 process back to a .pro file body.",
-    "Fetches code (Prolog/Metadata/Data/Epilog), parameters, variables, and datasource in parallel.",
+    "Fetches code (Prolog/Metadata/Data/Epilog), parameters, variables (including the columns set to Ignore), and datasource in parallel.",
     "Returns the .pro content inline by default; pass writeToFile to also persist to an absolute path on the MCP host.",
     "Round-trip safe with tm1_import_pro_file — useful for syncing live server state into a Git repo.",
     "NOT a drop-in replacement for the .pro file in TM1's Datadir: the output omits TM1's BOM, its '601' version header and CRLF line endings. Measured on 11.8: TM1 does load such a file at startup and rewrites it in its own dialect, but it decodes slot 565 with its own scheme — a password written here becomes garbage that TM1 then persists, so the process looks configured and fails at runtime. Deploy via tm1_import_pro_file, not by copying into the Datadir.",
@@ -71,10 +71,10 @@ export const registerExportProcessToPro = defineTool({
           "includeDataSourcePassword is v12-only. On v11 the exported credential stops working when the TM1 service restarts, and the file gives no sign of it. To clone a process with its password inside this instance use tm1_copy_process; to deploy elsewhere or later, export without the password and pass dataSourcePassword to tm1_import_pro_file.",
       });
     }
-    const [code, parameters, variables, dataSource] = await Promise.all([
+    const [code, parameters, layout, dataSource] = await Promise.all([
       tm1Client.processes.getCode(processName),
       tm1Client.processes.getParameters(processName),
-      tm1Client.processes.getVariables(processName),
+      tm1Client.processes.getVariableLayout(processName),
       tm1Client.processes.getDataSource(processName, {
         includeSecrets: includeDataSourcePassword === true,
       }),
@@ -96,7 +96,10 @@ export const registerExportProcessToPro = defineTool({
       data: mask(code.data),
       epilog: mask(code.epilog),
       parameters,
-      variables,
+      variables: layout.variables,
+      ...(layout.variablesUIData !== undefined
+        ? { variablesUIData: layout.variablesUIData }
+        : {}),
       dataSource,
     });
 
@@ -119,7 +122,7 @@ export const registerExportProcessToPro = defineTool({
             byteLength: Buffer.byteLength(proContent, "utf8"),
             writtenTo,
             parameterCount: parameters.length,
-            variableCount: variables.length,
+            variableCount: layout.variables.length,
             dataSourceType: dataSource.type,
             credentialsIncluded,
             // Written to disk only when credentials are in play — otherwise

@@ -6,7 +6,8 @@ import { defineTool } from "../define-tool.js";
 export const registerCopyProcess = defineTool({
   name: "tm1_copy_process",
   description:
-    "Copy a TI process (including variables and datasource) to a new name",
+    "Copy a TI process to a new name. Carries over code, parameters, variables, datasource and the " +
+    "UI-only state — including which datasource columns are set to Ignore.",
   annotations: WRITE,
   output: CopyProcessResultSchema,
   input: {

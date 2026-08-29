@@ -172,12 +172,12 @@ datasource (562-589).
 
 - `tm1_check_process_code` — Validate TI process code WITHOUT saving it on the server (POST /api/v1/CompileProcess unbound)
 - `tm1_compile_process` — Compile a TI process to validate its syntax without executing it
-- `tm1_copy_process` — Copy a TI process (including variables and datasource) to a new name
+- `tm1_copy_process` — Copy a TI process to a new name
 - `tm1_delete_process` — Delete a TurboIntegrator process from the TM1 server
 - `tm1_diff_process_with_file` — Compare an installed TI process on the server against a local .pro file
 - `tm1_diff_processes` — Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog)
 - `tm1_execute_process` — Execute a TurboIntegrator process on the TM1 server with optional parameters
-- `tm1_export_process_to_git` — Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' (parameters, variables, datasource) plus a '{name}.ti' (Prolog/Metadata/Data/Epilog as p
+- `tm1_export_process_to_git` — Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' (parameters, variables, ignored datasource columns, datasource) plus a '{name}.ti' (Prol
 - `tm1_export_process_to_pro` — Reverse of tm1_import_pro_file: serialize a TM1 process back to a .pro file body
 - `tm1_get_all_processes_code` — Bulk-load source code (Prolog/Metadata/Data/Epilog) of every TI process in one call, plus each process's HasSecurityAccess elevation flag (hasSecurityAccess) fo
 - `tm1_get_process` — Native full read of a TI process — the read-twin of tm1_upsert_process

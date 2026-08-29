@@ -148,3 +148,29 @@ describe("pro-serializer round-trip", () => {
     expect(out.endsWith("\n")).toBe(true);
   });
 });
+
+describe("pro-serializer ignored datasource columns (block 582)", () => {
+  const UI = [
+    "IgnoredInputVarName=vsOld\fVarType=32\fColType=1165\f",
+    "VarType=32\fColType=827\f",
+    "VarType=33\fColType=827\f",
+  ];
+
+  it("round-trips the block verbatim", () => {
+    const out = serializeToPro(fixture({ variablesUIData: UI }));
+    expect(parseProFile(out).variablesUIData).toEqual(UI);
+  });
+
+  it("counts columns, not variables — the block is legitimately longer", () => {
+    // Two variables, three columns: column 1 is ignored.
+    const out = serializeToPro(fixture({ variablesUIData: UI }));
+    expect(out).toContain("582,3");
+    expect(out).toContain("577,2");
+  });
+
+  it("omits the block when nothing is ignored", () => {
+    const out = serializeToPro(fixture());
+    expect(out).not.toContain("582,");
+    expect(parseProFile(out).variablesUIData).toEqual([]);
+  });
+});

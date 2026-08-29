@@ -19,6 +19,19 @@ export const ProcessVariableSchema = z.object({
 });
 export type ProcessVariable = z.infer<typeof ProcessVariableSchema>;
 
+// A datasource column set to "Ignore" carries no variable, so it is absent from
+// `Variables` — it only shows up in `VariablesUIData`. See
+// src/lib/variables-ui-data.ts for the encoding and how it was measured.
+export const IgnoredColumnSchema = z.object({
+  position: z.number().int(),
+  name: z.string().optional(),
+});
+export type IgnoredColumn = z.infer<typeof IgnoredColumnSchema>;
+
+// Raw `Process.VariablesUIData`: one entry per datasource column, ignored ones
+// included. Carried verbatim so nothing measured-but-unmodelled is dropped.
+export const VariablesUIDataSchema = z.array(z.string());
+
 export const ProcessSchema = z.object({
   name: z.string(),
   parameters: z.array(ProcessParameterSchema),

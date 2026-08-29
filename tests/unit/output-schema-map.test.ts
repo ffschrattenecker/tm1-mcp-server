@@ -335,6 +335,7 @@ describe("declared output schemas", () => {
       tabs: [],
       parameters: [],
       variables: [],
+      ignoredColumns: { identical: true, added: [], removed: [], renamed: [] },
       dataSource: [],
     },
     tm1_upsert_process: {

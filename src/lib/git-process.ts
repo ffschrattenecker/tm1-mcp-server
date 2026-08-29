@@ -29,6 +29,13 @@ export interface GitProcessInput {
   name: string;
   parameters: ProcessParameter[];
   variables: ProcessVariable[];
+  /**
+   * Raw `VariablesUIData` — one entry per datasource column, ignored ones
+   * included. Written to the .json as-is because a column set to "Ignore"
+   * appears nowhere in `variables`; leaving it out makes the export lose the
+   * setting on every re-import.
+   */
+  variablesUIData?: string[];
   dataSource: DataSource;
   hasSecurityAccess: boolean;
 }
@@ -47,6 +54,7 @@ export interface ParsedGitProcess {
   epilog: string;
   parameters: ProcessParameter[];
   variables: ProcessVariable[];
+  variablesUIData?: string[];
   dataSource: DataSource;
   hasSecurityAccess?: boolean;
 }
@@ -83,6 +91,10 @@ export function serializeProcessToGit(
           type: p.type,
         })),
         variables: input.variables,
+        ...(input.variablesUIData !== undefined &&
+        input.variablesUIData.length > 0
+          ? { variablesUIData: input.variablesUIData }
+          : {}),
       },
       null,
       2,
@@ -241,6 +253,7 @@ export function parseProcessFromGit(
     hasSecurityAccess?: unknown;
     parameters?: unknown;
     variables?: unknown;
+    variablesUIData?: unknown;
     dataSource?: unknown;
   };
   try {
@@ -289,6 +302,14 @@ export function parseProcessFromGit(
   }
   const variables: ProcessVariable[] = varsResult.data;
 
+  const uiResult = z.array(z.string()).safeParse(meta.variablesUIData ?? []);
+  if (!uiResult.success) {
+    throw new Error(
+      `Process JSON has invalid 'variablesUIData': ${uiResult.error.issues[0]?.message ?? "expected an array of strings"}`,
+    );
+  }
+  const variablesUIData: string[] = uiResult.data;
+
   const dsResult = dataSourceSchema.safeParse(
     meta.dataSource ?? { type: "None" },
   );
@@ -310,6 +331,7 @@ export function parseProcessFromGit(
     epilog: tabs.epilog,
     parameters,
     variables,
+    ...(variablesUIData.length > 0 ? { variablesUIData } : {}),
     dataSource,
   };
 }

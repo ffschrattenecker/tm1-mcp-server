@@ -183,9 +183,18 @@ export const registerImportProcessFromGit = defineTool({
         `Parameter update failed for '${processName}'. Code applied but parameters missing. tm1_upsert_process with mode=update + parameters=[...] to recover.`,
       );
     }
-    if (parsed.variables.length > 0) {
+    // Ignored columns live only in the UI data, so a .json can carry column
+    // layout with an empty variable list — patch on either.
+    if (
+      parsed.variables.length > 0 ||
+      (parsed.variablesUIData?.length ?? 0) > 0
+    ) {
       await withToolHint(
-        tm1Client.processes.updateVariables(processName, parsed.variables),
+        tm1Client.processes.updateVariables(
+          processName,
+          parsed.variables,
+          parsed.variablesUIData,
+        ),
         `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
       );
     }

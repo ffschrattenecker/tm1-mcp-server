@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Datasource columns set to "Ignore" are no longer invisible.** TM1 drops such a
+  column from `Process.Variables` entirely and records it only in `VariablesUIData` —
+  one entry per source column, ignored ones marked `ColType=1165` and carrying the
+  variable name the column had before (`IgnoredInputVarName=`). Neither v11 nor v12
+  declares that property in `$metadata`, so a plain GET never returns it and every tool
+  here read the process as if the columns did not exist. Measured against 1022 real
+  `.pro` files (396 ignored columns in 30 processes, line block 582) and live on 11.8
+  and 12.5.
+
+  What changes:
+
+  - `tm1_get_process_variables` and `tm1_get_process` report an `ignoredColumns` list
+    (`{position, name}`) — which is also the explanation for the gaps the remaining
+    variable positions have always had. One request, not two: `Variables` and
+    `VariablesUIData` come back from the same `$select`, with a fallback to the plain
+    `Variables` collection if a server refuses the query shape.
+  - `tm1_copy_process` carries the setting to the copy. It re-POSTed the plain GET body,
+    which does not contain `VariablesUIData` (or `UIData`, the Architect action
+    settings), so every copy silently lost the ignored columns despite the tool
+    advertising "including variables".
+  - `tm1_export_process_to_pro` writes line block 582 and `tm1_import_pro_file` reads it;
+    `tm1_export_process_to_git` writes `variablesUIData` into the `.json` and
+    `tm1_import_process_from_git` restores it. Both round trips lost the flag before.
+    The raw entries are carried verbatim rather than rebuilt, so contents settings other
+    than Ignore survive untouched.
+  - `tm1_diff_processes` and `tm1_diff_process_with_file` compare the ignored columns.
+    Two processes differing only in which columns they skip previously reported
+    `identical: true`.
+
+  Patching `Variables` alone still leaves whatever UI data the process has (measured on
+  12.5), so an ordinary `tm1_upsert_process` edit is unaffected.
+
 ### Changed
 
 - **`tm1_execute_chore` reports how the chore ended instead of always claiming

@@ -12,6 +12,12 @@ export interface ProcessSerializeInput {
   epilog?: string;
   parameters?: ProcessParameter[];
   variables?: ProcessVariable[];
+  /**
+   * Raw `VariablesUIData` / line block 582 — one entry per datasource column,
+   * ignored ones included. Omit it and the ignored columns are gone: they have
+   * no representation in the variables list.
+   */
+  variablesUIData?: string[];
   dataSource?: DataSource;
 }
 
@@ -67,6 +73,14 @@ function serializeVariables(vars: ProcessVariable[]): string[] {
   lines.push(`581,${vars.length}`);
   for (const v of vars) lines.push(String(v.endByte ?? 0));
   return lines;
+}
+
+// 582 = per-column UI state, one entry per datasource column. Written verbatim:
+// the block counts COLUMNS, not variables, so its length legitimately exceeds
+// the variable count whenever columns are ignored.
+function serializeVariablesUIData(uiData: string[] | undefined): string[] {
+  if (!uiData || uiData.length === 0) return [];
+  return [`582,${uiData.length}`, ...uiData];
 }
 
 function serializeDataSource(ds: DataSource | undefined): string[] {
@@ -159,6 +173,7 @@ export function serializeToPro(input: ProcessSerializeInput): string {
   lines.push(`602,${quote(input.name)}`);
   lines.push(...serializeParameters(input.parameters ?? []));
   lines.push(...serializeVariables(input.variables ?? []));
+  lines.push(...serializeVariablesUIData(input.variablesUIData));
   lines.push(...serializeDataSource(input.dataSource));
   lines.push(...serializeSection("572", input.prolog));
   lines.push(...serializeSection("573", input.metadata));

@@ -12,6 +12,12 @@ export interface ParsedPro {
   epilog: string;
   parameters: ProcessParameter[];
   variables: ProcessVariable[];
+  /**
+   * Raw line block 582: one entry per datasource COLUMN, ignored ones included.
+   * Empty when the file carries none. See src/lib/variables-ui-data.ts — the
+   * ignore flag exists nowhere else, so dropping this block loses it.
+   */
+  variablesUIData: string[];
   dataSource: DataSource;
 }
 
@@ -302,6 +308,7 @@ export function parseProFile(content: string): ParsedPro {
     ...sections,
     parameters: parseParameters(fields.blocks),
     variables: parseVariables(fields.blocks),
+    variablesUIData: fields.blocks.get("582") ?? [],
     dataSource: parseDataSource(fields),
   };
 }

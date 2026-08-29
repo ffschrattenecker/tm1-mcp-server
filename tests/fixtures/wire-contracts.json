@@ -688,7 +688,9 @@
         "Value": "number"
       },
       "PrologProcedure?": "string",
-      "Variables[]?": "unknown"
+      "UIData?": "string",
+      "Variables[]?": "unknown",
+      "VariablesUIData[]?": "string"
     },
     "GET /api/v1/Processes('*') !404": {
       "error": {

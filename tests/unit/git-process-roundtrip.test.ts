@@ -383,3 +383,39 @@ describe("git-process #region round-trip", () => {
     ).toBeUndefined();
   });
 });
+
+describe("git-process ignored datasource columns", () => {
+  // A column set to "Ignore" carries no variable, so `variables` alone cannot
+  // represent it — leaving the UI data out made every export/import cycle drop
+  // the setting.
+  const UI = [
+    "IgnoredInputVarName=vsOld\fVarType=32\fColType=1165\f",
+    "VarType=32\fColType=827\f",
+    "VarType=33\fColType=827\f",
+  ];
+
+  it("survives a json round-trip", () => {
+    const { json } = serializeProcessToGit(fixture({ variablesUIData: UI }));
+    const parsed = parseProcessFromGit(json, makeTi({ Prolog: "sX='a';" }));
+    expect(parsed.variablesUIData).toEqual(UI);
+  });
+
+  it("is absent from the json when the process ignores nothing", () => {
+    const { json } = serializeProcessToGit(fixture());
+    expect(JSON.parse(json)).not.toHaveProperty("variablesUIData");
+    expect(
+      parseProcessFromGit(json, makeTi({ Prolog: "sX='a';" })).variablesUIData,
+    ).toBeUndefined();
+  });
+
+  it("rejects a json whose variablesUIData is not a list of strings", () => {
+    const broken = JSON.stringify({
+      name: "P",
+      variables: [],
+      variablesUIData: [{ ColType: 1165 }],
+    });
+    expect(() =>
+      parseProcessFromGit(broken, makeTi({ Prolog: "sX='a';" })),
+    ).toThrow(/variablesUIData/);
+  });
+});

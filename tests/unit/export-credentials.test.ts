@@ -29,6 +29,7 @@ function captureProExport(version: 11 | 12 = 11): {
     }),
     getParameters: async () => [],
     getVariables: async () => [],
+    getVariableLayout: async () => ({ variables: [], ignoredColumns: [] }),
     getDataSource: async (_n: string, opts?: { includeSecrets?: boolean }) => {
       secretsAsked.push(opts?.includeSecrets === true);
       return {
@@ -127,6 +128,7 @@ describe("git export refuses credentials on v11", () => {
       getCodeBlob: async () => "#region Prolog\nsVal = 'x';\n#endregion Prolog",
       getParameters: async () => [],
       getVariables: async () => [],
+      getVariableLayout: async () => ({ variables: [], ignoredColumns: [] }),
       getDataSource: async () => ({
         type: "ODBC" as const,
         dataSourceNameForServer: "SALES_DWH",
