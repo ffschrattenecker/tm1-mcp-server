@@ -1,6 +1,6 @@
 {
   "recordedAgainst": ["11.8.02900.8"],
-  "recordedAt": "2026-08-13",
+  "recordedAt": "2026-08-29",
   "endpoints": {
     "DELETE /api/v1/Chores('*') !404": {
       "error": {
@@ -163,7 +163,7 @@
           "JVMArgs": "null",
           "JVMPath": "null"
         },
-        "Language": "null",
+        "Language": "null|string",
         "MaskUserNameInServerTools": "boolean",
         "PerfMonActive": "boolean",
         "PerformanceMonitorOn": "boolean",
@@ -689,7 +689,13 @@
       },
       "PrologProcedure?": "string",
       "UIData?": "string",
-      "Variables[]?": "unknown",
+      "Variables[]?": {
+        "EndByte": "number",
+        "Name": "string",
+        "Position": "number",
+        "StartByte": "number",
+        "Type": "string"
+      },
       "VariablesUIData[]?": "string"
     },
     "GET /api/v1/Processes('*') !404": {
@@ -858,7 +864,13 @@
         "Value": "number"
       },
       "PrologProcedure": "string",
-      "Variables[]": "unknown"
+      "Variables[]": {
+        "EndByte": "number",
+        "Name": "string",
+        "Position": "number",
+        "StartByte": "number",
+        "Type": "string"
+      }
     },
     "PATCH /api/v1/Processes('*') !400": {
       "error": {
@@ -899,6 +911,12 @@
       "Frequency": "string",
       "Name": "string",
       "StartTime": "string"
+    },
+    "POST /api/v1/Chores('*')/tm1.ExecuteWithReturn !404": {
+      "error": {
+        "code": "string",
+        "message": "string"
+      }
     },
     "POST /api/v1/CompileProcess": {
       "@odata.context": "string",
@@ -1104,6 +1122,14 @@
       },
       "DataProcedure": "string",
       "DataSource": {
+        "asciiDecimalSeparator?": "string",
+        "asciiDelimiterChar?": "string",
+        "asciiDelimiterType?": "string",
+        "asciiHeaderRecords?": "number",
+        "asciiQuoteCharacter?": "string",
+        "asciiThousandSeparator?": "string",
+        "dataSourceNameForClient?": "string",
+        "dataSourceNameForServer?": "string",
         "Type": "string"
       },
       "EpilogProcedure": "string",
@@ -1117,7 +1143,13 @@
         "Value": "number"
       },
       "PrologProcedure": "string",
-      "Variables[]": "unknown"
+      "Variables[]": {
+        "EndByte": "number",
+        "Name": "string",
+        "Position": "number",
+        "StartByte": "number",
+        "Type": "string"
+      }
     },
     "POST /api/v1/Processes('*')/tm1.Compile": {
       "@odata.context": "string",
@@ -1129,6 +1161,7 @@
     },
     "POST /api/v1/Processes('*')/tm1.ExecuteWithReturn": {
       "@odata.context": "string",
+      "ErrorLogFile?": "null|object",
       "ProcessExecuteStatusCode": "string"
     },
     "POST /api/v1/Threads(*)/tm1.CancelOperation !404": {

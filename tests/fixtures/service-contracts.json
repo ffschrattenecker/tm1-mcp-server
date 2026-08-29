@@ -1,6 +1,6 @@
 {
   "recordedAgainst": ["11.8.02900.8"],
-  "recordedAt": "2026-08-13",
+  "recordedAt": "2026-08-29",
   "methods": {
     "batch.execute": {
       "[]": {
@@ -66,6 +66,12 @@
         "tuple[]": "string"
       },
       "statements[]": "string"
+    },
+    "chores.execute": {
+      "choreErrorStatus": "string",
+      "outcome": "string",
+      "statusUnavailable": "boolean",
+      "success": "boolean"
     },
     "chores.list": {
       "[]": {
@@ -256,6 +262,7 @@
       "success": "boolean"
     },
     "processes.execute": {
+      "errorLogFile?": "string",
       "outcome": "string",
       "processErrorStatus": "string",
       "success": "boolean"
@@ -324,6 +331,20 @@
         "prompt": "string",
         "type": "string"
       }
+    },
+    "processes.getVariableLayout": {
+      "ignoredColumns[]": {
+        "name": "string",
+        "position": "number"
+      },
+      "variables[]": {
+        "endByte": "number",
+        "name": "string",
+        "position": "number",
+        "startByte": "number",
+        "type": "string"
+      },
+      "variablesUIData[]": "string"
     },
     "processes.getVariables": {
       "[]": "unknown"
@@ -510,7 +531,7 @@
             "JVMArgs": "null",
             "JVMPath": "null"
           },
-          "Language": "null",
+          "Language": "null|string",
           "MaskUserNameInServerTools": "boolean",
           "PerfMonActive": "boolean",
           "PerformanceMonitorOn": "boolean",
