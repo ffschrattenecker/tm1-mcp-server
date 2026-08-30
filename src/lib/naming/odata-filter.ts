@@ -21,7 +21,7 @@
 // emitted expression in TypeScript so the property can be tested directly;
 // tests/unit/naming-odata-filter.test.ts asserts it over every rule class,
 // and the live suite asserts that TM1 agrees.
-import { SERVER_RESERVED_CHARS, type TM1MajorVersion } from "./rules.js";
+import { SERVER_RESERVED_CHARS } from "./rules.js";
 
 /** OData string literal: single quotes double. */
 function lit(value: string): string {
@@ -35,7 +35,7 @@ function lit(value: string): string {
  * trailing whitespace, TM1-Server-reserved characters, the `}` control prefix,
  * a leading `+`/`-`, and — on v12 only — an embedded TAB.
  */
-export function elementViolationFilter(version: TM1MajorVersion): string {
+export function elementViolationFilter(): string {
   const clauses = [
     // checkEmpty: name.trim() is empty. Covers "" and whitespace-only in one.
     "length(trim(Name)) eq 0",
@@ -52,9 +52,11 @@ export function elementViolationFilter(version: TM1MajorVersion): string {
     ...[...SERVER_RESERVED_CHARS].map((ch) => `contains(Name,${lit(ch)})`),
   ];
 
-  // checkElementContainsTab is v12-only. TAB cannot appear raw in a URL, so it
-  // goes in percent-encoded; the surrounding query is not re-encoded.
-  if (version === 12) clauses.push("indexof(Name,'%09') ge 0");
+  // checkElementContainsTab applies on every version. TAB cannot appear raw in
+  // a URL, so it goes in percent-encoded; the surrounding query is not
+  // re-encoded. Verified against both servers: the clause is accepted and does
+  // find an element whose name contains a TAB.
+  clauses.push("indexof(Name,'%09') ge 0");
 
   return clauses.join(" or ");
 }
@@ -64,15 +66,12 @@ export function elementViolationFilter(version: TM1MajorVersion): string {
  * without a server. Kept beside the builder so the two cannot drift: a rule
  * added to one and forgotten in the other fails the unit test.
  */
-export function matchesElementViolationFilter(
-  name: string,
-  version: TM1MajorVersion,
-): boolean {
+export function matchesElementViolationFilter(name: string): boolean {
   if (name.trim().length === 0) return true;
   if (name !== name.trim()) return true;
   if (name.startsWith("}")) return true;
   if (name.startsWith("+") || name.startsWith("-")) return true;
   for (const ch of SERVER_RESERVED_CHARS) if (name.includes(ch)) return true;
-  if (version === 12 && name.includes("\t")) return true;
+  if (name.includes("\t")) return true;
   return false;
 }

@@ -91,9 +91,8 @@ function makeAuditNamingClientStub(args: AuditNamingClientStubArgs) {
     // precisely to send v12 rules to a v11 server — the TAB clause is the
     // observable difference.
     const sentFilter = qs.get("$filter");
-    const filterMajor = sentFilter?.includes("indexof(Name,'%09')") ? 12 : 11;
     const matching = sentFilter
-      ? names.filter((n) => matchesElementViolationFilter(n, filterMajor))
+      ? names.filter((n) => matchesElementViolationFilter(n))
       : names;
     const value = matching.slice(skip, skip + top).map((Name) => ({ Name }));
     return wantCount ? { "@odata.count": matching.length, value } : { value };
@@ -225,7 +224,9 @@ describe("tm1_audit_naming tool", () => {
     expect(out.findings?.[0]?.violations[0]?.rule).toBe("element_contains_tab");
   });
 
-  it("does NOT flag TAB on v11 server even if elements contain it", async () => {
+  it("flags TAB on a v11 server too", async () => {
+    // 11.8 accepts a TAB in an element name and keeps it verbatim, so the rule
+    // is not version-gated: the audit reports it wherever it finds it.
     const fake = makeFakeServer();
     const tm1 = makeAuditNamingClientStub({
       productVersion: "11.8.01100",
@@ -235,10 +236,14 @@ describe("tm1_audit_naming tool", () => {
     registerAuditNaming(fake.server, tm1);
     const out = parseResult(await fake.getHandler()({ scope: ["elements"] }));
     expect(out.appliedMajor).toBe(11);
-    expect(out.invalidCount).toBe(0);
+    expect(out.invalidCount).toBe(1);
+    expect(out.findings?.[0]?.violations[0]?.rule).toBe("element_contains_tab");
   });
 
-  it("versionOverride='12' forces v12 rules on v11 server", async () => {
+  // No naming rule differs by version today, so this pins the plumbing —
+  // detected vs applied major are reported independently — rather than a
+  // version-specific verdict.
+  it("versionOverride='12' is reported as the applied major on a v11 server", async () => {
     const fake = makeFakeServer();
     const tm1 = makeAuditNamingClientStub({
       productVersion: "11.8.01100",
@@ -294,7 +299,7 @@ describe("tm1_audit_naming tool", () => {
       const skip = Number(qs.get("$skip") ?? 0);
       const wantCount = qs.get("$count") === "true";
       const matching = qs.get("$filter")
-        ? names.filter((n) => matchesElementViolationFilter(n, 11))
+        ? names.filter((n) => matchesElementViolationFilter(n))
         : names;
       const value = matching.slice(skip, skip + top).map((Name) => ({ Name }));
       return wantCount ? { "@odata.count": matching.length, value } : { value };

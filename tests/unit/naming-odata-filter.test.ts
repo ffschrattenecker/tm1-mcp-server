@@ -49,12 +49,12 @@ const CLEAN = [
 describe("elementViolationFilter", () => {
   it("is sound: every name checkName flags is matched", () => {
     for (const name of VIOLATING) {
-      const flagged = checkName(name, "element", 12).length > 0;
+      const flagged = checkName(name, "element").length > 0;
       expect(flagged, `${JSON.stringify(name)} should violate a rule`).toBe(
         true,
       );
       expect(
-        matchesElementViolationFilter(name, 12),
+        matchesElementViolationFilter(name),
         `filter must not miss ${JSON.stringify(name)}`,
       ).toBe(true);
     }
@@ -65,21 +65,25 @@ describe("elementViolationFilter", () => {
     // the right answer, just a bigger download. Worth pinning anyway.
     for (const name of CLEAN) {
       expect(
-        matchesElementViolationFilter(name, 12),
+        matchesElementViolationFilter(name),
         `${JSON.stringify(name)} should not be a candidate`,
       ).toBe(false);
     }
   });
 
-  it("only looks for TAB on v12, where it is reserved", () => {
-    expect(matchesElementViolationFilter("mid\tdle", 12)).toBe(true);
-    expect(matchesElementViolationFilter("mid\tdle", 11)).toBe(false);
-    // …matching checkName, which gates the same rule on the version.
-    expect(checkName("mid\tdle", "element", 11)).toEqual([]);
+  it("looks for TAB unconditionally, matching checkName", () => {
+    // Measured on 11.8 and 12.5: both accept a TAB in an element name and keep
+    // it verbatim, so neither the rule nor the prefilter is version-gated.
+    expect(matchesElementViolationFilter("mid\tdle")).toBe(true);
+    expect(
+      checkName("mid\tdle", "element").some(
+        (v) => v.rule === "element_contains_tab",
+      ),
+    ).toBe(true);
   });
 
   it("doubles a single quote, the one literal OData can misparse", () => {
-    const f = elementViolationFilter(11);
+    const f = elementViolationFilter();
     expect(f).toContain("contains(Name,'''')");
   });
 
@@ -87,13 +91,13 @@ describe("elementViolationFilter", () => {
     // `name !== name.trim()` covers every unicode space JS trims. Enumerating
     // them as startswith/endswith clauses would silently miss the ones nobody
     // thought of, which is the failure mode this filter must not have.
-    const f = elementViolationFilter(11);
+    const f = elementViolationFilter();
     expect(f).toContain("trim(Name) ne Name");
     expect(f).toContain("length(trim(Name)) eq 0");
   });
 
   it("emits TAB as an escaped literal, never a raw control character", () => {
-    const f = elementViolationFilter(12);
+    const f = elementViolationFilter();
     expect(f).not.toContain("\t");
     expect(f).toContain("indexof(Name,'%09')");
   });

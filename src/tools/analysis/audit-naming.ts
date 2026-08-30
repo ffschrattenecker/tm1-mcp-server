@@ -88,8 +88,9 @@ export const registerAuditNaming = defineTool({
       .enum(["11", "12"])
       .optional()
       .describe(
-        "Override auto-detected TM1 major version. Use '12' to apply v12-only rules (e.g., TAB " +
-          "in element names) against a v11 server.",
+        "Override the auto-detected TM1 major version in the report (detectedMajor stays as " +
+          "found, appliedMajor follows this). No naming rule currently differs by version, so " +
+          "this does not change which names are flagged.",
       ),
     elementsPageSize: z
       .number()
@@ -170,7 +171,7 @@ export const registerAuditNaming = defineTool({
       kind: ObjectKind,
       parent?: string,
     ): void => {
-      const violations = checkName(name, kind, major);
+      const violations = checkName(name, kind);
       if (violations.length === 0) return;
       const f: Finding = { objectKind: kind, objectName: name, violations };
       if (parent !== undefined) f.parent = parent;
@@ -265,7 +266,7 @@ export const registerAuditNaming = defineTool({
           } = await tm1Client.elements.scanElementNames(d.name, h, {
             pageSize: elementsPageSize,
             maxScan: maxElementsPerDim,
-            filter: elementViolationFilter(major),
+            filter: elementViolationFilter(),
             ...(d.elementCounts?.[h] !== undefined
               ? { scopeTotal: d.elementCounts[h] }
               : {}),

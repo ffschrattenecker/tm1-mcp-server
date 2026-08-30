@@ -144,17 +144,21 @@ function checkElementLeadingArithmetic(name: string): Violation | null {
   return null;
 }
 
-function checkElementContainsTab(
-  name: string,
-  version: TM1MajorVersion,
-): Violation | null {
-  if (version !== 12) return null;
+// TAB is a hygiene problem on every version, not a v12 one. Measured on 11.8
+// and 12.5 alike: the element is created, the name round-trips verbatim, no
+// alias attribute appears, and MDX addresses it exactly like a plain element.
+// So the rule no longer keys off the server version — it flags a character
+// that is invisible in every UI, ambiguous against surrounding whitespace, and
+// splits the name in TI and CSV round trips. Planning Analytics 3.1 is also
+// reported to reserve TAB as the name/alias separator; that is a documented
+// claim, not something either reachable server demonstrates.
+function checkElementContainsTab(name: string): Violation | null {
   const idx = name.indexOf("\t");
   if (idx >= 0) {
     return {
       rule: "element_contains_tab",
       message:
-        "Element name contains TAB. Reserved by Planning Analytics 3.1 as the name/alias separator.",
+        "Element name contains TAB — invisible in UIs, ambiguous against other whitespace, and a field separator in TI and CSV round trips. Planning Analytics 3.1 additionally reserves it as the name/alias separator.",
       char: "\t",
       position: idx,
     };
@@ -195,11 +199,7 @@ function checkProcessVariable(name: string): Violation | null {
  * Validate a single TM1 object name. Returns all hard violations.
  * Order: empty → length → whitespace → reserved-char → control-prefix → element-specific.
  */
-export function checkName(
-  name: string,
-  kind: ObjectKind,
-  version: TM1MajorVersion = 11,
-): Violation[] {
+export function checkName(name: string, kind: ObjectKind): Violation[] {
   if (kind === "processVariable") {
     const v = checkProcessVariable(name);
     return v ? [v] : [];
@@ -240,7 +240,7 @@ export function checkName(
     const arithmetic = checkElementLeadingArithmetic(name);
     if (arithmetic) violations.push(arithmetic);
 
-    const tab = checkElementContainsTab(name, version);
+    const tab = checkElementContainsTab(name);
     if (tab) violations.push(tab);
   }
 

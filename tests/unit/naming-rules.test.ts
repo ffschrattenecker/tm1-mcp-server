@@ -61,42 +61,40 @@ describe("checkName — cube/dim/process (server-reserved kinds)", () => {
 
 describe("checkName — element (PA 2.0 v11)", () => {
   it("accepts a clean element name", () => {
-    expect(checkName("Jan", "element", 11)).toEqual([]);
+    expect(checkName("Jan", "element")).toEqual([]);
   });
 
   it("flags leading '+' or '-'", () => {
-    expect(checkName("+Special", "element", 11)[0]?.rule).toBe(
+    expect(checkName("+Special", "element")[0]?.rule).toBe(
       "element_leading_arithmetic",
     );
-    expect(checkName("-Special", "element", 11)[0]?.rule).toBe(
+    expect(checkName("-Special", "element")[0]?.rule).toBe(
       "element_leading_arithmetic",
     );
   });
 
-  it("does NOT flag TAB in v11", () => {
-    const v = checkName("a\tb", "element", 11);
-    expect(v.some((x) => x.rule === "element_contains_tab")).toBe(false);
-  });
-
-  it("flags TAB in v12 element names", () => {
-    const v = checkName("a\tb", "element", 12);
+  it("flags TAB in element names", () => {
+    // 11.8 and 12.5 both accept a TAB and keep the name verbatim, so the rule
+    // is naming hygiene rather than a v12 migration check — and no longer
+    // takes a version at all.
+    const v = checkName("a\tb", "element");
     expect(v.some((x) => x.rule === "element_contains_tab")).toBe(true);
   });
 
   it("flags reserved chars in elements", () => {
-    const v = checkName("Foo;Bar", "element", 11);
+    const v = checkName("Foo;Bar", "element");
     expect(v.some((x) => x.rule === "server_reserved_char")).toBe(true);
   });
 
   it("does NOT flag length on long element names (no hard server limit)", () => {
     const long = "e".repeat(500);
-    const v = checkName(long, "element", 11);
+    const v = checkName(long, "element");
     expect(v.some((x) => x.rule === "length_exceeds")).toBe(false);
   });
 
   it("does NOT flag length on long attribute names", () => {
     const long = "a".repeat(500);
-    const v = checkName(long, "attribute", 11);
+    const v = checkName(long, "attribute");
     expect(v.some((x) => x.rule === "length_exceeds")).toBe(false);
   });
 });

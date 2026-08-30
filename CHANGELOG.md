@@ -58,6 +58,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`tm1_audit_naming` flags TAB in element names on every version, not only v12.** The
+  rule carried a v12 gate and the message claimed Planning Analytics 3.1 reserves TAB as
+  the name/alias separator. Measured against 11.8 and 12.5, that separator behaviour is
+  not observable on either: the element is created, the name round-trips verbatim
+  (`"AA\tBB"`), no alias attribute appears, and MDX addresses it exactly like a plain
+  element. Whatever PA 3.1 does, neither reachable server does it.
+
+  What remains true regardless of version is that TAB is a bad character in a name: it is
+  invisible in every UI, ambiguous against other whitespace, and a field separator in TI
+  and CSV round trips. So the rule is now version-independent, its message says what is
+  actually wrong, and the server-side prefilter emits `indexof(Name,'%09') ge 0` on both
+  versions — verified to be accepted and to find such an element on each.
+
+  Consequently no naming rule differs by version any more. `checkName()` no longer takes
+  one, and `versionOverride` now only sets the reported `appliedMajor`; its description
+  says so. It no longer changes which names are flagged.
+
 - **`tm1_clear_cube` clears a whole cube on v12 again.** The service assumed
   `tm1.Clear` was the v12 route and the ephemeral-TI fallback a v11 workaround, so every
   full clear against v12 failed. Measured against a real cube on both servers, no build
