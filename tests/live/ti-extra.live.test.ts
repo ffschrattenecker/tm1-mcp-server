@@ -11,6 +11,7 @@ import {
   getHarness,
   LIVE_ENABLED,
   SANDBOX,
+  skipUnlessRegistered,
   type LiveHarness,
 } from "./harness.js";
 
@@ -182,7 +183,8 @@ describe.skipIf(!LIVE_ENABLED)(
       }
     });
 
-    it("cancel_thread on a non-existent id returns a result without throwing", async () => {
+    it("cancel_thread on a non-existent id returns a result without throwing", async (ctx) => {
+      skipUnlessRegistered(ctx, h, "tm1_cancel_thread");
       // Never targets a real thread; 999999999 is effectively unassignable.
       const r = await h.call("tm1_cancel_thread", { id: 999999999 });
       expect(typeof r.isError).toBe("boolean");

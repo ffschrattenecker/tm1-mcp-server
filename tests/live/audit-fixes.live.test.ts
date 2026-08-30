@@ -11,6 +11,7 @@ import {
   getHarness,
   LIVE_ENABLED,
   SANDBOX,
+  skipUnlessRegistered,
   type LiveHarness,
 } from "./harness.js";
 import {
@@ -90,7 +91,8 @@ describe.skipIf(!LIVE_ENABLED)("live: audit fixes 2026-08-05", () => {
 
   // ---- S10: reject bad timestamps before they reach OData ----------------
   describe("S10 — timestamp validation", () => {
-    it("rejects a non-ISO timestamp with a named error instead of an OData parse failure", async () => {
+    it("rejects a non-ISO timestamp with a named error instead of an OData parse failure", async (ctx) => {
+      skipUnlessRegistered(ctx, h, "tm1_get_message_log");
       const r = await h.call("tm1_get_message_log", {
         since: "yesterday",
         top: 1,
@@ -100,7 +102,8 @@ describe.skipIf(!LIVE_ENABLED)("live: audit fixes 2026-08-05", () => {
       expect(r.text).toMatch(/yesterday/);
     });
 
-    it("rejects an ambiguous locale date rather than silently picking a day", async () => {
+    it("rejects an ambiguous locale date rather than silently picking a day", async (ctx) => {
+      skipUnlessRegistered(ctx, h, "tm1_get_message_log");
       const r = await h.call("tm1_get_message_log", {
         since: "08/06/2026",
         top: 1,
@@ -109,7 +112,8 @@ describe.skipIf(!LIVE_ENABLED)("live: audit fixes 2026-08-05", () => {
       expect(r.text).toMatch(/Not a usable timestamp/);
     });
 
-    it("still accepts ISO-8601 and reaches the server", async () => {
+    it("still accepts ISO-8601 and reaches the server", async (ctx) => {
+      skipUnlessRegistered(ctx, h, "tm1_get_message_log");
       const since = new Date(Date.now() - 10 * 60_000).toISOString();
       const r = await h.ok("tm1_get_message_log", { since, top: 5 });
       expect(r.json).toBeTruthy();

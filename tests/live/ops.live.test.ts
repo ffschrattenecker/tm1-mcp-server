@@ -19,6 +19,7 @@ import {
   getHarness,
   LIVE_ENABLED,
   SANDBOX,
+  skipUnlessRegistered,
   type LiveHarness,
 } from "./harness.js";
 
@@ -74,6 +75,33 @@ describe.skipIf(!LIVE_ENABLED)(
       }
     });
 
+    // ---- VERSION GATE ------------------------------------------------------
+
+    // The tools below are registered per server version (`enabled:` in their
+    // defineTool spec). The suites that call them skip when they are absent,
+    // so without this test "absent" and "silently dropped" would look alike.
+    // This asserts the gate from both sides against the real server.
+    it("registers the version-gated monitoring tools for this server only", () => {
+      const V11_ONLY = [
+        "tm1_get_message_log",
+        "tm1_get_audit_log",
+        "tm1_get_transaction_log",
+        "tm1_list_threads",
+        "tm1_cancel_thread",
+        "tm1_save_data",
+      ];
+      const V12_ONLY = ["tm1_list_jobs", "tm1_cancel_job"];
+      const present = (names: string[]) => names.filter((n) => h.has(n));
+
+      if (h.client.version === 11) {
+        expect(present(V11_ONLY)).toEqual(V11_ONLY);
+        expect(present(V12_ONLY)).toEqual([]);
+      } else {
+        expect(present(V12_ONLY)).toEqual(V12_ONLY);
+        expect(present(V11_ONLY)).toEqual([]);
+      }
+    });
+
     // ---- OPERATIONS / MONITORING (read-tier) -------------------------------
 
     it("tm1_get_server_info returns identity + config", async () => {
@@ -94,7 +122,8 @@ describe.skipIf(!LIVE_ENABLED)(
       expect(r.json.counts).toHaveProperty("dimensions");
     });
 
-    it("tm1_get_message_log returns entries (small limit)", async () => {
+    it("tm1_get_message_log returns entries (small limit)", async (ctx) => {
+      skipUnlessRegistered(ctx, h, "tm1_get_message_log");
       const r = await h.ok("tm1_get_message_log", { top: 5 });
       expect(r.json).toMatchObject({
         count: expect.any(Number),
@@ -103,7 +132,8 @@ describe.skipIf(!LIVE_ENABLED)(
       expect(r.json.entries.length).toBeLessThanOrEqual(5);
     });
 
-    it("tm1_list_threads returns pagination envelope", async () => {
+    it("tm1_list_threads returns pagination envelope", async (ctx) => {
+      skipUnlessRegistered(ctx, h, "tm1_list_threads");
       const r = await h.ok("tm1_list_threads", { limit: 10 });
       expect(r.json).toMatchObject({
         total: expect.any(Number),
@@ -122,7 +152,8 @@ describe.skipIf(!LIVE_ENABLED)(
       });
     });
 
-    it("tm1_get_audit_log returns entries (may be empty if auditing off)", async () => {
+    it("tm1_get_audit_log returns entries (may be empty if auditing off)", async (ctx) => {
+      skipUnlessRegistered(ctx, h, "tm1_get_audit_log");
       const r = await h.ok("tm1_get_audit_log", { top: 5 });
       expect(r.json).toMatchObject({
         count: expect.any(Number),

@@ -22,6 +22,7 @@ import { RECORDING } from "./contract-mode.js";
 import { recordingClient } from "./service-recorder.js";
 import { registerAllTools } from "../../src/tools/index.js";
 import type { McpToolResult } from "../../src/tools/error-format.js";
+import type { TestContext } from "vitest";
 
 /** True only when the environment is configured to reach a live TM1 server. */
 export const LIVE_ENABLED = Boolean(
@@ -57,6 +58,10 @@ export interface LiveHarness {
   ok: (name: string, args?: Record<string, unknown>) => Promise<CallResult>;
   /** Names of all registered (readwrite-mode) tools. */
   toolNames: () => string[];
+  /** True when a tool is registered for the connected server version.
+   *  Version-gated tools (v11-only logs/threads, v12-only jobs) are absent by
+   *  design on the other version — see `enabled:` in their defineTool spec. */
+  has: (name: string) => boolean;
 }
 
 let harnessPromise: Promise<LiveHarness> | null = null;
@@ -165,7 +170,36 @@ async function build(): Promise<LiveHarness> {
     return r;
   };
 
-  return { client, call, ok, toolNames: () => [...registry.keys()] };
+  return {
+    client,
+    call,
+    ok,
+    toolNames: () => [...registry.keys()],
+    has: (name: string) => registry.has(name),
+  };
+}
+
+/**
+ * Skip the current test when a version-gated tool is not registered on the
+ * target server.
+ *
+ * A tool the version gate deliberately withholds must read as **skipped**, not
+ * failed. Before this existed, a v12 run reported seven red tests that were
+ * working exactly as designed — and a real v12 regression would have been
+ * indistinguishable from that noise. The gate itself is asserted positively in
+ * ops.live.test.ts, so skipping here loses no coverage.
+ */
+export function skipUnlessRegistered(
+  ctx: TestContext,
+  h: LiveHarness,
+  ...names: string[]
+): void {
+  const missing = names.filter((n) => !h.has(n));
+  if (missing.length > 0) {
+    ctx.skip(
+      `version-gated off on this server (v${h.client.version}): ${missing.join(", ")}`,
+    );
+  }
 }
 
 /**
