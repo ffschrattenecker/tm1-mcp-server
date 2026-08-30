@@ -7,330 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- **`tm1_unload_cube` is v11-only.** v12 answers `tm1.Unload` with "Demand load,
+  loading and unloading of cubes is no longer supported" — the feature is gone with no
+  successor, so the tool is withheld rather than offered and refused. It no longer appears
+  in `tools/list` against v12. *Action:* branch on the server version; on v12 the call
+  never worked.
+- **`tm1_get_audit_log`, `tm1_get_message_log` and `tm1_get_transaction_log` are
+  v11-only.** v12 deprecated the underlying collections in 12.0.0: they answer 200 with
+  nothing and have no successor endpoint. *Action:* as above.
+- **`tm1_execute_chore` reports how the chore ended** instead of always answering
+  `{success: true}` when the HTTP call did not throw. On v12 12.5.0+ it returns
+  `{success, outcome, choreErrorStatus, errorLogFile}`. *Action:* a chore whose step failed
+  now surfaces as a failure; callers that treated every response as success must branch on
+  `outcome`.
+- **`oDBCConnection` removed from the datasource model.** TM1 has no such field — it was
+  always `undefined`. *Action:* none.
+- **`lockType` removed from the thread shape.** No v11 thread ever carried it. *Action:*
+  none.
+
+### Added
+
+- `tm1_get_process_variables` and `tm1_get_process` report `ignoredColumns` — the
+  datasource columns a process ignores. They live only in `VariablesUIData`, which no
+  version declares, so a plain GET never returned them and the tools read the process as if
+  those columns did not exist. Carried through `tm1_copy_process`, both diff tools, and the
+  `.pro` and Git round trips.
+- `tm1_list_dimensions` publishes `lastUpdated` with `includeLastUpdated: true`.
+
 ### Fixed
 
-- **The naming audit's TAB prefilter never matched anything.** `elementViolationFilter()`
-  wrote the tab as the literal text `%09`, on the assumption that "the surrounding query is
-  not re-encoded". Its only caller, `scanElementNames()`, runs the whole filter through
-  `encodeURIComponent()`, so `%09` went out as `%2509` and the server searched for three
-  characters — `%`, `0`, `9` — that no element name contains. Every tab-containing element
-  was invisible to `tm1_audit_naming` for as long as the clause existed. The filter now
-  carries a real TAB, which the caller's encoding turns into `%09` on the wire, and the
-  unit test asserts the encoded form instead of the source form.
-
-- **`DataSource.usesUnicode` was discarded on exactly the version that supports it.** The
-  service dropped the property on v11 with a warning calling it "v12-only", and sent it on
-  v12. Measured on both servers, that is backwards. TM1 validates datasource properties per
-  *source type*, not per version:
-
-  ```
-  11.8, ASCII source : "unprocessed properties were: usesUnicode"   → rejected
-  11.8, ODBC source  : accepted, returned by a plain GET, and written
-                       to the .pro file as line 559 (true → 559,1, false → 559,0)
-  12.5, any source   : never returned for any type — no evidence it exists there
-  ```
-
-  The gate is now the datasource type (`ODBC`), which is correct on both versions; the
-  version check is gone. A non-ODBC source still drops the property, now with a warning
-  that says why.
-
-- **`.pro` round trips no longer lose the ODBC unicode setting.** The serializer listed
-  line 559 among the headers that "carry no portable information" and omitted it, while a
-  REST-created process defaults to `559,1`. Exporting a process with unicode off and
-  importing it back therefore turned unicode on, silently. The serializer now writes 559
-  for ODBC sources and the parser reads it. An absent line stays `undefined` rather than
-  becoming `false` — a file that never carried the setting must not invent one.
-
-- **`tm1_get_cell_value` no longer reports a non-existent coordinate as an empty cell on
-  v12.** The MDX behind it selects exactly one member, so a resolvable coordinate always
-  yields one cell — an empty one arrives as a cell with a null `Value`. An empty *cellset*
-  means a member did not resolve. v11 refuses such an MDX outright
-  (`"ZZ_NO_SUCH_ELEMENT" : member not found (rte 81)`), but v12 answers 200 with no cells,
-  and the service turned that into `{value: null}`. A typo in an element name therefore
-  read as "this cell is empty" instead of "this element does not exist" — a silent wrong
-  answer on the read path.
-
-  Both versions now fail the same way, with `NOT_FOUND` naming the cube and the offending
-  coordinate. On v11 nothing changes: the server already errored. On v12 a call that used
-  to return `{value: null}` for a bad coordinate now returns an error envelope.
-
-  This was the last entry of the v12 live baseline; both suites are green.
-
-- **Datasource columns set to "Ignore" are no longer invisible.** TM1 drops such a
-  column from `Process.Variables` entirely and records it only in `VariablesUIData` —
-  one entry per source column, ignored ones marked `ColType=1165` and carrying the
-  variable name the column had before (`IgnoredInputVarName=`). Neither v11 nor v12
-  declares that property in `$metadata`, so a plain GET never returns it and every tool
-  here read the process as if the columns did not exist. Measured against 1022 real
-  `.pro` files (396 ignored columns in 30 processes, line block 582) and live on 11.8
-  and 12.5.
-
-  What changes:
-
-  - `tm1_get_process_variables` and `tm1_get_process` report an `ignoredColumns` list
-    (`{position, name}`) — which is also the explanation for the gaps the remaining
-    variable positions have always had. One request, not two: `Variables` and
-    `VariablesUIData` come back from the same `$select`, with a fallback to the plain
-    `Variables` collection if a server refuses the query shape.
-  - `tm1_copy_process` carries the setting to the copy. It re-POSTed the plain GET body,
-    which does not contain `VariablesUIData` (or `UIData`, the Architect action
-    settings), so every copy silently lost the ignored columns despite the tool
-    advertising "including variables".
-  - `tm1_export_process_to_pro` writes line block 582 and `tm1_import_pro_file` reads it;
-    `tm1_export_process_to_git` writes `variablesUIData` into the `.json` and
-    `tm1_import_process_from_git` restores it. Both round trips lost the flag before.
-    The raw entries are carried verbatim rather than rebuilt, so contents settings other
-    than Ignore survive untouched.
-  - `tm1_diff_processes` and `tm1_diff_process_with_file` compare the ignored columns.
-    Two processes differing only in which columns they skip previously reported
-    `identical: true`.
-
-  Patching `Variables` alone still leaves whatever UI data the process has (measured on
-  12.5), so an ordinary `tm1_upsert_process` edit is unaffected.
+- **`tm1_get_cell_value` no longer reports a non-existent coordinate as an empty cell.**
+  The MDX selects exactly one member, so an empty cell arrives as a cell with a null
+  `Value`; an empty *cellset* means a member did not resolve. v11 refuses such an MDX, but
+  v12 answers 200 with no cells and the service returned `{value: null}` — a typo in an
+  element name read as "this cell is empty". Both versions now raise `NOT_FOUND` naming the
+  cube and coordinate.
+- **`tm1_clear_cube` clears a whole cube on v12 again.** `tm1.Clear` was taken for the v12
+  route; measured against a real cube, neither 11.8 nor 12.5 resolves it and neither
+  declares a clear action in `$metadata`. A full clear now runs `CubeClearData()` through an
+  ephemeral TI on both versions. A partial clear needs `tm1.Clear`, which no reachable
+  server offers, and now fails fast with `UNSUPPORTED_OPERATION` and the bedrock pointer.
+- **`DataSource.usesUnicode` was discarded on the version that supports it.** It was
+  dropped on v11 as "v12-only" and sent on v12 — backwards. TM1 validates datasource
+  properties per *source type*: 11.8 rejects it for ASCII, accepts it for ODBC, returns it
+  from a plain GET and writes it to `.pro` line 559; 12.5 never returns it at all. The gate
+  is now `type === "ODBC"`.
+- **`.pro` round trips no longer lose the ODBC unicode setting.** Line 559 was omitted as
+  carrying "no portable information" while a REST-created process defaults to `559,1`, so
+  export + import silently turned unicode on.
+- **The naming audit's TAB prefilter never matched anything.** The clause carried the
+  literal text `%09`, and its only caller runs the filter through `encodeURIComponent()` —
+  so `%2509` went out and the server searched for three characters no name contains. Every
+  tab-containing element was invisible to `tm1_audit_naming`.
+- **Anonymous sessions no longer break `tm1_list_sessions`.** `GET /Sessions` returns
+  `User: null` for a session with no signed-in user; the response type and the recorded
+  wire contract both admitted only an object.
+- **`errorLogFile` was never filled in** — the execute calls omitted the `$expand`, so the
+  filename was always absent on both versions.
 
 ### Changed
 
 - **`tm1_audit_naming` flags TAB in element names on every version, not only v12.** The
-  rule carried a v12 gate and the message claimed Planning Analytics 3.1 reserves TAB as
-  the name/alias separator. Measured against 11.8 and 12.5, that separator behaviour is
-  not observable on either: the element is created, the name round-trips verbatim
-  (`"AA\tBB"`), no alias attribute appears, and MDX addresses it exactly like a plain
-  element. Whatever PA 3.1 does, neither reachable server does it.
-
-  What remains true regardless of version is that TAB is a bad character in a name: it is
-  invisible in every UI, ambiguous against other whitespace, and a field separator in TI
-  and CSV round trips. So the rule is now version-independent, its message says what is
-  actually wrong, and the server-side prefilter emits `indexof(Name,'%09') ge 0` on both
-  versions — verified to be accepted and to find such an element on each.
-
-  Consequently no naming rule differs by version any more. `checkName()` no longer takes
-  one, and `versionOverride` now only sets the reported `appliedMajor`; its description
-  says so. It no longer changes which names are flagged.
-
-- **`tm1_clear_cube` clears a whole cube on v12 again.** The service assumed
-  `tm1.Clear` was the v12 route and the ephemeral-TI fallback a v11 workaround, so every
-  full clear against v12 failed. Measured against a real cube on both servers, no build
-  has that endpoint:
-
-  ```
-  POST Cubes('<existing cube>')/tm1.Clear
-  11.8 → 'tm1.Clear' resource can not be resolved on type 'Cube'.
-  12.5 → 'tm1.Clear' resource can not be resolved on type 'Cube'.
-  ```
-
-  Neither version declares a clear action anywhere in `$metadata` either — `Cube` carries
-  only `Lock` and `Unlock`. A full clear now runs `CubeClearData()` through an ephemeral
-  TI on both versions, which is the only route measured to work.
-
-  Partial (tuple-selective) clears would need `tm1.Clear`, so no reachable server can do
-  one. They now fail fast with `UNSUPPORTED_OPERATION` and the bedrock pointer
-  (`}bedrock.cube.data.clear`) on **both** versions, instead of v12 sending a request
-  that is known to 404.
-
-- **`tm1_unload_cube` is registered on v11 only.** v12 answers `tm1.Unload` with
-  "Demand load, loading and unloading of cubes is no longer supported." — the feature is
-  gone with no successor endpoint. The tool is withheld rather than offered and refused,
-  matching how the log readers and thread tools are gated. **Breaking for v12 callers:**
-  the tool disappears from `tools/list` against a v12 database.
-
-- **`tm1_execute_chore` reports how the chore ended instead of always claiming
-  success.** It answered `{success: true}` whenever the HTTP call did not throw, so a chore
-  whose step failed reported a clean run — the same fail-open T-4 closed for processes. On
-  v12 12.5.0 and up it now runs `tm1.ExecuteWithReturn` (with `$expand=ErrorLogFile`, which
-  is required: `ErrorLogFile` is a navigation property, so without it the filename is
-  silently absent) and returns `{success, outcome, choreErrorStatus, errorLogFile}`. This
-  costs no extra waiting — `tm1.Execute` was already synchronous, which is why the tool has
-  always offered a one-hour `timeoutMs`; the status was simply thrown away.
-
-  The commit semantics were measured against 12.5.9, with the identical TI bodies run as
-  standalone processes as a control, and they are **not** the process ones:
-
-  | TI in the step | standalone process | as a chore step |
-  | --- | --- | --- |
-  | `ItemReject` | `CompletedWithMessages`, committed | `CompletedSuccessfully`, committed |
-  | `ProcessQuit` | `QuitCalled`, committed | `CompletedWithMessages`, committed |
-  | `ProcessError` | `Aborted`, **rolled back** | `CompletedWithMessages`, **committed** |
-  | `CellPutN` into a missing cube | `Aborted`, **rolled back** | `CompletedWithMessages`, **committed** |
-  | `ProcessRollback` | `RollbackCalled`, rolled back | `ProcessRollbackCalled`, rolled back |
-
-  A step that aborts therefore COMMITS its writes inside a chore. Running chore statuses
-  through the process classifier would report `rolled_back` for a run that committed — an
-  invitation to re-run it and duplicate the data — so `classifyChoreExecution`
-  (`chore-status.ts`) is a separate table and `ChoreOutcome` a separate type. `QuitCalled`,
-  `Aborted` and `RollbackCalled` are declared in `tm1.ChoreExecuteStatusCode` but no exit
-  path produced them at chore level; they classify as `indeterminate` rather than being
-  guessed from their names, which the ProcessError row shows to be unsafe.
-
-- **Two corrections to what `tm1_execute_chore` and `tm1_create_chore` told callers.**
-  Chores do **not** fail-fast: with a failing step first and a clean writer second, the
-  second step ran and committed in every measured case, in both execution modes — the tool
-  description said the opposite. And `ExecutionMode` does not decide whether a failing step
-  stops the chore; it decides only how far a `ProcessRollback` reaches (`SingleCommit`
-  discards everything the chore had written up to that point, `MultipleCommit` only the
-  rolling-back step).
-
-- On a server without `tm1.ExecuteWithReturn` on Chore — v11 entirely, v12 before 12.5.0 —
-  the chore still runs and the result carries `statusUnavailable: true` with
-  `outcome: "indeterminate"`, rather than the old blanket success. That variant deliberately
-  does not set the MCP `isError` flag: on v11 it is every chore run, and a known API
-  limitation is not a failure. Detection is by attempt, not by version sniffing: the action
-  is called, and a 404 — which is also what a missing chore returns, distinguishable only by
-  error prose this codebase does not parse — falls back to `tm1.Execute`. If that runs, the
-  chore existed, which proves the 404 was about the action; the verdict is then remembered
-  per connection. If the chore really was missing, the retry 404s too and the error surfaces
-  unchanged.
-
-- **`tm1_get_audit_log`, `tm1_get_message_log` and `tm1_get_transaction_log` are v11-only
-  and no longer registered on v12.** All three read entity sets that v12 marks
-  `Core.RevisionKind/Deprecated` at 12.0.0 — `AuditLogEntry`/`AuditLogEntries`,
-  `MessageLogEntry`/`MessageLogEntries` (plus the `MessageLog` and `TailMessageLog`
-  functions) and `TransactionLogEntry`/`TransactionLogEntries` (plus `TransactionLog` and
-  `TailTransactionLog`) — and v12 serves every one of them as an empty collection with no
-  successor endpoint. Measured against 12.5.9: `$count` is `0` on all three, and the
-  function forms return empty too, on an instance that had live sessions, processes and
-  repeated logins; the same probe against 11.8.02900.8 returns 37,655 message log rows.
-  An empty list is indistinguishable from "nothing was logged", so the tools now gate off
-  the way `tm1_list_threads` and `tm1_save_data` already do rather than answering with a
-  silent nothing. `tm1_get_message_log` and `tm1_get_transaction_log` also gained the
-  `requiresVersion: "v11"` annotation they were missing; `tm1_get_audit_log` had the
-  annotation but no gate. The `tm1_diagnose_process`, `tm1_audit_cube` and
-  `tm1_server_health` prompts mark the affected steps as v11-only.
+  v12 gate rested on Planning Analytics 3.1 reserving TAB as the name/alias separator, which
+  neither 11.8 nor 12.5 demonstrates: the name round-trips verbatim, no alias appears, and
+  MDX addresses it like any other element. TAB stays a bad character regardless — invisible
+  in UIs, ambiguous against other whitespace, a field separator in TI and CSV round trips.
+  No naming rule differs by version now, so `versionOverride` sets only the reported
+  `appliedMajor`.
+- Two descriptions corrected: `tm1_execute_chore` and `tm1_create_chore` described chore
+  exit codes and `ExecutionMode` in terms that did not match measured behaviour.
 
 ### Removed
 
-- **`oDBCConnection` is gone from the datasource model — TM1 has no such field.** It had
-  been in the `DataSource` type since the initial release without ever being verified, and
-  the measurement says it was never real: across two 11.8.02900.8 instances all 29 genuine
-  ODBC sources expose exactly `Type`, `dataSourceNameForServer`,
-  `dataSourceNameForClient`, `userName`, `password`, `query`, `usesUnicode` — no
-  connection-string field anywhere, and none of the DSN values is a connection string
-  either. Writing it back is worse than useless: 11.8 answers `400 Invalid data source
-  properties supplied ... unprocessed properties were: "oDBCConnection"`, and v12 accepts
-  the write and then never returns the field, so a caller who put a connection string there
-  was told nothing. `ProcessDataSource` is declared `OpenType="true"` in `$metadata`, which
-  is why the invalid property reached the server at all instead of failing schema
-  validation. The field is now out of the type, both zod schemas, the git round-trip and
-  both process diffs; the strict upsert schema rejects it at the tool boundary with a named
-  error instead of deferring to whichever way the server chooses to fail.
-- **`tm1_get_process_datasource` no longer takes `maskSecrets`.** Its only job was masking
-  `PWD=`/`UID=` pairs inside `oDBCConnection`; with that field gone the flag masked nothing.
-  The `password` field is still always redacted at the service layer. `maskSecrets` on
-  `tm1_get_process_code`, `tm1_get_process` and `tm1_export_process_to_git` is unaffected —
-  there it masks credential literals in the TI code, which is where a connection string
-  actually does show up.
-- `maskDataSourceSecrets()` and `maskConnectionString()` dropped from `src/lib/mask-secrets.ts`
-  (both existed only for the removed field). `maskCode`/`maskCodeLine` are unchanged and keep
-  the brace-quoted-value handling, now covered directly by their own tests.
-- **`lockType` is gone from the thread shape — no TM1 thread ever carried it.** Like
-  `oDBCConnection` it had been in the read shape since the initial release without ever
-  being on the wire: `LockType` is not a property of the `Thread` entity in the v11
-  `$metadata`, and across both 11.8.02900.8 instances every real thread returns exactly
-  fourteen fields — `ID`, `Type`, `Name`, `Context`, `State`, `Function`, `ObjectType`,
-  `ObjectName`, `RLocks`, `IXLocks`, `WLocks`, `ElapsedTime`, `WaitTime`, `Info`. There is
-  no lock *type* among them, so the key was never populated and the mapping that copied it
-  was dead code. Removed from the `Thread` type, from the session-embedded thread shape
-  behind `tm1_list_sessions`, and from `ThreadItemSchema`, which backs `tm1_list_threads`.
-  The lock state TM1 does report lives in the `RLocks`/`IXLocks`/`WLocks` counts, which this
-  server has never surfaced on either tool — unchanged here, and a separate question.
+- `maskSecrets` on `tm1_get_process_datasource`. Its only job was masking, which is now
+  unconditional. Callers still passing it are unaffected — unknown input keys are dropped.
 
-### Fixed
+### Internal
 
-- **`errorLogFile` was never filled in — the execute calls omitted the `$expand`.** Both
-  `tm1_execute_process` and the internal save-data run read `ErrorLogFile.Filename` off the
-  `ExecuteWithReturn` response, but `ErrorLogFile` is a *navigation* property on
-  `ProcessExecuteResult`, and OData does not serialize one unless it is expanded. Measured on
-  11.8.02900.8 and 12.5.9 with a process that aborts: without the expand both answer exactly
-  `{"ProcessExecuteStatusCode":"Aborted"}` and the key is absent; with it both add
-  `{"ErrorLogFile":{"Filename":...}}` — `TM1ProcessError_….log` on v11,
-  `ProcessLog_….jsonl` on v12. So every failed run since the field was introduced reported
-  `errorLogFile: undefined` and left the caller to find the log by hand. Both call sites now
-  request `$expand=ErrorLogFile`, and a unit test asserts the expand rather than just the
-  path, so it cannot be dropped again. The filename feeds straight into
-  `tm1_get_error_log_content`.
-
-- `tm1_get_process` no longer claims its datasource round-trip is lossy for ODBC/ASCII. That
-  stopped being true once `upsert_process` moved to the shared datasource schema — it accepts
-  `query` and `usesUnicode` — and the remaining field in that sentence never existed.
-
-- **`tm1_list_dimensions` publishes `lastUpdated`.** With `includeLastUpdated: true` (or
-  `changedSince`) the handler attaches a `lastUpdated` field per dimension, but the declared
-  output schema never listed it. Since the schema is strict, a client validating against the
-  published JSON Schema rejects the whole response with "must NOT have additional
-  properties" — the same failure class the 3.0.x schema-completeness fixes closed. Found by
-  merging the two definitions of the dimension shape (see below), which is exactly the kind
-  of gap having them in two files hid.
-
-- **Internal (no client-visible change): a tool's metadata now lives in exactly one
-  place.** A tool used to be
-  spread across four sites — the `server.tool(...)` call, an `ANNOTATION_MAP` entry, an
-  `OUTPUT_SCHEMA_MAP` entry, and membership in `MARKDOWN_CAPABLE_TOOLS` — with four of the
-  eight lint gates existing only to keep those name-keyed maps in step with the
-  registrations. All 114 tools now use `defineTool()` (`src/tools/define-tool.ts`), which
-  holds name, description, input, output schema, annotations, an optional version gate and
-  the handler in a single literal, and derives what the maps needed spelled out by hand:
-  `markdownCapable()` from the presence of `format` in the input shape, and
-  `asOutputSchema()` routing so a `.passthrough()` schema keeps `additionalProperties: true`.
-  `annotation-map.ts` and `output-schema-map.ts` are deleted, and with them
-  `lint:annotations`, `lint:output-schema` and `lint:markdown-schema` — the remaining gates
-  (`lint:tool-registration`, `lint:output-schema-budget`, `lint:input-naming`,
-  `lint:mutation-envelope`, `lint:no-flat-api`) all still run. Adding a tool is now two
-  files: the tool and the `REGISTRARS` line.
-
-  No wire-format change, and the byte budget is the proof: 114 tools and 60220 bytes of
-  serialized `outputSchema` before and after, `docs/TOOLS.md` and the README table
-  regenerate byte-identical.
-
-  The `functions` coverage floor drops 60 → 57. That is not a regression: the migration
-  deleted 105 one-line `export function registerX(...)` wrappers that were all covered, so
-  the denominator shrank while the uncovered count stayed put (547 before, 546 after).
-  `coverage-thresholds.json` records the reason.
-
-- **Internal (no client-visible change): each wire shape is defined once.** The same shapes
-  were written twice — a hand-kept interface in `src/types.ts` for the TM1 client, and a
-  hand-kept Zod object in `src/tools/schemas/items-*.ts` for the published outputSchema —
-  with nothing linking them. That is how `lockType` and `oDBCConnection` sat in the read
-  shape for months and why removing each meant editing two unrelated files. The Zod object
-  is now the definition, in the new layer-neutral `src/schemas/`, and the TypeScript type is
-  `z.infer` of it: 24 duplicated shapes collapsed (`Thread`, `Session`, `Job`, `Cube`,
-  `Dimension`, `Process`, `Chore`, `DataSource`, `Client`, `Group`, the log entries, …).
-  `src/types.ts` re-exports every derived type, so no import path changed. Where a tool
-  publishes a projection of the canonical shape it now derives it (`CubeItemSchema =
-  CubeSchema.partial({ dimensions: true })`) instead of restating the fields.
-
-  Four shapes stay separate on purpose — `MdxResult`, `ViewResult`, `CubeRules` and
-  `ServerInfo`, where the tool payload genuinely differs from the client's — with the reason
-  recorded next to the declarations. `tests/unit/schema-single-source.test.ts` fails if a new
-  interface starts duplicating a tool schema, or if `src/schemas/` ever imports from the
-  layers that consume it.
-
-- **Internal (no client-visible change): Markdown tables name their fields instead of
-  restating them.** Every tool offering `format: "markdown"` carried its own column list —
-  about 100 `{ header: "name", get: (r) => r.name }` literals across 29 files, none of which
-  the compiler could tie back to the row type, so a renamed field left a table quietly
-  printing empty cells. `columnsOf()` (`src/tools/format.ts`) takes the field name instead
-  and the key is `keyof Row`, which makes that rename a compile error; explicit
-  `{ header, get }` entries still pass through unchanged for the ~18 columns that really are
-  projections. 83 literals collapsed. Together with the schema consolidation above, renaming
-  a field in `src/schemas/` now fails the build at every table that printed it.
-
-  `(r) => r.field ?? ""` collapsed too: the escaper already renders null/undefined as an
-  empty cell and `??` leaves `0`/`false` untouched, so the plain field name renders the same
-  bytes. `tests/unit/columns.test.ts` pins that equivalence rather than leaving it as a
-  claim.
-
-  Coverage floors rise (lines 67, statements 66, functions 61) — deleting ~83 one-line
-  getters raised the function ratio past the ratchet's slack, which is the gate working as
-  designed.
-
-- **Internal (no client-visible change): two spent codemods deleted, `BatchService`'s scope
-  written down.** `scripts/codemod-mutation-envelope.mjs` and
-  `scripts/codemod-remove-dead-trycatch.mjs` were one-shot migrations that had already run;
-  what they enforced is now a gate (`lint:mutation-envelope`) or simply the shape of the
-  code, so 357 lines of tooling sat in `scripts/` looking like something you might need to
-  run. `BatchService` has exactly one consumer (`ElementService.bulkUpsert`), which reads as
-  an oversized abstraction until you know why it is not folded in: `$batch` is bound to no
-  TM1 object type, and its `supported` verdict is connection-scoped rather than per-caller.
-  Both reasons now stand in the file header instead of in someone's memory.
+No client-visible change: tool metadata now lives in exactly one place per tool
+(`defineTool()`, both metadata maps deleted); each wire shape is defined once and its
+TypeScript type derived; Markdown tables name their fields via `columnsOf()` instead of
+restating them; two spent codemods deleted and `BatchService`'s scope recorded.
 
 ## [3.1.0] - 2026-08-18
 
