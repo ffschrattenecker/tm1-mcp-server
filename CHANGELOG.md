@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`tm1_get_cell_value` no longer reports a non-existent coordinate as an empty cell on
+  v12.** The MDX behind it selects exactly one member, so a resolvable coordinate always
+  yields one cell — an empty one arrives as a cell with a null `Value`. An empty *cellset*
+  means a member did not resolve. v11 refuses such an MDX outright
+  (`"ZZ_NO_SUCH_ELEMENT" : member not found (rte 81)`), but v12 answers 200 with no cells,
+  and the service turned that into `{value: null}`. A typo in an element name therefore
+  read as "this cell is empty" instead of "this element does not exist" — a silent wrong
+  answer on the read path.
+
+  Both versions now fail the same way, with `NOT_FOUND` naming the cube and the offending
+  coordinate. On v11 nothing changes: the server already errored. On v12 a call that used
+  to return `{value: null}` for a bad coordinate now returns an error envelope.
+
+  This was the last entry of the v12 live baseline; both suites are green.
+
 - **Datasource columns set to "Ignore" are no longer invisible.** TM1 drops such a
   column from `Process.Variables` entirely and records it only in `VariablesUIData` —
   one entry per source column, ignored ones marked `ColType=1165` and carrying the

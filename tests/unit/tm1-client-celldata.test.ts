@@ -149,30 +149,29 @@ describe("TM1Client – Cell Data Methods", () => {
       expect(value).toBeNull();
     });
 
-    it("should return null when Cells array is empty", async () => {
+    // An empty cellset means a member did not resolve, not an empty cell: the
+    // MDX selects exactly one member, and an empty cell comes back as a cell
+    // with a null Value (covered above). v11 refuses such an MDX outright,
+    // v12 answers 200 with no cells — returning null there reported "empty
+    // cell" for a coordinate that does not exist.
+    it("throws when the Cells array is empty (coordinate did not resolve)", async () => {
       fetchSpy
         .mockResolvedValueOnce(mockResponse(salesCubeMeta))
         .mockResolvedValueOnce(mockResponse({ ID: "cellset-004", Cells: [] }));
 
-      const value = await client.cells.getValue("SalesCube", [
-        "Mar",
-        "UK",
-        "Actual",
-      ]);
-      expect(value).toBeNull();
+      await expect(
+        client.cells.getValue("SalesCube", ["Mar", "UK", "Actual"]),
+      ).rejects.toMatchObject({ code: TM1ErrorCode.NOT_FOUND });
     });
 
-    it("should return null when Cells is missing from response", async () => {
+    it("throws when Cells is missing from the response", async () => {
       fetchSpy
         .mockResolvedValueOnce(mockResponse(salesCubeMeta))
         .mockResolvedValueOnce(mockResponse({ ID: "cellset-005" }));
 
-      const value = await client.cells.getValue("SalesCube", [
-        "Apr",
-        "US",
-        "Actual",
-      ]);
-      expect(value).toBeNull();
+      await expect(
+        client.cells.getValue("SalesCube", ["Apr", "US", "Actual"]),
+      ).rejects.toMatchObject({ code: TM1ErrorCode.NOT_FOUND });
     });
 
     it("should pass through pre-qualified `[Dim].[Element]` element strings", async () => {

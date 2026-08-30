@@ -93,7 +93,17 @@ export class CellService {
       if (cellsetResponse.Cells && cellsetResponse.Cells.length > 0) {
         return cellsetResponse.Cells[0]!.Value;
       }
-      return null;
+      // The MDX selects exactly one member, so a resolvable coordinate always
+      // yields one cell — an empty one comes back as a cell with a null Value.
+      // No cell at all means a member did not resolve. v11 refuses that MDX
+      // outright ("member not found (rte 81)"); v12 answers 200 with an empty
+      // cellset, and returning null there reported "this cell is empty" for a
+      // coordinate that does not exist. Both versions now fail the same way.
+      throw new TM1Error({
+        code: TM1ErrorCode.NOT_FOUND,
+        message: `No cell resolved for cube '${cubeName}' at (${elements.join(", ")}). At least one element name does not exist in its dimension — check spelling and case with tm1_get_descendants or tm1_list_element_attributes.`,
+        endpoint: "/api/v1/ExecuteMDX",
+      });
     } finally {
       // Free the session-scoped cellset best-effort so single-value reads don't
       // leak TM1 server memory while keep-alive holds the session open.
