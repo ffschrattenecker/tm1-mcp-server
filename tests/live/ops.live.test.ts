@@ -89,6 +89,7 @@ describe.skipIf(!LIVE_ENABLED)(
         "tm1_list_threads",
         "tm1_cancel_thread",
         "tm1_save_data",
+        "tm1_unload_cube",
       ];
       const V12_ONLY = ["tm1_list_jobs", "tm1_cancel_job"];
       const present = (names: string[]) => names.filter((n) => h.has(n));

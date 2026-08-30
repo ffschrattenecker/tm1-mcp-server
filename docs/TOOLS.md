@@ -13,8 +13,9 @@ Two things the raw list does not show:
 
 - **No single server exposes all of them.** `TM1_MODE=readonly` (the default)
   registers read tools only. Version also gates a few: `tm1_list_threads`,
-  `tm1_cancel_thread` and `tm1_save_data` are v11-only, `tm1_list_jobs` and
-  `tm1_cancel_job` are v12-only.
+  `tm1_cancel_thread`, `tm1_save_data`, `tm1_unload_cube`, `tm1_get_message_log`,
+  `tm1_get_audit_log` and `tm1_get_transaction_log` are v11-only, `tm1_list_jobs`
+  and `tm1_cancel_job` are v12-only.
 - **Seventeen tools require a `confirm` argument** that repeats the target name
   verbatim — every `delete_*` and `clear_*`, plus `tm1_execute_process`,
   `tm1_execute_chore`, `tm1_write_cells`, `tm1_set_cube_rules` and

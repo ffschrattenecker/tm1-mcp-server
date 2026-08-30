@@ -182,8 +182,11 @@ security notes and the `autoApprove` allowlist:
   paths assume 11.x semantics, and v12-only fields (e.g.
   `DataSource.usesUnicode`) are dropped when `TM1_VERSION` says `11.x`
 - TM1 12.5 / Planning Analytics Engine — via `TM1_INSTANCE` + `TM1_DATABASE`,
-  live-validated with `s2s` auth only. `tm1_list_threads`, `tm1_cancel_thread`
-  and `tm1_save_data` are v11-only; `tm1_list_jobs` and `tm1_cancel_job` v12-only;
+  live-validated with `s2s` auth only. `tm1_list_threads`, `tm1_cancel_thread`,
+  `tm1_save_data`, `tm1_unload_cube` and the three log readers
+  (`tm1_get_message_log`, `tm1_get_audit_log`, `tm1_get_transaction_log`) are
+  v11-only; `tm1_list_jobs` and `tm1_cancel_job` v12-only; v12 dropped demand
+  load, so unloading a cube has no successor endpoint there;
   v12 ships no `}Stats*` control cubes, so `tm1_get_cube_stats` and
   `tm1_audit_feeders` in `mode` `runtime`/`both` report the statistics as
   unavailable instead of returning metrics (static feeder analysis is unaffected)

@@ -5,6 +5,7 @@ import { registerSaveData } from "../../src/tools/operations/save-data.js";
 import { registerGetAuditLog } from "../../src/tools/operations/get-audit-log.js";
 import { registerGetMessageLog } from "../../src/tools/operations/get-message-log.js";
 import { registerGetTransactionLog } from "../../src/tools/operations/get-transaction-log.js";
+import { registerUnloadCube } from "../../src/tools/model-building/unload-cube.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 
@@ -35,6 +36,18 @@ describe("version-gated monitoring tools", () => {
     const j = mockServer();
     registerGetJobs(j.server, clientWith(11));
     expect(j.names).toEqual([]);
+  });
+
+  // 12.5 answers POST Cubes('x')/tm1.Unload with "Demand load, loading and
+  // unloading of cubes is no longer supported." — measured live. The feature
+  // is gone with no successor, so the tool is not offered on v12 at all.
+  it("registers tm1_unload_cube on v11 only (v12 dropped demand load)", () => {
+    const v11 = mockServer();
+    registerUnloadCube(v11.server, clientWith(11));
+    expect(v11.names).toEqual(["tm1_unload_cube"]);
+    const v12 = mockServer();
+    registerUnloadCube(v12.server, clientWith(12));
+    expect(v12.names).toEqual([]);
   });
 
   it("registers tm1_save_data on v11 only (v12 removed SaveDataAll/CubeSaveData)", () => {

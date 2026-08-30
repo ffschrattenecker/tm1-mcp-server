@@ -63,6 +63,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`}bedrock.cube.data.clear`) on **both** versions, instead of v12 sending a request
   that is known to 404.
 
+- **`tm1_unload_cube` is registered on v11 only.** v12 answers `tm1.Unload` with
+  "Demand load, loading and unloading of cubes is no longer supported." — the feature is
+  gone with no successor endpoint. The tool is withheld rather than offered and refused,
+  matching how the log readers and thread tools are gated. **Breaking for v12 callers:**
+  the tool disappears from `tools/list` against a v12 database.
+
 - **`tm1_execute_chore` reports how the chore ended instead of always claiming
   success.** It answered `{success: true}` whenever the HTTP call did not throw, so a chore
   whose step failed reported a clean run — the same fail-open T-4 closed for processes. On

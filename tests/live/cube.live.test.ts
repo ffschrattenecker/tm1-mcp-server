@@ -10,6 +10,7 @@ import {
   getHarness,
   LIVE_ENABLED,
   SANDBOX,
+  skipUnlessRegistered,
   type LiveHarness,
 } from "./harness.js";
 
@@ -223,7 +224,8 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
     expect(r.isError).toBeFalsy();
   });
 
-  it("unload_cube succeeds on the sandbox cube", async () => {
+  it("unload_cube succeeds on the sandbox cube", async (ctx) => {
+    skipUnlessRegistered(ctx, h, "tm1_unload_cube");
     const r = await h.call("tm1_unload_cube", { cubeName: C1 });
     expect(r.isError).toBeFalsy();
   });
