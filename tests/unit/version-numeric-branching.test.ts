@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createConnectionProfile } from "../../src/tm1-client/connection/profile.js";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type pino from "pino";
 import type { FnSpy } from "../helpers/spy-types.js";
@@ -41,17 +42,6 @@ function makeConfig(over: Partial<TM1Config>): TM1Config {
   } as unknown as TM1Config;
 }
 
-function mock204Response(): Response {
-  return {
-    ok: true,
-    status: 204,
-    statusText: "No Content",
-    headers: new Headers(),
-    text: vi.fn().mockResolvedValue(""),
-    json: vi.fn().mockRejectedValue(new Error("No content")),
-  } as unknown as Response;
-}
-
 function makeClient(config: TM1Config): TM1Client {
   const sessionManager = new SessionManager(config, mockLogger);
   vi.spyOn(sessionManager, "ensureSession").mockResolvedValue("session123");
@@ -72,28 +62,32 @@ describe("A3 — service version-gating uses numeric config.version", () => {
     vi.restoreAllMocks();
   });
 
-  it("v11: partial clear throws UNSUPPORTED_OPERATION (no tm1.Clear endpoint)", async () => {
-    const client = makeClient(makeConfig({ version: 11, tm1Version: "11.8" }));
-    await expect(
-      client.cubes.clear("Sales", ["Region", "Month"], [["North"], []]),
-    ).rejects.toMatchObject({ code: TM1ErrorCode.UNSUPPORTED_OPERATION });
-    expect(fetchSpy).not.toHaveBeenCalled();
+  it("partial clear throws UNSUPPORTED_OPERATION on both versions", async () => {
+    // tm1.Clear resolves on neither 11.8 nor 12.5, so this is not a version
+    // branch any more — it must refuse before touching the network either way.
+    for (const version of [11, 12] as const) {
+      fetchSpy.mockClear();
+      const client = makeClient(makeConfig({ version, tm1Version: "11.8" }));
+      await expect(
+        client.cubes.clear("Sales", ["Region", "Month"], [["North"], []]),
+      ).rejects.toMatchObject({ code: TM1ErrorCode.UNSUPPORTED_OPERATION });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    }
   });
 
-  it("split-brain (version 12 but string '11.8'): partial clear takes the v12 tm1.Clear REST path", async () => {
-    // If the branch keyed off the STRING, "11.8" would throw UNSUPPORTED_OPERATION.
-    // Keyed off numeric version===12 it must POST tm1.Clear instead.
-    fetchSpy.mockResolvedValue(mock204Response());
-    const client = makeClient(makeConfig({ version: 12, tm1Version: "11.8" }));
+  it("split-brain (version 12 but string '11.8'): connection profile takes the v12 reroot", () => {
+    // If a branch keyed off the STRING, "11.8" would pick the v11 profile,
+    // whose resolveApiPath is the identity. Keyed off numeric version===12 it
+    // must reroot the /api/v1 prefix onto the instance/database path instead.
+    const v12 = createConnectionProfile(
+      makeConfig({ version: 12, tm1Version: "11.8" }),
+    );
+    expect(v12.resolveApiPath("/api/v1/Cubes")).not.toBe("/api/v1/Cubes");
 
-    await expect(
-      client.cubes.clear("Sales", ["Region", "Month"], [["North"], []]),
-    ).resolves.toBeUndefined();
-
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const url = String(fetchSpy.mock.calls[0][0]);
-    expect(url).toContain("tm1.Clear");
-    expect(fetchSpy.mock.calls[0][1]).toMatchObject({ method: "POST" });
+    const v11 = createConnectionProfile(
+      makeConfig({ version: 11, tm1Version: "11.8" }),
+    );
+    expect(v11.resolveApiPath("/api/v1/Cubes")).toBe("/api/v1/Cubes");
   });
 
   it("exposes numeric version off the held HTTP client via the same source of truth", () => {

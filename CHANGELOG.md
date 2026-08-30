@@ -43,6 +43,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`tm1_clear_cube` clears a whole cube on v12 again.** The service assumed
+  `tm1.Clear` was the v12 route and the ephemeral-TI fallback a v11 workaround, so every
+  full clear against v12 failed. Measured against a real cube on both servers, no build
+  has that endpoint:
+
+  ```
+  POST Cubes('<existing cube>')/tm1.Clear
+  11.8 → 'tm1.Clear' resource can not be resolved on type 'Cube'.
+  12.5 → 'tm1.Clear' resource can not be resolved on type 'Cube'.
+  ```
+
+  Neither version declares a clear action anywhere in `$metadata` either — `Cube` carries
+  only `Lock` and `Unlock`. A full clear now runs `CubeClearData()` through an ephemeral
+  TI on both versions, which is the only route measured to work.
+
+  Partial (tuple-selective) clears would need `tm1.Clear`, so no reachable server can do
+  one. They now fail fast with `UNSUPPORTED_OPERATION` and the bedrock pointer
+  (`}bedrock.cube.data.clear`) on **both** versions, instead of v12 sending a request
+  that is known to 404.
+
 - **`tm1_execute_chore` reports how the chore ended instead of always claiming
   success.** It answered `{success: true}` whenever the HTTP call did not throw, so a chore
   whose step failed reported a clean run — the same fail-open T-4 closed for processes. On

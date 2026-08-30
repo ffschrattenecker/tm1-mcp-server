@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { TM1ErrorCode } from "../../src/types.js";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type pino from "pino";
 import type { FnSpy } from "../helpers/spy-types.js";
@@ -742,23 +743,44 @@ describe("TM1Client – Cell Data Methods", () => {
       } as unknown as Response;
     }
 
-    it("12.x: POSTs tm1.Clear with Members@odata.bind tuples", async () => {
+    // Measured on 12.5: POST Cubes('x')/tm1.Clear answers "'tm1.Clear'
+    // resource can not be resolved on type 'Cube'", and $metadata declares no
+    // clear action at all. A full clear therefore takes the same TI route as
+    // v11 rather than an endpoint this build does not have.
+    it("12.x full clear: deploys ephemeral TI, not tm1.Clear", async () => {
       const c = newClient("12.0");
-      fetchSpy.mockResolvedValueOnce(mock204());
+      fetchSpy
+        .mockResolvedValueOnce(mock204()) // create process
+        .mockResolvedValueOnce(
+          mockResponse({ ProcessExecuteStatusCode: "CompletedSuccessfully" }),
+        ) // execute
+        .mockResolvedValueOnce(mock204()); // delete
 
-      await c.cubes.clear("Sales", ["Time", "Region"], [["Jan"], []]);
+      await c.cubes.clear("Sales", ["Time", "Region"], [[], []]);
 
-      const [url, opts] = fetchSpy.mock.calls[0];
-      // Reroot-tolerant: a v12 client rewrites the `/api/v1` prefix to the
-      // database-rooted path, so assert on the cube+action segment only.
-      expect(url).toContain("Cubes('Sales')/tm1.Clear");
-      expect(opts.method).toBe("POST");
-      const body = JSON.parse(opts.body);
-      expect(body.Tuples).toHaveLength(2);
-      expect(body.Tuples[0]["Members@odata.bind"]).toEqual([
-        "Dimensions('Time')/Hierarchies('Time')/Members('Jan')",
-      ]);
-      expect(body.Tuples[1]["Members@odata.bind"]).toEqual([]);
+      const [createUrl, createOpts] = fetchSpy.mock.calls[0];
+      expect(createUrl).toContain("/Processes");
+      const createBody = JSON.parse(createOpts.body);
+      expect(createBody.PrologProcedure).toBe("CubeClearData('Sales');");
+      expect(
+        fetchSpy.mock.calls.some(([u]) => String(u).includes("tm1.Clear")),
+      ).toBe(false);
+    });
+
+    // Neither 11.8 nor 12.5 resolves tm1.Clear on an existing cube, so a
+    // tuple-selective clear is refused before any request goes out — on both
+    // versions, with the bedrock pointer the caller can act on.
+    it.each([
+      ["11.8", 11],
+      ["12.0", 12],
+    ])("%s partial clear: refused without a request", async (ver) => {
+      const c = newClient(ver);
+      await expect(
+        c.cubes.clear("Sales", ["Time", "Region"], [["Jan"], []]),
+      ).rejects.toMatchObject({
+        code: TM1ErrorCode.UNSUPPORTED_OPERATION,
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
     });
 
     it("11.x full clear: deploys ephemeral TI, executes, deletes", async () => {
