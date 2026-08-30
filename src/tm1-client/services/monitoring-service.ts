@@ -76,7 +76,10 @@ export class MonitoringService {
       value: Array<{
         ID: string | number;
         Active?: boolean;
-        User?: { Name: string };
+        // Anonymous sessions (no signed-in user) come back with User: null,
+        // not with the property omitted — v11.8 measured. `user` falls back
+        // to "" for both, which is what the anonymousCount summary counts.
+        User?: { Name: string } | null;
         Threads?: Array<{
           ID: number;
           Type: number | string;
