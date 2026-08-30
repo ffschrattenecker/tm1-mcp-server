@@ -52,11 +52,12 @@ export function elementViolationFilter(): string {
     ...[...SERVER_RESERVED_CHARS].map((ch) => `contains(Name,${lit(ch)})`),
   ];
 
-  // checkElementContainsTab applies on every version. TAB cannot appear raw in
-  // a URL, so it goes in percent-encoded; the surrounding query is not
-  // re-encoded. Verified against both servers: the clause is accepted and does
-  // find an element whose name contains a TAB.
-  clauses.push("indexof(Name,'%09') ge 0");
+  // checkElementContainsTab applies on every version. The TAB goes in as a REAL
+  // tab character: every caller passes this string through
+  // encodeURIComponent(), which turns it into %09 on the wire. Writing "%09"
+  // here instead produced %2509 — the server then searched for the three
+  // characters "%09" and never matched, so the clause silently found nothing.
+  clauses.push("indexof(Name,'\t') ge 0");
 
   return clauses.join(" or ");
 }

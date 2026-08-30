@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The naming audit's TAB prefilter never matched anything.** `elementViolationFilter()`
+  wrote the tab as the literal text `%09`, on the assumption that "the surrounding query is
+  not re-encoded". Its only caller, `scanElementNames()`, runs the whole filter through
+  `encodeURIComponent()`, so `%09` went out as `%2509` and the server searched for three
+  characters — `%`, `0`, `9` — that no element name contains. Every tab-containing element
+  was invisible to `tm1_audit_naming` for as long as the clause existed. The filter now
+  carries a real TAB, which the caller's encoding turns into `%09` on the wire, and the
+  unit test asserts the encoded form instead of the source form.
+
 - **`DataSource.usesUnicode` was discarded on exactly the version that supports it.** The
   service dropped the property on v11 with a warning calling it "v12-only", and sent it on
   v12. Measured on both servers, that is backwards. TM1 validates datasource properties per

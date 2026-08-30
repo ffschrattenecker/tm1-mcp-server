@@ -53,7 +53,7 @@ export const registerAuditNaming = defineTool({
   name: "tm1_audit_naming",
   description:
     "Bulk-scan TM1 objects against IBM PA 2.0/3.1 naming conventions; reports hard violations only " +
-    "(reserved chars, control-prefix misuse, 256-char limit, element leading +/-, TAB in v12 names, " +
+    "(reserved chars, control-prefix misuse, 256-char limit, element leading +/-, TAB in element names, " +
     "invalid process-variable identifiers). Auto-detects TM1 version; element scan paginated per hierarchy " +
     "(default cap 100k, oversized hierarchies reported in elementsTruncated).",
   annotations: READ_ONLY,
@@ -401,7 +401,7 @@ export const registerAuditNaming = defineTool({
       elementsTruncated,
       totalElementsInScope,
       rulesetSource:
-        "IBM PA naming-conventions (2.0 + 3.1) — hard rules only (server-reserved chars, control prefix, length 256, element leading +/-, TAB in v12 elements, process-var identifier).",
+        "IBM PA naming-conventions (2.0 + 3.1) — hard rules only (server-reserved chars, control prefix, length 256, element leading +/-, TAB in element names, process-var identifier).",
     };
     if (summary) {
       payload.findingsByGroup = findingsByGroup;

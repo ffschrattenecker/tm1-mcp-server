@@ -96,9 +96,14 @@ describe("elementViolationFilter", () => {
     expect(f).toContain("length(trim(Name)) eq 0");
   });
 
-  it("emits TAB as an escaped literal, never a raw control character", () => {
+  it("emits a real TAB that survives the caller's encodeURIComponent as %09", () => {
+    // The only caller (scanElementNames) encodes the whole filter. Writing the
+    // literal "%09" here produced "%2509" on the wire, so the server searched
+    // for three characters and the clause silently matched nothing — the tab
+    // prefilter never worked. Assert the wire form, not the source form.
     const f = elementViolationFilter();
-    expect(f).not.toContain("\t");
-    expect(f).toContain("indexof(Name,'%09')");
+    expect(f).toContain("indexof(Name,'\t')");
+    expect(encodeURIComponent(f)).toContain("indexof(Name%2C'%09')");
+    expect(encodeURIComponent(f)).not.toContain("%2509");
   });
 });
