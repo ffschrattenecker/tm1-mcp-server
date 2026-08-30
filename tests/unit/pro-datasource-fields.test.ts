@@ -72,6 +72,46 @@ const REAL_SUBSET_PRO = [
 ].join("\n");
 
 describe("pro-parser: real TM1 line codes", () => {
+  // 559 is the ODBC unicode-interface flag. Measured on 11.8: patching
+  // usesUnicode:false rewrites the line to "559,0" and back to "559,1" for
+  // true, and a plain GET returns the property. It used to be discarded on
+  // both sides of the round trip.
+  it("reads the ODBC unicode flag from line 559", () => {
+    const ds = parseProFile(REAL_ODBC_PRO).dataSource;
+    expect(ds?.usesUnicode).toBe(true);
+  });
+
+  it("reads 559,0 as unicode off", () => {
+    const off = REAL_ODBC_PRO.replace("559,1", "559,0");
+    expect(parseProFile(off).dataSource?.usesUnicode).toBe(false);
+  });
+
+  it("leaves usesUnicode unset when the file has no 559 line", () => {
+    // An absent line is an older or hand-written file, not "unicode off" —
+    // reporting false there would invent a setting the file never carried.
+    const none = REAL_ODBC_PRO.split("\n")
+      .filter((l) => !l.startsWith("559,"))
+      .join("\n");
+    expect(parseProFile(none).dataSource?.usesUnicode).toBeUndefined();
+  });
+
+  it("round-trips the unicode flag through serialize → parse", () => {
+    for (const value of [true, false]) {
+      const text = serializeToPro({
+        name: "P",
+        dataSource: {
+          type: "ODBC",
+          dataSourceNameForServer: "DSN",
+          userName: "u",
+          query: "SELECT 1",
+          usesUnicode: value,
+        },
+      });
+      expect(text).toContain(`559,${value ? 1 : 0}`);
+      expect(parseProFile(text).dataSource?.usesUnicode).toBe(value);
+    }
+  });
+
   it("reads the ODBC query from the 566 block", () => {
     const ds = parseProFile(REAL_ODBC_PRO).dataSource;
     expect(ds.type).toBe("ODBC");

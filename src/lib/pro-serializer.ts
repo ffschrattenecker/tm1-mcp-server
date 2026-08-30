@@ -131,6 +131,12 @@ function serializeDataSource(ds: DataSource | undefined): string[] {
       lines.push(`589,${quote(ds.asciiThousandSeparator)}`);
   } else if (ds.type === "ODBC") {
     if (ds.userName) lines.push(`564,${quote(ds.userName)}`);
+    // 559 is the ODBC unicode-interface flag: `usesUnicode: true` → "559,1",
+    // false → "559,0". Measured on 11.8 by patching the property and reading
+    // the file back. TM1 writes the line for every source type, but only an
+    // ODBC source exposes it over REST, so only that branch can round-trip it.
+    if (ds.usesUnicode !== undefined)
+      lines.push(`559,${ds.usesUnicode ? 1 : 0}`);
     // 565 is TM1's password slot. It is only filled when the caller explicitly
     // exported credentials; the value is then what TM1's REST API returned —
     // a server-bound ciphertext on v11, plain text on v12 — not TM1's own file
@@ -164,7 +170,7 @@ function serializeSection(
 // Serialize a TM1 process back to a .pro file body. Round-trip safe with parseProFile().
 // Line codes follow what TM1 writes itself (562/564/566/570/571/585/586, counted
 // sections), so files TM1 wrote parse back losslessly. Still omitted are the headers
-// TM1 adds but that carry no portable information: 601 (version), 559, 565 (the
+// TM1 adds but that carry no portable information: 601 (version), 565 (the
 // server-encrypted password blob), 592, 593-598, 599, 800/801, 928, 603. They are only
 // required when re-uploading via legacy TM1 .pro tooling, not for repo round-trip via
 // tm1_import_pro_file.

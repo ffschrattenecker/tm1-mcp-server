@@ -291,6 +291,10 @@ function parseDataSource(fields: HeaderFields): DataSource {
     // no 601 version header.
     const password = get("565");
     if (password && !scalars.has("601")) ds.password = password;
+    // 559 — ODBC unicode interface. TM1 writes it for every process, so an
+    // absent line means an older/hand-written file, not "unicode off".
+    const unicode = get("559");
+    if (unicode === "1" || unicode === "0") ds.usesUnicode = unicode === "1";
   }
   return ds;
 }

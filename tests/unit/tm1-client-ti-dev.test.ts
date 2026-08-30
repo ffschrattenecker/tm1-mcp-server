@@ -405,51 +405,59 @@ describe("TM1Client – TI Development Methods", () => {
       expect(body.DataSource.query).toBe("SELECT id FROM users");
     });
 
-    it("should drop usesUnicode on TM1 11.x", async () => {
-      const cfg = {
-        ...makeConfig(),
-        version: 11,
-        tm1Version: "11.8",
-      } as TM1Config;
-      const sm = new SessionManager(cfg, mockLogger);
-      vi.spyOn(sm, "ensureSession").mockResolvedValue("sess");
-      vi.spyOn(sm, "authenticate").mockResolvedValue("sess");
-      const c = new TM1Client(cfg, sm, mockLogger);
-      fetchSpy.mockResolvedValueOnce(mock204Response());
+    // usesUnicode is an ODBC setting, not a version one. 11.8 rejects it for an
+    // ASCII source ("unprocessed properties") and accepts it for an ODBC source,
+    // where it also drives .pro line 559 — measured on both servers. The old
+    // pair of tests asserted the opposite and pinned the bug in place.
+    it.each([
+      ["11.8", 11],
+      ["12.0", 12],
+    ])(
+      "%s: sends usesUnicode for an ODBC source",
+      async (tm1Version, version) => {
+        const cfg = { ...makeConfig(), version, tm1Version } as TM1Config;
+        const sm = new SessionManager(cfg, mockLogger);
+        vi.spyOn(sm, "ensureSession").mockResolvedValue("sess");
+        vi.spyOn(sm, "authenticate").mockResolvedValue("sess");
+        const c = new TM1Client(cfg, sm, mockLogger);
+        fetchSpy.mockResolvedValueOnce(mock204Response());
 
-      await c.processes.updateDataSource("ImportCSV", {
-        type: "ASCII",
-        dataSourceNameForServer: "/data/x.csv",
-        usesUnicode: true,
-      });
+        await c.processes.updateDataSource("ImportODBC", {
+          type: "ODBC",
+          dataSourceNameForServer: "DSN",
+          usesUnicode: false,
+        });
 
-      const [, opts] = fetchSpy.mock.calls[0];
-      const body = JSON.parse(opts.body);
-      expect(body.DataSource).not.toHaveProperty("usesUnicode");
-    });
+        const [, opts] = fetchSpy.mock.calls[0];
+        const body = JSON.parse(opts.body);
+        expect(body.DataSource.usesUnicode).toBe(false);
+      },
+    );
 
-    it("should send usesUnicode on TM1 12.x", async () => {
-      const cfg = {
-        ...makeConfig(),
-        version: 12,
-        tm1Version: "12.0",
-      } as TM1Config;
-      const sm = new SessionManager(cfg, mockLogger);
-      vi.spyOn(sm, "ensureSession").mockResolvedValue("sess");
-      vi.spyOn(sm, "authenticate").mockResolvedValue("sess");
-      const c = new TM1Client(cfg, sm, mockLogger);
-      fetchSpy.mockResolvedValueOnce(mock204Response());
+    it.each([
+      ["11.8", 11],
+      ["12.0", 12],
+    ])(
+      "%s: drops usesUnicode for a non-ODBC source",
+      async (tm1Version, version) => {
+        const cfg = { ...makeConfig(), version, tm1Version } as TM1Config;
+        const sm = new SessionManager(cfg, mockLogger);
+        vi.spyOn(sm, "ensureSession").mockResolvedValue("sess");
+        vi.spyOn(sm, "authenticate").mockResolvedValue("sess");
+        const c = new TM1Client(cfg, sm, mockLogger);
+        fetchSpy.mockResolvedValueOnce(mock204Response());
 
-      await c.processes.updateDataSource("ImportCSV", {
-        type: "ASCII",
-        dataSourceNameForServer: "/data/x.csv",
-        usesUnicode: true,
-      });
+        await c.processes.updateDataSource("ImportCSV", {
+          type: "ASCII",
+          dataSourceNameForServer: "/data/x.csv",
+          usesUnicode: true,
+        });
 
-      const [, opts] = fetchSpy.mock.calls[0];
-      const body = JSON.parse(opts.body);
-      expect(body.DataSource.usesUnicode).toBe(true);
-    });
+        const [, opts] = fetchSpy.mock.calls[0];
+        const body = JSON.parse(opts.body);
+        expect(body.DataSource).not.toHaveProperty("usesUnicode");
+      },
+    );
   });
 
   // ── updateProcessParameters() ────────────────────────────────────────────

@@ -906,13 +906,13 @@ export class ProcessService {
     if (dataSource.asciiThousandSeparator !== undefined)
       dsBody.asciiThousandSeparator = dataSource.asciiThousandSeparator;
     if (dataSource.usesUnicode !== undefined) {
-      if (this.http.version === 11) {
-        this.http.logger.warn(
-          { processName, tm1Version: this.http.tm1Version },
-          "DataSource.usesUnicode is v12-only and is being dropped from the PATCH (TM1 11.x rejects it as 'unprocessed properties')",
-        );
-      } else {
+      if (acceptsUsesUnicode(dataSource.type)) {
         dsBody.usesUnicode = dataSource.usesUnicode;
+      } else {
+        this.http.logger.warn(
+          { processName, dataSourceType: dataSource.type },
+          "DataSource.usesUnicode applies to ODBC sources only and is being dropped from the PATCH (TM1 rejects it as 'unprocessed properties' for other types)",
+        );
       }
     }
     if (dataSource.userName !== undefined)
@@ -1153,8 +1153,8 @@ export class ProcessService {
         dsBody.asciiDecimalSeparator = ds.asciiDecimalSeparator;
       if (ds.asciiThousandSeparator !== undefined)
         dsBody.asciiThousandSeparator = ds.asciiThousandSeparator;
-      // usesUnicode: same v11 quirk as updateDataSource — drop on TM1 11.x.
-      if (ds.usesUnicode !== undefined && this.http.version !== 11) {
+      // usesUnicode: ODBC-only, on every version — see acceptsUsesUnicode().
+      if (ds.usesUnicode !== undefined && acceptsUsesUnicode(ds.type)) {
         dsBody.usesUnicode = ds.usesUnicode;
       }
       if (ds.userName !== undefined) dsBody.userName = ds.userName;
@@ -1194,4 +1194,23 @@ export class ProcessService {
       throw err;
     }
   }
+}
+
+/**
+ * `usesUnicode` is an ODBC datasource setting, not a version-specific one.
+ *
+ * It was carried here as "v12-only, TM1 11.x rejects it", which had it exactly
+ * backwards. TM1 validates datasource properties per source type: 11.8 rejects
+ * usesUnicode for an ASCII source ("unprocessed properties") but accepts it for
+ * an ODBC one, returns it from a plain GET, and writes it to the .pro file as
+ * line 559 (`usesUnicode: true` → `559,1`, `false` → `559,0`) — measured on
+ * both. On 12.5 the property is never returned for any source type, so there is
+ * no evidence it exists there; sending it costs nothing, since v12 silently
+ * ignores properties it does not know.
+ *
+ * Gating on the source type therefore serves both versions correctly, which
+ * gating on the version never did.
+ */
+function acceptsUsesUnicode(type: string | undefined): boolean {
+  return type === "ODBC";
 }

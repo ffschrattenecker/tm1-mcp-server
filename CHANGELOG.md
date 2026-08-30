@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`DataSource.usesUnicode` was discarded on exactly the version that supports it.** The
+  service dropped the property on v11 with a warning calling it "v12-only", and sent it on
+  v12. Measured on both servers, that is backwards. TM1 validates datasource properties per
+  *source type*, not per version:
+
+  ```
+  11.8, ASCII source : "unprocessed properties were: usesUnicode"   → rejected
+  11.8, ODBC source  : accepted, returned by a plain GET, and written
+                       to the .pro file as line 559 (true → 559,1, false → 559,0)
+  12.5, any source   : never returned for any type — no evidence it exists there
+  ```
+
+  The gate is now the datasource type (`ODBC`), which is correct on both versions; the
+  version check is gone. A non-ODBC source still drops the property, now with a warning
+  that says why.
+
+- **`.pro` round trips no longer lose the ODBC unicode setting.** The serializer listed
+  line 559 among the headers that "carry no portable information" and omitted it, while a
+  REST-created process defaults to `559,1`. Exporting a process with unicode off and
+  importing it back therefore turned unicode on, silently. The serializer now writes 559
+  for ODBC sources and the parser reads it. An absent line stays `undefined` rather than
+  becoming `false` — a file that never carried the setting must not invent one.
+
 - **`tm1_get_cell_value` no longer reports a non-existent coordinate as an empty cell on
   v12.** The MDX behind it selects exactly one member, so a resolvable coordinate always
   yields one cell — an empty one arrives as a cell with a null `Value`. An empty *cellset*
