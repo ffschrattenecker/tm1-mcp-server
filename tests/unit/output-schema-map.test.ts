@@ -575,7 +575,7 @@ describe("declared output schemas", () => {
     tm1_clear_cube: {
       success: true,
       cubeName: "Sales",
-      summary: "Region=*, Period=Jan",
+      summary: "all cells",
     },
     tm1_create_chore: {
       success: true,

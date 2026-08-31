@@ -115,7 +115,7 @@ datasource (562-589).
 ### model-building (9)
 
 - `tm1_check_cube_rule` — Validate the syntax of a TM1 cube rule WITHOUT applying it
-- `tm1_clear_cube` — Clear a subset of cells from a cube
+- `tm1_clear_cube` — Wipe every cell in a cube
 - `tm1_create_cube` — Create a new TM1 cube with the specified dimensions
 - `tm1_delete_cube` — Delete a TM1 cube and all its data
 - `tm1_get_all_cube_rules` — Bulk-load rules text for every cube in one call

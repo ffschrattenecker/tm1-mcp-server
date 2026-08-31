@@ -217,8 +217,6 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
   it("clear_cube wipes the cube (confirm required)", async () => {
     const r = await h.call("tm1_clear_cube", {
       cubeName: C1,
-      dimensions: [D1, D2],
-      tuples: [[], []], // empty arrays = all elements → clear everything
       confirm: C1,
     });
     expect(r.isError).toBeFalsy();

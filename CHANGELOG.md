@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- **`tm1_clear_cube` takes only `cubeName` and `confirm`.** The `dimensions` and
+  `tuples` inputs are gone. They advertised a region clear the server cannot do: no
+  build declares a `tm1.Clear` action, and the only route that works is an ephemeral TI
+  with `CubeClearData()`, which takes a cube name and nothing else. Every call carrying
+  element names was already refused with `UNSUPPORTED_OPERATION`. *Action:* drop the two
+  arguments; the tool now states plainly that it empties the whole cube. To empty part of
+  a cube, run a TI process via `tm1_execute_process`.
+
 ## [4.0.0] - 2026-08-30
 
 ### Breaking

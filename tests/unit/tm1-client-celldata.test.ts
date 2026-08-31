@@ -744,9 +744,9 @@ describe("TM1Client – Cell Data Methods", () => {
 
     // Measured on 12.5: POST Cubes('x')/tm1.Clear answers "'tm1.Clear'
     // resource can not be resolved on type 'Cube'", and $metadata declares no
-    // clear action at all. A full clear therefore takes the same TI route as
-    // v11 rather than an endpoint this build does not have.
-    it("12.x full clear: deploys ephemeral TI, not tm1.Clear", async () => {
+    // clear action at all. The clear therefore takes the same TI route as v11
+    // rather than an endpoint this build does not have.
+    it("12.x clear: deploys ephemeral TI, not tm1.Clear", async () => {
       const c = newClient("12.0");
       fetchSpy
         .mockResolvedValueOnce(mock204()) // create process
@@ -755,7 +755,7 @@ describe("TM1Client – Cell Data Methods", () => {
         ) // execute
         .mockResolvedValueOnce(mock204()); // delete
 
-      await c.cubes.clear("Sales", ["Time", "Region"], [[], []]);
+      await c.cubes.clear("Sales");
 
       const [createUrl, createOpts] = fetchSpy.mock.calls[0];
       expect(createUrl).toContain("/Processes");
@@ -766,23 +766,7 @@ describe("TM1Client – Cell Data Methods", () => {
       ).toBe(false);
     });
 
-    // Neither 11.8 nor 12.5 resolves tm1.Clear on an existing cube, so a
-    // tuple-selective clear is refused before any request goes out — on both
-    // versions, with the bedrock pointer the caller can act on.
-    it.each([
-      ["11.8", 11],
-      ["12.0", 12],
-    ])("%s partial clear: refused without a request", async (ver) => {
-      const c = newClient(ver);
-      await expect(
-        c.cubes.clear("Sales", ["Time", "Region"], [["Jan"], []]),
-      ).rejects.toMatchObject({
-        code: TM1ErrorCode.UNSUPPORTED_OPERATION,
-      });
-      expect(fetchSpy).not.toHaveBeenCalled();
-    });
-
-    it("11.x full clear: deploys ephemeral TI, executes, deletes", async () => {
+    it("11.x clear: deploys ephemeral TI, executes, deletes", async () => {
       const c = newClient("11.8");
       fetchSpy
         .mockResolvedValueOnce(mock204()) // create process
@@ -794,7 +778,7 @@ describe("TM1Client – Cell Data Methods", () => {
         ) // execute
         .mockResolvedValueOnce(mock204()); // delete
 
-      await c.cubes.clear("Sales", ["Time", "Region"], [[], []]);
+      await c.cubes.clear("Sales");
 
       const [createUrl, createOpts] = fetchSpy.mock.calls[0];
       expect(createUrl).toContain("/api/v1/Processes");
@@ -811,7 +795,7 @@ describe("TM1Client – Cell Data Methods", () => {
       expect(delUrl).toContain("/api/v1/Processes('");
     });
 
-    it("11.x full clear: an execute with no status code is not a confirmed clear (T-4)", async () => {
+    it("11.x clear: an execute with no status code is not a confirmed clear (T-4)", async () => {
       // `?? "CompletedSuccessfully"` used to report an unverified clear as a
       // successful one. For a destructive operation the unknown has to surface.
       const c = newClient("11.8");
@@ -820,16 +804,16 @@ describe("TM1Client – Cell Data Methods", () => {
         .mockResolvedValueOnce(mock204()) // execute — no status code
         .mockResolvedValueOnce(mock204()); // delete (cleanup still runs)
 
-      await expect(
-        c.cubes.clear("Sales", ["Time", "Region"], [[], []]),
-      ).rejects.toThrow(/no ProcessExecuteStatusCode/);
+      await expect(c.cubes.clear("Sales")).rejects.toThrow(
+        /no ProcessExecuteStatusCode/,
+      );
 
       // The ephemeral process is still cleaned up.
       const [, delOpts] = fetchSpy.mock.calls[2];
       expect(delOpts.method).toBe("DELETE");
     });
 
-    it("11.x full clear: a rolled-back clear says the cube is unchanged", async () => {
+    it("11.x clear: a rolled-back clear says the cube is unchanged", async () => {
       // Distinct from the unconfirmed case above: here TM1 told us the writes
       // were discarded, so the caller can be told the cube still holds its
       // data instead of being left to guess.
@@ -841,12 +825,12 @@ describe("TM1Client – Cell Data Methods", () => {
         ) // execute
         .mockResolvedValueOnce(mock204()); // delete
 
-      await expect(
-        c.cubes.clear("Sales", ["Time", "Region"], [[], []]),
-      ).rejects.toThrow(/rolled back.*Aborted.*unchanged/s);
+      await expect(c.cubes.clear("Sales")).rejects.toThrow(
+        /rolled back.*Aborted.*unchanged/s,
+      );
     });
 
-    it("11.x full clear: a committed-with-messages clear stands", async () => {
+    it("11.x clear: a committed-with-messages clear stands", async () => {
       // The measured commit semantics say the CubeClearData DID commit. Raising
       // here would tell the model the cube still holds its data when it does
       // not — the inverse of the T-4 fail-open, and just as wrong.
@@ -858,21 +842,7 @@ describe("TM1Client – Cell Data Methods", () => {
         ) // execute
         .mockResolvedValueOnce(mock204()); // delete
 
-      await expect(
-        c.cubes.clear("Sales", ["Time", "Region"], [[], []]),
-      ).resolves.toBeUndefined();
-    });
-
-    it("11.x partial clear: throws UNSUPPORTED_OPERATION", async () => {
-      const c = newClient("11.8");
-
-      await expect(
-        c.cubes.clear("Sales", ["Time", "Region"], [["Jan"], []]),
-      ).rejects.toMatchObject({
-        code: "UNSUPPORTED_OPERATION",
-        message: expect.stringContaining("Partial clearCube"),
-      });
-      expect(fetchSpy).not.toHaveBeenCalled();
+      await expect(c.cubes.clear("Sales")).resolves.toBeUndefined();
     });
   });
 

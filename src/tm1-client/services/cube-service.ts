@@ -304,39 +304,17 @@ export class CubeService {
   }
 
   /**
-   * Clear cube cells.
+   * Clear every cell in a cube.
    *
-   * A **full** clear runs an ephemeral TI with CubeClearData(). tm1.Clear is
-   * not an alternative on either build: 11.8 and 12.5 both answer
-   * "'tm1.Clear' resource can not be resolved on type 'Cube'" for a cube that
-   * exists, and neither declares a clear action anywhere in $metadata — Cube
-   * carries only Lock and Unlock. CubeClearData() is the only route measured
-   * to work.
-   *
-   * A **partial** clear would need tuple selectors, which only tm1.Clear
-   * offers, so no server reachable here can do one. Callers get
-   * UNSUPPORTED_OPERATION pointing at bedrock `}bedrock.cube.data.clear`
-   * rather than a request that is known to 404.
+   * The clear runs an ephemeral TI with CubeClearData(). tm1.Clear is not an
+   * alternative on either build: 11.8 and 12.5 both answer "'tm1.Clear'
+   * resource can not be resolved on type 'Cube'" for a cube that exists, and
+   * neither declares a clear action anywhere in $metadata — Cube carries only
+   * Lock and Unlock. CubeClearData() is the only route measured to work, and
+   * it takes a cube name and nothing else, so there is no region to scope.
    */
-  async clear(
-    cubeName: string,
-    dimensions: string[],
-    tuples: string[][],
-  ): Promise<void> {
-    const isFullClear = dimensions.every(
-      (_, i) => (tuples[i] ?? []).length === 0,
-    );
-    if (!isFullClear) throw this.partialClearUnsupported(cubeName);
+  async clear(cubeName: string): Promise<void> {
     await this.clearViaTI(cubeName);
-  }
-
-  /** Same verdict for both versions: no tuple-selective clear on this server. */
-  private partialClearUnsupported(cubeName: string): TM1Error {
-    return new TM1Error({
-      code: TM1ErrorCode.UNSUPPORTED_OPERATION,
-      message: `Partial clearCube is not supported on TM1 ${this.http.tm1Version} (no tm1.Clear endpoint). Implement a TI process with bedrock '}bedrock.cube.data.clear' or custom CellPutN loop and call via tm1_execute_process.`,
-      endpoint: `/api/v1/Cubes('${cubeName}')/tm1.Clear`,
-    });
   }
 
   /**
