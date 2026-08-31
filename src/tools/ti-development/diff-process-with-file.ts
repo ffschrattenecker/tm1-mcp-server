@@ -12,7 +12,7 @@ import { parseProFile } from "../../lib/pro-parser.js";
 import { ignoredColumnsOf } from "../../lib/variables-ui-data.js";
 import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
 import { DiffProcessResultSchema } from "../schemas/items.js";
-import { READ_ONLY, withVersion } from "../annotations.js";
+import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 
 interface TabDiff {
@@ -157,7 +157,7 @@ export const registerDiffProcessWithFile = defineTool({
   name: "tm1_diff_process_with_file",
   description:
     "Compare an installed TI process on the server against a local .pro file. Returns per-tab identical flags + line counts, parameter diff (added/removed/changed), variable diff, and datasource diff. Use before tm1_import_pro_file to preview what will change.",
-  annotations: withVersion(READ_ONLY, "v11"),
+  annotations: READ_ONLY,
   output: DiffProcessResultSchema,
   input: {
     filePath: z

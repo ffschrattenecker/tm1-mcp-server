@@ -343,6 +343,103 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
     });
   });
 
+  // ── alternate-hierarchy addressing (Hier:Elem) ──────────────────────────
+  // The three cell diagnostics used to state that alternate hierarchies were
+  // not supported. Measured on 11.8 and 12.5.9: an entry written `Hier:Elem`
+  // addresses the alternate rollup and BOTH halves are validated — a wrong
+  // hierarchy fails exactly like a wrong element, so a passing call is real
+  // resolution and not a tolerated string.
+  //
+  // Deliberately independent of the rule-cube discovery above: CheckFeeders
+  // resolves a coordinate on any cube, and tying this to a populated rule cell
+  // made it skip its own body on a model without one (which is how it passed
+  // against v12 while proving nothing). Needs only a cube one of whose
+  // dimensions carries a second hierarchy.
+  it("tm1_check_feeders: Hier:Elem addresses an alternate hierarchy", async () => {
+    const dimList = await h.ok("tm1_list_dimensions", { fetchAll: true });
+    const hierarchiesOf = new Map<string, string[]>(
+      (
+        (dimList.json?.items ?? []) as Array<{
+          name: string;
+          hierarchies?: string[];
+        }>
+      ).map((d) => [d.name, d.hierarchies ?? []]),
+    );
+
+    const cubes = await h.ok("tm1_list_cubes", {
+      fetchAll: true,
+      includeDimensions: true,
+      includeControl: false,
+    });
+    const cubeItems = (cubes.json?.items ?? []) as Array<{
+      name: string;
+      dimensions?: string[];
+    }>;
+
+    // One element per dimension, taken from its DEFAULT hierarchy. The cell
+    // need not hold data — only the coordinate has to resolve.
+    const firstElement = async (
+      dim: string,
+      hier: string,
+    ): Promise<string | undefined> => {
+      const r = await h.call("tm1_get_hierarchy", {
+        dimensionName: dim,
+        hierarchyName: hier,
+        compact: true,
+        topN: 1,
+      });
+      return r.json?.elements?.[0]?.name;
+    };
+
+    let probe:
+      | { cube: string; coords: string[]; slot: number; altHier: string }
+      | undefined;
+
+    for (const c of cubeItems) {
+      const dims = c.dimensions ?? [];
+      if (dims.length === 0) continue;
+      const slot = dims.findIndex((d) =>
+        (hierarchiesOf.get(d) ?? []).some((hRaw) => hRaw !== d),
+      );
+      if (slot < 0) continue;
+      const altHier = (hierarchiesOf.get(dims[slot]) ?? []).find(
+        (hRaw) => hRaw !== dims[slot],
+      );
+      if (!altHier) continue;
+
+      const coords = await Promise.all(dims.map((d) => firstElement(d, d)));
+      if (!coords.every((e): e is string => typeof e === "string" && e !== ""))
+        continue;
+
+      const altElement = await firstElement(dims[slot], altHier);
+      if (!altElement) continue;
+
+      coords[slot] = `${altHier}:${altElement}`;
+      probe = { cube: c.name, coords, slot, altHier };
+      break;
+    }
+
+    // A model with no alternate hierarchy anywhere cannot exercise this.
+    if (!probe) return;
+
+    const ok = await h.call("tm1_check_feeders", {
+      cubeName: probe.cube,
+      elements: probe.coords,
+    });
+    expect(ok.isError).toBe(false);
+
+    // Negative control. Without it the pass above would also hold if the
+    // hierarchy half were ignored and only the element name resolved.
+    const bogus = [...probe.coords];
+    const element = probe.coords[probe.slot].slice(probe.altHier.length + 1);
+    bogus[probe.slot] = `ZZ_NO_SUCH_HIERARCHY:${element}`;
+    const bad = await h.call("tm1_check_feeders", {
+      cubeName: probe.cube,
+      elements: bogus,
+    });
+    expect(bad.isError).toBe(true);
+  });
+
   // ── trace_feeders (v11 runtime, real cell) ──────────────────────────────
   it("tm1_trace_feeders: real cell in a rule-bearing cube", async () => {
     if (!sampleCube || !sampleElements) return;

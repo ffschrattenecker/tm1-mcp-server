@@ -936,6 +936,64 @@ describe("TM1Client – Cell Data Methods", () => {
         ).rejects.toThrow(/2 dimension\(s\)/);
         expect(fetchSpy).toHaveBeenCalledTimes(1);
       });
+
+      // A bare name means the default hierarchy, which carries the dimension's
+      // own name; `Hier:Elem` leaves it. Both forms mix inside one coordinate.
+      it("addresses an alternate hierarchy from a Hier:Elem entry", async () => {
+        fetchSpy
+          .mockResolvedValueOnce(mockResponse(cubeMeta))
+          .mockResolvedValueOnce(mockResponse({ value: [] }));
+
+        await client.cells.checkFeeders("SalesCube", [
+          "2024",
+          "Territory:North",
+        ]);
+
+        const [, opts] = fetchSpy.mock.calls[1];
+        expect(JSON.parse(opts.body)["Tuple@odata.bind"]).toEqual([
+          "Dimensions('Time')/Hierarchies('Time')/Elements('2024')",
+          "Dimensions('Region')/Hierarchies('Territory')/Elements('North')",
+        ]);
+      });
+
+      // The split takes the FIRST colon, so naming the default hierarchy
+      // explicitly reaches an element whose own name contains one. Without
+      // this, `A:B` would be unaddressable.
+      it("reaches a colon-bearing element via its explicit hierarchy", async () => {
+        fetchSpy
+          .mockResolvedValueOnce(mockResponse(cubeMeta))
+          .mockResolvedValueOnce(mockResponse({ value: [] }));
+
+        await client.cells.checkFeeders("SalesCube", [
+          "2024",
+          "Region:North:West",
+        ]);
+
+        const [, opts] = fetchSpy.mock.calls[1];
+        expect(JSON.parse(opts.body)["Tuple@odata.bind"]).toEqual([
+          "Dimensions('Time')/Hierarchies('Time')/Elements('2024')",
+          "Dimensions('Region')/Hierarchies('Region')/Elements('North%3AWest')",
+        ]);
+      });
+
+      // A colon that cannot separate two names is part of the element.
+      it.each([":North", "North:"])(
+        "treats %s as a plain element name",
+        async (entry) => {
+          fetchSpy
+            .mockResolvedValueOnce(mockResponse(cubeMeta))
+            .mockResolvedValueOnce(mockResponse({ value: [] }));
+
+          await client.cells.checkFeeders("SalesCube", ["2024", entry]);
+
+          const [, opts] = fetchSpy.mock.calls[1];
+          const binds = JSON.parse(opts.body)["Tuple@odata.bind"] as string[];
+          expect(binds[1]).toContain("Hierarchies('Region')");
+          expect(binds[1]).toContain(
+            `Elements('${encodeURIComponent(entry)}')`,
+          );
+        },
+      );
     });
 
     describe("traceFeeders()", () => {

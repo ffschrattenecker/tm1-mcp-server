@@ -3,7 +3,7 @@ import {
   scanForDeprecatedTi,
   type ScanHit,
 } from "../../lib/v12-compat/scanner.js";
-import { READ_ONLY, withVersion } from "../annotations.js";
+import { READ_ONLY } from "../annotations.js";
 import { V12ReadinessResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 
@@ -50,7 +50,7 @@ export const registerCheckV12Readiness = defineTool({
     "Scans every TI process section (prolog/metadata/data/epilog) and every cube rule for functions removed in v12, returning findings with severity, location, and migration hint per occurrence.",
     "Read-only, two bulk REST calls. Not exhaustive: covers syntactic deprecations only (runtime/semantic differences require manual review).",
   ],
-  annotations: withVersion(READ_ONLY, "v11"),
+  annotations: READ_ONLY,
   output: V12ReadinessResultSchema,
   input: {
     scope: z

@@ -17,6 +17,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   arguments; the tool now states plainly that it empties the whole cube. To empty part of
   a cube, run a TI process via `tm1_execute_process`.
 
+### Added
+
+- **`tm1_check_feeders`, `tm1_trace_feeders` and `tm1_trace_cell_calculation` address
+  alternate hierarchies.** An entry in `elements` written `Hierarchy:Element` leaves the
+  dimension's default hierarchy; a bare name still means the default one. The split takes
+  the first colon and the default hierarchy can be named explicitly, so an element whose
+  own name contains a colon stays reachable — in dimension `Region`, `Region:A:B` is
+  element `A:B` in the default hierarchy.
+
+### Fixed
+
+- **Seven tools no longer claim to be v11-only.** `tm1_check_feeders`,
+  `tm1_trace_feeders`, `tm1_trace_cell_calculation`, `tm1_export_process_to_pro`,
+  `tm1_import_pro_file`, `tm1_install_pro_bundle` and `tm1_diff_process_with_file` carried
+  `requiresVersion: "v11"`, and the first three said "v11 only." in their description and
+  "On v12 this action is unavailable." in their error hint. All seven were measured
+  working against 12.5.9. The claim steered callers off a working tool.
+  `tm1_check_v12_readiness` loses the same tag: it runs on either generation, and the
+  field states where a tool runs, not what it is for.
+- **The three cell diagnostics no longer claim alternate hierarchies are unsupported.**
+  Measured on 11.8: `Hier:Elem` resolves and both halves are validated — a wrong
+  hierarchy fails exactly like a wrong element.
+
 ## [4.0.0] - 2026-08-30
 
 ### Breaking
