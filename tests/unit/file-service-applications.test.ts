@@ -149,4 +149,29 @@ describe("FileService, applications container", () => {
       path: `${ROOT}/Contents('Reports')/Contents('new.csv.blob')`,
     });
   });
+  it("follows @odata.nextLink when a listing is paged", async () => {
+    const calls: string[] = [];
+    const page2 = `${ROOT}/Contents?$skiptoken=2`;
+    const http = {
+      request: vi.fn(async (_method: string, path: string) => {
+        calls.push(path);
+        if (path === `${ROOT}/Contents`) {
+          return {
+            value: [entry("DocumentReference", "a.csv.blob", "a.csv")],
+            "@odata.nextLink": `https://tm1.invalid${page2}`,
+          };
+        }
+        if (path === page2) {
+          return {
+            value: [entry("DocumentReference", "b.csv.blob", "b.csv")],
+          };
+        }
+        throw new Error(`no stub for ${path}`);
+      }),
+    } as unknown as TM1HttpClient;
+
+    const names = await new FileService(http).list(undefined, "applications");
+    expect(names).toEqual(["a.csv", "b.csv"]);
+    expect(calls).toEqual([`${ROOT}/Contents`, page2]);
+  });
 });

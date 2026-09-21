@@ -86,6 +86,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while the name existed with no content. The entry is removed again when the upload
   that created it could not be filled.
 
+- **Applications listings follow `@odata.nextLink`.** Only the first page was read. A
+  paged listing did not merely shorten a file list: name resolution walks it, so an entry
+  on a later page answered `NOT_FOUND`.
+
 - **A v12 connection no longer demands `TM1_PASSWORD`.** Startup required a password
   before it looked at `TM1_AUTH_MODE`, so a `s2s`, `access_token`, `oidc` or `iam`
   connection — none of which ever send one — died with `Missing or empty required

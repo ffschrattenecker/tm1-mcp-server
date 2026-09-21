@@ -60,16 +60,38 @@ interface AppsEntry {
 export class FileService {
   constructor(private readonly http: TM1HttpClient) {}
 
-  /** Entries directly under an Applications URL. */
+  /**
+   * Entries directly under an Applications URL.
+   *
+   * Follows `@odata.nextLink` if the server sends one. Whether these builds
+   * page this endpoint at all was not observed; a missed page here would not
+   * just shorten a listing, it would make name resolution answer NOT_FOUND for
+   * an entry that exists, so the loop runs either way.
+   */
   private async appsChildren(url: string): Promise<AppsEntry[]> {
-    const r = await this.http.request<{
-      value: Array<{ ID: string; Name: string; "@odata.type": string }>;
-    }>("GET", `${url}/Contents`);
-    return r.value.map((e) => ({
-      id: e.ID,
-      name: e.Name,
-      kind: e["@odata.type"].split(".").pop() ?? "",
-    }));
+    const entries: AppsEntry[] = [];
+    let next: string | undefined = `${url}/Contents`;
+    while (next) {
+      const r: {
+        value: Array<{ ID: string; Name: string; "@odata.type": string }>;
+        "@odata.nextLink"?: string;
+      } = await this.http.request("GET", next);
+      for (const e of r.value) {
+        entries.push({
+          id: e.ID,
+          name: e.Name,
+          kind: e["@odata.type"].split(".").pop() ?? "",
+        });
+      }
+      const link = r["@odata.nextLink"];
+      // A nextLink may be absolute. Reduce it to a path: `request` prepends the
+      // base URL. Its v12 rerooting only rewrites a leading `/api/v1`, which a
+      // server-built link no longer carries, so it passes through untouched.
+      next = link?.startsWith("http")
+        ? new URL(link).pathname + new URL(link).search
+        : link;
+    }
+    return entries;
   }
 
   /**
