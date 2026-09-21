@@ -28,6 +28,11 @@ import { rethrowIfSystemic } from "./fallback.js";
 // while removing the serialized 2-3N round-trips on an explicitly-bulk op.
 const BULK_UPSERT_CONCURRENCY = 8;
 
+// Names per `consolidatedAmong` request. Keeps the generated $filter well
+// inside any proxy URL limit while still costing one round-trip for the
+// element count a normal write carries.
+const CONSOLIDATED_PROBE_CHUNK = 50;
+
 // OData key encoder: double ' per OData literal rules, then percent-encode.
 const enc = (s: string): string =>
   encodeURIComponent(String(s).replace(/'/g, "''"));
@@ -318,6 +323,37 @@ export class ElementService {
       scanned: inScope,
       truncated: total > maxScan,
     };
+  }
+
+  /**
+   * Which of `names` are consolidated (Type 3) in this hierarchy.
+   *
+   * One filtered request per chunk of names rather than a GET per element:
+   * the server evaluates `Type eq 3 and (Name eq ...)` and answers with the
+   * hits only, so the response is bounded by the consolidations among the
+   * names asked about, never by the size of the hierarchy.
+   *
+   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Name&$filter=...
+   */
+  async consolidatedAmong(
+    dimensionName: string,
+    hierarchyName: string,
+    names: string[],
+  ): Promise<string[]> {
+    const hits: string[] = [];
+    for (let i = 0; i < names.length; i += CONSOLIDATED_PROBE_CHUNK) {
+      const clause = names
+        .slice(i, i + CONSOLIDATED_PROBE_CHUNK)
+        .map((n) => `Name eq '${n.replace(/'/g, "''")}'`)
+        .join(" or ");
+      const filter = encodeURIComponent(`Type eq 3 and (${clause})`);
+      const page = await this.http.request<{ value: Array<{ Name: string }> }>(
+        "GET",
+        `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements?$select=Name&$filter=${filter}`,
+      );
+      for (const e of page.value) hits.push(e.Name);
+    }
+    return hits;
   }
 
   /**

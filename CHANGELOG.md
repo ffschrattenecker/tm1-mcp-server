@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- **`tm1_write_cells` refuses a consolidated coordinate.** Every coordinate is resolved
+  before anything is sent; if one names a C element the call aborts with
+  `VALIDATION_ERROR` and nothing is written. Whether the server would accept such a write
+  depends on the account's rights, but it is not how TM1 data is loaded — an aggregate
+  comes from the leaves below it. *Action:* write the leaves, or run a TI process via
+  `tm1_execute_process`. `tm1_check_writable_coords` reports the level of every
+  coordinate. The check costs one filtered request per distinct hierarchy in the write,
+  and it also removes a partial-loss trap: TM1 refuses a chunk holding one non-writable
+  cell as a whole, so a single consolidated coordinate used to take every writable cell
+  travelling with it down too.
+
 - **`tm1_clear_cube` takes only `cubeName` and `confirm`.** The `dimensions` and
   `tuples` inputs are gone. They advertised a region clear the server cannot do: no
   build declares a `tm1.Clear` action, and the only route that works is an ephemeral TI
@@ -53,8 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   something this tool does.
 - **Two tools described a consolidated cell write wrongly, and disagreed with each other.**
   `tm1_write_cells` said such writes "are rejected by TM1"; `tm1_check_writable_coords` said
-  they "silent-fail". Neither holds: with sufficient rights the write goes through. Both now
-  say to use leaf coordinates and why, without inventing a refusal.
+  they "silent-fail". Neither is the rule: whether the server accepts one depends on the
+  account's rights. Both now say so, and `tm1_write_cells` refuses one itself.
 - **`tm1_get_cube_stats` no longer ties missing `}Stats*` cubes to v12 alone.** v11 keeps
   them only while statistics collection is switched on, so `statsUnavailable` is a normal
   answer there too.
