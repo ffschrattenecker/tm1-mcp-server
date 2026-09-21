@@ -76,6 +76,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   missed — `[Dimension].[Element]` and any name carrying an escaped `]]` — which the
   writer accepts and would otherwise have written past the check.
 
+- **The HTTP transport caps a request body at 64 MB.** `/mcp` buffered the whole request
+  and copied it again before any tool-level limit applied, so a single large POST could
+  exhaust memory. An oversized body is answered with `413` instead, on the declared
+  `Content-Length` and on the bytes actually received.
+
 - **A v12 connection no longer demands `TM1_PASSWORD`.** Startup required a password
   before it looked at `TM1_AUTH_MODE`, so a `s2s`, `access_token`, `oidc` or `iam`
   connection — none of which ever send one — died with `Missing or empty required

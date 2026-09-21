@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import pino from "pino";
 import { startHttpTransport } from "../../src/http-transport.js";
@@ -229,5 +229,39 @@ describe("startHttpTransport (stateless, per-request)", () => {
       body: JSON.stringify(INIT),
     });
     expect(res.status).toBe(200);
+  });
+  it("answers 413 for an oversized body instead of buffering it", async () => {
+    // Declared length is refused before any byte is read, so the test does not
+    // have to push 64 MB across the loopback to prove the cap exists.
+    const port = await freePort();
+    close = await startHttpTransport(
+      buildServer,
+      makeConfig(port),
+      silentLogger,
+    );
+
+    const status = await new Promise<number>((resolve, reject) => {
+      const req = httpRequest(
+        {
+          host: "127.0.0.1",
+          port,
+          path: "/mcp",
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": String(65 * 1024 * 1024),
+          },
+        },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        },
+      );
+      req.on("error", reject);
+      // Header only: the server must answer without waiting for the body.
+      req.flushHeaders();
+    });
+
+    expect(status).toBe(413);
   });
 });
