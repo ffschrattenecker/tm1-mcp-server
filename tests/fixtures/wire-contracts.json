@@ -1,6 +1,6 @@
 {
   "recordedAgainst": ["11.8.02900.8"],
-  "recordedAt": "2026-08-30",
+  "recordedAt": "2026-09-21",
   "endpoints": {
     "DELETE /api/v1/Chores('*') !404": {
       "error": {
@@ -337,7 +337,10 @@
     },
     "GET /api/v1/Contents('*')/Contents": {
       "@odata.context": "string",
-      "value[]": "unknown"
+      "value[]": {
+        "@odata.type": "string",
+        "Name": "string"
+      }
     },
     "GET /api/v1/Contents('*')/Contents !404": {
       "error": {
@@ -675,7 +678,8 @@
         "query?": "string",
         "Type": "string",
         "userName?": "string",
-        "usesUnicode?": "boolean"
+        "usesUnicode?": "boolean",
+        "view?": "string"
       },
       "EpilogProcedure?": "string",
       "HasSecurityAccess?": "boolean",
@@ -685,7 +689,7 @@
         "Name": "string",
         "Prompt": "string",
         "Type": "string",
-        "Value": "number"
+        "Value": "number|string"
       },
       "PrologProcedure?": "string",
       "UIData?": "string",
@@ -710,7 +714,7 @@
         "Name": "string",
         "Prompt": "string",
         "Type": "string",
-        "Value": "number"
+        "Value": "number|string"
       }
     },
     "GET /api/v1/Processes('*')/Variables": {
@@ -951,6 +955,12 @@
     "POST /api/v1/Cubes('*')/tm1.CheckFeeders": {
       "@odata.context": "string",
       "value[]": "unknown"
+    },
+    "POST /api/v1/Cubes('*')/tm1.CheckFeeders !404": {
+      "error": {
+        "code": "string",
+        "message": "string"
+      }
     },
     "POST /api/v1/Cubes('*')/tm1.CheckRules": {
       "@odata.context": "string",

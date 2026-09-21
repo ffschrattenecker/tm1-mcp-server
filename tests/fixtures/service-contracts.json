@@ -1,6 +1,6 @@
 {
   "recordedAgainst": ["11.8.02900.8"],
-  "recordedAt": "2026-08-30",
+  "recordedAt": "2026-09-21",
   "methods": {
     "batch.execute": {
       "[]": {
@@ -148,6 +148,9 @@
         "to": "string"
       }
     },
+    "elements.consolidatedAmong": {
+      "[]": "unknown"
+    },
     "elements.getAttributeValues": {
       "[]": {
         "attributeName": "string",
@@ -168,11 +171,14 @@
       "truncated": "boolean"
     },
     "files.getContent": "string",
+    "files.getContentBytes": {
+      "*": "number"
+    },
     "files.list": {
-      "[]": "unknown"
+      "[]": "string"
     },
     "files.search": {
-      "[]": "unknown"
+      "[]": "string"
     },
     "files.upload": {
       "created": "boolean",
@@ -319,14 +325,15 @@
       "query?": "string",
       "type": "string",
       "userName?": "string",
-      "usesUnicode?": "boolean"
+      "usesUnicode?": "boolean",
+      "view?": "string"
     },
     "processes.getDeployMeta": {
       "hasSecurityAccess": "boolean"
     },
     "processes.getParameters": {
       "[]": {
-        "defaultValue": "number",
+        "defaultValue": "number|string",
         "name": "string",
         "prompt": "string",
         "type": "string"
@@ -347,7 +354,13 @@
       "variablesUIData[]": "string"
     },
     "processes.getVariables": {
-      "[]": "unknown"
+      "[]": {
+        "endByte": "number",
+        "name": "string",
+        "position": "number",
+        "startByte": "number",
+        "type": "string"
+      }
     },
     "processes.list": {
       "[]?": {
