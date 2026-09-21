@@ -47,6 +47,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`tm1_clear_cube` states that the clear is final.** It called itself irreversible while
   naming only the read behaviour afterwards. There is no dependable way back: a following
   `SaveDataAll` or `CubeSaveData` writes the empty cube to disk.
+- **`tm1_delete_hierarchy` no longer claims the default hierarchy is undeletable.** The
+  hierarchy that carries the dimension's own name can be deleted. It is an unusual thing to
+  do, but the server allows it, and the sentence sent callers to `tm1_delete_dimension` for
+  something this tool does.
+- **Two tools described a consolidated cell write wrongly, and disagreed with each other.**
+  `tm1_write_cells` said such writes "are rejected by TM1"; `tm1_check_writable_coords` said
+  they "silent-fail". Neither holds: with sufficient rights the write goes through. Both now
+  say to use leaf coordinates and why, without inventing a refusal.
+- **`tm1_get_cube_stats` no longer ties missing `}Stats*` cubes to v12 alone.** v11 keeps
+  them only while statistics collection is switched on, so `statsUnavailable` is a normal
+  answer there too.
+- **`tm1_get_transaction_log` no longer promises that it "never triggers a full scan".** The
+  expanding-window ladder bounds the lookback at one year; it does not make the call cheap.
+  A sparse log walks all nine windows first.
+- **`tm1_unload_cube` names both reasons to call it.** Reloading after feeder corrections
+  was documented; releasing the cube's memory was not.
 
 ## [4.0.0] - 2026-08-30
 

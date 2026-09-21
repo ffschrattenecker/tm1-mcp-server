@@ -16,7 +16,7 @@ interface CoordCheck {
 export const registerCheckWritableCoords = defineTool({
   name: "tm1_check_writable_coords",
   description:
-    "Pre-flight check before CellPutN/CellPutS. Verifies (1) every coord element exists, (2) every element is N-Level (writes to Consolidated elements silent-fail), and (3) whether the target cube has rules that may overlap the coord. Returns per-coord status + a rule-overlap warning. Use before writing cells in a TI process or via tm1_write_cells.",
+    "Pre-flight check before CellPutN/CellPutS. Verifies (1) every coord element exists, (2) every element is N-Level (a consolidated coordinate is not refused outright, but should not be written to), and (3) whether the target cube has rules that may overlap the coord. Returns per-coord status + a rule-overlap warning. Use before writing cells in a TI process or via tm1_write_cells.",
   annotations: READ_ONLY,
   output: WritableCoordsResultSchema,
   input: {

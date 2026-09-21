@@ -8,7 +8,7 @@ import { defineTool } from "../define-tool.js";
 export const registerDeleteHierarchy = defineTool({
   name: "tm1_delete_hierarchy",
   description:
-    "Delete a hierarchy from a dimension. The default (dimension-named) hierarchy cannot be deleted — use tm1_delete_dimension for that. Irreversible — pass confirm=<hierarchy name verbatim>.",
+    "Delete a hierarchy from a dimension. Irreversible — pass confirm=<hierarchy name verbatim>.",
   annotations: DESTRUCTIVE,
   output: MutationResultSchema,
   input: {
