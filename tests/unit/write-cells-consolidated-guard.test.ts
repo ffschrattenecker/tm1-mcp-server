@@ -32,8 +32,8 @@ function makeFakeServer() {
       if (!captured || !parser) throw new Error("handler not registered");
       const p = parser;
       const h = captured;
-      // Parsing through the real schema applies .default(false) exactly as
-      // the SDK does, so allowConsolidated behaves like it does in prod.
+      // Parse through the registered schema rather than passing the object
+      // straight in, so the handler sees exactly what the SDK would hand it.
       return (args) => h(p.parse(args));
     },
   };

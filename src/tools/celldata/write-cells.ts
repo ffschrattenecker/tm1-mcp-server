@@ -130,7 +130,7 @@ export const registerWriteCells = defineTool({
       throw new TM1Error({
         code: "VALIDATION_ERROR",
         message: `Consolidated coordinates in this write: ${consolidated.join(", ")}. Nothing was sent.`,
-        hint: "Write to N-level (leaf) elements instead — tm1_check_writable_coords reports the level of every coordinate. If the consolidated write is intended and the account carries the rights for it, re-issue with allowConsolidated=true.",
+        hint: "Write to N-level (leaf) elements instead — tm1_check_writable_coords reports the level of every coordinate. There is no override: an aggregate is computed from the leaves below it, so load those, or run a TI process via tm1_execute_process.",
       });
     }
     // writeCells throws a TM1Error carrying its own partial-commit accounting
