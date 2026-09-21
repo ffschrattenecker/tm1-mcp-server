@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { TM1Error } from "../../types.js";
-import { rethrowIfSystemic } from "../../tm1-client/services/fallback.js";
 import { actionResponse } from "../format.js";
 import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
@@ -8,32 +7,69 @@ import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 
 /**
- * Where an element reference points, in the three shapes cell-service's
- * `qualifyWriteMember` accepts: a bare name, `[Element]`, or a fully
- * qualified `[Dimension].[Hierarchy].[Element]`.
+ * Split a bracketed MDX reference into its parts, `]]` unescaped back to `]`.
  *
- * A name carrying a literal `]` (escaped `]]` in MDX) falls through to the
- * bare branch and is looked up verbatim, so it matches nothing and the guard
- * lets it pass. That is the safe direction: the server still answers for the
- * coordinate it was actually given.
+ * Hand-parsed rather than matched: a regex over `[^\]]+` cannot see past an
+ * escaped `]]`, so every name containing a `]` would fall out of the guard
+ * and be written unchecked.
+ *
+ * Returns null for anything that is not a well-formed bracketed reference —
+ * the caller then treats the string as a bare element name, which is what the
+ * writer does with it too.
+ */
+function mdxParts(ref: string): string[] | null {
+  const parts: string[] = [];
+  let i = 0;
+  while (i < ref.length) {
+    if (ref[i] !== "[") return null;
+    i++;
+    let name = "";
+    for (;;) {
+      if (i >= ref.length) return null;
+      if (ref[i] === "]") {
+        if (ref[i + 1] === "]") {
+          name += "]";
+          i += 2;
+          continue;
+        }
+        i++;
+        break;
+      }
+      name += ref[i]!;
+      i++;
+    }
+    parts.push(name);
+    if (i === ref.length) return parts;
+    if (ref[i] !== ".") return null;
+    i++;
+  }
+  return null;
+}
+
+/**
+ * Where an element reference points, in the four shapes cell-service's
+ * `qualifyWriteMember` accepts: a bare name, `[Element]`,
+ * `[Dimension].[Element]` (default hierarchy) and the fully qualified
+ * `[Dimension].[Hierarchy].[Element]`.
+ *
+ * Both sides must read a reference the same way. Where this function and the
+ * writer disagree, the guard probes one coordinate and the write hits another.
  */
 function memberRef(
   dimension: string,
   element: string,
 ): { dimension: string; hierarchy: string; element: string } {
-  const qualified = element.match(/^\[([^\]]+)\]\.\[([^\]]+)\]\.\[([^\]]+)\]$/);
-  if (qualified) {
-    return {
-      dimension: qualified[1]!,
-      hierarchy: qualified[2]!,
-      element: qualified[3]!,
-    };
+  const parts = element.startsWith("[") ? mdxParts(element) : null;
+  if (parts?.length === 3) {
+    return { dimension: parts[0]!, hierarchy: parts[1]!, element: parts[2]! };
   }
-  const bare = element.match(/^\[([^\]]+)\]$/);
+  if (parts?.length === 2) {
+    return { dimension: parts[0]!, hierarchy: parts[0]!, element: parts[1]! };
+  }
   return {
     dimension,
     hierarchy: dimension,
-    element: bare ? bare[1]! : element,
+    element: parts?.length === 1 ? parts[0]! : element,
   };
 }
 
@@ -119,10 +155,18 @@ export const registerWriteCells = defineTool({
         );
         for (const hit of hits) consolidated.push(`${dimension}:${hit}`);
       } catch (e) {
-        // A dimension or hierarchy the caller named wrongly must produce
-        // TM1's own error on the write, not a confusing failure in the
-        // pre-check. Transport and auth failures still surface.
-        rethrowIfSystemic(e);
+        // Fail closed. A probe that did not answer is not evidence that the
+        // coordinates are leaves, and the tool promises every coordinate is
+        // checked before anything is sent — so an unanswered probe stops the
+        // write instead of reading as "no consolidations found".
+        throw new TM1Error({
+          code: e instanceof TM1Error ? e.code : "TM1_ERROR",
+          message: `Could not check the elements of ${dimension}:${hierarchy} for consolidations: ${e instanceof Error ? e.message : String(e)}. Nothing was sent.`,
+          hint: "Verify the dimension and hierarchy names — in `dimensions` and in any qualified element reference — then retry. Use tm1_check_writable_coords to inspect the coordinates first.",
+          ...(e instanceof TM1Error && e.httpStatus !== undefined
+            ? { httpStatus: e.httpStatus }
+            : {}),
+        });
       }
     }
 

@@ -69,6 +69,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whole branch. A folder or a view reference is now refused before anything is sent;
   documents delete as before.
 
+- **`tm1_write_cells` no longer writes when its own pre-check failed.** A failed
+  consolidation probe was swallowed and read as "no consolidations found", so a write
+  the tool promises to check went through unchecked. Any error from the probe now aborts
+  the call with nothing sent. The guard also reads the two reference forms it previously
+  missed — `[Dimension].[Element]` and any name carrying an escaped `]]` — which the
+  writer accepts and would otherwise have written past the check.
+
 - **A v12 connection no longer demands `TM1_PASSWORD`.** Startup required a password
   before it looked at `TM1_AUTH_MODE`, so a `s2s`, `access_token`, `oidc` or `iam`
   connection — none of which ever send one — died with `Missing or empty required

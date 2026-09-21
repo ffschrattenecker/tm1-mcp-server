@@ -8,6 +8,7 @@ import { describe, it, expect, vi } from "vitest";
 import { z, type ZodRawShape } from "zod";
 import { registerWriteCells } from "../../src/tools/celldata/write-cells.js";
 import { ElementService } from "../../src/tm1-client/services/element-service.js";
+import { TM1Error, TM1ErrorCode } from "../../src/types.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 
 type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>;
@@ -120,5 +121,58 @@ describe("tm1_write_cells consolidated guard", () => {
     });
     expect(probed).toContain("Region/Alt");
     expect(probed).not.toContain("Region/Region");
+  });
+
+  it("catches a consolidation behind a two-part [Dim].[Elem] member", async () => {
+    // The writer passes this form through as a default-hierarchy reference, so
+    // the guard has to read it the same way instead of probing the whole
+    // bracketed string as an element name.
+    const { client, writeCells } = makeClient({ "Region/Region": ["Europe"] });
+    await expect(
+      handlerFor(client)({
+        cubeName: "Sales",
+        dimensions: ["Region", "Month"],
+        cells: [CELL(["[Region].[Europe]", "Jan"])],
+        confirm: "Sales",
+      }),
+    ).rejects.toThrow(/Region:Europe/);
+    expect(writeCells).not.toHaveBeenCalled();
+  });
+
+  it("catches a consolidation whose name carries an escaped ]]", async () => {
+    const { client, writeCells } = makeClient({ "Region/Region": ["A]B"] });
+    await expect(
+      handlerFor(client)({
+        cubeName: "Sales",
+        dimensions: ["Region", "Month"],
+        cells: [CELL(["[Region].[Region].[A]]B]", "Jan"])],
+        confirm: "Sales",
+      }),
+    ).rejects.toThrow(/Region:A]B/);
+    expect(writeCells).not.toHaveBeenCalled();
+  });
+
+  it("sends nothing when the pre-check itself fails", async () => {
+    // An unanswered probe is not proof the coordinates are leaves.
+    const writeCells = vi.fn(async () => undefined);
+    const elements = {
+      consolidatedAmong: async () => {
+        throw new TM1Error({
+          code: TM1ErrorCode.TM1_ERROR,
+          message: "boom",
+          httpStatus: 400,
+        });
+      },
+    };
+    const client = { elements, cells: { writeCells } } as unknown as TM1Client;
+    await expect(
+      handlerFor(client)({
+        cubeName: "Sales",
+        dimensions: ["Region", "Month"],
+        cells: [CELL(["Berlin", "Jan"])],
+        confirm: "Sales",
+      }),
+    ).rejects.toThrow(/Nothing was sent/);
+    expect(writeCells).not.toHaveBeenCalled();
   });
 });
