@@ -56,6 +56,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A v12 connection no longer demands `TM1_PASSWORD`.** Startup required a password
+  before it looked at `TM1_AUTH_MODE`, so a `s2s`, `access_token`, `oidc` or `iam`
+  connection — none of which ever send one — died with `Missing or empty required
+  environment variables: TM1_PASSWORD`. That is the configuration `docs/CONFIGURATION.md`
+  prescribes for s2s, so the documented v12 setup could not start. The password is now
+  required only for the modes that use it (v11, CAM namespace, and v12 `basic`), which
+  each still fail loudly without one. The bug survived because every local run reads the
+  repository's `.env`, which supplies a password to the test suites and the live suites
+  alike; it showed up only once the packed tarball ran in a directory without one.
+
 - **Seven tools no longer claim to be v11-only.** `tm1_check_feeders`,
   `tm1_trace_feeders`, `tm1_trace_cell_calculation`, `tm1_export_process_to_pro`,
   `tm1_import_pro_file`, `tm1_install_pro_bundle` and `tm1_diff_process_with_file` carried

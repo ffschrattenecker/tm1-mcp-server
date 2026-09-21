@@ -115,6 +115,24 @@ export function loadConfig(): TM1Config {
   const namespace = process.env.TM1_NAMESPACE || undefined;
   const camPassport = process.env.TM1_CAM_PASSPORT || undefined;
 
+  // Which connection this is has to be known BEFORE the required-variable
+  // check below, because the answer decides which credential is required.
+  const tm1Version = process.env.TM1_VERSION || "11.8";
+  const instance = process.env.TM1_INSTANCE || undefined;
+  const database = process.env.TM1_DATABASE || undefined;
+  const versionMajor = Number.parseInt(tm1Version, 10);
+  const isV12 = Boolean(instance || database) || versionMajor === 12;
+  const version: 11 | 12 = isV12 ? 12 : 11;
+
+  // Every v12 auth mode except "basic" authenticates with a client secret, a
+  // bearer token or an API key, and the session login sends no password at all
+  // (connection/profile.ts buildV12Authorization). Demanding TM1_PASSWORD there
+  // rejects exactly the configuration docs/CONFIGURATION.md prescribes, and it
+  // does so at startup, before the server can say anything more useful. The v12
+  // block below still requires whichever credential the chosen mode does need.
+  const v12AuthMode = (process.env.TM1_AUTH_MODE ?? "s2s").trim().toLowerCase();
+  const passwordlessV12 = version === 12 && v12AuthMode !== "basic";
+
   // Required: baseUrl always. user/password only when NOT using a passport — a
   // passport carries the authenticated identity, so TM1 needs no credentials.
   // Empty strings are rejected (treated as unset). Password may be empty — some
@@ -124,7 +142,9 @@ export function loadConfig(): TM1Config {
   if (!baseUrl) missing.push("TM1_BASE_URL");
   if (!camPassport) {
     if (!user) missing.push("TM1_USER");
-    if (password === undefined) missing.push("TM1_PASSWORD");
+    if (password === undefined && !passwordlessV12) {
+      missing.push("TM1_PASSWORD");
+    }
   }
 
   if (missing.length > 0) {
@@ -134,7 +154,7 @@ export function loadConfig(): TM1Config {
     );
   }
 
-  if (!camPassport && password === "") {
+  if (!camPassport && !passwordlessV12 && password === "") {
     process.stderr.write(
       "[tm1-mcp-server] WARNING: TM1_PASSWORD is empty. " +
         "If TM1 rejects with 401, check whether the account actually allows blank passwords.\n",
@@ -164,8 +184,6 @@ export function loadConfig(): TM1Config {
     : "info";
 
   const logFile = process.env.TM1_LOG_FILE || undefined;
-
-  const tm1Version = process.env.TM1_VERSION || "11.8";
 
   const transportRaw = process.env.TM1_MCP_TRANSPORT ?? "stdio";
   const transport = VALID_TRANSPORTS.includes(
@@ -259,11 +277,6 @@ export function loadConfig(): TM1Config {
   const responseMode = responseModeRaw as TM1Config["responseMode"];
 
   // --- v12 (Planning Analytics Engine) connection ---------------------------
-  const instance = process.env.TM1_INSTANCE || undefined;
-  const database = process.env.TM1_DATABASE || undefined;
-  const versionMajor = Number.parseInt(tm1Version, 10);
-  const isV12 = Boolean(instance || database) || versionMajor === 12;
-  const version: 11 | 12 = isV12 ? 12 : 11;
   // Keep the DISPLAY string (server_info, logs) consistent with the numeric
   // `version`: a v12 connection (isV12, via TM1_INSTANCE/TM1_DATABASE) declared
   // with a v11-looking TM1_VERSION="11.8" would otherwise report "11.8" to users
@@ -291,9 +304,7 @@ export function loadConfig(): TM1Config {
         "v12 connection requires TM1_DATABASE (set alongside TM1_INSTANCE).",
       );
     }
-    const authModeRaw = (process.env.TM1_AUTH_MODE ?? "s2s")
-      .trim()
-      .toLowerCase();
+    const authModeRaw = v12AuthMode;
     if (
       !VALID_AUTH_MODES.includes(
         authModeRaw as (typeof VALID_AUTH_MODES)[number],
