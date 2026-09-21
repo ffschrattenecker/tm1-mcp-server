@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { actionResponse } from "../format.js";
 import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
@@ -19,8 +20,28 @@ export const registerClearCube = defineTool({
   input: {
     cubeName: z.string().describe("Cube to empty completely"),
     ...CONFIRM_SCHEMA,
+    // Removed in 4.0.0, still DECLARED so a stored old call is refused instead
+    // of silently widened: the SDK strips properties the schema does not
+    // mention, so an undeclared field reaches the handler as if it was never
+    // sent — and a region clear would become a full wipe.
+    dimensions: z
+      .array(z.string())
+      .optional()
+      .describe("REMOVED — passing this fails the call. Do not send it."),
+    tuples: z
+      .array(z.array(z.string()))
+      .optional()
+      .describe("REMOVED — passing this fails the call. Do not send it."),
   },
-  handler: async ({ cubeName, confirm }, tm1Client) => {
+  handler: async ({ cubeName, confirm, dimensions, tuples }, tm1Client) => {
+    if (dimensions !== undefined || tuples !== undefined) {
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message:
+          "tm1_clear_cube no longer takes `dimensions`/`tuples`, and this call was NOT executed. Sending them once meant a region clear, which the server never supported; ignoring them here would empty the whole cube instead.",
+        hint: "To empty the whole cube, repeat the call with cubeName and confirm only. To empty part of it, run a TI process with CubeClearData()/view-based logic via tm1_execute_process.",
+      });
+    }
     requireConfirm(confirm, cubeName, "cube");
     await tm1Client.cubes.clear(cubeName);
     return actionResponse({ success: true, cubeName, summary: "all cells" });

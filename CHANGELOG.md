@@ -56,6 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`tm1_clear_cube` refuses a call that still carries `dimensions`/`tuples`.** Removing
+  the two inputs left them undeclared, and the SDK strips what a schema does not mention:
+  a stored call meaning "clear this region" arrived as a bare `cubeName` and emptied the
+  whole cube, where v4.0.0 had refused it with `UNSUPPORTED_OPERATION`. Both fields are
+  declared again for the sole purpose of being rejected — the call fails with
+  `VALIDATION_ERROR` and nothing is cleared.
+
 - **A v12 connection no longer demands `TM1_PASSWORD`.** Startup required a password
   before it looked at `TM1_AUTH_MODE`, so a `s2s`, `access_token`, `oidc` or `iam`
   connection — none of which ever send one — died with `Missing or empty required
