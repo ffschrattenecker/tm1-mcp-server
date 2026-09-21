@@ -47,7 +47,7 @@ contract built from element 0 alone would call element 1 a violation.
 
 ```bash
 npm run contracts:record                 # tm1-test, full live suite
-node scripts/record-wire-contracts.mjs tm1-prod --read-only --merge
+node scripts/record-wire-contracts.mjs tm1-prod --read-only
 ```
 
 The recorder rides along with the live suite instead of probing a separate list
@@ -58,11 +58,17 @@ The server is named from `.mcp.json`, never from `.env`: `.env` points at a
 production instance and the full suite creates and deletes sandbox objects.
 `--read-only` restricts the run to the read sweep, which is safe anywhere.
 
-`--merge` folds a run into what is already on disk. That is how a sandbox
-recording and a sweep of a populated model combine: the sandbox contributes the
-write and error paths, the populated model contributes shapes a fresh sandbox
-cannot produce — non-null cells, real data sources, elements with children.
-Without merging, whichever ran last would silently narrow the contracts.
+Recording merges into what is already on disk. That is how a sandbox recording
+and a sweep of a populated model combine: the sandbox contributes the write and
+error paths, the populated model contributes shapes a fresh sandbox cannot
+produce — non-null cells, real data sources, elements with children.
+
+Merging is the default because a single run only observes the shapes its target
+happens to hold. Recording over the file drops every endpoint that run did not
+reach and narrows every union it did not re-observe, and no gate turns red
+afterwards — the contracts simply check less than they did before. `--replace`
+asks for that fresh start explicitly; use it for a new server version, and read
+the diff.
 
 ## Verifying
 
