@@ -541,6 +541,7 @@ describe("declared output schemas", () => {
       totalBytes: 1024,
       returnedBytes: 1024,
       truncated: false,
+      encoding: "text" as const,
       content: "a,b,c\n1,2,3",
     },
     tm1_list_error_logs: {

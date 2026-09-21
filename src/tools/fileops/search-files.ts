@@ -3,6 +3,7 @@ import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
 import { FORMAT_SCHEMA, wrappedPageResponse, columnsOf } from "../format.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { CONTAINER_SCHEMA } from "./container.js";
 import { FilenameItemSchema } from "../schemas/items.js";
 import { pageShapeFor } from "../schemas/common.js";
 
@@ -54,11 +55,22 @@ export const registerSearchFiles = defineTool({
       .string()
       .optional()
       .describe("Subfolder to search in (v12 only). Empty = root."),
+    ...CONTAINER_SCHEMA,
     ...PAGINATION_SCHEMA,
     ...FORMAT_SCHEMA,
   },
   handler: async (
-    { startswith, contains, operator, path, limit, offset, fetchAll, format },
+    {
+      startswith,
+      contains,
+      operator,
+      path,
+      container,
+      limit,
+      offset,
+      fetchAll,
+      format,
+    },
     tm1Client,
   ) => {
     const names = await tm1Client.files.search({
@@ -66,6 +78,7 @@ export const registerSearchFiles = defineTool({
       contains,
       operator,
       path,
+      container,
     });
     const page = paginate(names, limit, offset, fetchAll);
     const wrapper = {

@@ -5,6 +5,7 @@ import { actionResponse } from "../format.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { CONTAINER_SCHEMA } from "./container.js";
 
 export const registerDeleteFile = defineTool({
   name: "tm1_delete_file",
@@ -22,12 +23,13 @@ export const registerDeleteFile = defineTool({
       .string()
       .min(1)
       .describe("File name or path (e.g. 'data.csv' or 'imports/old.csv')."),
+    ...CONTAINER_SCHEMA,
     ...CONFIRM_SCHEMA,
   },
-  handler: async ({ fileName, confirm }, tm1Client) => {
+  handler: async ({ fileName, container, confirm }, tm1Client) => {
     requireConfirm(confirm, fileName, "file");
     await withToolHint(
-      tm1Client.files.delete(fileName),
+      tm1Client.files.delete(fileName, container),
       "Verify exact name with tm1_list_files or tm1_search_files. Names are case-sensitive.",
     );
     return actionResponse({ success: true, fileName, deleted: true });

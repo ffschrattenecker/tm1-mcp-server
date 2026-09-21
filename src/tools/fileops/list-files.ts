@@ -3,6 +3,7 @@ import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
 import { FORMAT_SCHEMA, wrappedPageResponse, columnsOf } from "../format.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { CONTAINER_SCHEMA } from "./container.js";
 import { FilenameItemSchema } from "../schemas/items.js";
 import { pageShapeFor } from "../schemas/common.js";
 
@@ -19,6 +20,7 @@ export const registerListFiles = defineTool({
     "Use to browse available CSV, TXT, or other files before building import processes.",
     "Supports subfolder navigation via the path parameter.",
     "Auto-falls back from v12 (Files) to v11 (Blobs) container.",
+    "Set container='applications' to browse the Applications tree instead.",
     "Paginated (default 50/page).",
   ],
   annotations: READ_ONLY,
@@ -30,11 +32,15 @@ export const registerListFiles = defineTool({
       .describe(
         "Subfolder path (e.g. 'imports' or 'imports/2024'). Empty = root.",
       ),
+    ...CONTAINER_SCHEMA,
     ...PAGINATION_SCHEMA,
     ...FORMAT_SCHEMA,
   },
-  handler: async ({ path, limit, offset, fetchAll, format }, tm1Client) => {
-    const files = await tm1Client.files.list(path);
+  handler: async (
+    { path, container, limit, offset, fetchAll, format },
+    tm1Client,
+  ) => {
+    const files = await tm1Client.files.list(path, container);
     const page = paginate(files, limit, offset, fetchAll);
     const wrapper = { path: path ?? "", ...page };
     type Row = (typeof files)[number];

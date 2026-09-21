@@ -5,6 +5,7 @@ import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { IDEMPOTENT_WRITE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { CONTAINER_SCHEMA } from "./container.js";
 
 const HARD_MAX_BYTES = 32 * 1024 * 1024;
 
@@ -16,6 +17,7 @@ export const registerUploadFile = defineTool({
     "Provide content as plain text OR base64 (set encoding='base64' for binary).",
     "Auto-falls back from v12 (Files) to v11 (Blobs) container.",
     "v11: subfolders not supported — use a flat file name. v12: nested paths OK if folders exist.",
+    "container='applications' writes into the Applications tree instead, which nests on both versions. The parent folder must already exist there too.",
     `Hard max size: ${HARD_MAX_BYTES} bytes (32 MB).`,
   ],
   annotations: IDEMPOTENT_WRITE,
@@ -39,9 +41,13 @@ export const registerUploadFile = defineTool({
       .describe(
         "Encoding of the `content` field. 'text' (default) for UTF-8 text, 'base64' for binary.",
       ),
+    ...CONTAINER_SCHEMA,
     ...CONFIRM_SCHEMA,
   },
-  handler: async ({ fileName, content, encoding, confirm }, tm1Client) => {
+  handler: async (
+    { fileName, content, encoding, container, confirm },
+    tm1Client,
+  ) => {
     // Silently replaces an existing server file of the same name. Guards
     // against accidental invocation — not a security control.
     requireConfirm(confirm, fileName, "file");
@@ -71,7 +77,7 @@ export const registerUploadFile = defineTool({
     }
 
     const result = await withToolHint(
-      tm1Client.files.upload(fileName, bytes),
+      tm1Client.files.upload(fileName, bytes, container),
       "If parent folder is missing, create it on TM1 v12 before retrying. v11 supports root only.",
     );
 

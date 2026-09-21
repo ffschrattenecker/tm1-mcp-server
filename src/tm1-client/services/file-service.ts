@@ -3,6 +3,22 @@
 // back to the v11 root `Blobs`, since the same logical entity moved between
 // product generations.
 //
+// A second container, `Applications`, holds the tree users see under
+// "Applications" in Architect and PAW. It is addressed differently and the
+// difference is measured, not assumed (11.8, 2026-09-21):
+//   - entries are keyed by ID, not by Name; a document's ID is its name with
+//     ".blob" appended, a folder's ID is its name. Names are resolved by
+//     listing the parent rather than by deriving the ID, so one naming rule
+//     changing on a future build cannot silently mis-address an entry.
+//   - a document appears as a DocumentReference. Its bytes live one hop
+//     further, behind a derived-type cast:
+//     Contents('<id>')/ibm.tm1.api.v1.DocumentReference/Document/Content
+//     `/Content` directly on the reference is a 404, and `$value` answers 501
+//     on every resource in this tree.
+//   - creating a document is a POST WITHOUT Content ("Document Content
+//     property is of type stream." otherwise), then a PUT of the bytes.
+//   - DELETE on a folder removes what it contains.
+//
 // See docs/ARCHITECTURE.md for the layering.
 import type { TM1HttpClient } from "../http.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
@@ -28,8 +44,90 @@ function splitPath(raw: string): string[] {
   return parts;
 }
 
+/** Which storage tree a file operation addresses. */
+export type FileContainer = "files" | "applications";
+
+const APPS_ROOT = "/api/v1/Contents('Applications')";
+const DOCUMENT_REFERENCE = "ibm.tm1.api.v1.DocumentReference";
+
+interface AppsEntry {
+  id: string;
+  name: string;
+  /** Trailing segment of @odata.type: Folder, DocumentReference, ViewReference. */
+  kind: string;
+}
+
 export class FileService {
   constructor(private readonly http: TM1HttpClient) {}
+
+  /** Entries directly under an Applications URL. */
+  private async appsChildren(url: string): Promise<AppsEntry[]> {
+    const r = await this.http.request<{
+      value: Array<{ ID: string; Name: string; "@odata.type": string }>;
+    }>("GET", `${url}/Contents`);
+    return r.value.map((e) => ({
+      id: e.ID,
+      name: e.Name,
+      kind: e["@odata.type"].split(".").pop() ?? "",
+    }));
+  }
+
+  /**
+   * Walk name segments down the Applications tree, one listing per level.
+   *
+   * Costs a request per segment, which the depth of this tree makes cheap, and
+   * buys two things a derived key cannot: the entry's real ID whatever the
+   * server's naming rule is, and its type — so a caller asking for the bytes of
+   * a ViewReference gets told what it actually hit.
+   */
+  private async appsResolve(
+    segments: string[],
+  ): Promise<{ url: string; entry: AppsEntry | undefined }> {
+    let url = APPS_ROOT;
+    let entry: AppsEntry | undefined;
+    for (const seg of segments) {
+      const children = await this.appsChildren(url);
+      const lower = seg.toLowerCase();
+      const hit =
+        children.find((c) => c.name.toLowerCase() === lower) ??
+        // A listing hands documents back under their name, but an ID pasted
+        // straight from a previous response has to keep working too.
+        children.find((c) => c.id.toLowerCase() === lower);
+      if (!hit) {
+        throw new TM1Error({
+          code: TM1ErrorCode.NOT_FOUND,
+          message: `'${seg}' not found in the Applications tree`,
+          endpoint: url,
+        });
+      }
+      url += `/Contents('${enc(hit.id)}')`;
+      entry = hit;
+    }
+    return { url, entry };
+  }
+
+  /** URL of the bytes behind a DocumentReference, or a typed refusal. */
+  private appsContentUrl(url: string, entry: AppsEntry | undefined): string {
+    if (entry === undefined) {
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message: "The Applications root is not a file",
+        endpoint: url,
+      });
+    }
+    if (entry.kind !== "DocumentReference") {
+      throw new TM1Error({
+        code: TM1ErrorCode.UNSUPPORTED_OPERATION,
+        message: `'${entry.name}' is a ${entry.kind}, which carries no file content`,
+        hint:
+          entry.kind === "Folder"
+            ? "List it instead — tm1_list_files with container='applications' and this path."
+            : "Only documents hold bytes. A ViewReference points at a cube view; read it with tm1_get_view.",
+        endpoint: url,
+      });
+    }
+    return `${url}/${DOCUMENT_REFERENCE}/Document/Content`;
+  }
 
   /**
    * List files in TM1 server's blob/file storage.
@@ -37,8 +135,15 @@ export class FileService {
    * v11: same with 'Blobs' instead of 'Files'.
    * Tries v12 'Files' first, falls back to v11 'Blobs'.
    */
-  async list(path?: string): Promise<string[]> {
+  async list(
+    path?: string,
+    container: FileContainer = "files",
+  ): Promise<string[]> {
     const segments = path ? splitPath(path) : [];
+    if (container === "applications") {
+      const { url } = await this.appsResolve(segments);
+      return (await this.appsChildren(url)).map((e) => e.name);
+    }
     const buildUrl = (root: string): string => {
       let url = `/api/v1/Contents('${enc(root)}')`;
       for (const seg of segments) {
@@ -68,8 +173,26 @@ export class FileService {
    * Returns raw text (CSV/TXT/etc).
    * Tries v12 'Files' first, falls back to v11 'Blobs'.
    */
-  async getContent(fileName: string): Promise<string> {
+  async getContent(
+    fileName: string,
+    container: FileContainer = "files",
+  ): Promise<string> {
+    return (await this.getContentBytes(fileName, container)).toString("utf8");
+  }
+
+  /**
+   * The same read, byte-for-byte. The Applications tree holds spreadsheets and
+   * other binaries, which a UTF-8 decode would quietly destroy.
+   */
+  async getContentBytes(
+    fileName: string,
+    container: FileContainer = "files",
+  ): Promise<Buffer> {
     const parts = splitPath(fileName);
+    if (container === "applications") {
+      const { url, entry } = await this.appsResolve(parts);
+      return this.http.requestRawBytes("GET", this.appsContentUrl(url, entry));
+    }
     const buildUrl = (root: string): string => {
       let url = `/api/v1/Contents('${enc(root)}')`;
       for (const p of parts) {
@@ -79,10 +202,10 @@ export class FileService {
       return url;
     };
     try {
-      return await this.http.requestRaw("GET", buildUrl("Files"));
+      return await this.http.requestRawBytes("GET", buildUrl("Files"));
     } catch (e) {
       rethrowIfSystemic(e);
-      return await this.http.requestRaw("GET", buildUrl("Blobs"));
+      return await this.http.requestRawBytes("GET", buildUrl("Blobs"));
     }
   }
 
@@ -91,9 +214,20 @@ export class FileService {
    * Implemented as a cheap GET on the entity ($select=Name) — TM1 REST does
    * not expose HEAD on these. 404 → false; other errors propagate.
    */
-  async exists(fileName: string): Promise<boolean> {
+  async exists(
+    fileName: string,
+    container: FileContainer = "files",
+  ): Promise<boolean> {
     const parts = splitPath(fileName);
     if (parts.length === 0) return false;
+    if (container === "applications") {
+      try {
+        return (await this.appsResolve(parts)).entry !== undefined;
+      } catch (e) {
+        if ((e as { code?: string }).code === "NOT_FOUND") return false;
+        throw e;
+      }
+    }
     const buildUrl = (root: string): string => {
       const segs = parts
         .slice(0, -1)
@@ -129,11 +263,14 @@ export class FileService {
   async upload(
     fileName: string,
     content: Uint8Array,
-  ): Promise<{ created: boolean; root: "Files" | "Blobs" }> {
+    container: FileContainer = "files",
+  ): Promise<{ created: boolean; root: "Files" | "Blobs" | "Applications" }> {
     const parts = splitPath(fileName);
     if (parts.length === 0) {
       throw new Error("upload: empty file name");
     }
+    if (container === "applications")
+      return this.uploadToApplications(parts, content);
     // parts.length > 0 is guarded above
     const leaf = parts[parts.length - 1]!;
     const parentSegs = parts
@@ -171,10 +308,18 @@ export class FileService {
   /**
    * Delete a file from blob/file storage. Tries 'Files' first, then 'Blobs'.
    */
-  async delete(fileName: string): Promise<void> {
+  async delete(
+    fileName: string,
+    container: FileContainer = "files",
+  ): Promise<void> {
     const parts = splitPath(fileName);
     if (parts.length === 0) {
       throw new Error("delete: empty file name");
+    }
+    if (container === "applications") {
+      const { url } = await this.appsResolve(parts);
+      await this.http.request("DELETE", url);
+      return;
     }
     const buildUrl = (root: string): string => {
       const segs = parts.map((s) => `/Contents('${enc(s)}')`).join("");
@@ -199,9 +344,26 @@ export class FileService {
     contains?: string[] | undefined;
     operator?: "and" | "or" | undefined;
     path?: string | undefined;
+    container?: FileContainer | undefined;
   }): Promise<string[]> {
     const operator = opts.operator ?? "and";
     const segments = opts.path ? splitPath(opts.path) : [];
+    if (opts.container === "applications") {
+      // Filtered client-side: the $filter push-down is measured for Blobs, not
+      // for this tree, and an Applications folder holds tens of entries, not
+      // thousands. Same matching rules as the server-side clauses below.
+      const names = await this.list(opts.path, "applications");
+      const starts = opts.startswith?.toLowerCase();
+      const subs = (opts.contains ?? []).map((c) => c.toLowerCase());
+      return names.filter((n) => {
+        const low = n.toLowerCase();
+        if (starts !== undefined && !low.startsWith(starts)) return false;
+        if (subs.length === 0) return true;
+        return operator === "or"
+          ? subs.some((c) => low.includes(c))
+          : subs.every((c) => low.includes(c));
+      });
+    }
     const escape = (s: string): string => s.replace(/'/g, "''");
     const filters: string[] = [];
     if (opts.startswith) {
@@ -239,5 +401,46 @@ export class FileService {
       );
       return r.value.map((f) => f.Name);
     }
+  }
+
+  /**
+   * Create-or-update a document in the Applications tree.
+   *
+   * Three steps, each one measured: POST the entity WITHOUT Content (inlining
+   * it is refused — the property is a stream), re-resolve to learn the ID the
+   * server assigned, then PUT the bytes behind the cast.
+   */
+  private async uploadToApplications(
+    parts: string[],
+    content: Uint8Array,
+  ): Promise<{ created: boolean; root: "Applications" }> {
+    const leaf = parts[parts.length - 1]!;
+    const parentParts = parts.slice(0, -1);
+    const { url: parentUrl } = await this.appsResolve(parentParts);
+
+    const existing = (await this.appsChildren(parentUrl)).find(
+      (e) => e.name.toLowerCase() === leaf.toLowerCase(),
+    );
+    if (existing !== undefined && existing.kind !== "DocumentReference") {
+      throw new TM1Error({
+        code: TM1ErrorCode.UNSUPPORTED_OPERATION,
+        message: `'${leaf}' already exists as a ${existing.kind} and is not a document`,
+        endpoint: parentUrl,
+      });
+    }
+    if (existing === undefined) {
+      await this.http.request("POST", `${parentUrl}/Contents`, {
+        "@odata.type": "#ibm.tm1.api.v1.Document",
+        Name: leaf,
+      });
+    }
+
+    const { url, entry } = await this.appsResolve([...parentParts, leaf]);
+    await this.http.requestBinary(
+      "PUT",
+      this.appsContentUrl(url, entry),
+      content,
+    );
+    return { created: existing === undefined, root: "Applications" };
   }
 }

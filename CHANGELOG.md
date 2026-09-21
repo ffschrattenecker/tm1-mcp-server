@@ -30,6 +30,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The five file tools reach the Applications tree.** `tm1_list_files`,
+  `tm1_search_files`, `tm1_get_file_content`, `tm1_upload_file` and `tm1_delete_file` take
+  `container`, which stays `files` by default — the data directory TI processes read from.
+  `container: "applications"` addresses the tree users see under Applications in Architect
+  and PAW, which nests on both versions. Measured against 11.8: entries there are keyed by
+  ID rather than by Name, a document surfaces as a `DocumentReference` whose bytes sit
+  behind a derived-type cast (`/ibm.tm1.api.v1.DocumentReference/Document/Content`; plain
+  `/Content` is a 404 and `$value` answers 501 everywhere in the tree), and creating one is
+  a POST *without* `Content` followed by a PUT of the bytes. Names are resolved by listing
+  each level rather than by deriving the ID, so the naming rule changing on a later build
+  cannot mis-address an entry. Asking a folder or a view reference for content is refused
+  by name with `UNSUPPORTED_OPERATION` instead of returning nothing.
+- **`tm1_get_file_content` can return bytes untouched.** `encoding: "base64"` hands back the
+  raw content; the default stays `text`. The Applications tree holds spreadsheets, and the
+  previous read decoded everything as UTF-8, which destroys a binary silently. The response
+  now carries an `encoding` field in both modes.
+
 - **`tm1_check_feeders`, `tm1_trace_feeders` and `tm1_trace_cell_calculation` address
   alternate hierarchies.** An entry in `elements` written `Hierarchy:Element` leaves the
   dimension's default hierarchy; a bare name still means the default one. The split takes
