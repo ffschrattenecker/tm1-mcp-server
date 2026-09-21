@@ -117,4 +117,21 @@ describe("FileService, applications container", () => {
       path: `${ROOT}/Contents('Reports')/Contents('sheet.xlsx.blob')`,
     });
   });
+  it("refuses a folder before the DELETE goes out", async () => {
+    // DELETE on a folder removes its contents too, so this must never reach
+    // the server from the single-file delete path.
+    const { svc, calls } = makeService();
+    await expect(svc.delete("Reports", "applications")).rejects.toThrow(
+      /is a Folder, not a file/,
+    );
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+  });
+
+  it("refuses a view reference in the delete path as well", async () => {
+    const { svc, calls } = makeService();
+    await expect(
+      svc.delete("Reports/by_month", "applications"),
+    ).rejects.toThrow(/is a ViewReference, not a file/);
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+  });
 });

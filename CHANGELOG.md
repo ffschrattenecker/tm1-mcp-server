@@ -63,6 +63,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   declared again for the sole purpose of being rejected — the call fails with
   `VALIDATION_ERROR` and nothing is cleared.
 
+- **`tm1_delete_file` no longer deletes an Applications folder.** In the Applications
+  tree a `DELETE` on a folder takes everything inside it with it, and the resolved entry
+  type was not checked before the request went out, so the single-file tool could empty a
+  whole branch. A folder or a view reference is now refused before anything is sent;
+  documents delete as before.
+
 - **A v12 connection no longer demands `TM1_PASSWORD`.** Startup required a password
   before it looked at `TM1_AUTH_MODE`, so a `s2s`, `access_token`, `oidc` or `iam`
   connection — none of which ever send one — died with `Missing or empty required

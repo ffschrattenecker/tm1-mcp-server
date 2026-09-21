@@ -317,7 +317,22 @@ export class FileService {
       throw new Error("delete: empty file name");
     }
     if (container === "applications") {
-      const { url } = await this.appsResolve(parts);
+      const { url, entry } = await this.appsResolve(parts);
+      // DELETE on a folder takes everything under it with it (see the header
+      // note). This is the single-file contract, so anything that is not a
+      // document is refused here rather than at the server, where it would
+      // already be gone.
+      if (entry !== undefined && entry.kind !== "DocumentReference") {
+        throw new TM1Error({
+          code: TM1ErrorCode.UNSUPPORTED_OPERATION,
+          message: `'${entry.name}' is a ${entry.kind}, not a file — refusing to delete it`,
+          hint:
+            entry.kind === "Folder"
+              ? "Deleting a folder would delete everything inside it, which this tool does not do. Delete the entries individually, or remove the folder in Architect/PAW."
+              : "Only documents can be deleted here. A ViewReference points at a cube view; remove it with tm1_delete_view.",
+          endpoint: url,
+        });
+      }
       await this.http.request("DELETE", url);
       return;
     }
