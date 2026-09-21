@@ -292,7 +292,18 @@ export class FileService {
           Name: leaf,
         });
       }
-      await this.http.requestBinary("PUT", contentUrl, content);
+      try {
+        await this.http.requestBinary("PUT", contentUrl, content);
+      } catch (e) {
+        // Same two-request split as the Applications path: an entry this call
+        // created and could not fill is removed again, so a failed upload does
+        // not leave an empty file under the name.
+        if (!existed) {
+          const url = `/api/v1/Contents('${enc(root)}')${parentSegs}/Contents('${enc(leaf)}')`;
+          await this.http.request("DELETE", url).catch(() => undefined);
+        }
+        throw e;
+      }
       return { created: !existed, root };
     };
 
@@ -451,11 +462,21 @@ export class FileService {
     }
 
     const { url, entry } = await this.appsResolve([...parentParts, leaf]);
-    await this.http.requestBinary(
-      "PUT",
-      this.appsContentUrl(url, entry),
-      content,
-    );
+    try {
+      await this.http.requestBinary(
+        "PUT",
+        this.appsContentUrl(url, entry),
+        content,
+      );
+    } catch (e) {
+      // Create and write are two requests. If the write fails on an entry this
+      // call created, take it back out — leaving an empty document behind would
+      // report a failed upload while the name now exists.
+      if (existing === undefined) {
+        await this.http.request("DELETE", url).catch(() => undefined);
+      }
+      throw e;
+    }
     return { created: existing === undefined, root: "Applications" };
   }
 }

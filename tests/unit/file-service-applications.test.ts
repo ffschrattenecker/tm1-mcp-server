@@ -134,4 +134,19 @@ describe("FileService, applications container", () => {
     ).rejects.toThrow(/is a ViewReference, not a file/);
     expect(calls.some((c) => c.method === "DELETE")).toBe(false);
   });
+  it("removes an entry it created when the content PUT fails", async () => {
+    // Create and write are two requests; a half-written upload must not leave
+    // the name occupied by an empty document.
+    const { svc, calls } = makeService();
+    const http = (svc as unknown as { http: TM1HttpClient }).http;
+    vi.mocked(http.requestBinary).mockRejectedValueOnce(new Error("no space"));
+
+    await expect(
+      svc.upload("Reports/new.csv", Buffer.from("x"), "applications"),
+    ).rejects.toThrow(/no space/);
+    expect(calls.at(-1)).toMatchObject({
+      method: "DELETE",
+      path: `${ROOT}/Contents('Reports')/Contents('new.csv.blob')`,
+    });
+  });
 });

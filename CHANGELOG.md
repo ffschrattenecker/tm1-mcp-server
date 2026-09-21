@@ -81,6 +81,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exhaust memory. An oversized body is answered with `413` instead, on the declared
   `Content-Length` and on the bytes actually received.
 
+- **A failed upload no longer leaves an empty file behind.** Creating an entry and
+  writing its bytes are two requests; if the write failed, the call reported an error
+  while the name existed with no content. The entry is removed again when the upload
+  that created it could not be filled.
+
 - **A v12 connection no longer demands `TM1_PASSWORD`.** Startup required a password
   before it looked at `TM1_AUTH_MODE`, so a `s2s`, `access_token`, `oidc` or `iam`
   connection — none of which ever send one — died with `Missing or empty required
