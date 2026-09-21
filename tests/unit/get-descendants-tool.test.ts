@@ -46,10 +46,22 @@ function makeFakeServer() {
   };
 }
 
-function makeTM1Client(): TM1Client {
+// Same shape plus "Empty", a consolidation nobody put components under. It
+// has no children, so a purely structural leaf test would hand it back as one.
+const POOL_WITH_EMPTY_CONSOLIDATION = [
+  ...POOL,
+  {
+    Name: "Empty",
+    Type: "Consolidated",
+    Level: 0,
+    Parents: [{ Name: "Total" }],
+  },
+];
+
+function makeTM1Client(pool: typeof POOL = POOL): TM1Client {
   const request = async (_method: string, _path: string) => ({
     Name: "H",
-    Elements: POOL,
+    Elements: pool,
   });
   const hierarchies = new HierarchyService({
     request,
@@ -58,6 +70,30 @@ function makeTM1Client(): TM1Client {
 }
 
 describe("tm1_get_descendants tool", () => {
+  it("leavesOnly drops an empty consolidation, not just parents", async () => {
+    const { server, getHandler } = makeFakeServer();
+    registerGetDescendants(
+      server,
+      makeTM1Client(POOL_WITH_EMPTY_CONSOLIDATION),
+    );
+
+    const res = await getHandler()({
+      dimensionName: "D",
+      hierarchyName: "H",
+      elementName: "Total",
+      leavesOnly: true,
+    });
+    const out = JSON.parse(res.content[0].text);
+
+    expect(out.descendants.map((d: { name: string }) => d.name)).toEqual([
+      "E1",
+      "E2",
+      "E3",
+      "E4",
+      "E5",
+    ]);
+  });
+
   it("returns the full set with truncated=false when under the default cap", async () => {
     const { server, getHandler } = makeFakeServer();
     registerGetDescendants(server, makeTM1Client());

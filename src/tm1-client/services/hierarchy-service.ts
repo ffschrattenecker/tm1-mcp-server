@@ -285,7 +285,11 @@ export class HierarchyService {
         seen.add(child.name);
         const childNode = byName.get(child.name);
         if (!childNode) continue;
-        const isLeaf = childNode.children.length === 0;
+        // Type, not just shape: an empty consolidation has no children but is
+        // not a leaf in the sense callers ask for — nothing can be written to
+        // it and it carries no value of its own.
+        const isLeaf =
+          childNode.children.length === 0 && childNode.type !== "Consolidated";
         if (!opts?.leavesOnly || isLeaf) {
           out.push({
             name: childNode.name,

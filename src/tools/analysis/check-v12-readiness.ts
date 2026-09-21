@@ -48,7 +48,7 @@ export const registerCheckV12Readiness = defineTool({
   description: [
     "Static gap-analysis against the TM1 / Planning Analytics v12 (Cloud Native) deprecation list.",
     "Scans every TI process section (prolog/metadata/data/epilog) and every cube rule for functions removed in v12, returning findings with severity, location, and migration hint per occurrence.",
-    "Read-only, two bulk REST calls. Not exhaustive: covers syntactic deprecations only (runtime/semantic differences require manual review).",
+    "Read-only: one bulk request per scope, so two for the default (processes and cube rules) and one when scope names only one of them. Not exhaustive: covers syntactic deprecations only (runtime/semantic differences require manual review).",
   ],
   annotations: READ_ONLY,
   output: V12ReadinessResultSchema,

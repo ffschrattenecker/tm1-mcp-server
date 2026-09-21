@@ -74,6 +74,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A sparse log walks all nine windows first.
 - **`tm1_unload_cube` names both reasons to call it.** Reloading after feeder corrections
   was documented; releasing the cube's memory was not.
+- **`tm1_get_descendants` with `leavesOnly` no longer returns empty consolidations.** The
+  filter tested shape alone — an element with no children — so a consolidation nobody put
+  components under came back as a leaf, with `type: "Consolidated"` in the payload, while
+  the tool promised "only N-elements (no consolidations)". It now tests the type as well.
+- **`tm1_check_v12_readiness` no longer claims a fixed two REST calls.** It issues one bulk
+  request per scope, so narrowing `scope` to processes or to cube rules makes it one.
 
 ## [4.0.0] - 2026-08-30
 
