@@ -39,6 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The three cell diagnostics no longer claim alternate hierarchies are unsupported.**
   Measured on 11.8: `Hier:Elem` resolves and both halves are validated — a wrong
   hierarchy fails exactly like a wrong element.
+- **`tm1_unload_cube` no longer advertises itself as consequence-free.** It said "Safe to
+  call: data is preserved (read from .cub on next access)", which hid the part that
+  matters: TM1 writes the cube to disk before it unloads. Whatever sits in memory becomes
+  the saved state, so a caller reading "data is preserved" could reach for the tool
+  expecting the on-disk copy to survive untouched. The description now states the save.
+- **`tm1_clear_cube` states that the clear is final.** It called itself irreversible while
+  naming only the read behaviour afterwards. There is no dependable way back: a following
+  `SaveDataAll` or `CubeSaveData` writes the empty cube to disk.
 
 ## [4.0.0] - 2026-08-30
 
