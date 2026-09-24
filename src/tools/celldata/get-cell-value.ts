@@ -7,7 +7,8 @@ export const registerGetCellValue = defineTool({
   description: [
     "Get a single cell value from a TM1 cube by specifying element coordinates.",
     "Discover dimension order with tm1_list_cubes (cube.dimensions).",
-    "Related: tm1_execute_mdx for slices/grids, tm1_sample_cells to probe sparsity without enumerating, tm1_write_cells for the inverse operation.",
+    "Reading more than a few cells? One tm1_execute_mdx (slices/grids) or tm1_sample_cells (populated cells) call replaces a loop of get_cell_value calls.",
+    "Related: tm1_write_cells for the inverse operation.",
   ],
   annotations: READ_ONLY,
   output: {
