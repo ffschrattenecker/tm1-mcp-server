@@ -472,6 +472,8 @@ describe("declared output schemas", () => {
       processName: "_compile_check",
       errorCount: 1,
       errors: [{ procedure: "Prolog", lineNumber: 3, message: "syntax" }],
+      tabsChecked: ["prolog"],
+      partial: true,
     },
     tm1_compile_process: {
       ok: true,

@@ -16,7 +16,7 @@ export const registerCheckProcessCode = defineTool({
     "Validate TI process code WITHOUT saving it on the server (POST /api/v1/CompileProcess unbound).",
     "Pre-flight check before tm1_upsert_process to avoid create-with-rollback patterns.",
     "Returns 'valid' or a list of syntax errors with procedure (Prolog/Metadata/Data/Epilog) and line number.",
-    "All procedure tabs default to empty strings if omitted; pass only the tabs you want to validate.",
+    "Omitted tabs are validated as EMPTY: the result covers only tabsChecked, and partial=true says the check did not see a whole process — validate every tab you will install.",
   ],
   annotations: READ_ONLY,
   output: {
@@ -24,6 +24,8 @@ export const registerCheckProcessCode = defineTool({
     processName: z.string(),
     errorCount: z.number().int(),
     errors: z.array(CompileErrorSchema),
+    tabsChecked: z.array(z.string()),
+    partial: z.boolean(),
   },
   input: {
     processName: z
@@ -95,11 +97,19 @@ export const registerCheckProcessCode = defineTool({
     // Syntax errors are the expected output of a validator, so the failure
     // payload carries its own code/message/hint — otherwise the isError
     // normalizer stamps a generic TM1_ERROR envelope over it.
+    // Omitted tabs compile as empty, so a clean result on a fragment says
+    // nothing about the tabs that were left out — report what was covered.
+    const provided = { prolog, metadata, data, epilog };
+    const tabsChecked = (
+      Object.keys(provided) as Array<keyof typeof provided>
+    ).filter((t) => provided[t] !== undefined);
     const payload = {
       ok: result.success,
       processName: processName ?? "_compile_check",
       errorCount: result.errors.length,
       errors: result.errors,
+      tabsChecked,
+      partial: tabsChecked.length < 4,
       ...(result.success
         ? {}
         : {

@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `DimensionCreate`) are no longer reported as unresolved, so the
   `IF(DimensionExists('X') = 0); DimensionCreate('X');` pattern passes. The scan moved to a
   shared core that the install tools' preflight now also runs.
+- **`tm1_check_process_code` reports `tabsChecked` and `partial`.** Omitted tabs compile as
+  empty, so a clean result on a fragment says nothing about the tabs left out. `partial:
+  true` makes that visible: a validated prolog is not a validated process.
 
 ## [4.1.0] - 2026-09-24
 

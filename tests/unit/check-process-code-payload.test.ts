@@ -63,3 +63,27 @@ describe("tm1_check_process_code failure payload", () => {
     expect(payload.hint).toBeUndefined();
   });
 });
+
+describe("tm1_check_process_code coverage", () => {
+  it("marks a fragment as partial and names the tabs it saw", async () => {
+    const cb = captureHandler(async () => ({ success: true, errors: [] }));
+    const payload = JSON.parse(
+      (await cb({ prolog: "nX = 1;" }, {})).content[0].text,
+    );
+    expect(payload.tabsChecked).toEqual(["prolog"]);
+    expect(payload.partial).toBe(true);
+  });
+
+  it("is complete when all four tabs are passed, empty ones included", async () => {
+    const cb = captureHandler(async () => ({ success: true, errors: [] }));
+    const args = { prolog: "nX = 1;", metadata: "", data: "", epilog: "" };
+    const payload = JSON.parse((await cb(args, {})).content[0].text);
+    expect(payload.tabsChecked).toEqual([
+      "prolog",
+      "metadata",
+      "data",
+      "epilog",
+    ]);
+    expect(payload.partial).toBe(false);
+  });
+});
