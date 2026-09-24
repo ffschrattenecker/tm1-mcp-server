@@ -4,6 +4,8 @@ import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
 import { slimJsonSchema } from "../lib/slim-json-schema.js";
 import { specFor } from "./define-tool.js";
+import { DEFAULT_MAX_RESPONSE_CHARS } from "../config.js";
+import { TM1Error, TM1ErrorCode } from "../types.js";
 import { strictVariants } from "./schemas/markdown-capable.js";
 import {
   formatTm1ErrorResult,
@@ -50,6 +52,40 @@ function isMarkdownPayload(value: unknown): boolean {
     keys[0] === "markdown" &&
     typeof (value as { markdown: unknown }).markdown === "string"
   );
+}
+
+// Characters the client receives for a successful result: the text blocks, or
+// the serialized structuredContent when "structured" mode emptied content[].
+function responseChars(result: McpToolResult): number {
+  const text = (result.content ?? []).reduce(
+    (n, c) => n + (typeof c.text === "string" ? c.text.length : 0),
+    0,
+  );
+  if (text > 0 || result.structuredContent === undefined) return text;
+  return JSON.stringify(result.structuredContent).length;
+}
+
+// How to narrow a call, derived from the tool's own input keys so a new tool
+// gets a correct hint without a per-tool table to keep in step.
+export function narrowingHint(inputKeys: ReadonlySet<string>): string {
+  const ways: string[] = [];
+  if (inputKeys.has("outline"))
+    ways.push("outline=true to see the sections, then lineRange for a slice");
+  else if (inputKeys.has("lineRange")) ways.push("lineRange for a slice");
+  if (inputKeys.has("countOnly")) ways.push("countOnly=true to size it first");
+  if (inputKeys.has("limit"))
+    ways.push("a smaller limit, walking on with offset/next_offset");
+  else if (inputKeys.has("topN"))
+    ways.push("a smaller topN, walking on with offset");
+  if (inputKeys.has("maxBytes") || inputKeys.has("headLines"))
+    ways.push("a smaller maxBytes or headLines");
+  if (inputKeys.has("summary")) ways.push("summary=true");
+  if (inputKeys.has("compact")) ways.push("compact=true");
+  const tail =
+    ways.length > 0
+      ? `Use ${ways.join("; or ")}.`
+      : "Narrow the request (filters, fewer objects) and retry.";
+  return `${tail} Raise TM1_MAX_RESPONSE_CHARS only if the client can take the full payload.`;
 }
 
 // Rewrite a tools/list response so every advertised schema is slimmed.
@@ -134,6 +170,7 @@ export function withAnnotations(
   // callers — the live harness and the unit tests, which read content[0].text —
   // exercise the same wire shape real clients get.
   responseMode: "legacy" | "structured" = "legacy",
+  maxResponseChars: number = DEFAULT_MAX_RESPONSE_CHARS,
 ): McpServer {
   installToolsListSlimming(server);
 
@@ -193,10 +230,34 @@ export function withAnnotations(
 
   const SLOW_TOOL_MS = 5000;
 
+  // Replace an oversized success with an error that says how to narrow the
+  // call. Never truncate: a cut JSON payload is worse than none.
+  const guardSize = (
+    toolName: string,
+    result: McpToolResult,
+    hint: string,
+  ): McpToolResult => {
+    const size = responseChars(result);
+    if (size <= maxResponseChars) return result;
+    logger.warn(
+      { tool: toolName, size, maxResponseChars },
+      "response too large",
+    );
+    return formatTm1ErrorResult(
+      new TM1Error({
+        code: TM1ErrorCode.RESPONSE_TOO_LARGE,
+        message: `${toolName} produced ${size} characters, over the ${maxResponseChars}-character response limit. Nothing was returned.`,
+        hint,
+        details: JSON.stringify({ size, limit: maxResponseChars }),
+      }),
+    );
+  };
+
   const wrapCb = (
     toolName: string,
     cb: ToolCallback,
     outputSchema: ZodRawShape | ZodTypeAny | undefined,
+    sizeHint: string,
   ): ToolCallback => {
     // Normalize once per tool, not per call.
     const schema = outputSchema ? asZodSchema(outputSchema) : undefined;
@@ -275,9 +336,9 @@ export function withAnnotations(
               );
             }
           }
-          return withStructured;
+          return guardSize(toolName, withStructured, sizeHint);
         }
-        return result;
+        return result ? guardSize(toolName, result, sizeHint) : result;
       } catch (err) {
         logger.error({ err, tool: toolName }, "Tool handler threw");
         return formatTm1ErrorResult(err);
@@ -315,7 +376,17 @@ export function withAnnotations(
           return;
         }
         const outputSchema = spec.outputSchema;
-        const wrappedCb = wrapCb(name, args[3] as ToolCallback, outputSchema);
+        const inputKeys = new Set(
+          inputSchema && typeof inputSchema === "object"
+            ? Object.keys(inputSchema)
+            : [],
+        );
+        const wrappedCb = wrapCb(
+          name,
+          args[3] as ToolCallback,
+          outputSchema,
+          narrowingHint(inputKeys),
+        );
         const config: Record<string, unknown> = {
           title: deriveTitle(name),
           description,

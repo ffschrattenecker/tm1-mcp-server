@@ -10,6 +10,7 @@ export const TM1ErrorCode = {
   VALIDATION_ERROR: "VALIDATION_ERROR",
   TM1_ERROR: "TM1_ERROR",
   UNSUPPORTED_OPERATION: "UNSUPPORTED_OPERATION",
+  RESPONSE_TOO_LARGE: "RESPONSE_TOO_LARGE",
 } as const;
 
 export type TM1ErrorCode = (typeof TM1ErrorCode)[keyof typeof TM1ErrorCode];
@@ -87,6 +88,8 @@ export function hintForCode(code: TM1ErrorCode | string): string {
       return "TM1 server unreachable. Verify TM1_BASE_URL/TM1_HOST/TM1_PORT and that the service is running.";
     case TM1ErrorCode.LOCK_TIMEOUT:
       return "Request timed out — TM1 server may be waiting on an exclusive lock held by another session. Use tm1_list_threads to diagnose. Retry after the blocking operation completes.";
+    case TM1ErrorCode.RESPONSE_TOO_LARGE:
+      return "The result exceeds the response limit (TM1_MAX_RESPONSE_CHARS). Re-issue a narrower call: page with offset/limit, filter, or use the tool's summary mode.";
     case TM1ErrorCode.TM1_ERROR:
       return "Generic TM1 error. Inspect `details` for the raw server message.";
     default:

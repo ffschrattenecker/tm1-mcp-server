@@ -3,7 +3,9 @@ import { FileContentResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 
-const DEFAULT_MAX_BYTES = 256 * 1024;
+// Below the server's 80k-character response limit (TM1_MAX_RESPONSE_CHARS)
+// once JSON escaping is added; the old 256 KB default could never be returned.
+const DEFAULT_MAX_BYTES = 64 * 1024;
 const HARD_MAX_BYTES = 4 * 1024 * 1024;
 
 export const registerGetFileContent = defineTool({
@@ -12,7 +14,7 @@ export const registerGetFileContent = defineTool({
     "Read the content of a file from the TM1 server's data directory.",
     "Use to inspect CSV, TXT, or other text files before building import processes.",
     "Auto-falls back from v12 (Files) to v11 (Blobs) container.",
-    "Response is truncated to maxBytes (default 256 KB) to keep MCP messages small.",
+    "Response is truncated to maxBytes (default 64 KB) to keep MCP messages small.",
   ],
   annotations: READ_ONLY,
   output: FileContentResultSchema,

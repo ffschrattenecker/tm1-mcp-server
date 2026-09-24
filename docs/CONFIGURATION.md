@@ -21,6 +21,15 @@ config's `env` block. **Do not put `TM1_PASSWORD` in `.mcp.json` or
 `settings.json`** — those files are routinely shared or committed. Keep secrets
 in a `.env` that stays out of version control.
 
+## Response size — `TM1_MAX_RESPONSE_CHARS`
+
+A successful result longer than this many characters (default 80000) is replaced
+by a `RESPONSE_TOO_LARGE` error. Its hint says how to narrow the call, based on
+the tool's own parameters: `offset`/`limit`, `lineRange`/`outline`, `countOnly`,
+`maxBytes`. The result is never truncated, because a cut JSON payload is worse
+than none. The default sits under Claude Code's MCP output cap. Raise it only for
+a client that can take more.
+
 ## Wire format — `TM1_RESPONSE_MODE`
 
 Default `legacy`: a successful result ships its payload both as

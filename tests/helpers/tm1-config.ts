@@ -34,6 +34,7 @@ export const baseTestConfig: TM1Config = {
   httpAllowedOrigins: ["http://127.0.0.1:3000", "http://localhost:3000"],
   mode: "readonly",
   responseMode: "legacy",
+  maxResponseChars: 80_000,
   version: 11,
 };
 

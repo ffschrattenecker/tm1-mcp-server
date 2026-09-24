@@ -84,6 +84,7 @@ TM1_SSL_REJECT_UNAUTHORIZED=false
 TM1_VERSION=11.8
 TM1_MODE=readonly                   # readonly (default) | readwrite
 # TM1_RESPONSE_MODE=structured      # legacy (default) | structured
+# TM1_MAX_RESPONSE_CHARS=80000      # larger results fail with RESPONSE_TOO_LARGE
 # TM1_LOCAL_FILE_ROOT=/srv/tm1-git  # optional; enables host-disk file params
 ```
 

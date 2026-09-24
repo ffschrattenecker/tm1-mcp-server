@@ -45,6 +45,7 @@ function makeV12Config(): TM1Config {
     httpAllowedOrigins: [],
     mode: "readonly",
     responseMode: "structured",
+    maxResponseChars: 80_000,
     version: 12,
     instance: "tm1",
     database: "db1",

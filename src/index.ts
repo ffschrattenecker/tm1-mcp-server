@@ -81,7 +81,13 @@ function buildMcpServer(
   // mode the proxy silently drops write/destructive tools so they never appear
   // in the tool listing — no autoApprove lists needed.
   registerAllTools(
-    withAnnotations(server, logger, config.mode, config.responseMode),
+    withAnnotations(
+      server,
+      logger,
+      config.mode,
+      config.responseMode,
+      config.maxResponseChars,
+    ),
     tm1Client,
   );
   logger.debug(`All MCP tools registered (mode: ${config.mode})`);

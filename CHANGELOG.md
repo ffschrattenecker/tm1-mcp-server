@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with `attributeNames` to narrow the columns. The window is pushed into the MDX row set, so
   the query text stays short however large the page is. Passing `elementName` returns the
   same single-element shape as before.
+- **Response-size guard (`TM1_MAX_RESPONSE_CHARS`, default 80000).** A successful result
+  over the limit is replaced by a `RESPONSE_TOO_LARGE` error that gives the size and a
+  hint derived from the tool's own parameters (`offset`/`limit`, `lineRange`/`outline`,
+  `countOnly`, `maxBytes`). The result is never truncated. Before this, 23 recorded
+  results overflowed Claude Code's cap and reached the model as a file offload or nothing.
 
 
 ### Changed
@@ -43,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Input problems in `tm1_sample_cells`, `tm1_get_cube_stats` and the file upload and delete
   tools are now `VALIDATION_ERROR`s. They used to be generic errors or ad-hoc `{error}`
   bodies.
+- `tm1_get_file_content` defaults to `maxBytes` 64 KB (was 256 KB), so the default read
+  fits under the response limit.
 
 ## [4.0.0] - 2026-08-30
 

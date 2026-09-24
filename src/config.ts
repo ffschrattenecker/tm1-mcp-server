@@ -58,6 +58,11 @@ export interface TM1Config {
   // reads content[] exclusively, so "structured" renders as an empty result
   // there. Cost measured, benefit measured, default follows.
   responseMode: "legacy" | "structured";
+  // Upper bound on a successful tool result, in characters of what the client
+  // receives. Past it the result is replaced by a RESPONSE_TOO_LARGE error that
+  // says how to narrow the call — a client that truncates or offloads an
+  // oversized result instead hands the model broken JSON or nothing at all.
+  maxResponseChars: number;
   // v12 (Planning Analytics Engine). version===12 selects the v12 connection
   // profile (URL reroot + POST /{instance}/auth/v1/session login). Selected
   // when instance+database are set, or TM1_VERSION major is 12.
@@ -87,6 +92,8 @@ const VALID_AUTH_MODES = [
 // Parse a positive-integer env var. Empty/unset → default. A non-numeric or
 // non-positive value throws at startup instead of silently becoming NaN — NaN
 // makes setInterval/setTimeout fire continuously and ports resolve to ":NaN".
+export const DEFAULT_MAX_RESPONSE_CHARS = 80_000;
+
 function parseIntEnv(
   name: string,
   raw: string | undefined,
@@ -258,6 +265,14 @@ export function loadConfig(): TM1Config {
   }
   const responseMode = responseModeRaw as TM1Config["responseMode"];
 
+  // ~80k characters sits under Claude Code's default MCP output cap (25k
+  // tokens) with room for the envelope; 23 recorded results overflowed it.
+  const maxResponseChars = parseIntEnv(
+    "TM1_MAX_RESPONSE_CHARS",
+    process.env.TM1_MAX_RESPONSE_CHARS,
+    DEFAULT_MAX_RESPONSE_CHARS,
+  );
+
   // --- v12 (Planning Analytics Engine) connection ---------------------------
   const instance = process.env.TM1_INSTANCE || undefined;
   const database = process.env.TM1_DATABASE || undefined;
@@ -358,6 +373,7 @@ export function loadConfig(): TM1Config {
     httpToken,
     mode,
     responseMode,
+    maxResponseChars,
     version,
     instance,
     database,
