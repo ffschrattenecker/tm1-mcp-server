@@ -1,0 +1,71 @@
+name: Publish dist branch
+
+# Fork-only: publishes a pre-built, install-ready package for every push to a
+# feat/** branch onto dist/<branch>, so instances can run it with
+#   npx -y github:<owner>/tm1-mcp-server#dist/<branch>
+# without building from source on startup. npx keys its cache on the resolved
+# commit, so each publish is picked up on the next start. Not meant for
+# upstream: drop this file before opening a PR there.
+
+on:
+  push:
+    branches: ["feat/**"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-dist-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: github.event.repository.fork
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Gate: a broken push must not reach running instances.
+      - name: Tests
+        run: npm test
+
+      # Stage exactly what an npm consumer receives (files:["dist"], NOTICE,
+      # CHANGELOG), minus scripts/devDependencies so a git install neither
+      # pulls dev tooling nor re-runs `prepare`.
+      - name: Pack
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/stage"
+          tar -xzf "$RUNNER_TEMP"/tm1-mcp-server-*.tgz -C "$RUNNER_TEMP/stage" --strip-components=1
+          node -e '
+            const fs = require("fs");
+            const f = process.argv[1];
+            const p = JSON.parse(fs.readFileSync(f, "utf8"));
+            delete p.scripts;
+            delete p.devDependencies;
+            p.version = `${p.version}-dev.${process.env.GITHUB_RUN_NUMBER}`;
+            fs.writeFileSync(f, JSON.stringify(p, null, 2) + "\n");
+          ' "$RUNNER_TEMP/stage/package.json"
+
+      - name: Push to dist/${{ github.ref_name }}
+        working-directory: ${{ runner.temp }}/stage
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git init -q -b dist
+          git add -A
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -qm "dist: ${GITHUB_REF_NAME}@${GITHUB_SHA::7}"
+          git push --force \
+            "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:refs/heads/dist/${GITHUB_REF_NAME}"
