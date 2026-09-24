@@ -75,6 +75,8 @@ const CONFIRM_REQUIRED = [
   "tm1_import_pro_file",
   "tm1_import_process_from_git",
   "tm1_install_pro_bundle",
+  // …and bulk_upsert_elements when components would drop existing children.
+  "tm1_bulk_upsert_elements",
 ];
 
 describe("confirmation-guard coverage", () => {

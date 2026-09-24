@@ -5,6 +5,7 @@ import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
+import { TM1Error, TM1ErrorCode } from "../../types.js";
 
 const ElementSchema = z.object({
   name: z.string().describe("Element name"),
@@ -34,6 +35,7 @@ export const registerBulkUpsertElements = defineTool({
     "Existing elements are updated; new elements are created.",
     "IMPORTANT: List all Numeric/String leaf elements BEFORE Consolidated elements to avoid reference errors.",
     "For a Consolidated element, a non-empty components list REPLACES its full child set (existing children not listed are dropped); omit components to leave children unchanged.",
+    "When that would drop existing children, the call needs confirm=<dimension name>; dryRun=true returns the plan (creates, updates, typeChanges, removals) without writing.",
   ],
   annotations: IDEMPOTENT_DESTRUCTIVE,
   output: MutationResultSchema,
@@ -44,9 +46,59 @@ export const registerBulkUpsertElements = defineTool({
       .array(ElementSchema)
       .min(1)
       .describe("Elements to create or update"),
+    dryRun: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe(
+        "Return the plan (creates, updates, typeChanges, removals) and write nothing.",
+      ),
+    confirm: z
+      .string()
+      .optional()
+      .describe(
+        "Required only when components would remove existing children: the dimension name verbatim.",
+      ),
   },
-  handler: async ({ dimensionName, hierarchyName, elements }, tm1Client) => {
+  handler: async (
+    { dimensionName, hierarchyName, elements, dryRun, confirm },
+    tm1Client,
+  ) => {
     const hier = resolveHierarchy(dimensionName, hierarchyName);
+    // Only a components list can drop children, so only then (or for a
+    // dryRun) is the plan worth its read. It must run before bulkUpsert: the
+    // $batch create pass commits as it goes.
+    const replacesChildren = elements.some(
+      (e) => e.type === "Consolidated" && (e.components?.length ?? 0) > 0,
+    );
+    if (dryRun || replacesChildren) {
+      const plan = await tm1Client.elements.planBulkUpsert(
+        dimensionName,
+        hier,
+        elements,
+      );
+      if (dryRun) {
+        return actionResponse({
+          success: true,
+          dryRun: true,
+          dimensionName,
+          hierarchyName: hier,
+          ...plan,
+        });
+      }
+      if (plan.removals.length > 0 && confirm !== dimensionName) {
+        const dropped = plan.removals.reduce(
+          (n, r) => n + r.children.length,
+          0,
+        );
+        throw new TM1Error({
+          code: TM1ErrorCode.VALIDATION_ERROR,
+          message: `components would remove ${dropped} existing child link(s) under ${plan.removals.map((r) => r.parent).join(", ")}. Nothing was written.`,
+          hint: `components REPLACE a consolidation's children. Show the user details.removals; to proceed re-issue with confirm="${dimensionName}", or list the complete intended child set.`,
+          details: JSON.stringify({ removals: plan.removals }),
+        });
+      }
+    }
     const { typeChanges } = await withToolHint(
       tm1Client.elements.bulkUpsert(dimensionName, hier, elements),
       "Bulk upsert failed. Common causes: Consolidated element references a child that is not in this batch and does not exist yet (list leafs first), dimension/hierarchy name mismatch (tm1_list_dimensions to verify), or attempt to change an element's type (delete + recreate instead).",

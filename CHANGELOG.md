@@ -31,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now annotated `destructiveHint: true`. `tm1_copy_process` is unchanged: TM1 refuses to
   copy onto an existing name, so it never overwrites. *Action:* pass `confirm` on every
   update of an existing process, or use `mode: "create"` to refuse overwrites outright.
+- **`tm1_bulk_upsert_elements` needs `confirm` (the dimension name) when `components`
+  would remove existing children.** Components replace a consolidation's child set, so
+  listing `[A]` under a parent that holds `{A, B}` drops `B`. The removals are computed
+  before anything is written: the `$batch` create pass commits as it goes, so they could
+  not be computed afterwards. The call fails with `VALIDATION_ERROR` and
+  `details.removals[{parent, children}]` for the model to show the user. New `dryRun:
+  true` returns the full plan (`creates`, `updates`, `typeChanges`, `removals`) and writes
+  nothing. Calls whose components keep every child need no confirm. *Action:* pass
+  `confirm` when a removal is intended, or list the complete child set.
 
 
 ### Changed

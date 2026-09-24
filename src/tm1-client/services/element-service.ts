@@ -29,6 +29,15 @@ import { rethrowIfSystemic } from "./fallback.js";
 // while removing the serialized 2-3N round-trips on an explicitly-bulk op.
 const BULK_UPSERT_CONCURRENCY = 8;
 
+/** Read-only preview of {@link ElementService.bulkUpsert}. */
+export interface BulkUpsertPlan {
+  creates: string[];
+  updates: string[];
+  typeChanges: Array<{ name: string; from: string; to: string }>;
+  /** Existing children a components list would drop, per consolidation. */
+  removals: Array<{ parent: string; children: string[] }>;
+}
+
 /** Outcome of one element in {@link ElementService.deleteMany}. */
 export interface ElementDeleteResult {
   elementName: string;
@@ -218,6 +227,77 @@ export class ElementService {
   ): Promise<void> {
     const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(elementName)}')`;
     await this.http.request<void>("DELETE", path);
+  }
+
+  /**
+   * What a bulkUpsert of `elements` would do, read-only: which elements it
+   * creates, which it updates, which change type in place (a Numeric ->
+   * Consolidated/String conversion discards leaf data), and which existing
+   * children a `components` list would drop — components REPLACE the child
+   * set, they do not append.
+   *
+   * Computed BEFORE any write on purpose: bulkUpsert's $batch pass commits its
+   * creates as it goes (TM1's $batch is non-atomic), so a plan worked out
+   * afterwards could only report damage, not prevent it.
+   *
+   * One filtered read per 40 names — `Elements?$filter=Name eq … or …` with
+   * the edges expanded — instead of loading the hierarchy.
+   */
+  async planBulkUpsert(
+    dimensionName: string,
+    hierarchyName: string,
+    elements: ElementCreate[],
+  ): Promise<BulkUpsertPlan> {
+    const base = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements`;
+    const lit = (n: string) => `'${n.replace(/'/g, "''")}'`;
+    const current = new Map<string, { type: string; children: string[] }>();
+    const names = [...new Set(elements.map((e) => e.name))];
+    for (let i = 0; i < names.length; i += 40) {
+      const chunk = names.slice(i, i + 40);
+      const filter = chunk.map((n) => `Name eq ${lit(n)}`).join(" or ");
+      const page = await this.http.request<{
+        value: Array<{
+          Name: string;
+          Type: string;
+          Edges?: Array<{ ComponentName: string }>;
+        }>;
+      }>(
+        "GET",
+        `${base}?$select=Name,Type&$expand=Edges($select=ComponentName)&$filter=${encodeURIComponent(filter)}`,
+      );
+      for (const e of page.value)
+        current.set(e.Name.toLowerCase(), {
+          type: e.Type,
+          children: (e.Edges ?? []).map((x) => x.ComponentName),
+        });
+    }
+    const plan: BulkUpsertPlan = {
+      creates: [],
+      updates: [],
+      typeChanges: [],
+      removals: [],
+    };
+    for (const el of elements) {
+      const now = current.get(el.name.toLowerCase());
+      if (!now) {
+        plan.creates.push(el.name);
+        continue;
+      }
+      plan.updates.push(el.name);
+      if (now.type !== el.type)
+        plan.typeChanges.push({ name: el.name, from: now.type, to: el.type });
+      if (
+        el.type === "Consolidated" &&
+        el.components &&
+        el.components.length > 0
+      ) {
+        const keep = new Set(el.components.map((c) => c.name.toLowerCase()));
+        const dropped = now.children.filter((c) => !keep.has(c.toLowerCase()));
+        if (dropped.length > 0)
+          plan.removals.push({ parent: el.name, children: dropped });
+      }
+    }
+    return plan;
   }
 
   /**
