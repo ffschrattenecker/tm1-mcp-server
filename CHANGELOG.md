@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `counts.byLevel`, `counts.maxLevel`) with an empty `elements` array. The filters still
   apply. It reads only `Type,Level` from the Elements collection, so sizing a dimension no
   longer means probing with a growing `topN`.
+- **`tm1_get_element_attribute_values` reads every element when `elementName` is
+  omitted**: a name-sorted page of `{elementName, values}` rows in the usual page envelope,
+  with `attributeNames` to narrow the columns. The window is pushed into the MDX row set, so
+  the query text stays short however large the page is. Passing `elementName` returns the
+  same single-element shape as before.
+
 
 ### Changed
 

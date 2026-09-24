@@ -9,6 +9,7 @@
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
 import { TM1Error } from "../../types.js";
 import type {
+  CellValue,
   ElementAttributeValue,
   ElementCreate,
   ElementUpdate,
@@ -762,6 +763,58 @@ export class ElementService {
       });
     }
     return out;
+  }
+
+  /**
+   * Attribute values for a window of elements — every element of the
+   * dimension's default hierarchy, name-sorted, `limit` at a time. One MDX
+   * against `}ElementAttributes_{Dim}` with the window pushed into the row set
+   * (`SUBSET(TM1SORT(TM1SUBSETALL(...)))`), so the query text stays short no
+   * matter how many elements a page holds — TM1's request entity limit can be
+   * as low as 32 KB. `total` comes from `$count` on the Elements collection.
+   *
+   * `attributeNames` narrows the columns; omitted, every attribute is read.
+   */
+  async getAttributeValuesPage(
+    dimensionName: string,
+    opts: { offset: number; limit: number; attributeNames?: string[] },
+  ): Promise<{
+    total: number;
+    items: Array<{ elementName: string; values: Record<string, CellValue> }>;
+  }> {
+    const countPath = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(dimensionName)}')/Elements?$select=Name&$top=1&$count=true`;
+    const counted = await this.http.request<{ "@odata.count"?: number }>(
+      "GET",
+      countPath,
+    );
+    const total = counted["@odata.count"] ?? 0;
+    if (opts.limit === 0 || opts.offset >= total) return { total, items: [] };
+
+    const esc = (s: string): string => s.replace(/]/g, "]]");
+    const dim = esc(dimensionName);
+    const attrDim = `[}ElementAttributes_${dim}].[}ElementAttributes_${dim}]`;
+    const columns =
+      opts.attributeNames && opts.attributeNames.length > 0
+        ? `{${opts.attributeNames.map((a) => `${attrDim}.[${esc(a)}]`).join(", ")}}`
+        : `{TM1SUBSETALL(${attrDim})}`;
+    const mdx =
+      `SELECT ${columns} ON COLUMNS, ` +
+      `SUBSET(TM1SORT({TM1SUBSETALL([${dim}].[${dim}])}, ASC), ${opts.offset}, ${opts.limit}) ON ROWS ` +
+      `FROM [}ElementAttributes_${dim}]`;
+    const result = await this.cells.executeMdx(mdx);
+    const attrs = (result.axes[0]?.tuples ?? []).map(
+      (t) => t.members[0]?.name ?? "",
+    );
+    const rows = result.axes[1]?.tuples ?? [];
+    // Cells are row-major: cell (r, c) sits at r * columns + c.
+    const items = rows.map((t, r) => {
+      const values: Record<string, CellValue> = {};
+      attrs.forEach((a, c) => {
+        values[a] = result.cells[r * attrs.length + c]?.value ?? null;
+      });
+      return { elementName: t.members[0]?.name ?? "", values };
+    });
+    return { total, items };
   }
 
   /**
