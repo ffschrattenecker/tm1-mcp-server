@@ -1,11 +1,11 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
-import { TM1Error } from "../../types.js";
+import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { compileUserRegex } from "../../lib/safe-regex.js";
 import { parseProFile } from "../../lib/pro-parser.js";
 import { resolveLocalPath } from "../local-file.js";
-import { IDEMPOTENT_WRITE, withVersion } from "../annotations.js";
+import { IDEMPOTENT_DESTRUCTIVE, withVersion } from "../annotations.js";
 import { InstallProBundleResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { runPreflight, type PreflightFailure } from "./preflight.js";
@@ -24,7 +24,7 @@ export const registerInstallProBundle = defineTool({
   name: "tm1_install_pro_bundle",
   description:
     "Install all .pro files from a directory in one call. Iterates the directory (non-recursive by default), applies tm1_import_pro_file logic per file, and reports per-file outcome. Stops on first failure unless continueOnError=true. Useful for Bedrock or library deployments.",
-  annotations: withVersion(IDEMPOTENT_WRITE, "v11"),
+  annotations: withVersion(IDEMPOTENT_DESTRUCTIVE, "v11"),
   output: InstallProBundleResultSchema,
   input: {
     directory: z
@@ -62,6 +62,12 @@ export const registerInstallProBundle = defineTool({
       .describe(
         "Continue installing remaining files after a failure. Default false (stop on first error).",
       ),
+    confirm: z
+      .string()
+      .optional()
+      .describe(
+        "Required when any file would overwrite an installed process: the directory's last path segment, verbatim. dryRun lists the overwrites without needing it.",
+      ),
     dryRun: z
       .boolean()
       .optional()
@@ -71,7 +77,16 @@ export const registerInstallProBundle = defineTool({
       ),
   },
   handler: async (
-    { directory, recursive, pattern, mode, preflight, continueOnError, dryRun },
+    {
+      directory,
+      recursive,
+      pattern,
+      mode,
+      preflight,
+      continueOnError,
+      dryRun,
+      confirm,
+    },
     tm1Client,
     extra,
   ) => {
@@ -130,6 +145,30 @@ export const registerInstallProBundle = defineTool({
     const installedNames = new Set(
       installed.map((p: { name: string }) => p.name),
     );
+
+    // Which files would replace an installed process. Worked out before the
+    // first write so a missing confirm stops the bundle with nothing
+    // installed, and a dryRun can show the list to the user.
+    const overwrites: string[] = [];
+    if (mode !== "create") {
+      for (const file of files) {
+        try {
+          const name = parseProFile(await fs.readFile(file, "utf8")).name;
+          if (name && installedNames.has(name)) overwrites.push(name);
+        } catch {
+          /* unreadable or unparseable — reported per file below */
+        }
+      }
+    }
+    const bundle = path.basename(safeDir);
+    if (!dryRun && overwrites.length > 0 && confirm !== bundle) {
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message: `${overwrites.length} file(s) would overwrite installed processes (${overwrites.slice(0, 20).join(", ")}${overwrites.length > 20 ? ", …" : ""}). Nothing was installed.`,
+        hint: `Show the user the overwrite list (dryRun=true returns it), then re-issue with confirm="${bundle}". mode="create" installs only processes that do not exist yet.`,
+        details: JSON.stringify({ overwrites }),
+      });
+    }
 
     const results: FileResult[] = [];
     let stopped = false;
@@ -270,6 +309,7 @@ export const registerInstallProBundle = defineTool({
       filesFound: files.length,
       dryRun,
       mode,
+      overwrites,
       counts: {
         created: results.filter((r) => r.status === "created").length,
         updated: results.filter((r) => r.status === "updated").length,

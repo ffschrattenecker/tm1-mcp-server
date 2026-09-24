@@ -69,6 +69,12 @@ const CONFIRM_REQUIRED = [
   "tm1_write_cells",
   "tm1_set_cube_rules",
   "tm1_upload_file",
+  // 5.0.0: create-or-update tools confirm an OVERWRITE (optional field, required
+  // at runtime once the target exists).
+  "tm1_upsert_process",
+  "tm1_import_pro_file",
+  "tm1_import_process_from_git",
+  "tm1_install_pro_bundle",
 ];
 
 describe("confirmation-guard coverage", () => {

@@ -7,9 +7,13 @@ import {
   unplacedBlobContent,
 } from "../../lib/git-process.js";
 import { withToolHint } from "../error-format.js";
-import { IDEMPOTENT_WRITE } from "../annotations.js";
+import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { ImportProcessFromGitResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import {
+  OVERWRITE_CONFIRM_SCHEMA,
+  requireOverwriteConfirm,
+} from "../confirm.js";
 import { preflightResult, runPreflight } from "./preflight.js";
 
 export const registerImportProcessFromGit = defineTool({
@@ -19,7 +23,7 @@ export const registerImportProcessFromGit = defineTool({
     "Reverse of tm1_export_process_to_git. Modes: 'create' (fail if exists), 'update' (fail if missing), 'upsert' (default).",
     "If the source datasource is ODBC, pass dataSourcePassword to re-inject the credential that export strips.",
   ],
-  annotations: IDEMPOTENT_WRITE,
+  annotations: IDEMPOTENT_DESTRUCTIVE,
   output: ImportProcessFromGitResultSchema,
   input: {
     jsonContent: z
@@ -57,6 +61,7 @@ export const registerImportProcessFromGit = defineTool({
       .describe(
         "ODBC password to re-inject, in clear text; the target server encrypts it. Overrides whatever the .json carries. Export omits the password unless includeDataSourcePassword was set, which is possible on v12 only — so on v11 this is the only way to deploy a working ODBC process. Ignored for non-ODBC datasources.",
       ),
+    ...OVERWRITE_CONFIRM_SCHEMA,
     preflight: z
       .boolean()
       .optional()
@@ -75,6 +80,7 @@ export const registerImportProcessFromGit = defineTool({
       mode,
       dataSourcePassword,
       preflight,
+      confirm,
     },
     tm1Client,
   ) => {
@@ -160,6 +166,9 @@ export const registerImportProcessFromGit = defineTool({
         message: `Process '${processName}' does not exist; mode=update`,
       });
     }
+
+    // Replacing an installed process is not undoable through the API.
+    if (exists) requireOverwriteConfirm(confirm, processName, "process");
 
     const action = exists ? "updated" : "created";
     if (!exists) {

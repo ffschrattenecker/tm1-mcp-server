@@ -4,16 +4,20 @@ import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { parseProFile } from "../../lib/pro-parser.js";
 import { withToolHint } from "../error-format.js";
-import { IDEMPOTENT_WRITE, withVersion } from "../annotations.js";
+import { IDEMPOTENT_DESTRUCTIVE, withVersion } from "../annotations.js";
 import { ImportProFileResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import {
+  OVERWRITE_CONFIRM_SCHEMA,
+  requireOverwriteConfirm,
+} from "../confirm.js";
 import { preflightResult, runPreflight } from "./preflight.js";
 
 export const registerImportProFile = defineTool({
   name: "tm1_import_pro_file",
   description:
     "Parse a TM1 .pro file (Tabs / Parameters / Variables / DataSource) and deploy the process in one call. Provide either filePath (absolute path on the MCP host) or content (the .pro file body as string). Modes: 'create' (fail if exists), 'update' (fail if missing), 'upsert' (default — create or update). A .pro carries an ODBC password only when it came from tm1_export_process_to_pro against a v12 database, which writes it in clear; TM1's own Datadir .pro encodes slot 565 in a form that cannot be replayed over REST, and v11 exports never contain a password at all. Pass dataSourcePassword in every other case.",
-  annotations: withVersion(IDEMPOTENT_WRITE, "v11"),
+  annotations: withVersion(IDEMPOTENT_DESTRUCTIVE, "v11"),
   output: ImportProFileResultSchema,
   input: {
     filePath: z
@@ -44,6 +48,7 @@ export const registerImportProFile = defineTool({
       .describe(
         "Run the syntax check (tm1_check_process_code) AND the reference check (tm1_validate_process_refs) on the exact payload before applying; abort on either. Default true. false skips both.",
       ),
+    ...OVERWRITE_CONFIRM_SCHEMA,
     dataSourcePassword: z
       .string()
       .optional()
@@ -59,6 +64,7 @@ export const registerImportProFile = defineTool({
       mode,
       preflight,
       dataSourcePassword,
+      confirm,
     },
     tm1Client,
   ) => {
@@ -117,6 +123,9 @@ export const registerImportProFile = defineTool({
         message: `Process '${processName}' does not exist; mode=update`,
       });
     }
+
+    // Replacing an installed process is not undoable through the API.
+    if (exists) requireOverwriteConfirm(confirm, processName, "process");
 
     const action = exists ? "updated" : "created";
     if (!exists) {

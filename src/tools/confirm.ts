@@ -46,3 +46,33 @@ export function requireConfirm(
     });
   }
 }
+
+// Overwrite guard for create-or-update tools (upsert_process, the import tools,
+// install_pro_bundle). Creating a new object needs no confirmation; replacing
+// an existing one does, because the previous version is not recoverable
+// through the API. Hence optional in the schema, required at runtime once the
+// target is known to exist.
+export const OVERWRITE_CONFIRM_SCHEMA = {
+  confirm: z
+    .string()
+    .optional()
+    .describe(
+      "Required only when the target already exists (an overwrite): repeat its name verbatim. Not needed to create.",
+    ),
+};
+
+export function requireOverwriteConfirm(
+  provided: string | undefined,
+  target: string,
+  kind: string,
+): void {
+  if (provided === target) return;
+  throw new TM1Error({
+    code: TM1ErrorCode.VALIDATION_ERROR,
+    message:
+      provided === undefined
+        ? `${kind} "${target}" already exists; overwriting it needs confirm="${target}". Nothing was written.`
+        : `confirm mismatch — expected ${kind} name "${target}", got "${provided}". Nothing was written.`,
+    hint: `Show the user what will be replaced (e.g. tm1_diff_process_with_file), then re-issue with confirm="${target}" verbatim, or use mode="create" to refuse overwrites outright.`,
+  });
+}

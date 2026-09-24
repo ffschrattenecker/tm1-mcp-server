@@ -2,9 +2,13 @@ import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { invalidateCallgraphCache } from "../../lib/callgraph/tm1-adapter.js";
 import { dataSourceSchema as sharedDataSourceSchema } from "../../lib/process-parts-schema.js";
-import { IDEMPOTENT_WRITE } from "../annotations.js";
+import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { UpsertProcessResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import {
+  OVERWRITE_CONFIRM_SCHEMA,
+  requireOverwriteConfirm,
+} from "../confirm.js";
 import { preflightResult, runPreflight } from "./preflight.js";
 
 // The same data source shape the git round-trip and check_process_code use.
@@ -33,7 +37,7 @@ export const registerUpsertProcess = defineTool({
   name: "tm1_upsert_process",
   description:
     "Atomic-style create-or-update for a TI process. Bundles createProcess (if missing) + updateProcessCode + updateProcessParameters + updateProcessVariables + updateProcessDataSource into a single MCP call. NOTE: TM1 itself does not support a real transaction — on partial failure, the steps that already succeeded are not rolled back. The tool reports which step failed.",
-  annotations: IDEMPOTENT_WRITE,
+  annotations: IDEMPOTENT_DESTRUCTIVE,
   output: UpsertProcessResultSchema,
   input: {
     processName: z.string(),
@@ -51,6 +55,7 @@ export const registerUpsertProcess = defineTool({
         "When set, applies the process's HasSecurityAccess flag via a dedicated PATCH after the other steps.",
       ),
     mode: z.enum(["create", "update", "upsert"]).optional().default("upsert"),
+    ...OVERWRITE_CONFIRM_SCHEMA,
     preflight: z
       .boolean()
       .optional()
@@ -80,6 +85,7 @@ export const registerUpsertProcess = defineTool({
       mode,
       preflight,
       autoCompile,
+      confirm,
     },
     tm1Client,
   ) => {
@@ -97,6 +103,9 @@ export const registerUpsertProcess = defineTool({
         message: `Process '${processName}' does not exist; mode=update`,
       });
     }
+
+    // Replacing an installed process is not undoable through the API.
+    if (exists) requireOverwriteConfirm(confirm, processName, "process");
 
     if (preflight) {
       // Check the process as it will stand after this call, not the fields

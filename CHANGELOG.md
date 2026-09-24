@@ -22,6 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   twice: that code would install without having been checked. *Action:* a deploy that
   references an object its own code does not create must create the object first, or pass
   `preflight: false`, which skips both checks.
+- **Overwriting an installed process needs `confirm`.** `tm1_upsert_process`,
+  `tm1_import_pro_file` and `tm1_import_process_from_git` reject an update of an existing
+  process unless `confirm` repeats the process name, and nothing is written.
+  `tm1_install_pro_bundle` works out every file that would overwrite before the first
+  write, and needs `confirm` set to the directory's last path segment. `dryRun` returns the
+  list (`overwrites[]`) without it. Creating a new process needs no confirm. All four are
+  now annotated `destructiveHint: true`. `tm1_copy_process` is unchanged: TM1 refuses to
+  copy onto an existing name, so it never overwrites. *Action:* pass `confirm` on every
+  update of an existing process, or use `mode: "create"` to refuse overwrites outright.
+
 
 ### Changed
 

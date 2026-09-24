@@ -127,7 +127,7 @@ describe("tm1_upsert_process preflight", () => {
         calls,
       ),
       // Updates the prolog only; the installed epilog still names 'Gone'.
-      { processName: "P", prolog: "CellGetN('Sales', 'a');" },
+      { processName: "P", prolog: "CellGetN('Sales', 'a');", confirm: "P" },
     );
     expect(calls.check[0]).toMatchObject({
       prolog: "CellGetN('Sales', 'a');",
