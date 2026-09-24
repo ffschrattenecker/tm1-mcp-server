@@ -197,6 +197,8 @@ describe.skipIf(!LIVE_ENABLED)("live: process (TI development)", () => {
       processName: PROC_BAD,
       prolog: "nX = ThisFunctionDoesNotExist( ;",
       mode: "upsert",
+      // Broken on purpose — the install preflight would refuse it.
+      preflight: false,
     });
     const compiled = await h.call("tm1_compile_process", {
       processName: PROC_BAD,

@@ -107,6 +107,11 @@
       "endpoint": "GET /api/v1/Dimensions('*')/Hierarchies('*')/Elements",
       "path": "$.value[].Name",
       "reason": "Not a recording gap but a projection: HierarchyService.getCounts (tm1_get_hierarchy countOnly) selects $select=Type,Level only, because it never needs the names and they are most of the payload on a 160k-element dimension. The contract is keyed by path, not by $select, so it expects the Name the other Elements reads select."
+    },
+    {
+      "endpoint": "GET /api/v1/Dimensions('*')/Hierarchies('*')/Elements",
+      "path": "$.value[].Edges",
+      "reason": "Not a recording gap but a projection: ElementService.planBulkUpsert (tm1_bulk_upsert_elements dryRun / removal guard) expands Edges($select=ComponentName) on a Name-filtered Elements read to learn each consolidation's current children. The other Elements reads never expand it, so the recording never saw the key."
     }
   ]
 }

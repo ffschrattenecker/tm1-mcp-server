@@ -210,6 +210,9 @@ describe.skipIf(!LIVE_ENABLED)(
           processName: stepProc(c.name),
           prolog: `CellPutN(22, '${CUBE}', 'M2', 'F1');\r\n${c.body}\r\n`,
           mode: "upsert",
+          // Some cases fail on purpose (a missing cube, a syntax error) — the
+          // install preflight would refuse them.
+          preflight: false,
         });
       }
 

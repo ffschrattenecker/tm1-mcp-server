@@ -228,6 +228,8 @@ describe.skipIf(!LIVE_ENABLED)(
         await h.ok("tm1_upsert_process", {
           processName: proc,
           prolog: `CellPutN(42, '${CUBE}', 'E1', 'F1');\r\n${c.body}\r\n`,
+          // Some cases fail on purpose — the install preflight would refuse them.
+          preflight: false,
         });
 
         const run = await h.call("tm1_execute_process", {
