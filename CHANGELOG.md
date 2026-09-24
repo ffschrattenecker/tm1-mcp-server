@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`hierarchyName` defaults to the dimension name** on the 15 tools that use a hierarchy
+  to locate something: `get_hierarchy`, `get_ancestors`, `get_descendants`, the element and
+  element-attribute tools, and the subset tools. Omitting it was the most common schema
+  error in recorded usage. `create_hierarchy` and `delete_hierarchy` keep it required, since
+  there the hierarchy is the subject and the same-named one can be neither created nor
+  deleted on its own.
+
 ## [4.0.0] - 2026-08-30
 
 ### Breaking

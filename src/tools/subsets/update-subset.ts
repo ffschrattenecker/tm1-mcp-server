@@ -3,6 +3,7 @@ import { actionResponse } from "../format.js";
 import { IDEMPOTENT_WRITE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 export const registerUpdateSubset = defineTool({
   name: "tm1_update_subset",
   description:
@@ -11,7 +12,7 @@ export const registerUpdateSubset = defineTool({
   output: MutationResultSchema,
   input: {
     dimensionName: z.string().describe("Dimension name"),
-    hierarchyName: z.string().describe("Hierarchy name"),
+    ...HIERARCHY_NAME_OPTIONAL,
     subsetName: z.string().describe("Existing subset name"),
     expression: z.string().optional().describe("New MDX expression"),
     elements: z
@@ -24,7 +25,8 @@ export const registerUpdateSubset = defineTool({
     { dimensionName, hierarchyName, subsetName, expression, elements, alias },
     tm1Client,
   ) => {
-    await tm1Client.subsets.update(dimensionName, hierarchyName, subsetName, {
+    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
+    await tm1Client.subsets.update(dimensionName, hierarchy, subsetName, {
       expression,
       elements,
       alias,

@@ -3,6 +3,7 @@ import { actionResponse } from "../format.js";
 import { IDEMPOTENT_WRITE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 const updateSchema = z.object({
   newName: z.string().optional().describe("New name for the element"),
   type: z
@@ -23,7 +24,7 @@ export const registerUpdateElement = defineTool({
   output: MutationResultSchema,
   input: {
     dimensionName: z.string().describe("Name of the dimension"),
-    hierarchyName: z.string().describe("Name of the hierarchy"),
+    ...HIERARCHY_NAME_OPTIONAL,
     elementName: z.string().describe("Current name of the element to update"),
     update: updateSchema.describe("Fields to update on the element"),
   },
@@ -31,9 +32,10 @@ export const registerUpdateElement = defineTool({
     { dimensionName, hierarchyName, elementName, update },
     tm1Client,
   ) => {
+    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
     await tm1Client.elements.update(
       dimensionName,
-      hierarchyName,
+      hierarchy,
       elementName,
       update,
     );

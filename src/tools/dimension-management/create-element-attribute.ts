@@ -3,6 +3,7 @@ import { actionResponse } from "../format.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { WRITE } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 export const registerCreateElementAttribute = defineTool({
   name: "tm1_create_element_attribute",
   description:
@@ -11,9 +12,7 @@ export const registerCreateElementAttribute = defineTool({
   output: MutationResultSchema,
   input: {
     dimensionName: z.string().describe("Name of the TM1 dimension"),
-    hierarchyName: z
-      .string()
-      .describe("Name of the hierarchy within the dimension"),
+    ...HIERARCHY_NAME_OPTIONAL,
     attributeName: z.string().describe("Name of the new attribute"),
     attributeType: z
       .enum(["Numeric", "String", "Alias"])
@@ -23,9 +22,10 @@ export const registerCreateElementAttribute = defineTool({
     { dimensionName, hierarchyName, attributeName, attributeType },
     tm1Client,
   ) => {
+    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
     await tm1Client.elements.createAttribute(
       dimensionName,
-      hierarchyName,
+      hierarchy,
       attributeName,
       attributeType,
     );

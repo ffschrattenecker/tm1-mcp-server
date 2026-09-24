@@ -2,6 +2,7 @@ import { z } from "zod";
 import { READ_ONLY } from "../annotations.js";
 import { SubsetSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 export const registerGetSubset = defineTool({
   name: "tm1_get_subset",
   description:
@@ -10,7 +11,7 @@ export const registerGetSubset = defineTool({
   output: SubsetSchema,
   input: {
     dimensionName: z.string().describe("Dimension name"),
-    hierarchyName: z.string().describe("Hierarchy name"),
+    ...HIERARCHY_NAME_OPTIONAL,
     subsetName: z.string().describe("Subset name"),
     isPrivate: z
       .boolean()
@@ -24,9 +25,10 @@ export const registerGetSubset = defineTool({
     { dimensionName, hierarchyName, subsetName, isPrivate },
     tm1Client,
   ) => {
+    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
     const subset = await tm1Client.subsets.get(
       dimensionName,
-      hierarchyName,
+      hierarchy,
       subsetName,
       isPrivate ?? false,
     );

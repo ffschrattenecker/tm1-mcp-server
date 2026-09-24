@@ -3,6 +3,7 @@ import { actionResponse } from "../format.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { WRITE } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 export const registerMoveElement = defineTool({
   name: "tm1_move_element",
   description:
@@ -11,7 +12,7 @@ export const registerMoveElement = defineTool({
   output: MutationResultSchema,
   input: {
     dimensionName: z.string().describe("Name of the dimension"),
-    hierarchyName: z.string().describe("Name of the hierarchy"),
+    ...HIERARCHY_NAME_OPTIONAL,
     elementName: z.string().describe("Name of the element to move"),
     newParent: z.string().describe("Name of the new parent element"),
     weight: z
@@ -23,9 +24,10 @@ export const registerMoveElement = defineTool({
     { dimensionName, hierarchyName, elementName, newParent, weight },
     tm1Client,
   ) => {
+    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
     await tm1Client.elements.move(
       dimensionName,
-      hierarchyName,
+      hierarchy,
       elementName,
       newParent,
       weight,

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 import { READ_ONLY } from "../annotations.js";
 import { AncestorsResultSchema } from "../schemas/items.js";
 import {
@@ -20,7 +21,7 @@ export const registerGetAncestors = defineTool({
   output: AncestorsResultSchema,
   input: {
     dimensionName: z.string().describe("Name of the TM1 dimension"),
-    hierarchyName: z.string().describe("Hierarchy within the dimension"),
+    ...HIERARCHY_NAME_OPTIONAL,
     elementName: z
       .string()
       .describe(
@@ -32,9 +33,10 @@ export const registerGetAncestors = defineTool({
     { dimensionName, hierarchyName, elementName, format },
     tm1Client,
   ) => {
+    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
     const result = await tm1Client.hierarchies.getAncestors(
       dimensionName,
-      hierarchyName,
+      hierarchy,
       elementName,
     );
     type Row = (typeof result.ancestors)[number];

@@ -4,6 +4,7 @@ import { actionResponse } from "../format.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 export const registerDeleteSubset = defineTool({
   name: "tm1_delete_subset",
   description:
@@ -12,7 +13,7 @@ export const registerDeleteSubset = defineTool({
   output: MutationResultSchema,
   input: {
     dimensionName: z.string().describe("Dimension name"),
-    hierarchyName: z.string().describe("Hierarchy name"),
+    ...HIERARCHY_NAME_OPTIONAL,
     subsetName: z.string().describe("Subset to delete"),
     ...CONFIRM_SCHEMA,
   },
@@ -20,8 +21,9 @@ export const registerDeleteSubset = defineTool({
     { dimensionName, hierarchyName, subsetName, confirm },
     tm1Client,
   ) => {
+    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
     requireConfirm(confirm, subsetName, "subset");
-    await tm1Client.subsets.delete(dimensionName, hierarchyName, subsetName);
+    await tm1Client.subsets.delete(dimensionName, hierarchy, subsetName);
     return actionResponse({ success: true, subsetName });
   },
 });

@@ -3,6 +3,7 @@ import { actionResponse } from "../format.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { WRITE } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 export const registerCreateSubset = defineTool({
   name: "tm1_create_subset",
   description:
@@ -11,7 +12,7 @@ export const registerCreateSubset = defineTool({
   output: MutationResultSchema,
   input: {
     dimensionName: z.string().describe("Dimension name"),
-    hierarchyName: z.string().describe("Hierarchy name"),
+    ...HIERARCHY_NAME_OPTIONAL,
     subsetName: z.string().describe("New subset name"),
     expression: z
       .string()
@@ -34,7 +35,8 @@ export const registerCreateSubset = defineTool({
     { dimensionName, hierarchyName, subsetName, expression, elements, alias },
     tm1Client,
   ) => {
-    await tm1Client.subsets.create(dimensionName, hierarchyName, {
+    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
+    await tm1Client.subsets.create(dimensionName, hierarchy, {
       name: subsetName,
       expression,
       elements,

@@ -8,6 +8,7 @@ import {
 import { DescendantsResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 
 export const registerGetDescendants = defineTool({
   name: "tm1_get_descendants",
@@ -22,7 +23,7 @@ export const registerGetDescendants = defineTool({
   output: DescendantsResultSchema,
   input: {
     dimensionName: z.string().describe("Name of the TM1 dimension"),
-    hierarchyName: z.string().describe("Hierarchy within the dimension"),
+    ...HIERARCHY_NAME_OPTIONAL,
     elementName: z
       .string()
       .describe(
@@ -62,9 +63,10 @@ export const registerGetDescendants = defineTool({
     },
     tm1Client,
   ) => {
+    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
     const full = await tm1Client.hierarchies.getDescendants(
       dimensionName,
-      hierarchyName,
+      hierarchy,
       elementName,
       {
         ...(depth !== undefined ? { depth } : {}),

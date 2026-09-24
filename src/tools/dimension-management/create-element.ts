@@ -3,6 +3,7 @@ import { actionResponse } from "../format.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { WRITE } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 const elementSchema = z.object({
   name: z.string().describe("Element name"),
   type: z.enum(["Numeric", "String", "Consolidated"]).describe("Element type"),
@@ -19,13 +20,14 @@ export const registerCreateElement = defineTool({
   output: MutationResultSchema,
   input: {
     dimensionName: z.string().describe("Name of the dimension"),
-    hierarchyName: z.string().describe("Name of the hierarchy"),
+    ...HIERARCHY_NAME_OPTIONAL,
     element: elementSchema.describe(
       "Element definition with name, type and optional components",
     ),
   },
   handler: async ({ dimensionName, hierarchyName, element }, tm1Client) => {
-    await tm1Client.elements.create(dimensionName, hierarchyName, element);
+    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
+    await tm1Client.elements.create(dimensionName, hierarchy, element);
     return actionResponse({ success: true, elementName: element.name });
   },
 });

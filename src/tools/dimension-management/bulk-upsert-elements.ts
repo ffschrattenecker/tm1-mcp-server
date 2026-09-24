@@ -4,6 +4,7 @@ import { actionResponse } from "../format.js";
 import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 
 const ElementSchema = z.object({
   name: z.string().describe("Element name"),
@@ -38,17 +39,14 @@ export const registerBulkUpsertElements = defineTool({
   output: MutationResultSchema,
   input: {
     dimensionName: z.string().describe("Dimension name"),
-    hierarchyName: z
-      .string()
-      .optional()
-      .describe("Hierarchy name (defaults to dimension name)"),
+    ...HIERARCHY_NAME_OPTIONAL,
     elements: z
       .array(ElementSchema)
       .min(1)
       .describe("Elements to create or update"),
   },
   handler: async ({ dimensionName, hierarchyName, elements }, tm1Client) => {
-    const hier = hierarchyName ?? dimensionName;
+    const hier = resolveHierarchy(dimensionName, hierarchyName);
     const { typeChanges } = await withToolHint(
       tm1Client.elements.bulkUpsert(dimensionName, hier, elements),
       "Bulk upsert failed. Common causes: Consolidated element references a child that is not in this batch and does not exist yet (list leafs first), dimension/hierarchy name mismatch (tm1_list_dimensions to verify), or attempt to change an element's type (delete + recreate instead).",

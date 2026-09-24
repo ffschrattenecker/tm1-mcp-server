@@ -2,6 +2,7 @@ import { z } from "zod";
 import { HierarchySchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 export const registerGetHierarchy = defineTool({
   name: "tm1_get_hierarchy",
   description: [
@@ -14,9 +15,7 @@ export const registerGetHierarchy = defineTool({
   output: HierarchySchema,
   input: {
     dimensionName: z.string().describe("Name of the TM1 dimension"),
-    hierarchyName: z
-      .string()
-      .describe("Name of the hierarchy within the dimension"),
+    ...HIERARCHY_NAME_OPTIONAL,
     level: z
       .number()
       .int()
@@ -99,9 +98,10 @@ export const registerGetHierarchy = defineTool({
     },
     tm1Client,
   ) => {
+    const hierName = resolveHierarchy(dimensionName, hierarchyName);
     const { totalElements, ...hierarchy } = await tm1Client.hierarchies.get(
       dimensionName,
-      hierarchyName,
+      hierName,
       {
         ...(level !== undefined ? { level } : {}),
         ...(levelMax !== undefined ? { levelMax } : {}),

@@ -4,6 +4,7 @@ import { FORMAT_SCHEMA, pageResponse, columnsOf } from "../format.js";
 import { READ_ONLY } from "../annotations.js";
 import { SubsetSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 import { pageShapeFor } from "../schemas/common.js";
 
 export const registerListSubsets = defineTool({
@@ -14,9 +15,7 @@ export const registerListSubsets = defineTool({
   output: pageShapeFor(SubsetSchema),
   input: {
     dimensionName: z.string().describe("Dimension name"),
-    hierarchyName: z
-      .string()
-      .describe("Hierarchy name (commonly equal to the dimension name)"),
+    ...HIERARCHY_NAME_OPTIONAL,
     ...PAGINATION_SCHEMA,
     ...FORMAT_SCHEMA,
   },
@@ -24,7 +23,8 @@ export const registerListSubsets = defineTool({
     { dimensionName, hierarchyName, limit, offset, fetchAll, format },
     tm1Client,
   ) => {
-    const subsets = await tm1Client.subsets.list(dimensionName, hierarchyName);
+    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
+    const subsets = await tm1Client.subsets.list(dimensionName, hierarchy);
     const page = paginate(subsets, limit, offset, fetchAll);
     type Row = (typeof subsets)[number];
     const columns = columnsOf<Row>([
@@ -34,7 +34,7 @@ export const registerListSubsets = defineTool({
       "expression",
     ]);
     return pageResponse(page, format, {
-      title: `Subsets of ${dimensionName}/${hierarchyName}`,
+      title: `Subsets of ${dimensionName}/${hierarchy}`,
       columns,
     });
   },
