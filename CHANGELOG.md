@@ -75,6 +75,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   description always said this could not be done. TM1 11.8 does not refuse it, though: it
   answers 204 and leaves a dimension listed with no hierarchies at all (verified live).
   The tool now fails with `VALIDATION_ERROR` and points to `tm1_delete_dimension`.
+- **`tm1_copy_process` onto an existing target fails with `CONFLICT`** instead of a
+  "Generic TM1 error". TM1 already refuses the POST and leaves the target untouched
+  (verified live), so copy never overwrote. It now says so up front.
 
 ## [4.0.0] - 2026-08-30
 
