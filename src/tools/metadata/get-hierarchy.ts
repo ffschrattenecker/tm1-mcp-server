@@ -7,6 +7,7 @@ export const registerGetHierarchy = defineTool({
   name: "tm1_get_hierarchy",
   description: [
     "Get hierarchy elements with parent-child relationships for a dimension.",
+    "To size a dimension, pass countOnly=true (totals by type and level, no elements) or narrow with nameContains/nameStartsWith before paging — don't probe with growing topN.",
     "Filters (level/levelMax/elementType, name filters, compact) reduce payload; capped to topN (default 1000) with truncated=true when the cap clips.",
     "Elements are ordered by name; walk large dimensions with offset (total/has_more count the filtered element set) rather than raising topN.",
     "Filtered-out parents/children are pruned from remaining elements to avoid dangling references.",
@@ -74,6 +75,13 @@ export const registerGetHierarchy = defineTool({
       .describe(
         "Elements to skip before topN (default 0). Use next page = offset + topN while has_more is true.",
       ),
+    countOnly: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe(
+        "Return only totals of the filtered set (counts.byType, counts.byLevel, counts.maxLevel) with an empty elements array. Filters apply; topN/offset/compact are ignored.",
+      ),
     compact: z
       .boolean()
       .optional()
@@ -94,24 +102,44 @@ export const registerGetHierarchy = defineTool({
       nameRegex,
       topN,
       offset,
+      countOnly,
       compact,
     },
     tm1Client,
   ) => {
     const hierName = resolveHierarchy(dimensionName, hierarchyName);
+    const filterOpts = {
+      ...(level !== undefined ? { level } : {}),
+      ...(levelMax !== undefined ? { levelMax } : {}),
+      ...(elementType !== undefined ? { elementType } : {}),
+      ...(nameContains !== undefined ? { nameContains } : {}),
+      ...(nameStartsWith !== undefined ? { nameStartsWith } : {}),
+      ...(nameRegex !== undefined ? { nameRegex } : {}),
+    };
+    if (countOnly) {
+      const { total, ...counts } = await tm1Client.hierarchies.getCounts(
+        dimensionName,
+        hierName,
+        filterOpts,
+      );
+      const output = {
+        name: hierName,
+        dimensionName,
+        elements: [],
+        truncated: false,
+        total,
+        offset: 0,
+        has_more: false,
+        counts,
+      };
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(output) }],
+      };
+    }
     const { totalElements, ...hierarchy } = await tm1Client.hierarchies.get(
       dimensionName,
       hierName,
-      {
-        ...(level !== undefined ? { level } : {}),
-        ...(levelMax !== undefined ? { levelMax } : {}),
-        ...(elementType !== undefined ? { elementType } : {}),
-        ...(nameContains !== undefined ? { nameContains } : {}),
-        ...(nameStartsWith !== undefined ? { nameStartsWith } : {}),
-        ...(nameRegex !== undefined ? { nameRegex } : {}),
-        topN,
-        skip: offset,
-      },
+      { ...filterOpts, topN, skip: offset },
     );
     // `totalElements` counts the whole filtered set, so this is exact — the
     // old `elements.length === topN` test cried truncation whenever the last

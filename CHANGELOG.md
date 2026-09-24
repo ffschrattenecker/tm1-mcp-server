@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`tm1_get_hierarchy` takes `countOnly: true`**: totals by type and level (`counts.byType`,
+  `counts.byLevel`, `counts.maxLevel`) with an empty `elements` array. The filters still
+  apply. It reads only `Type,Level` from the Elements collection, so sizing a dimension no
+  longer means probing with a growing `topN`.
+
 ### Changed
 
 - **`hierarchyName` defaults to the dimension name** on the 15 tools that use a hierarchy

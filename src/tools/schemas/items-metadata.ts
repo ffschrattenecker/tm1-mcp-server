@@ -40,6 +40,18 @@ export const HierarchySchema = HierarchyBase.extend({
   has_more: z.boolean(),
   // true when the topN cap clipped the (post-filter) element set — raise topN.
   truncated: z.boolean(),
+  // countOnly=true: totals of the filtered set; elements is then empty.
+  counts: z
+    .object({
+      byType: z.object({
+        Numeric: z.number().int(),
+        String: z.number().int(),
+        Consolidated: z.number().int(),
+      }),
+      byLevel: z.record(z.string(), z.number().int()),
+      maxLevel: z.number().int(),
+    })
+    .optional(),
 });
 
 export const BulkUpsertElementsResultSchema = z.object({

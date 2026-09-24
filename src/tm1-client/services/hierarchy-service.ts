@@ -22,6 +22,67 @@ const enc = (s: string): string =>
  */
 export type HierarchyPage = Hierarchy & { totalElements: number };
 
+/** Element filters shared by {@link HierarchyService.get} and {@link HierarchyService.getCounts}. */
+export interface ElementFilterOpts {
+  level?: number;
+  levelMax?: number;
+  elementType?: "Numeric" | "String" | "Consolidated" | "All";
+  nameContains?: string;
+  nameStartsWith?: string;
+  nameRegex?: string;
+}
+
+/** Element totals of a (filtered) hierarchy, without the elements. */
+export interface HierarchyCounts {
+  total: number;
+  byType: { Numeric: number; String: number; Consolidated: number };
+  /** Level → element count. Keys are the level as a string ("0" = leaves). */
+  byLevel: Record<string, number>;
+  maxLevel: number;
+}
+
+// elementType pushes down as the ORDINAL, not the name: `Type eq
+// 'Consolidated'` is accepted and matches nothing — silently, which is
+// worse than an error and is why this filter used to run client-side.
+// `Type eq 3` works (verified live on 11.8: 1 → Numeric, 2 → String,
+// 3 → Consolidated).
+//
+// Doing it server-side matters more since elements carry their Edges: a
+// client-side type filter means fetching every element of the dimension
+// with its edges attached — measured at 99 MB on a 171k-element dimension,
+// against 300 KB for the pushed-down page.
+//
+// nameRegex stays client-side; OData has no regex.
+const TYPE_ORDINAL: Record<string, number> = {
+  Numeric: 1,
+  String: 2,
+  Consolidated: 3,
+};
+
+function elementFilters(opts: ElementFilterOpts | undefined): {
+  filters: string[];
+  regex: RegExp | undefined;
+} {
+  const filters: string[] = [];
+  if (opts?.level !== undefined) filters.push(`Level eq ${opts.level}`);
+  if (opts?.levelMax !== undefined) filters.push(`Level le ${opts.levelMax}`);
+  const escapeOdata = (s: string) => s.replace(/'/g, "''");
+  if (opts?.nameContains)
+    filters.push(`contains(Name, '${escapeOdata(opts.nameContains)}')`);
+  if (opts?.nameStartsWith)
+    filters.push(`startswith(Name, '${escapeOdata(opts.nameStartsWith)}')`);
+  const typeOrdinal =
+    opts?.elementType && opts.elementType !== "All"
+      ? TYPE_ORDINAL[opts.elementType]
+      : undefined;
+  if (typeOrdinal !== undefined) filters.push(`Type eq ${typeOrdinal}`);
+  const regex =
+    opts?.nameRegex !== undefined
+      ? compileUserRegex(opts.nameRegex, undefined, "nameRegex")
+      : undefined;
+  return { filters, regex };
+}
+
 export class HierarchyService {
   constructor(private readonly http: TM1HttpClient) {}
 
@@ -44,10 +105,7 @@ export class HierarchyService {
   async get(
     dimensionName: string,
     hierarchyName: string,
-    opts?: {
-      level?: number;
-      levelMax?: number;
-      elementType?: "Numeric" | "String" | "Consolidated" | "All";
+    opts?: ElementFilterOpts & {
       topN?: number;
       /**
        * Elements to skip before `topN`. Applied server-side when possible and
@@ -55,9 +113,6 @@ export class HierarchyService {
        * pagination semantics either way.
        */
       skip?: number;
-      nameContains?: string;
-      nameStartsWith?: string;
-      nameRegex?: string;
     },
   ): Promise<HierarchyPage> {
     const elementClauses: string[] = [
@@ -67,41 +122,7 @@ export class HierarchyService {
       // for why the separate Edges scan is gone.
       "$expand=Parents($select=Name),Edges($select=ComponentName,Weight)",
     ];
-    const filters: string[] = [];
-    if (opts?.level !== undefined) filters.push(`Level eq ${opts.level}`);
-    if (opts?.levelMax !== undefined) filters.push(`Level le ${opts.levelMax}`);
-    const escapeOdata = (s: string) => s.replace(/'/g, "''");
-    if (opts?.nameContains)
-      filters.push(`contains(Name, '${escapeOdata(opts.nameContains)}')`);
-    if (opts?.nameStartsWith)
-      filters.push(`startswith(Name, '${escapeOdata(opts.nameStartsWith)}')`);
-    // elementType pushes down as the ORDINAL, not the name: `Type eq
-    // 'Consolidated'` is accepted and matches nothing — silently, which is
-    // worse than an error and is why this filter used to run client-side.
-    // `Type eq 3` works (verified live on 11.8: 1 → Numeric, 2 → String,
-    // 3 → Consolidated).
-    //
-    // Doing it here matters more since elements carry their Edges: a
-    // client-side type filter means fetching every element of the dimension
-    // with its edges attached — measured at 99 MB on a 171k-element dimension,
-    // against 300 KB for the pushed-down page.
-    //
-    // nameRegex stays client-side; OData has no regex.
-    const TYPE_ORDINAL: Record<string, number> = {
-      Numeric: 1,
-      String: 2,
-      Consolidated: 3,
-    };
-    const typeOrdinal =
-      opts?.elementType && opts.elementType !== "All"
-        ? TYPE_ORDINAL[opts.elementType]
-        : undefined;
-    if (typeOrdinal !== undefined) filters.push(`Type eq ${typeOrdinal}`);
-
-    let regex: RegExp | undefined;
-    if (opts?.nameRegex !== undefined) {
-      regex = compileUserRegex(opts.nameRegex, undefined, "nameRegex");
-    }
+    const { filters, regex } = elementFilters(opts);
     const needsClientPostFilter = regex !== undefined;
     if (filters.length > 0)
       elementClauses.push(`$filter=${filters.join(" and ")}`);
@@ -207,6 +228,52 @@ export class HierarchyService {
       elements,
       totalElements,
     };
+  }
+
+  /**
+   * Element totals by type and level for a (filtered) hierarchy — no element
+   * rows. Reads the Elements collection with `$select=Type,Level` (plus Name
+   * only when a regex has to run client-side), so a count over a 200k-element
+   * dimension costs a few MB of wire traffic and a few hundred bytes of reply,
+   * where probing with growing `topN` returned the elements themselves.
+   *
+   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Type,Level
+   */
+  async getCounts(
+    dimensionName: string,
+    hierarchyName: string,
+    opts?: ElementFilterOpts,
+  ): Promise<HierarchyCounts> {
+    const { filters, regex } = elementFilters(opts);
+    const clauses = [regex ? "$select=Name,Type,Level" : "$select=Type,Level"];
+    if (filters.length > 0) clauses.push(`$filter=${filters.join(" and ")}`);
+    const path =
+      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')` +
+      `/Elements?${clauses.join("&")}`;
+    const response = await this.http.request<{
+      value?: Array<{ Name?: string; Type: string; Level: number }>;
+    }>("GET", path);
+    let rows = response.value ?? [];
+    if (regex !== undefined)
+      rows = rows.filter((e) => regex.test(e.Name ?? ""));
+    const counts: HierarchyCounts = {
+      total: rows.length,
+      byType: { Numeric: 0, String: 0, Consolidated: 0 },
+      byLevel: {},
+      maxLevel: 0,
+    };
+    for (const e of rows) {
+      if (
+        e.Type === "Numeric" ||
+        e.Type === "String" ||
+        e.Type === "Consolidated"
+      )
+        counts.byType[e.Type]++;
+      const lvl = String(e.Level);
+      counts.byLevel[lvl] = (counts.byLevel[lvl] ?? 0) + 1;
+      if (e.Level > counts.maxLevel) counts.maxLevel = e.Level;
+    }
+    return counts;
   }
 
   /**

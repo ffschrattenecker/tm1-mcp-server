@@ -218,3 +218,72 @@ describe("tm1_get_hierarchy tool", () => {
     expect(out.has_more).toBe(false);
   });
 });
+
+describe("tm1_get_hierarchy countOnly", () => {
+  const ROWS = [
+    { Name: "Total", Type: "Consolidated", Level: 2 },
+    { Name: "EU", Type: "Consolidated", Level: 1 },
+    { Name: "AT", Type: "Numeric", Level: 0 },
+    { Name: "DE", Type: "Numeric", Level: 0 },
+    { Name: "Note", Type: "String", Level: 0 },
+  ];
+
+  function countingClient(paths: string[]): TM1Client {
+    const request = async (_method: string, path: string) => {
+      paths.push(path);
+      return { value: ROWS };
+    };
+    const hierarchies = new HierarchyService({
+      request,
+    } as unknown as ConstructorParameters<typeof HierarchyService>[0]);
+    return contractCheckedClient({ hierarchies } as unknown as TM1Client);
+  }
+
+  it("returns totals by type and level with no elements", async () => {
+    const paths: string[] = [];
+    const { server, getHandler } = makeFakeServer();
+    registerGetHierarchy(server, countingClient(paths));
+
+    const out = JSON.parse(
+      (await getHandler()({ dimensionName: "Region", countOnly: true }))
+        .content[0].text,
+    );
+
+    // Defaulted hierarchy, the Elements collection, and no Parents/Edges expand.
+    expect(paths[0]).toContain(
+      "Hierarchies('Region')/Elements?$select=Type,Level",
+    );
+    expect(paths[0]).not.toContain("$expand");
+    expect(out.elements).toEqual([]);
+    expect(out.total).toBe(5);
+    expect(out.has_more).toBe(false);
+    expect(out.counts).toEqual({
+      byType: { Numeric: 2, String: 1, Consolidated: 2 },
+      byLevel: { "0": 3, "1": 1, "2": 1 },
+      maxLevel: 2,
+    });
+  });
+
+  it("pushes OData filters down and applies nameRegex client-side", async () => {
+    const paths: string[] = [];
+    const { server, getHandler } = makeFakeServer();
+    registerGetHierarchy(server, countingClient(paths));
+
+    const out = JSON.parse(
+      (
+        await getHandler()({
+          dimensionName: "Region",
+          countOnly: true,
+          level: 0,
+          nameRegex: "^[A-Z]{2}$",
+        })
+      ).content[0].text,
+    );
+
+    expect(paths[0]).toContain("$select=Name,Type,Level");
+    expect(paths[0]).toContain("$filter=Level eq 0");
+    // The fake ignores $filter; only the regex narrows here.
+    expect(out.total).toBe(3);
+    expect(out.counts.byType.Consolidated).toBe(1);
+  });
+});
