@@ -4,10 +4,7 @@ import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
-import {
-  dimensionCountMismatch,
-  dimensionListMismatch,
-} from "../../lib/coordinate-error.js";
+import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
 
 export const registerWriteCells = defineTool({
   name: "tm1_write_cells",
@@ -57,12 +54,6 @@ export const registerWriteCells = defineTool({
         throw dimensionCountMismatch(cubeName, dimensions, c.elements);
       }
     }
-    const listError = dimensionListMismatch(
-      cubeName,
-      await tm1Client.cubes.getDimensionNames(cubeName),
-      dimensions,
-    );
-    if (listError) throw listError;
     // writeCells throws a TM1Error carrying its own partial-commit accounting
     // (written / failed / notAttempted) + a targeted hint, so we let it
     // propagate to the index.ts Proxy unwrapped — wrapping it here would

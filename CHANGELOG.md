@@ -68,13 +68,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bodies.
 - `tm1_get_file_content` defaults to `maxBytes` 64 KB (was 256 KB), so the default read
   fits under the response limit.
-- **`tm1_write_cells` checks `dimensions` against the cube before writing.** A tuple and
-  its dimension list can agree with each other and still both miss a dimension the cube
-  has. The usual culprit is `Sandboxes`, which a server with `EnableSandboxDimension` adds
-  to every cube it creates (verified on 11.8). The call now fails with `VALIDATION_ERROR`
-  that names the missing, unknown or misordered dimensions and gives the cube's real
-  order. Names compare ignoring case and spaces, as TM1 does. This costs one extra GET per
-  write.
 
 ## [4.0.0] - 2026-08-30
 
