@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { TM1Error } from "../../types.js";
 import { actionResponse } from "../format.js";
 import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
 
 export const registerWriteCells = defineTool({
   name: "tm1_write_cells",
@@ -51,10 +51,7 @@ export const registerWriteCells = defineTool({
     requireConfirm(confirm, cubeName, "cube");
     for (const c of cells) {
       if (c.elements.length !== dimensions.length) {
-        throw new TM1Error({
-          code: "VALIDATION_ERROR",
-          message: `Cell element count (${c.elements.length}) does not match dimension count (${dimensions.length})`,
-        });
+        throw dimensionCountMismatch(cubeName, dimensions, c.elements);
       }
     }
     // writeCells throws a TM1Error carrying its own partial-commit accounting

@@ -33,3 +33,33 @@ describe("dimensionCountMismatch", () => {
     expect(err.message).toContain("1 element(s) too many: c");
   });
 });
+
+describe("tm1_write_cells short tuple", () => {
+  it("fails before writing, naming the uncovered dimension", async () => {
+    const { registerWriteCells } =
+      await import("../../src/tools/celldata/write-cells.js");
+    const { z } = await import("zod");
+    let h: ((a: unknown) => Promise<unknown>) | undefined;
+    let shape: Record<string, never> = {};
+    const writes: unknown[] = [];
+    registerWriteCells(
+      {
+        tool: (_n: string, _d: string, s: never, cb: typeof h) => {
+          shape = s;
+          h = cb;
+        },
+      } as never,
+      {
+        cells: { writeCells: async (...a: unknown[]) => void writes.push(a) },
+      } as never,
+    );
+    const args = z.object(shape).parse({
+      cubeName: "Sales",
+      dimensions: ["Version", "Measure"],
+      cells: [{ elements: ["Actual"], value: 1 }],
+      confirm: "Sales",
+    });
+    await expect(h!(args)).rejects.toThrow("(by position): Measure");
+    expect(writes).toEqual([]);
+  });
+});
