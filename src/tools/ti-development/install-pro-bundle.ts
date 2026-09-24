@@ -8,17 +8,16 @@ import { resolveLocalPath } from "../local-file.js";
 import { IDEMPOTENT_WRITE, withVersion } from "../annotations.js";
 import { InstallProBundleResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { runPreflight, type PreflightFailure } from "./preflight.js";
 
 interface FileResult {
   file: string;
   processName: string | null;
   status: "created" | "updated" | "skipped" | "preflight_failed" | "error";
   error?: string;
-  preflightErrors?: Array<{
-    procedure?: string | undefined;
-    lineNumber?: number | undefined;
-    message: string;
-  }>;
+  preflightErrors?: PreflightFailure["errors"];
+  /** Unresolved cube/dimension references found by the preflight. */
+  preflightIssues?: PreflightFailure["issues"];
 }
 
 export const registerInstallProBundle = defineTool({
@@ -53,7 +52,9 @@ export const registerInstallProBundle = defineTool({
       .boolean()
       .optional()
       .default(true)
-      .describe("Run tm1_check_process_code per file. Default true."),
+      .describe(
+        "Per file: the syntax check AND the reference check on the exact payload; a failure marks the file preflight_failed. Default true. false skips both.",
+      ),
     continueOnError: z
       .boolean()
       .optional()
@@ -162,7 +163,7 @@ export const registerInstallProBundle = defineTool({
         }
 
         if (preflight) {
-          const check = await tm1Client.processes.check({
+          const failure = await runPreflight(tm1Client, {
             name: processName,
             prolog: parsed.prolog,
             metadata: parsed.metadata,
@@ -172,12 +173,14 @@ export const registerInstallProBundle = defineTool({
             variables: parsed.variables,
             dataSource: parsed.dataSource,
           });
-          if (!check.success) {
+          if (failure) {
             results.push({
               file,
               processName,
               status: "preflight_failed",
-              preflightErrors: check.errors,
+              error: failure.message,
+              ...(failure.errors ? { preflightErrors: failure.errors } : {}),
+              ...(failure.issues ? { preflightIssues: failure.issues } : {}),
             });
             if (!continueOnError) stopped = true;
             continue;

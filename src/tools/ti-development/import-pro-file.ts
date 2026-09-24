@@ -7,6 +7,7 @@ import { withToolHint } from "../error-format.js";
 import { IDEMPOTENT_WRITE, withVersion } from "../annotations.js";
 import { ImportProFileResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { preflightResult, runPreflight } from "./preflight.js";
 
 export const registerImportProFile = defineTool({
   name: "tm1_import_pro_file",
@@ -41,7 +42,7 @@ export const registerImportProFile = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Run tm1_check_process_code before applying. Abort on syntax errors. Default true.",
+        "Run the syntax check (tm1_check_process_code) AND the reference check (tm1_validate_process_refs) on the exact payload before applying; abort on either. Default true. false skips both.",
       ),
     dataSourcePassword: z
       .string()
@@ -86,7 +87,7 @@ export const registerImportProFile = defineTool({
     }
 
     if (preflight) {
-      const check = await tm1Client.processes.check({
+      const failure = await runPreflight(tm1Client, {
         name: processName,
         prolog: parsed.prolog,
         metadata: parsed.metadata,
@@ -96,21 +97,7 @@ export const registerImportProFile = defineTool({
         variables: parsed.variables,
         dataSource: parsed.dataSource,
       });
-      if (!check.success) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                stage: "preflight",
-                processName,
-                errors: check.errors,
-              }),
-            },
-          ],
-          isError: true,
-        };
-      }
+      if (failure) return preflightResult(failure);
     }
 
     const allProcs = await tm1Client.processes.list();

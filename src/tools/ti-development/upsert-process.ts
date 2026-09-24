@@ -5,6 +5,7 @@ import { dataSourceSchema as sharedDataSourceSchema } from "../../lib/process-pa
 import { IDEMPOTENT_WRITE } from "../annotations.js";
 import { UpsertProcessResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { preflightResult, runPreflight } from "./preflight.js";
 
 // The same data source shape the git round-trip and check_process_code use.
 // This tool used to carry its own copy, which had drifted: it was missing
@@ -50,6 +51,13 @@ export const registerUpsertProcess = defineTool({
         "When set, applies the process's HasSecurityAccess flag via a dedicated PATCH after the other steps.",
       ),
     mode: z.enum(["create", "update", "upsert"]).optional().default("upsert"),
+    preflight: z
+      .boolean()
+      .optional()
+      .default(true)
+      .describe(
+        "Before writing, run the syntax check AND the reference check on the process as it will be after this call (omitted tabs, parameters and variables keep their installed values). Abort on either. Default true. false skips both.",
+      ),
     autoCompile: z
       .boolean()
       .optional()
@@ -70,6 +78,7 @@ export const registerUpsertProcess = defineTool({
       dataSource,
       hasSecurityAccess,
       mode,
+      preflight,
       autoCompile,
     },
     tm1Client,
@@ -87,6 +96,32 @@ export const registerUpsertProcess = defineTool({
         code: TM1ErrorCode.NOT_FOUND,
         message: `Process '${processName}' does not exist; mode=update`,
       });
+    }
+
+    if (preflight) {
+      // Check the process as it will stand after this call, not the fields
+      // the caller happened to send: an omitted tab keeps its installed code.
+      const current = exists
+        ? await tm1Client.processes.getCode(processName)
+        : { prolog: "", metadata: "", data: "", epilog: "" };
+      const failure = await runPreflight(tm1Client, {
+        name: processName,
+        prolog: prolog ?? current.prolog,
+        metadata: metadata ?? current.metadata,
+        data: data ?? current.data,
+        epilog: epilog ?? current.epilog,
+        parameters:
+          parameters ??
+          (exists ? await tm1Client.processes.getParameters(processName) : []),
+        variables:
+          variables !== undefined && variables.length > 0
+            ? variables
+            : exists
+              ? await tm1Client.processes.getVariables(processName)
+              : [],
+        ...(dataSource !== undefined ? { dataSource } : {}),
+      });
+      if (failure) return preflightResult(failure);
     }
 
     if (!exists) {

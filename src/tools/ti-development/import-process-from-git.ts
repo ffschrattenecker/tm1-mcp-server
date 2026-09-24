@@ -2,11 +2,15 @@ import { promises as fs } from "node:fs";
 import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { resolveLocalPath } from "../local-file.js";
-import { parseProcessFromGit } from "../../lib/git-process.js";
+import {
+  parseProcessFromGit,
+  unplacedBlobContent,
+} from "../../lib/git-process.js";
 import { withToolHint } from "../error-format.js";
 import { IDEMPOTENT_WRITE } from "../annotations.js";
 import { ImportProcessFromGitResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { preflightResult, runPreflight } from "./preflight.js";
 
 export const registerImportProcessFromGit = defineTool({
   name: "tm1_import_process_from_git",
@@ -58,7 +62,7 @@ export const registerImportProcessFromGit = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Run tm1_check_process_code before applying. Abort on syntax errors. Default true.",
+        "Run the syntax check (tm1_check_process_code) AND the reference check (tm1_validate_process_refs) on the exact payload before applying; abort on either. Default true. false skips both.",
       ),
   },
   handler: async (
@@ -114,7 +118,22 @@ export const registerImportProcessFromGit = defineTool({
     }
 
     if (preflight) {
-      const check = await tm1Client.processes.check({
+      // The raw .ti blob is what deploys (TM1 splits it into tabs), so the
+      // parsed tabs are only an exact stand-in for it when every byte of the
+      // blob sits inside exactly one tab region. Anything else would be
+      // installed without having been checked.
+      const unplaced = unplacedBlobContent(ti);
+      if (unplaced.length > 0) {
+        return preflightResult({
+          stage: "preflight",
+          check: "syntax",
+          processName,
+          code: TM1ErrorCode.VALIDATION_ERROR,
+          message: `The .ti blob carries content the preflight cannot place in a tab: ${unplaced.join("; ")}.`,
+          hint: "Nothing was installed. Keep all code inside one #region Prolog/Metadata/Data/Epilog … #endregion block per tab — re-export with tm1_export_process_to_git if unsure.",
+        });
+      }
+      const failure = await runPreflight(tm1Client, {
         name: processName,
         prolog: parsed.prolog,
         metadata: parsed.metadata,
@@ -124,21 +143,7 @@ export const registerImportProcessFromGit = defineTool({
         variables: parsed.variables,
         dataSource,
       });
-      if (!check.success) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                stage: "preflight",
-                processName,
-                errors: check.errors,
-              }),
-            },
-          ],
-          isError: true,
-        };
-      }
+      if (failure) return preflightResult(failure);
     }
 
     const exists = await tm1Client.processes.exists(processName);
@@ -168,7 +173,8 @@ export const registerImportProcessFromGit = defineTool({
     // (normalized to CRLF, as TM1 emits/expects) and let the server split it
     // into the four tabs. This is a full replace — tabs whose region is
     // absent are cleared, matching the exported .ti exactly.
-    // Note: parsed tabs were used only for preflight validation above; this raw blob deploys, and TM1 owns the authoritative region split.
+    // The parsed tabs were preflighted above; unplacedBlobContent() made
+    // sure they cover this blob exactly, so what was checked is what deploys.
     await withToolHint(
       tm1Client.processes.updateCodeBlob(
         processName,

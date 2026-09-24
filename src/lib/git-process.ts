@@ -243,6 +243,44 @@ function parseCodeBlob(ti: string): Record<Tab, string> {
   return out;
 }
 
+/**
+ * Blob content the tab parser does not place — text outside every top-level
+ * `#region <Tab>` block, and a tab whose region appears more than once (the
+ * parser keeps the last copy). tm1_import_process_from_git deploys the RAW
+ * blob and lets TM1 split it, so its preflight can only vouch for the blob
+ * when this list is empty: otherwise the checked tabs and the installed code
+ * differ. Assumes a blob parseProcessFromGit already accepted.
+ */
+export function unplacedBlobContent(ti: string): string[] {
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  let depth = 0;
+  let outsideFrom = 0;
+  const outside = (from: number, to: number) => {
+    const text = ti.slice(from, to).trim();
+    if (text !== "")
+      problems.push(
+        `text outside any tab region: "${text.split(/\r?\n/)[0]!.slice(0, 60)}"`,
+      );
+  };
+  for (const m of extractRegionMarkers(ti)) {
+    if (m.kind === "region") {
+      if (depth === 0) {
+        outside(outsideFrom, m.start);
+        const tab = m.name.toLowerCase();
+        if (seen.has(tab)) problems.push(`#region ${m.name} appears twice`);
+        seen.add(tab);
+      }
+      depth++;
+    } else {
+      depth--;
+      if (depth === 0) outsideFrom = m.contentStart;
+    }
+  }
+  outside(outsideFrom, ti.length);
+  return problems;
+}
+
 /** Parse a `{name}.json` + `{name}.ti` pair back into deployable process parts. */
 export function parseProcessFromGit(
   jsonContent: string,

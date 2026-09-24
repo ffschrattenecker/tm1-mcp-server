@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- **Install preflight also runs the reference check, on the exact payload.**
+  `tm1_import_pro_file`, `tm1_import_process_from_git`, `tm1_install_pro_bundle` and now
+  `tm1_upsert_process` (new `preflight`, default true) run the syntax check and then the
+  `tm1_validate_process_refs` check before writing anything. A literal cube or dimension
+  name that does not exist on the server aborts the install with `VALIDATION_ERROR`
+  (`stage: "preflight"`, `check: "references"`, `issues[]`). Before, preflight ran the syntax
+  check only, and TM1 never resolves names at compile time. `upsert_process` checks the
+  process as it will be after the call: omitted tabs, parameters and variables keep their
+  installed values. `import_process_from_git` deploys the raw `.ti` blob, so it also
+  refuses a blob with code outside the four tab regions, or a tab region that appears
+  twice: that code would install without having been checked. *Action:* a deploy that
+  references an object its own code does not create must create the object first, or pass
+  `preflight: false`, which skips both checks.
+
 ### Changed
 
 - **`tm1_validate_process_refs` reports its coverage and stops flagging legitimate
