@@ -82,6 +82,9 @@ export const ValidateProcessRefsResultSchema = z.object({
   dimensionRefsScanned: z.number().int(),
   unresolved: z.number().int(),
   issues: z.array(z.unknown()),
+  tabsChecked: z.array(z.string()),
+  unresolvableArgs: z.number().int(),
+  partial: z.boolean(),
 });
 
 // Mirrors the `ProcessResult` union in src/types.ts. The wire schema stays a

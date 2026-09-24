@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`tm1_validate_process_refs` reports its coverage and stops flagging legitimate
+  patterns.** It now returns `tabsChecked`, `unresolvableArgs` and `partial`. `partial` is
+  true when object names are passed as parameters or computed values, so those references
+  were not checked. Existence probes (`DimensionExists`, `CubeExists`, `HierarchyExists`,
+  `SubsetExists`, `ViewExists`) and names the same code creates (`CubeCreate`,
+  `DimensionCreate`) are no longer reported as unresolved, so the
+  `IF(DimensionExists('X') = 0); DimensionCreate('X');` pattern passes. The scan moved to a
+  shared core that the install tools' preflight now also runs.
+
 ## [4.1.0] - 2026-09-24
 
 ### Added

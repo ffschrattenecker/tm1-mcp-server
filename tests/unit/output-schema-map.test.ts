@@ -205,6 +205,9 @@ describe("declared output schemas", () => {
       dimensionRefsScanned: 5,
       unresolved: 0,
       issues: [],
+      tabsChecked: ["prolog", "data"],
+      unresolvableArgs: 0,
+      partial: false,
     },
     tm1_get_subset: {
       name: "EU",
