@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   error in recorded usage. `create_hierarchy` and `delete_hierarchy` keep it required, since
   there the hierarchy is the subject and the same-named one can be neither created nor
   deleted on its own.
+- **`tm1_update_element_attribute_value` takes `value` as a string and an `updates[]`
+  batch.** The value is coerced to the attribute's type on the server: a Numeric attribute
+  takes `"12.5"`, String and Alias attributes take the text. A bare number is still
+  accepted. An unknown attribute or a non-number for a Numeric one fails with
+  `VALIDATION_ERROR` before anything is written. `updates[]` writes many values in one
+  cellset PATCH, instead of one call per value.
 
 ## [4.0.0] - 2026-08-30
 

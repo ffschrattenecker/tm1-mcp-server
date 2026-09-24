@@ -7,7 +7,7 @@
 //
 // See docs/ARCHITECTURE.md for the layering.
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
-import { TM1Error } from "../../types.js";
+import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type {
   CellValue,
   ElementAttributeValue,
@@ -818,11 +818,7 @@ export class ElementService {
   }
 
   /**
-   * Set a single attribute value on an element by writing to the
-   * `}ElementAttributes_{Dim}` control cube via CellService.writeCells.
-   *
-   * Prefer TI processes (CellPutS / AttrPutS) for reproducible deployments;
-   * this REST-direct path is for ad-hoc / debugging use.
+   * Set a single attribute value. See {@link updateAttributeValues}.
    */
   async updateAttributeValue(
     dimensionName: string,
@@ -830,11 +826,66 @@ export class ElementService {
     attributeName: string,
     value: number | string,
   ): Promise<void> {
-    const ctrlCube = `}ElementAttributes_${dimensionName}`;
+    await this.updateAttributeValues(dimensionName, [
+      { elementName, attributeName, value },
+    ]);
+  }
+
+  /**
+   * Set attribute values by writing to the `}ElementAttributes_{Dim}` control
+   * cube — every update in ONE cellset write (CellService.writeCells).
+   *
+   * Values are coerced to the attribute's type, looked up once: a Numeric
+   * attribute takes a number or a numeric string (`"12.5"`), String and Alias
+   * attributes take the value as text. An unknown attribute or a non-numeric
+   * value for a Numeric attribute is a VALIDATION_ERROR that names it, raised
+   * before anything is written.
+   *
+   * Prefer TI processes (CellPutS / AttrPutS) for reproducible deployments;
+   * this REST-direct path is for ad-hoc / debugging use.
+   */
+  async updateAttributeValues(
+    dimensionName: string,
+    updates: Array<{
+      elementName: string;
+      attributeName: string;
+      value: number | string;
+    }>,
+  ): Promise<void> {
+    if (updates.length === 0) return;
+    const types = new Map(
+      (await this.listAttributes(dimensionName, dimensionName)).map((a) => [
+        a.name,
+        a.type,
+      ]),
+    );
+    const cells = updates.map((u) => {
+      const type = types.get(u.attributeName);
+      if (type === undefined) {
+        throw new TM1Error({
+          code: TM1ErrorCode.VALIDATION_ERROR,
+          message: `Attribute '${u.attributeName}' does not exist on dimension '${dimensionName}'.`,
+          hint: `Known attributes: ${[...types.keys()].join(", ") || "(none)"}. Create it first with tm1_create_element_attribute.`,
+        });
+      }
+      let value: number | string = String(u.value);
+      if (type === "Numeric") {
+        const n =
+          typeof u.value === "number" ? u.value : Number(u.value.trim());
+        if (u.value === "" || !Number.isFinite(n)) {
+          throw new TM1Error({
+            code: TM1ErrorCode.VALIDATION_ERROR,
+            message: `Attribute '${u.attributeName}' is Numeric; '${String(u.value)}' (element '${u.elementName}') is not a number.`,
+          });
+        }
+        value = n;
+      }
+      return { elements: [u.elementName, u.attributeName], value };
+    });
     await this.cells.writeCells(
-      ctrlCube,
+      `}ElementAttributes_${dimensionName}`,
       [dimensionName, `}ElementAttributes_${dimensionName}`],
-      [{ elements: [elementName, attributeName], value }],
+      cells,
     );
   }
 }
