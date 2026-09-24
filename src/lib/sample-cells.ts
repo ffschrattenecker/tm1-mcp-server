@@ -2,6 +2,7 @@
 // No I/O — kept pure for unit-testability.
 
 import type { MdxResult, CellValue } from "../types.js";
+import { TM1Error, TM1ErrorCode } from "../types.js";
 import { escapeMdxName } from "./mdx.js";
 
 export type SampleCellFilter = string | string[];
@@ -63,22 +64,27 @@ export function buildSampleCellsMdx(
   } = args;
 
   if (dimensions.length === 0) {
-    throw new Error(`Cube '${cubeName}' has no dimensions`);
+    throw new TM1Error({
+      code: TM1ErrorCode.VALIDATION_ERROR,
+      message: `Cube '${cubeName}' has no dimensions`,
+    });
   }
 
   // dimensions.length === 0 is guarded above; the fallback is always defined.
   const columnDim = args.axisDimension ?? dimensions[dimensions.length - 1]!;
   if (!dimensions.includes(columnDim)) {
-    throw new Error(
-      `axisDimension '${columnDim}' is not a dimension of cube '${cubeName}' (dims: ${dimensions.join(", ")})`,
-    );
+    throw new TM1Error({
+      code: TM1ErrorCode.VALIDATION_ERROR,
+      message: `axisDimension '${columnDim}' is not a dimension of cube '${cubeName}' (dims: ${dimensions.join(", ")})`,
+    });
   }
 
   for (const key of Object.keys(filters)) {
     if (!dimensions.includes(key)) {
-      throw new Error(
-        `Filter dimension '${key}' is not a dimension of cube '${cubeName}' (dims: ${dimensions.join(", ")})`,
-      );
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message: `Filter dimension '${key}' is not a dimension of cube '${cubeName}' (dims: ${dimensions.join(", ")})`,
+      });
     }
   }
 
@@ -136,10 +142,12 @@ export function buildSampleCellsMdx(
     // surfaces strings on consolidations. Filter on a non-blank string value
     // instead. Needs a single measure cell to reference.
     if (columnMembers.length !== 1) {
-      throw new Error(
-        `includeStrings requires the column/measure to resolve to a single element; ` +
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message:
+          `includeStrings requires the column/measure to resolve to a single element; ` +
           `pin it via filters['${columnDim}']='<element>' or axisDimension (got ${columnMembers.length} members).`,
-      );
+      });
     }
     const filterExpr = `FILTER(${rowExpr},[${escapeMdxName(cubeName)}].(${columnMembers[0]})<>"")`;
     rowAxisExpr = maxCells > 0 ? `HEAD(${filterExpr},${maxCells})` : filterExpr;

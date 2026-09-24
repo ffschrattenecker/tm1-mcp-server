@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { TM1Error } from "../../types.js";
+import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
 import {
   FORMAT_SCHEMA,
@@ -44,32 +44,18 @@ export const registerGetCubeStats = defineTool({
   },
   handler: async ({ cubeName, cubeNames, format }, tm1Client) => {
     if (cubeName !== undefined && cubeNames !== undefined) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              error:
-                "cubeName and cubeNames are mutually exclusive — pass only one.",
-            }),
-          },
-        ],
-        isError: true,
-      };
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message:
+          "cubeName and cubeNames are mutually exclusive — pass only one.",
+      });
     }
     const targets = cubeNames ?? (cubeName !== undefined ? [cubeName] : []);
     if (targets.length === 0) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              error: "Specify exactly one of cubeName or cubeNames.",
-            }),
-          },
-        ],
-        isError: true,
-      };
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message: "Specify exactly one of cubeName or cubeNames.",
+      });
     }
 
     // One }StatsByCube MDX per target, capped in flight. Unbounded, a batch

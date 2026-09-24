@@ -4,6 +4,7 @@ import { rethrowIfSystemic } from "../../tm1-client/services/fallback.js";
 import { READ_ONLY } from "../annotations.js";
 import { WritableCoordsResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
 
 interface CoordCheck {
   dimension: string;
@@ -40,10 +41,7 @@ export const registerCheckWritableCoords = defineTool({
     }
     const dims = cubeMeta.dimensions;
     if (coords.length !== dims.length) {
-      throw new TM1Error({
-        code: TM1ErrorCode.VALIDATION_ERROR,
-        message: `coords length ${coords.length} does not match cube '${cubeName}' dimensions (${dims.length}: ${dims.join(", ")})`,
-      });
+      throw dimensionCountMismatch(cubeName, dims, coords);
     }
 
     const checks: CoordCheck[] = await Promise.all(

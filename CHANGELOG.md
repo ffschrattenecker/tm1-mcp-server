@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepted. An unknown attribute or a non-number for a Numeric one fails with
   `VALIDATION_ERROR` before anything is written. `updates[]` writes many values in one
   cellset PATCH, instead of one call per value.
+- **A coordinate with the wrong number of elements says which dimension is missing.**
+  `tm1_get_cell_value`, `tm1_write_cells` and `tm1_check_writable_coords` raise
+  `VALIDATION_ERROR` with the cube's dimension order in the hint, the uncovered positions
+  in the message, and a dimension → element pairing in `details`, so a forgotten `Sandboxes`
+  or `Version` shows up at once. `get_cell_value` used to fail here as a "Generic TM1
+  error".
+- Input problems in `tm1_sample_cells`, `tm1_get_cube_stats` and the file upload and delete
+  tools are now `VALIDATION_ERROR`s. They used to be generic errors or ad-hoc `{error}`
+  bodies.
 
 ## [4.0.0] - 2026-08-30
 

@@ -132,7 +132,10 @@ export class FileService {
   ): Promise<{ created: boolean; root: "Files" | "Blobs" }> {
     const parts = splitPath(fileName);
     if (parts.length === 0) {
-      throw new Error("upload: empty file name");
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message: "upload: empty file name",
+      });
     }
     // parts.length > 0 is guarded above
     const leaf = parts[parts.length - 1]!;
@@ -174,7 +177,10 @@ export class FileService {
   async delete(fileName: string): Promise<void> {
     const parts = splitPath(fileName);
     if (parts.length === 0) {
-      throw new Error("delete: empty file name");
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message: "delete: empty file name",
+      });
     }
     const buildUrl = (root: string): string => {
       const segs = parts.map((s) => `/Contents('${enc(s)}')`).join("");

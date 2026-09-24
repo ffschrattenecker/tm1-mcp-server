@@ -14,6 +14,7 @@ import type {
 } from "../../types.js";
 import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { escapeMdxName } from "../../lib/mdx.js";
+import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
 import { freeCellset, transformCellsetResponse } from "./cellset-transform.js";
 
 // OData key encoder: double ' per OData literal rules, then percent-encode.
@@ -57,9 +58,7 @@ export class CellService {
     }>("GET", cubePath);
     const dims = cubeMeta.Dimensions.map((d) => d.Name);
     if (elements.length !== dims.length) {
-      throw new Error(
-        `Cube '${cubeName}' has ${dims.length} dimension(s) (${dims.join(", ")}) but ${elements.length} element(s) were given`,
-      );
+      throw dimensionCountMismatch(cubeName, dims, elements);
     }
     const qualify = (dim: string, element: string): string => {
       const d = escapeMdxName(dim);
@@ -185,10 +184,7 @@ export class CellService {
 
     for (const c of cells) {
       if (c.elements.length !== dimensions.length) {
-        throw new TM1Error({
-          code: TM1ErrorCode.VALIDATION_ERROR,
-          message: `Cell tuple length (${c.elements.length}) does not match dimension count (${dimensions.length}) for cube '${cubeName}'.`,
-        });
+        throw dimensionCountMismatch(cubeName, dimensions, c.elements);
       }
     }
 

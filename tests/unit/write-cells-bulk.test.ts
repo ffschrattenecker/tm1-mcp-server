@@ -107,7 +107,7 @@ describe("CellService.writeCells — bulk cellset", () => {
         ["Product", "Measure"],
         [{ elements: ["P1"], value: 1 }],
       ),
-    ).rejects.toThrow(/does not match dimension count/);
+    ).rejects.toThrow("(by position): Measure");
   });
 
   it("does nothing for an empty cell list", async () => {
