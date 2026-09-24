@@ -182,22 +182,16 @@ describe.skipIf(!LIVE_ENABLED)("live: 4.1.0 ergonomics", () => {
     expect(short.json.message).toContain("(by position):");
     expect(short.json.hint).toContain(`in this order: ${order}`);
 
-    // Tuple and list agree with each other but not with the cube.
+    // A tuple shorter than its own dimension list.
     const r = await h.call("tm1_write_cells", {
       cubeName: CUBE,
-      dimensions: [DIM, MEAS],
-      cells: [{ elements: ["L00", "Base"], value: 1 }],
+      dimensions: actual,
+      cells: [{ elements: ["Base"], value: 1 }],
       confirm: CUBE,
     });
-    if (actual.length === 2) {
-      expect(r.isError).toBe(false);
-    } else {
-      expect(r.isError).toBe(true);
-      expect(r.json.message).toContain(
-        `missing: ${actual.filter((d) => d !== DIM && d !== MEAS).join(", ")}`,
-      );
-      expect(r.json.hint).toContain(`in this order: ${order}`);
-    }
+    expect(r.isError).toBe(true);
+    expect(r.json.message).toContain("(by position):");
+    expect(r.json.hint).toContain(`in this order: ${order}`);
   });
 
   it("sets, outlines, slices and patches rules", async () => {

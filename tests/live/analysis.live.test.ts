@@ -294,14 +294,14 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
     expect(r.json.items?.[0]?.error).toBeTruthy();
   });
 
-  // ── get_cube_stats: mutually-exclusive args → isError + json.error ───────
+  // ── get_cube_stats: mutually-exclusive args → VALIDATION_ERROR ───────────
   it("tm1_get_cube_stats: both cubeName and cubeNames → isError", async () => {
     const r = await h.call("tm1_get_cube_stats", {
       cubeName: "A",
       cubeNames: ["B"],
     });
     expect(r.isError).toBe(true);
-    expect(r.json?.error).toBeTruthy();
+    expect(r.json?.code).toBe("VALIDATION_ERROR");
   });
 
   // ── find_orphan_dimensions ──────────────────────────────────────────────
