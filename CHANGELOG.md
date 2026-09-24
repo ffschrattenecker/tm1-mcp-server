@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-09-24
+
 ### Added
 
 - **`tm1_get_hierarchy` takes `countOnly: true`**: totals by type and level (`counts.byType`,
@@ -1046,7 +1048,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/flameY3T1/tm1-mcp-server/compare/v4.0.0...HEAD
+[Unreleased]: https://github.com/flameY3T1/tm1-mcp-server/compare/v4.1.0...HEAD
+[4.1.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v3.1.0...v4.0.0
 [3.1.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v3.0.1...v3.1.0
 [3.0.1]: https://github.com/flameY3T1/tm1-mcp-server/compare/v3.0.0...v3.0.1
