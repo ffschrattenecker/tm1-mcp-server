@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The preflight's reference-failure hint no longer says "correct the name". It asks the
+  model to report each unresolved name to the user first. A near match (`SalesPlan` for
+  `'Sales Plan'`) is a different object, and swapping it in unasked is the silent
+  substitution the check exists to stop.
+
 ## [5.0.0] - 2026-09-24
 
 ### Breaking

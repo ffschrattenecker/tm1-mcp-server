@@ -85,7 +85,10 @@ export async function runPreflight(
       processName: p.name,
       code: TM1ErrorCode.VALIDATION_ERROR,
       message: `Preflight reference check failed: ${names.join(", ")} not found on the server.`,
-      hint: `Correct the name (tm1_list_cubes / tm1_list_dimensions), or create the object first. ${SKIP_NOTE}`,
+      // Deliberately not "correct the name": a near match (SalesPlan for
+      // 'Sales Plan') is a different object, and swapping it in unasked is
+      // the silent substitution this check exists to stop.
+      hint: `Report each unresolved name to the user before changing anything — a similarly named object is a different object, not a fix. Create the object first if the code needs it. ${SKIP_NOTE}`,
       issues: refs.issues,
     };
   }
