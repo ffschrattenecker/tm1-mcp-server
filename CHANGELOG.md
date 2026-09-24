@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `lineCount`, capped at 200 entries. `lineRange: [from, to]` returns only those lines,
   verbatim with no number prefixes, so a slice can be quoted back as a patch `find`. A 130 KB
   rule file used to overflow the client's result cap.
+- **`tm1_set_cube_rules` takes `edits` (a find/replace patch) or `filePath`** as
+  alternatives to the full `rules` text. Exactly one source is required. Edits apply in
+  order to the current rules. Each `find` must match exactly once, otherwise the call
+  fails with `VALIDATION_ERROR`, the match count and the matching lines, and nothing is
+  written. Line endings are normalized, so an LF slice from `get_cube_rules` matches CRLF
+  stored text. `filePath` reads a host file under `TM1_LOCAL_FILE_ROOT`. `confirm` is still
+  required. This removes the REST fallback that 10–16 KB rule edits needed.
 
 
 ### Changed
