@@ -51,6 +51,7 @@ describe("tm1_write_cells short tuple", () => {
       } as never,
       {
         cells: { writeCells: async (...a: unknown[]) => void writes.push(a) },
+        cubes: { getDimensionNames: async () => ["Version", "Measure"] },
       } as never,
     );
     const args = z.object(shape).parse({
@@ -61,5 +62,42 @@ describe("tm1_write_cells short tuple", () => {
     });
     await expect(h!(args)).rejects.toThrow("(by position): Measure");
     expect(writes).toEqual([]);
+  });
+});
+
+describe("dimensionListMismatch", () => {
+  it("accepts the cube's own list, ignoring case and spaces", async () => {
+    const { dimensionListMismatch } =
+      await import("../../src/lib/coordinate-error.js");
+    expect(
+      dimensionListMismatch(
+        "C",
+        ["Sales Version", "Measure"],
+        ["salesversion", "MEASURE"],
+      ),
+    ).toBeUndefined();
+  });
+
+  it("names a dimension the caller left out of both list and tuple", async () => {
+    const { dimensionListMismatch } =
+      await import("../../src/lib/coordinate-error.js");
+    const err = dimensionListMismatch(
+      "Sales",
+      ["Sandboxes", "Version", "Measure"],
+      ["Version", "Measure"],
+    );
+    expect(err?.message).toContain("missing: Sandboxes");
+    expect(err?.hint).toContain("in this order: Sandboxes, Version, Measure");
+  });
+
+  it("flags unknown names and a wrong order", async () => {
+    const { dimensionListMismatch } =
+      await import("../../src/lib/coordinate-error.js");
+    expect(
+      dimensionListMismatch("C", ["A", "B"], ["A", "X"])?.message,
+    ).toContain("missing: B; not in the cube: X");
+    expect(
+      dimensionListMismatch("C", ["A", "B"], ["B", "A"])?.message,
+    ).toContain("same names, wrong order");
   });
 });
