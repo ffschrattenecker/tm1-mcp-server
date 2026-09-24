@@ -88,6 +88,13 @@ export const CubeRulesSchema = z.object({
   feederCount: z.number().int().optional(),
   commentLineCount: z.number().int().optional(),
   referencedCubes: z.array(z.string()).optional(),
+  // tm1_get_cube_rules outline=true: section markers instead of the text.
+  outline: z
+    .array(z.object({ line: z.number().int(), text: z.string() }))
+    .optional(),
+  outlineTruncated: z.boolean().optional(),
+  // tm1_get_cube_rules lineRange: the [from, to] actually returned (clamped).
+  lineRange: z.array(z.number().int()).optional(),
 });
 
 // ── tm1_get_cube_stats result schemas ────────────────────────────────────────

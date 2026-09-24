@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hint derived from the tool's own parameters (`offset`/`limit`, `lineRange`/`outline`,
   `countOnly`, `maxBytes`). The result is never truncated. Before this, 23 recorded
   results overflowed Claude Code's cap and reached the model as a file offload or nothing.
+- **`tm1_get_cube_rules` has `outline` and `lineRange` modes for large rule files.**
+  `outline: true` returns the section markers (SKIPCHECK, FEEDERS, FEEDSTRINGS, UNDEFVALS,
+  and the first worded line of each comment block) with 1-based line numbers and
+  `lineCount`, capped at 200 entries. `lineRange: [from, to]` returns only those lines,
+  verbatim with no number prefixes, so a slice can be quoted back as a patch `find`. A 130 KB
+  rule file used to overflow the client's result cap.
 
 
 ### Changed
