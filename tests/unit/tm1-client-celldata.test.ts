@@ -219,7 +219,7 @@ describe("TM1Client – Cell Data Methods", () => {
 
       await expect(
         client.cells.getValue("SalesCube", ["Jan", "Germany"]),
-      ).rejects.toThrow(/3 dimension\(s\).*2 element\(s\)/);
+      ).rejects.toThrow(/3 dimensions but 2 element\(s\)/);
     });
   });
 
