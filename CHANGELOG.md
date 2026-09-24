@@ -69,6 +69,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tm1_get_file_content` defaults to `maxBytes` 64 KB (was 256 KB), so the default read
   fits under the response limit.
 
+### Fixed
+
+- **`tm1_delete_hierarchy` refuses a dimension's default (same-named) hierarchy.** The
+  description always said this could not be done. TM1 11.8 does not refuse it, though: it
+  answers 204 and leaves a dimension listed with no hierarchies at all (verified live).
+  The tool now fails with `VALIDATION_ERROR` and points to `tm1_delete_dimension`.
+
 ## [4.0.0] - 2026-08-30
 
 ### Breaking

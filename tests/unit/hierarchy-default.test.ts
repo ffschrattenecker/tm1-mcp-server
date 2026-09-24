@@ -122,3 +122,28 @@ describe("handlers pass the effective hierarchy to the service", () => {
     expect(calls).toEqual([["Region", "Alt"]]);
   });
 });
+
+describe("delete_hierarchy refuses the default hierarchy", () => {
+  it("rejects hierarchyName = dimensionName before calling TM1", async () => {
+    const { registerDeleteHierarchy } =
+      await import("../../src/tools/dimension-management/delete-hierarchy.js");
+    const calls: unknown[][] = [];
+    const call = capture(registerDeleteHierarchy, {
+      hierarchies: { delete: async (...a: unknown[]) => void calls.push(a) },
+    });
+    await expect(
+      call({
+        dimensionName: "Region",
+        hierarchyName: "region",
+        confirm: "region",
+      }),
+    ).rejects.toThrow(/default hierarchy of 'Region'/);
+    expect(calls).toEqual([]);
+    await call({
+      dimensionName: "Region",
+      hierarchyName: "Alt",
+      confirm: "Alt",
+    });
+    expect(calls).toEqual([["Region", "Alt"]]);
+  });
+});
