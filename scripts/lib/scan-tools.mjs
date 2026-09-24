@@ -65,7 +65,8 @@ export function scanTools(toolsDir) {
   for (const file of walk(toolsDir)) {
     const src = readFileSync(file, "utf8");
     const rel = relative(toolsDir, file);
-    const group = rel.split("/")[0];
+    // Either separator: path.relative() answers with \ on Windows.
+    const group = rel.split(/[\\/]/)[0];
 
     for (const span of toolSpans(src)) {
       const body = src.slice(span.start, span.end);
