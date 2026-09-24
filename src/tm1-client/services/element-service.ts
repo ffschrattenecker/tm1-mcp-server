@@ -29,6 +29,13 @@ import { rethrowIfSystemic } from "./fallback.js";
 // while removing the serialized 2-3N round-trips on an explicitly-bulk op.
 const BULK_UPSERT_CONCURRENCY = 8;
 
+/** Outcome of one element in {@link ElementService.deleteMany}. */
+export interface ElementDeleteResult {
+  elementName: string;
+  deleted: boolean;
+  error?: { code: string; message: string };
+}
+
 // OData key encoder: double ' per OData literal rules, then percent-encode.
 const enc = (s: string): string =>
   encodeURIComponent(String(s).replace(/'/g, "''"));
@@ -211,6 +218,76 @@ export class ElementService {
   ): Promise<void> {
     const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(elementName)}')`;
     await this.http.request<void>("DELETE", path);
+  }
+
+  /**
+   * Delete many elements of one hierarchy. Through `$batch` when the server
+   * has it (one DELETE sub-request per element, chunked by BatchService), else
+   * per request with bounded concurrency.
+   *
+   * Never all-or-nothing: TM1's `$batch` is non-atomic, so each element gets
+   * its own result and one missing name does not stop the rest. A systemic
+   * failure (auth, transport) still aborts the call.
+   *
+   * Falling back after BatchUnsupportedError is safe: that error is only raised
+   * before the first successful batch on the connection. Should a refused
+   * envelope still have removed some elements, their per-request replay
+   * reports NOT_FOUND instead of claiming a second delete.
+   */
+  async deleteMany(
+    dimensionName: string,
+    hierarchyName: string,
+    elementNames: string[],
+  ): Promise<ElementDeleteResult[]> {
+    const pathOf = (name: string) =>
+      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(name)}')`;
+    const failed = (elementName: string, e: TM1Error): ElementDeleteResult => ({
+      elementName,
+      deleted: false,
+      error: { code: e.code, message: e.message },
+    });
+    if (this.batch && !this.batch.isKnownUnsupported) {
+      try {
+        const results = await this.batch.execute(
+          elementNames.map((name, i): BatchRequest => ({
+            id: `d${i}`,
+            method: "DELETE",
+            path: pathOf(name),
+          })),
+        );
+        const byIndex = new Map(results.map((r) => [Number(r.id.slice(1)), r]));
+        return elementNames.map((elementName, i) => {
+          const r = byIndex.get(i);
+          if (r === undefined)
+            return failed(
+              elementName,
+              new TM1Error({
+                code: TM1ErrorCode.TM1_ERROR,
+                message:
+                  "No sub-response for this element in the $batch reply.",
+              }),
+            );
+          return r.ok
+            ? { elementName, deleted: true }
+            : failed(elementName, r.error);
+        });
+      } catch (err) {
+        if (!(err instanceof BatchUnsupportedError)) throw err;
+      }
+    }
+    const settled = await mapSettledWithConcurrency(
+      elementNames,
+      BULK_UPSERT_CONCURRENCY,
+      async (name) => {
+        await this.http.request<void>("DELETE", pathOf(name));
+      },
+    );
+    return settled.map((r, i): ElementDeleteResult => {
+      const elementName = elementNames[i]!;
+      if (r.status === "fulfilled") return { elementName, deleted: true };
+      rethrowIfSystemic(r.reason);
+      return failed(elementName, r.reason as TM1Error);
+    });
   }
 
   /**

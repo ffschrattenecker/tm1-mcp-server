@@ -52,6 +52,7 @@ const CONFIRM_REQUIRED = [
   "tm1_delete_cube",
   "tm1_delete_dimension",
   "tm1_delete_element",
+  "tm1_delete_elements",
   "tm1_delete_hierarchy",
   "tm1_delete_subset",
   "tm1_delete_view",

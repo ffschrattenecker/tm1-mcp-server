@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   written. Line endings are normalized, so an LF slice from `get_cube_rules` matches CRLF
   stored text. `filePath` reads a host file under `TM1_LOCAL_FILE_ROOT`. `confirm` is still
   required. This removes the REST fallback that 10–16 KB rule edits needed.
+- **`tm1_delete_elements`**: delete many elements of one hierarchy in one call, through
+  `$batch` where the server has it and per request otherwise. `confirm` is the dimension
+  name. It is not all-or-nothing: the result counts `deleted` and `failed` and lists each
+  failure with its error, and `success` is true only when every element went. It replaces
+  runs of 18–24 single `delete_element` calls.
 
 
 ### Changed
