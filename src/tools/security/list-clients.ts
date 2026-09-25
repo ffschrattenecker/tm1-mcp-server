@@ -41,8 +41,9 @@ function project(
   }
 
   return clients.map((c) => {
-    const out: ProjectedClient = {};
-    if (want.has("name")) out.Name = c.Name;
+    // Name is the item key and required by ClientSchema, so every projection
+    // carries it — fields=['type'] without it failed the output schema.
+    const out: ProjectedClient = { Name: c.Name };
     if (want.has("friendlyName") && c.FriendlyName !== undefined)
       out.FriendlyName = c.FriendlyName;
     if (want.has("type") && c.Type !== undefined) out.Type = c.Type;
@@ -66,7 +67,7 @@ export const registerListClients = defineTool({
       .array(z.enum(FIELD_KEYS))
       .optional()
       .describe(
-        "Projection: subset of ['name','friendlyName','type','enabled','groups','groupCount']. Omit for full default payload.",
+        "Projection: subset of ['name','friendlyName','type','enabled','groups','groupCount']. Name is always included. Omit for full default payload.",
       ),
     groupCount: z
       .boolean()

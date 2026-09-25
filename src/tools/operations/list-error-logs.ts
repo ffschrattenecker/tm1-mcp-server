@@ -82,7 +82,27 @@ export const registerListErrorLogs = defineTool({
     "groupBy='process' returns a per-process audit summary instead of individual files.",
   ],
   annotations: READ_ONLY,
-  output: pageShapeFor(z.union([ErrorLogFileSchema, ErrorLogGroupSchema])),
+  output: {
+    // Set only on the groupBy='process' branch, which wraps the page in the
+    // filters it applied and the totals before paging.
+    groupBy: z.literal("process").optional().describe("Echoes groupBy"),
+    processName: z
+      .string()
+      .optional()
+      .describe("Echoes the processName filter"),
+    since: z.string().optional().describe("Echoes the since filter"),
+    totalFiles: z
+      .number()
+      .int()
+      .optional()
+      .describe("Log files aggregated into the groups"),
+    groupCount: z
+      .number()
+      .int()
+      .optional()
+      .describe("Distinct processes before paging"),
+    ...pageShapeFor(z.union([ErrorLogFileSchema, ErrorLogGroupSchema])),
+  },
   input: {
     processName: z
       .string()
