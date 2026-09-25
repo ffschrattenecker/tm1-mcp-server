@@ -78,7 +78,15 @@ export async function runPreflight(
   }
   const refs = await checkProcessRefs(tm1Client, p);
   if (refs.unresolved > 0) {
-    const names = [...new Set(refs.issues.map((i) => `${i.kind} '${i.name}'`))];
+    const names = [
+      ...new Set(
+        refs.issues.map((i) =>
+          i.kind === "element"
+            ? `element '${i.name}' in dimension '${i.dimension}'`
+            : `${i.kind} '${i.name}'`,
+        ),
+      ),
+    ];
     return {
       stage: "preflight",
       check: "references",

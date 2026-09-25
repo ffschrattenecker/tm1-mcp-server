@@ -12,7 +12,8 @@ export const registerValidateProcessRefs = defineTool({
   name: "tm1_validate_process_refs",
   description: [
     "Scan a TI process (live, by name, or from .pro) for cube/dimension references in well-known TI functions (CellGetN/S, CellPutN/S, ViewCreate, DimensionElementInsertDirect, AttrPutS, etc.) and verify each name resolves on the server. TM1 lets syntactically valid code reference non-existent objects — this catches the gap between compile and runtime.",
-    "Existence probes (DimensionExists, CubeExists, …) and names the code itself creates (CubeCreate/DimensionCreate) are not flagged.",
+    "Element literals in cell functions (CellGetN/S, CellPutN/S, CellIncrementN, …) are looked up in the dimension at their position, with TM1's own resolution (case/space-insensitive, aliases, 'Hierarchy:Element'); a missing one is an issue of kind 'element'. TI does not abort on a missing element — the write is just skipped — so this is the only place it shows before a run. Elements passed as variables are not checked.",
+    "Existence probes (DimensionExists, CubeExists, DimIx, …) and names the code itself creates (CubeCreate/DimensionCreate/DimensionElementInsert…) are not flagged.",
     "partial=true means some names are passed as parameters or computed values and could not be checked (see unresolvableArgs). The install tools run this same check in their preflight.",
   ],
   annotations: READ_ONLY,

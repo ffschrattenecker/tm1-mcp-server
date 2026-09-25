@@ -27,6 +27,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of relying on TM1's default member, which is `Base` only while no sandbox has
   `IncludeInSandboxDimension=true`. `dimensions` may come in any order; each cell's elements
   follow it. A named sandbox is addressable only once `IncludeInSandboxDimension` is true.
+- **The reference check also resolves element literals in cell functions**, in both
+  `tm1_validate_process_refs` and the install preflight. `CellGetN/S`, `CellPutN/S`,
+  `CellIncrementN`, `CellIsUpdateable` and `CellPutProportionalSpread` on an existing cube: each
+  literal (or literal-bound) element argument is looked up in the dimension at its position. A
+  missing one is an issue of kind `element` with its `dimension`, and the preflight refuses the
+  install. Why: TI does not abort on a missing element. Verified on 11.8.03500, the process ends
+  `HasMinorErrors`, the rest runs, and the value is not written. The rules against false
+  positives were checked live:
+  - The lookup is TM1's own resolution: case- and space-insensitive, aliases accepted,
+    `'Hierarchy:Element'` read against that hierarchy.
+  - TI cell calls never pass the `Sandboxes` dimension, so positions skip it; a call whose
+    argument count doesn't match is skipped.
+  - Elements the same code inserts are excused. A dimension the code inserts computed names
+    into excuses every literal in it.
+  - Variables (datasource fields, parameters) are not checked and do not set `partial`.
+  - `DimIx`/`ElementIndex` stay existence probes.
+  - Lookups are capped at 200 distinct pairs per report; the rest counts as `unresolvableArgs`.
+
+  New output field `elementRefsScanned`.
 
 ### Added
 

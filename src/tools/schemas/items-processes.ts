@@ -80,6 +80,7 @@ export const ValidateProcessRefsResultSchema = z.object({
   processName: z.string().nullable(),
   cubeRefsScanned: z.number().int(),
   dimensionRefsScanned: z.number().int(),
+  elementRefsScanned: z.number().int(),
   unresolved: z.number().int(),
   issues: z.array(z.unknown()),
   tabsChecked: z.array(z.string()),

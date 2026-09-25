@@ -150,6 +150,32 @@ export class ElementService {
     }
   }
 
+  /**
+   * Does an element resolve in a hierarchy the way TI would resolve it?
+   * The key lookup is TM1's own name resolution: case- and space-insensitive,
+   * and it accepts an alias (verified on 11.8.03500: 'northamerica' and the
+   * alias 'NA' both resolve 'North America'). 404 → false; anything else,
+   * including a denial, is rethrown — "you may not look" is not "missing".
+   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements('{e}')?$select=Name
+   */
+  async exists(
+    dimensionName: string,
+    hierarchyName: string,
+    elementName: string,
+  ): Promise<boolean> {
+    try {
+      await this.http.request<{ Name: string }>(
+        "GET",
+        `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(elementName)}')?$select=Name`,
+      );
+      return true;
+    } catch (e) {
+      if (e instanceof TM1Error && e.code === TM1ErrorCode.NOT_FOUND)
+        return false;
+      throw e;
+    }
+  }
+
   async create(
     dimensionName: string,
     hierarchyName: string,

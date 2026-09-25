@@ -203,6 +203,7 @@ describe("declared output schemas", () => {
       processName: "Load.Sales",
       cubeRefsScanned: 3,
       dimensionRefsScanned: 5,
+      elementRefsScanned: 4,
       unresolved: 0,
       issues: [],
       tabsChecked: ["prolog", "data"],
