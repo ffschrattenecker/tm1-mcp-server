@@ -56,7 +56,8 @@
     "lint:mutation-envelope": "node scripts/check-mutation-envelope.mjs",
     "lint:format": "prettier --check .",
     "format": "prettier --write .",
-    "verify": "npm run typecheck && npm run typecheck:tests && npm run lint:no-flat-api && npm run lint:output-schema-budget && npm run lint:tool-registration && npm run lint:input-naming && npm run lint:mutation-envelope && npm run lint:format && npm run lint:eslint && npm run coverage:check",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "verify": "npm run audit:prod && npm run typecheck && npm run typecheck:tests && npm run lint:no-flat-api && npm run lint:output-schema-budget && npm run lint:tool-registration && npm run lint:input-naming && npm run lint:mutation-envelope && npm run lint:format && npm run lint:eslint && npm run coverage:check",
     "tools:list": "node scripts/gen-tool-list.mjs",
     "tools:update-readme": "node scripts/gen-tool-list.mjs --write-readme",
     "lint:eslint": "eslint ."
@@ -72,7 +73,7 @@
     "node": ">=20.0.0"
   },
   "overrides": {
-    "fast-uri": "^3.1.5",
+    "fast-uri": "^4.2.1",
     "ip-address": "^10.4.0"
   },
   "dependencies": {

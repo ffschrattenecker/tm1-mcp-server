@@ -63,6 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`fast-uri` override moved out of the vulnerable range.** The override pinned `^3.1.5`,
+  but the advisories cover `>=3.0.0 <=3.1.5` (high, among them SSRF via IPv6
+  normalization), so `npm audit --omit=dev --audit-level=high` failed in CI. It is now
+  `^4.2.1`; `ajv` only uses it to resolve `$ref`. The remaining moderate advisories in
+  production dependencies (`hono`, `@hono/node-server`, `body-parser`, `qs`) are fixed
+  in-range through the lockfile. `npm run verify` now runs the same audit first, so it
+  fails locally instead of only in CI.
 - **A rejected login is never retried, so wrong credentials cannot lock the account.**
   After a 401/403 on login the server kept trying: every request re-authenticated, fan-out
   tools did so once per concurrency batch (about 50 attempts for a 400-element
