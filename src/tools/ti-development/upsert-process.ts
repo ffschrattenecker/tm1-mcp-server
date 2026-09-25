@@ -187,7 +187,7 @@ export const registerUpsertProcess = defineTool({
           ? // updateDataSource PATCHes only the fields sent; the rest stay.
             diffDs(installedDs, {
               ...installedDs,
-              ...(dataSource as DataSource),
+              ...(dataSource),
             })
           : undefined;
       const identical =
