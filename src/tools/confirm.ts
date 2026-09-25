@@ -29,7 +29,7 @@ export const CONFIRM_SCHEMA = {
   confirm: z
     .string()
     .describe(
-      "Safety check: repeat the target identifier verbatim (e.g. cube/dimension/process name) to confirm this irreversible action. Mismatched values reject the call.",
+      "Repeat the target name verbatim to confirm this irreversible action; a mismatch rejects the call.",
     ),
 };
 

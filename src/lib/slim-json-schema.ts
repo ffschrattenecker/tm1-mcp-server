@@ -14,6 +14,12 @@
  * (`properties` & friends), where the keys are user-chosen field names — a tool
  * with a field literally called `$schema` keeps its subschema.
  *
+ * Descriptions that restate the node's own `default` ("(default: false)",
+ * "Default: 50.") lose that phrase: the `default` keyword right next to it
+ * already says so. Only a phrase whose value equals the emitted default is
+ * removed, so a description documenting a default the schema does not carry
+ * (an optional field resolved in the handler) keeps it.
+ *
  * Pure: the input is never mutated, the result is a fresh deep clone.
  */
 
@@ -32,6 +38,35 @@ const NAME_KEYED_CONTAINERS = new Set([
   "dependentSchemas",
 ]);
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Remove "(default: X)" / "Default: X." where X is the emitted default. */
+export function stripDefaultPhrase(
+  description: string,
+  defaultValue: unknown,
+): string {
+  if (
+    typeof defaultValue !== "boolean" &&
+    typeof defaultValue !== "number" &&
+    typeof defaultValue !== "string"
+  ) {
+    return description;
+  }
+  const value = escapeRegExp(String(defaultValue));
+  return description
+    .replace(new RegExp(String.raw`\s*\(default:?\s*${value}\)`, "gi"), "")
+    .replace(
+      new RegExp(String.raw`\s*\bDefault:?\s*${value}(?:[.;]|(?=\s)|$)`, "gi"),
+      "",
+    )
+    .replace(/\s+([.,;])/g, "$1")
+    .trim()
+    // A phrase that opened the sentence leaves its trailing dash behind.
+    .replace(/^[—–-]\s*/, "");
+}
+
 export function slimJsonSchema(schema: unknown): unknown {
   return slimNode(schema, false);
 }
@@ -43,9 +78,17 @@ function slimNode(node: unknown, nameKeyed: boolean): unknown {
   if (node === null || typeof node !== "object") return node;
 
   const out: Record<string, unknown> = {};
+  const defaultValue = nameKeyed
+    ? undefined
+    : (node as Record<string, unknown>).default;
   for (const [key, value] of Object.entries(node)) {
     if (!nameKeyed) {
       if (key === "$schema") continue;
+      if (key === "description" && typeof value === "string") {
+        const text = stripDefaultPhrase(value, defaultValue);
+        if (text) out[key] = text;
+        continue;
+      }
       if (key === "minimum" && value === SAFE_INT_MIN) continue;
       if (key === "maximum" && value === SAFE_INT_MAX) continue;
     }

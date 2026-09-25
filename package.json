@@ -60,11 +60,12 @@
     "lint:mutation-envelope": "node scripts/check-mutation-envelope.mjs",
     "lint:format": "prettier --check .",
     "format": "prettier --write .",
-    "verify": "npm run typecheck && npm run typecheck:tests && npm run lint:no-flat-api && npm run lint:output-schema-budget && npm run lint:tool-registration && npm run lint:input-naming && npm run lint:mutation-envelope && npm run lint:format && npm run lint:eslint && npm run coverage:check",
+    "verify": "npm run typecheck && npm run typecheck:tests && npm run lint:no-flat-api && npm run lint:output-schema-budget && npm run lint:tool-surface-budget && npm run lint:tool-registration && npm run lint:input-naming && npm run lint:mutation-envelope && npm run lint:format && npm run lint:eslint && npm run coverage:check",
     "tools:list": "node scripts/gen-tool-list.mjs",
     "tools:update-readme": "node scripts/gen-tool-list.mjs --write-readme",
     "lint:eslint": "eslint .",
-    "measure:tools": "node scripts/measure-tool-surface.mjs"
+    "measure:tools": "node scripts/measure-tool-surface.mjs",
+    "lint:tool-surface-budget": "node scripts/measure-tool-surface.mjs --top 0 --budget 133000"
   },
   "keywords": [
     "mcp",

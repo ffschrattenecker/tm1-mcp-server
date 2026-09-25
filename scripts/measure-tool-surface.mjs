@@ -9,7 +9,12 @@
 //
 // Usage: node scripts/measure-tool-surface.mjs [readwrite|readonly] [--top N]
 //        [--dir <connections folder>]   measure multi-connection mode instead
+//        [--budget <chars>]             exit 1 when model-facing chars exceed it
 // Prints one JSON summary line, then the N largest tools.
+//
+// `npm run lint:tool-surface-budget` runs this with a budget inside the verify
+// gate, so the model-facing total cannot creep up unnoticed. Needs a current
+// dist/ — verify runs it right after the output-schema gate, which builds.
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,10 +23,14 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
 const mode =
   args.find((a) => a === "readwrite" || a === "readonly") ?? "readwrite";
-const topIdx = args.indexOf("--top");
-const top = topIdx >= 0 ? Number(args[topIdx + 1]) : 10;
-const dirIdx = args.indexOf("--dir");
-const dir = dirIdx >= 0 ? args[dirIdx + 1] : undefined;
+const flag = (name) => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : undefined;
+};
+const top = Number(flag("--top") ?? 10);
+const dir = flag("--dir");
+const budget =
+  flag("--budget") === undefined ? undefined : Number(flag("--budget"));
 
 // Legacy single connection (TM1_BASE_URL) unless --dir names a folder of
 // connections. Either way the user's own ~/.tm1 folders are never read.
@@ -38,7 +47,7 @@ const inherited = Object.fromEntries(
 );
 
 const child = spawn(process.execPath, [join(root, "dist", "index.js")], {
-  env: { ...inherited, ...connectionEnv, TM1_LOG_LEVEL: "silent" },
+  env: { ...inherited, ...connectionEnv, TM1_LOG_LEVEL: "error" },
   stdio: ["pipe", "pipe", "ignore"],
 });
 
@@ -50,6 +59,8 @@ const timer = setTimeout(() => {
 }, 20_000);
 
 const len = (v) => (v === undefined ? 0 : JSON.stringify(v).length);
+const modelFacing = (t) =>
+  t.name.length + (t.description ?? "").length + len(t.inputSchema);
 
 let buf = "";
 child.stdout.on("data", (chunk) => {
@@ -62,9 +73,15 @@ child.stdout.on("data", (chunk) => {
       send({ jsonrpc: "2.0", method: "notifications/initialized" });
       send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
     } else if (msg.id === 2) {
-      report(msg.result.tools);
+      const total = report(msg.result.tools);
       clearTimeout(timer);
       child.kill();
+      if (budget !== undefined && total > budget) {
+        console.error(
+          `✗ model-facing tool surface is ${total} chars, over the ${budget} budget`,
+        );
+        process.exit(1);
+      }
       process.exit(0);
     }
   }
@@ -72,6 +89,7 @@ child.stdout.on("data", (chunk) => {
 
 function report(tools) {
   const sum = (f) => tools.reduce((acc, t) => acc + f(t), 0);
+  const modelFacingChars = sum(modelFacing);
   console.log(
     JSON.stringify({
       mode: dir ? "connections-dir" : mode,
@@ -81,21 +99,15 @@ function report(tools) {
       descriptionChars: sum((t) => (t.description ?? "").length),
       inputSchemaChars: sum((t) => len(t.inputSchema)),
       outputSchemaChars: sum((t) => len(t.outputSchema)),
-      modelFacingChars: sum(
-        (t) =>
-          t.name.length + (t.description ?? "").length + len(t.inputSchema),
-      ),
+      modelFacingChars,
     }),
   );
   const largest = tools
-    .map((t) => ({
-      name: t.name,
-      modelFacing:
-        t.name.length + (t.description ?? "").length + len(t.inputSchema),
-    }))
-    .sort((a, b) => b.modelFacing - a.modelFacing)
+    .map((t) => ({ name: t.name, size: modelFacing(t) }))
+    .sort((a, b) => b.size - a.size)
     .slice(0, top);
-  for (const t of largest) console.log(`${t.modelFacing}\t${t.name}`);
+  for (const t of largest) console.log(`${t.size}\t${t.name}`);
+  return modelFacingChars;
 }
 
 send({

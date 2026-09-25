@@ -4,7 +4,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { z } from "zod";
 import type pino from "pino";
-import { slimJsonSchema } from "../../src/lib/slim-json-schema.js";
+import {
+  slimJsonSchema,
+  stripDefaultPhrase,
+} from "../../src/lib/slim-json-schema.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import "../../src/tools/metadata/list-cubes.js";
 
@@ -236,5 +239,54 @@ describe("tools/list advertises slimmed schemas", () => {
     // exists to remove — re-check whether the slimming is still needed.
     expect(wire).toContain(String(SAFE_INT_MAX));
     expect(wire).toContain("$schema");
+  });
+});
+
+describe("stripDefaultPhrase", () => {
+  it.each([
+    ["Include X (default: false).", false, "Include X."],
+    ["Include X. Default: true.", true, "Include X."],
+    [
+      "Include dims (default: true). Set false for compact.",
+      true,
+      "Include dims. Set false for compact.",
+    ],
+    [
+      "Default false — reads stay single request.",
+      false,
+      "reads stay single request.",
+    ],
+    ["Mode (default: upsert)", "upsert", "Mode"],
+  ])("drops a phrase restating the emitted default: %s", (text, value, out) => {
+    expect(stripDefaultPhrase(text, value)).toBe(out);
+  });
+
+  it.each([
+    // The phrase names a different value than the schema emits.
+    ["Keep (default: false)", true],
+    // A longer number that merely starts with the default.
+    ["Default: 1000 rows", 100],
+    // A default that is part of a richer explanation.
+    ["Page size (default 50/page).", 50],
+    // No emitted default at all: the text is the only place it is documented.
+    ["Group count (default: false)", undefined],
+  ])("keeps %s", (text, value) => {
+    expect(stripDefaultPhrase(text, value)).toBe(text);
+  });
+
+  it("is applied by slimJsonSchema only next to a matching default", () => {
+    const out = slimJsonSchema({
+      type: "object",
+      properties: {
+        a: {
+          type: "boolean",
+          default: false,
+          description: "A (default: false).",
+        },
+        b: { type: "boolean", description: "B (default: false)." },
+      },
+    }) as { properties: Record<string, { description?: string }> };
+    expect(out.properties.a.description).toBe("A.");
+    expect(out.properties.b.description).toBe("B (default: false).");
   });
 });
