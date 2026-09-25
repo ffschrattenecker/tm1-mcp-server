@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.1] - 2026-09-25
+
+### Security
+
+- **Dependency advisories patched.** The lockfile now pins fixed versions of `fast-uri` (host
+  confusion / SSRF, high), `hono` and `@hono/node-server`, `qs` and `body-parser` (moderate / low),
+  all pulled in by the MCP SDK. No tool contract changes.
+
 ## [6.0.0] - 2026-09-25
 
 ### Breaking
@@ -1194,7 +1202,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.0.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.0.1...HEAD
+[6.0.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.0.0...v6.0.1
 [6.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v5.0.0...v6.0.0
 [5.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v4.1.0...v5.0.0
 [4.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v4.0.0...v4.1.0
