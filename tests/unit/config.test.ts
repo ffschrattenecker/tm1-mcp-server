@@ -36,6 +36,20 @@ describe("loadConfig", () => {
     expect(config.logFile).toBeUndefined();
   });
 
+  it("reads an explicit env record instead of process.env when given one", () => {
+    setRequiredEnv();
+    const config = loadConfig({
+      TM1_BASE_URL: "https://other:9000",
+      TM1_USER: "u2",
+      TM1_PASSWORD: "p2",
+      TM1_MODE: "readwrite",
+    });
+
+    expect(config.baseUrl).toBe("https://other:9000");
+    expect(config.user).toBe("u2");
+    expect(config.mode).toBe("readwrite");
+  });
+
   // Not cosmetic: "structured" drops content[0].text, and a client that reads
   // only content[] (Kiro's IDE MCP layer does exactly that) then renders an
   // empty result. The default has to stay on the shape every client can read.

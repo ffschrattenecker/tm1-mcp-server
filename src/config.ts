@@ -107,10 +107,12 @@ function parseIntEnv(
   return n;
 }
 
-export function loadConfig(): TM1Config {
-  const baseUrl = process.env.TM1_BASE_URL;
-  const user = process.env.TM1_USER;
-  const password = process.env.TM1_PASSWORD;
+// `env` defaults to the process environment. The multi-connection registry
+// passes one record per connection folder instead (see ./connections.ts).
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
+  const baseUrl = env.TM1_BASE_URL;
+  const user = env.TM1_USER;
+  const password = env.TM1_PASSWORD;
 
   // CAM auth (mirrors TM1py's RestService._build_authorization_token):
   //   TM1_CAM_PASSPORT set → "CAMPassport <token>"      (no user/password round-trip)
@@ -119,8 +121,8 @@ export function loadConfig(): TM1Config {
   // SSO/gateway (Windows SSPI) is intentionally unsupported here: TM1py only does
   // it via the Windows-only requests_negotiate_sspi package. Supply a passport
   // obtained out-of-band via TM1_CAM_PASSPORT instead.
-  const namespace = process.env.TM1_NAMESPACE || undefined;
-  const camPassport = process.env.TM1_CAM_PASSPORT || undefined;
+  const namespace = env.TM1_NAMESPACE || undefined;
+  const camPassport = env.TM1_CAM_PASSPORT || undefined;
 
   // Required: baseUrl always. user/password only when NOT using a passport — a
   // passport carries the authenticated identity, so TM1 needs no credentials.
@@ -148,33 +150,33 @@ export function loadConfig(): TM1Config {
     );
   }
 
-  const sslRaw = process.env.TM1_SSL_REJECT_UNAUTHORIZED;
+  const sslRaw = env.TM1_SSL_REJECT_UNAUTHORIZED;
   const rejectUnauthorized = sslRaw === undefined ? true : sslRaw !== "false";
 
   const keepAliveIntervalMs = parseIntEnv(
     "TM1_KEEP_ALIVE_INTERVAL",
-    process.env.TM1_KEEP_ALIVE_INTERVAL,
+    env.TM1_KEEP_ALIVE_INTERVAL,
     60000,
   );
 
   const requestTimeoutMs = parseIntEnv(
     "TM1_REQUEST_TIMEOUT",
-    process.env.TM1_REQUEST_TIMEOUT,
+    env.TM1_REQUEST_TIMEOUT,
     30000,
   );
 
-  const logLevelRaw = process.env.TM1_LOG_LEVEL ?? "info";
+  const logLevelRaw = env.TM1_LOG_LEVEL ?? "info";
   const logLevel = VALID_LOG_LEVELS.includes(
     logLevelRaw as (typeof VALID_LOG_LEVELS)[number],
   )
     ? (logLevelRaw as TM1Config["logLevel"])
     : "info";
 
-  const logFile = process.env.TM1_LOG_FILE || undefined;
+  const logFile = env.TM1_LOG_FILE || undefined;
 
-  const tm1Version = process.env.TM1_VERSION || "11.8";
+  const tm1Version = env.TM1_VERSION || "11.8";
 
-  const transportRaw = process.env.TM1_MCP_TRANSPORT ?? "stdio";
+  const transportRaw = env.TM1_MCP_TRANSPORT ?? "stdio";
   const transport = VALID_TRANSPORTS.includes(
     transportRaw as (typeof VALID_TRANSPORTS)[number],
   )
@@ -183,10 +185,10 @@ export function loadConfig(): TM1Config {
 
   // Default to loopback. Binding to 0.0.0.0 must be opt-in to avoid exposing
   // a TM1-credentialed MCP server to the LAN by accident.
-  const httpHost = process.env.TM1_MCP_HTTP_HOST || "127.0.0.1";
+  const httpHost = env.TM1_MCP_HTTP_HOST || "127.0.0.1";
   const httpPort = parseIntEnv(
     "TM1_MCP_HTTP_PORT",
-    process.env.TM1_MCP_HTTP_PORT,
+    env.TM1_MCP_HTTP_PORT,
     3000,
   );
 
@@ -206,7 +208,7 @@ export function loadConfig(): TM1Config {
   ) {
     defaultOrigins.push(`http://${httpHost}:${httpPort}`);
   }
-  const extraOriginsRaw = process.env.TM1_MCP_HTTP_ALLOWED_ORIGINS;
+  const extraOriginsRaw = env.TM1_MCP_HTTP_ALLOWED_ORIGINS;
   const extraOrigins = extraOriginsRaw
     ? extraOriginsRaw
         .split(",")
@@ -217,7 +219,7 @@ export function loadConfig(): TM1Config {
     new Set([...defaultOrigins, ...extraOrigins]),
   );
 
-  const httpToken = process.env.TM1_MCP_HTTP_TOKEN || undefined;
+  const httpToken = env.TM1_MCP_HTTP_TOKEN || undefined;
 
   // Refuse a non-loopback HTTP bind without transport auth: TM1_MCP_HTTP_HOST=0.0.0.0
   // (or any LAN address) with no bearer token would expose an unauthenticated,
@@ -240,10 +242,10 @@ export function loadConfig(): TM1Config {
   // than silently falling back to readonly (dropping every write tool without a
   // word). A genuinely-unknown value throws at startup — parity with the numeric
   // env vars — instead of failing quietly.
-  const modeRaw = (process.env.TM1_MODE ?? "readonly").trim().toLowerCase();
+  const modeRaw = (env.TM1_MODE ?? "readonly").trim().toLowerCase();
   if (!VALID_MODES.includes(modeRaw as (typeof VALID_MODES)[number])) {
     throw new Error(
-      `Invalid TM1_MODE: "${process.env.TM1_MODE}". Expected "readwrite" or "readonly".`,
+      `Invalid TM1_MODE: "${env.TM1_MODE}". Expected "readwrite" or "readonly".`,
     );
   }
   const mode = modeRaw as TM1Config["mode"];
@@ -251,7 +253,7 @@ export function loadConfig(): TM1Config {
   // Same parse shape as TM1_MODE: case-insensitive, unknown value throws at
   // startup rather than silently picking a wire format the operator did not ask
   // for.
-  const responseModeRaw = (process.env.TM1_RESPONSE_MODE ?? "legacy")
+  const responseModeRaw = (env.TM1_RESPONSE_MODE ?? "legacy")
     .trim()
     .toLowerCase();
   if (
@@ -260,7 +262,7 @@ export function loadConfig(): TM1Config {
     )
   ) {
     throw new Error(
-      `Invalid TM1_RESPONSE_MODE: "${process.env.TM1_RESPONSE_MODE}". Expected "legacy" or "structured".`,
+      `Invalid TM1_RESPONSE_MODE: "${env.TM1_RESPONSE_MODE}". Expected "legacy" or "structured".`,
     );
   }
   const responseMode = responseModeRaw as TM1Config["responseMode"];
@@ -269,13 +271,13 @@ export function loadConfig(): TM1Config {
   // tokens) with room for the envelope; 23 recorded results overflowed it.
   const maxResponseChars = parseIntEnv(
     "TM1_MAX_RESPONSE_CHARS",
-    process.env.TM1_MAX_RESPONSE_CHARS,
+    env.TM1_MAX_RESPONSE_CHARS,
     DEFAULT_MAX_RESPONSE_CHARS,
   );
 
   // --- v12 (Planning Analytics Engine) connection ---------------------------
-  const instance = process.env.TM1_INSTANCE || undefined;
-  const database = process.env.TM1_DATABASE || undefined;
+  const instance = env.TM1_INSTANCE || undefined;
+  const database = env.TM1_DATABASE || undefined;
   const versionMajor = Number.parseInt(tm1Version, 10);
   const isV12 = Boolean(instance || database) || versionMajor === 12;
   const version: 11 | 12 = isV12 ? 12 : 11;
@@ -306,26 +308,24 @@ export function loadConfig(): TM1Config {
         "v12 connection requires TM1_DATABASE (set alongside TM1_INSTANCE).",
       );
     }
-    const authModeRaw = (process.env.TM1_AUTH_MODE ?? "s2s")
-      .trim()
-      .toLowerCase();
+    const authModeRaw = (env.TM1_AUTH_MODE ?? "s2s").trim().toLowerCase();
     if (
       !VALID_AUTH_MODES.includes(
         authModeRaw as (typeof VALID_AUTH_MODES)[number],
       )
     ) {
       throw new Error(
-        `Invalid TM1_AUTH_MODE: "${process.env.TM1_AUTH_MODE}". ` +
+        `Invalid TM1_AUTH_MODE: "${env.TM1_AUTH_MODE}". ` +
           `Expected one of: ${VALID_AUTH_MODES.join(", ")}.`,
       );
     }
     authMode = authModeRaw as TM1Config["authMode"];
 
-    clientId = process.env.TM1_CLIENT_ID || undefined;
-    clientSecret = process.env.TM1_CLIENT_SECRET || undefined;
-    accessToken = process.env.TM1_ACCESS_TOKEN || undefined;
-    apiKey = process.env.TM1_API_KEY || undefined;
-    iamUrl = process.env.TM1_IAM_URL || undefined;
+    clientId = env.TM1_CLIENT_ID || undefined;
+    clientSecret = env.TM1_CLIENT_SECRET || undefined;
+    accessToken = env.TM1_ACCESS_TOKEN || undefined;
+    apiKey = env.TM1_API_KEY || undefined;
+    iamUrl = env.TM1_IAM_URL || undefined;
 
     const missingV12: string[] = [];
     // Every v12 mode — not just "basic" — sends `{ User: config.user }` in the
