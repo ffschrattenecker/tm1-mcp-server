@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`tm1_execute_process` attaches the run's error log.** When TM1 names an error log for the run
+  (a failure, or `HasMinorErrors` on a run that committed), the last 40 lines come back as
+  `errorLog`. A run that reports `CompletedWithMessages` can still have skipped every record, and
+  telling that apart used to need a `tm1_diagnose_process_error` call on every non-clean run. That
+  tool stays for cascade siblings and older logs.
 - **`tm1_set_cube_rules` and `tm1_write_cells` read back what they wrote.** `set_cube_rules`
   returns `verified.textMatches`; `write_cells` re-reads up to 20 of the written cells and lists
   any whose stored value differs in `verified.mismatches` (a rule or spread overriding the value).

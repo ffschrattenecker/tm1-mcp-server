@@ -5,6 +5,8 @@ import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { ProcessResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { tailLines } from "../operations/error-log-helpers.js";
+import type { TM1Client } from "../../tm1-client.js";
 
 /**
  * Client-abort recovery hint, branched by TM1 major version: v11 exposes
@@ -17,13 +19,28 @@ export function abortHint(version: 11 | 12): string {
   return `Request aborted by the client — the process was NOT confirmed failed and may still be executing. Use ${monitor} to check for it and ${cancel} to stop it. Do NOT blindly re-run: that risks a duplicate execution.`;
 }
 
+const ERROR_LOG_TAIL_LINES = 40;
+
+async function fetchErrorLog(tm1Client: TM1Client, filename: string) {
+  try {
+    const raw = await tm1Client.server.getErrorLogContent(filename);
+    const { body, truncated, totalLines } = tailLines(
+      raw,
+      ERROR_LOG_TAIL_LINES,
+    );
+    return { filename, totalLines, truncated, content: body };
+  } catch (e) {
+    return { filename, fetchError: (e as Error).message };
+  }
+}
+
 export const registerExecuteProcess = defineTool({
   name: "tm1_execute_process",
   description: [
     "Execute a TurboIntegrator process on the TM1 server with optional parameters.",
     "Non-idempotent: each call re-runs the process — do not retry blindly on transport errors without checking server state.",
     "Before: tm1_check_process_code (syntax) and/or tm1_compile_process (full compile). Discover required params with tm1_get_process_parameters.",
-    "On failure: use tm1_diagnose_process_error for combined log + cascade fetch.",
+    "When TM1 wrote an error log for the run (failure or minor errors), its last 40 lines come back as errorLog. For cascade siblings and older logs use tm1_diagnose_process_error.",
   ],
   annotations: DESTRUCTIVE,
   output: ProcessResultSchema,
@@ -86,8 +103,21 @@ export const registerExecuteProcess = defineTool({
         }),
         `Process '${processName}' failed at runtime. Inspect cascade with tm1_diagnose_process_error(processName='${processName}', includeRelated=true). Verify parameter shape via tm1_get_process_parameters; check syntax with tm1_compile_process before re-running.`,
       );
+      // TM1 names the run's own error log when it wrote one (minor errors
+      // included). Attach its tail so judging the run takes no extra call.
+      const errorLog = result.errorLogFile
+        ? await fetchErrorLog(tm1Client, result.errorLogFile)
+        : undefined;
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(result) }],
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({
+              ...result,
+              ...(errorLog ? { errorLog } : {}),
+            }),
+          },
+        ],
         // A TI process that ran but reported failure is a tool failure, not a
         // successful call carrying success:false. Flag isError so agents that
         // branch on the MCP error signal don't silently treat it as success;

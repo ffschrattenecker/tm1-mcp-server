@@ -23,7 +23,10 @@ type ToolCb = (
   content: Array<{ type: string; text: string }>;
 }>;
 
-function captureHandler(execute: TM1Client["processes"]["execute"]): ToolCb {
+function captureHandler(
+  execute: TM1Client["processes"]["execute"],
+  getErrorLogContent?: (f: string) => Promise<string>,
+): ToolCb {
   let cb: ToolCb | undefined;
   const server = {
     tool: (_name: string, _desc: string, _schema: unknown, handler: ToolCb) => {
@@ -32,6 +35,7 @@ function captureHandler(execute: TM1Client["processes"]["execute"]): ToolCb {
   } as unknown as McpServer;
   const client = contractCheckedClient({
     processes: { execute },
+    ...(getErrorLogContent ? { server: { getErrorLogContent } } : {}),
   } as unknown as TM1Client);
   registerExecuteProcess(server, client);
   if (!cb) throw new Error("handler was not registered");
@@ -75,6 +79,58 @@ describe("tm1_execute_process isError contract (T2.1)", () => {
     expect(result.content[0]?.text).toContain(
       "TM1ProcessError_20260718_Partial.log",
     );
+  });
+
+  it("attaches the tail of the run's own error log", async () => {
+    const fetched: string[] = [];
+    const log = Array.from({ length: 50 }, (_, i) => `line ${i + 1}`).join(
+      "\r\n",
+    );
+    const cb = captureHandler(
+      async () => ({
+        success: false,
+        outcome: "completed_with_errors" as const,
+        processErrorStatus: "HasMinorErrors",
+        errorLogFile: "TM1ProcessError_x.log",
+      }),
+      async (f) => {
+        fetched.push(f);
+        return log;
+      },
+    );
+    const out = JSON.parse(
+      (await cb({ processName: "P", confirm: "P" }, {})).content[0]!.text,
+    );
+    expect(fetched).toEqual(["TM1ProcessError_x.log"]);
+    expect(out.errorLog).toMatchObject({
+      filename: "TM1ProcessError_x.log",
+      totalLines: 50,
+      truncated: true,
+    });
+    expect(out.errorLog.content.split("\n")).toHaveLength(40);
+    expect(out.errorLog.content).toContain("line 50");
+  });
+
+  it("reports a log it could not fetch without hiding the run result", async () => {
+    const cb = captureHandler(
+      async () => ({
+        success: false,
+        outcome: "rolled_back" as const,
+        processErrorStatus: "Aborted",
+        errorLogFile: "TM1ProcessError_y.log",
+      }),
+      async () => {
+        throw new Error("404");
+      },
+    );
+    const res = await cb({ processName: "P", confirm: "P" }, {});
+    const out = JSON.parse(res.content[0]!.text);
+    expect(res.isError).toBe(true);
+    expect(out.processErrorStatus).toBe("Aborted");
+    expect(out.errorLog).toEqual({
+      filename: "TM1ProcessError_y.log",
+      fetchError: "404",
+    });
   });
 
   it("flags isError when the outcome is indeterminate (T-4)", async () => {
