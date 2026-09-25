@@ -170,7 +170,10 @@ describe.skipIf(!LIVE_ENABLED)("live: 4.1.0 ergonomics", () => {
   it("names the missing dimension on a short coordinate", async () => {
     // A server with EnableSandboxDimension prepends `Sandboxes` to every cube
     // it creates — the dimension callers forget. Read the real order.
-    const listed = await h.ok("tm1_list_cubes", { nameExact: CUBE });
+    const listed = await h.ok("tm1_list_cubes", {
+      nameExact: CUBE,
+      includeDimensions: true,
+    });
     const actual = listed.json.items[0].dimensions as string[];
     const order = actual.join(", ");
 
