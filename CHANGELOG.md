@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`tm1_upsert_process` `dryRun`.** Runs the syntax and the reference check on the process as it
+  would be after the call, reports both (neither stops the other), and diffs it against the
+  installed version with credentials masked. Nothing is written. It needs no `confirm` and does not
+  count as one: the real overwrite still asks. Before, a caller that wanted the findings in front of
+  the user before the overwrite needed `tm1_check_process_code`, `tm1_validate_process_refs` and a
+  diff as three separate calls, because the install preflight only runs once the write is approved.
+- **`tm1_upsert_process` reads the code back.** The result carries `verified: {codeMatches,
+  mismatchedTabs}` for the tabs it sent, so confirming the change landed no longer takes a
+  `tm1_get_process_code` call.
+
 ### ⚠️ Behavior change
 
 - **Node.js 22.19 or newer is required.** Node 20 reached end of life in April 2026. CI now
