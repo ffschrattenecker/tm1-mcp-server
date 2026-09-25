@@ -176,21 +176,37 @@ export function loadConfig(): TM1Config {
     30000,
   );
 
-  const logLevelRaw = process.env.TM1_LOG_LEVEL ?? "info";
-  const logLevel = VALID_LOG_LEVELS.includes(
-    logLevelRaw as (typeof VALID_LOG_LEVELS)[number],
-  )
-    ? (logLevelRaw as TM1Config["logLevel"])
-    : "info";
+  // Same parse shape as TM1_MODE: case-insensitive, an unknown value throws at
+  // startup instead of silently falling back to the default.
+  const logLevelRaw = (process.env.TM1_LOG_LEVEL ?? "info")
+    .trim()
+    .toLowerCase();
+  if (
+    !VALID_LOG_LEVELS.includes(logLevelRaw as (typeof VALID_LOG_LEVELS)[number])
+  ) {
+    throw new Error(
+      `Invalid TM1_LOG_LEVEL: "${process.env.TM1_LOG_LEVEL}". Expected one of ${VALID_LOG_LEVELS.join(", ")}.`,
+    );
+  }
+  const logLevel = logLevelRaw as TM1Config["logLevel"];
 
   const logFile = process.env.TM1_LOG_FILE || undefined;
 
-  const transportRaw = process.env.TM1_MCP_TRANSPORT ?? "stdio";
-  const transport = VALID_TRANSPORTS.includes(
-    transportRaw as (typeof VALID_TRANSPORTS)[number],
-  )
-    ? (transportRaw as TM1Config["transport"])
-    : "stdio";
+  // A typo here used to start on stdio without a word: the expected /mcp port
+  // never bound and the operator saw only a client that could not connect.
+  const transportRaw = (process.env.TM1_MCP_TRANSPORT ?? "stdio")
+    .trim()
+    .toLowerCase();
+  if (
+    !VALID_TRANSPORTS.includes(
+      transportRaw as (typeof VALID_TRANSPORTS)[number],
+    )
+  ) {
+    throw new Error(
+      `Invalid TM1_MCP_TRANSPORT: "${process.env.TM1_MCP_TRANSPORT}". Expected "stdio" or "http".`,
+    );
+  }
+  const transport = transportRaw as TM1Config["transport"];
 
   // Default to loopback. Binding to 0.0.0.0 must be opt-in to avoid exposing
   // a TM1-credentialed MCP server to the LAN by accident.

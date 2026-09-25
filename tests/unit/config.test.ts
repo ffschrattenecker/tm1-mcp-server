@@ -165,12 +165,25 @@ describe("loadConfig", () => {
     }
   });
 
-  it("should default to 'info' for invalid log level", () => {
+  it("throws on an unknown log level instead of falling back", () => {
     setRequiredEnv();
     process.env.TM1_LOG_LEVEL = "verbose";
+    expect(() => loadConfig()).toThrow(/Invalid TM1_LOG_LEVEL/);
+  });
 
+  it("throws on an unknown transport instead of starting on stdio", () => {
+    setRequiredEnv();
+    process.env.TM1_MCP_TRANSPORT = "htttp";
+    expect(() => loadConfig()).toThrow(/Invalid TM1_MCP_TRANSPORT/);
+  });
+
+  it("accepts transport and log level case-insensitively", () => {
+    setRequiredEnv();
+    process.env.TM1_MCP_TRANSPORT = "HTTP";
+    process.env.TM1_LOG_LEVEL = "Debug";
     const config = loadConfig();
-    expect(config.logLevel).toBe("info");
+    expect(config.transport).toBe("http");
+    expect(config.logLevel).toBe("debug");
   });
 
   it("should set logFile when TM1_LOG_FILE is provided", () => {
