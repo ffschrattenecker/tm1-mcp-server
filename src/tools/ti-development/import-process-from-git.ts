@@ -177,33 +177,27 @@ export const registerImportProcessFromGit = defineTool({
       `Code update failed after process '${processName}' was ${exists ? "located" : "created"}. PARTIAL APPLY: shell exists but tabs are stale/empty. Re-run with mode=update once root cause fixed, or tm1_delete_process to roll back.`,
     );
 
-    if (parsed.parameters.length > 0) {
-      await withToolHint(
-        tm1Client.processes.updateParameters(processName, parsed.parameters),
-        `Parameter update failed for '${processName}'. Code applied but parameters missing. tm1_upsert_process with mode=update + parameters=[...] to recover.`,
-      );
-    }
-    // Ignored columns live only in the UI data, so a .json can carry column
-    // layout with an empty variable list — patch on either.
-    if (
-      parsed.variables.length > 0 ||
-      (parsed.variablesUIData?.length ?? 0) > 0
-    ) {
-      await withToolHint(
-        tm1Client.processes.updateVariables(
-          processName,
-          parsed.variables,
-          parsed.variablesUIData,
-        ),
-        `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
-      );
-    }
-    if (dataSource.type !== "None") {
-      await withToolHint(
-        tm1Client.processes.updateDataSource(processName, dataSource),
-        `Datasource update failed for '${processName}' (type=${dataSource.type}). Code+params+vars applied. For ODBC verify dataSourcePassword/DSN and re-run with mode=update.`,
-      );
-    }
+    // The file is the whole truth: an empty list or a None source is sent as
+    // well, because TM1 applies both (measured on 11.8 and 12.5) and skipping
+    // them left the removed parameters, variables and source on the server.
+    await withToolHint(
+      tm1Client.processes.updateParameters(processName, parsed.parameters),
+      `Parameter update failed for '${processName}'. Code applied but parameters missing. tm1_upsert_process with mode=update + parameters=[...] to recover.`,
+    );
+    // An export without variablesUIData (older format) leaves the server's
+    // column layout as it is; one that carries it replaces it.
+    await withToolHint(
+      tm1Client.processes.updateVariables(
+        processName,
+        parsed.variables,
+        parsed.variablesUIData,
+      ),
+      `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
+    );
+    await withToolHint(
+      tm1Client.processes.updateDataSource(processName, dataSource),
+      `Datasource update failed for '${processName}' (type=${dataSource.type}). Code+params+vars applied. For ODBC verify dataSourcePassword/DSN and re-run with mode=update.`,
+    );
 
     if (parsed.hasSecurityAccess !== undefined) {
       await withToolHint(

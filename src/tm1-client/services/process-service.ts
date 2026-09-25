@@ -1024,19 +1024,21 @@ export class ProcessService {
    */
   async updateVariables(
     processName: string,
-    vars: ProcessVariable[],
+    vars: ProcessVariable[] | undefined,
     variablesUIData?: string[],
   ): Promise<void> {
     const path = `/api/v1/Processes('${enc(processName)}')`;
-    const body: Record<string, unknown> = {
-      Variables: vars.map((v) => ({
+    const body: Record<string, unknown> = {};
+    // undefined = leave the variables alone and patch only the column layout.
+    if (vars !== undefined) {
+      body.Variables = vars.map((v) => ({
         Name: v.name,
         Type: v.type,
         Position: v.position,
         StartByte: v.startByte ?? 0,
         EndByte: v.endByte ?? 0,
-      })),
-    };
+      }));
+    }
     // Patching Variables alone leaves whatever VariablesUIData the process
     // already has (measured on 12.5), which is right for an edit that keeps the
     // column layout and wrong for one that changes it — hence the explicit

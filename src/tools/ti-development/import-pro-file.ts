@@ -149,32 +149,27 @@ export const registerImportProFile = defineTool({
       `Code update failed after process '${processName}' was ${exists ? "located" : "created"}. PARTIAL APPLY: the process shell exists but tabs are stale/empty. Re-run tm1_import_pro_file with mode=update once root cause fixed, or tm1_delete_process to roll back.`,
     );
 
-    if (parsed.parameters.length > 0) {
-      await withToolHint(
-        tm1Client.processes.updateParameters(processName, parsed.parameters),
-        `Parameter update failed for '${processName}'. Code applied but parameters missing. Inspect parsed parameters and re-run tm1_upsert_process with mode=update + parameters=[...] to recover.`,
-      );
-    }
-    // Ignored columns live only in the UI data, so a file can carry column
-    // layout with an empty variable list — patch on either.
-    if (parsed.variables.length > 0 || parsed.variablesUIData.length > 0) {
-      await withToolHint(
-        tm1Client.processes.updateVariables(
-          processName,
-          parsed.variables,
-          parsed.variablesUIData.length > 0
-            ? parsed.variablesUIData
-            : undefined,
-        ),
-        `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
-      );
-    }
-    if (parsed.dataSource.type !== "None") {
-      await withToolHint(
-        tm1Client.processes.updateDataSource(processName, parsed.dataSource),
-        `Datasource update failed for '${processName}' (type=${parsed.dataSource.type}). Code+params+vars applied. Verify datasource credentials/path (ASCII file existence, ODBC DSN, view name) and re-run tm1_upsert_process with mode=update + dataSource={...} to recover.`,
-      );
-    }
+    // The file is the whole truth: an empty list or a None source is sent as
+    // well, because TM1 applies both (measured on 11.8 and 12.5) and skipping
+    // them left the removed parameters, variables and source on the server.
+    await withToolHint(
+      tm1Client.processes.updateParameters(processName, parsed.parameters),
+      `Parameter update failed for '${processName}'. Code applied but parameters missing. Inspect parsed parameters and re-run tm1_upsert_process with mode=update + parameters=[...] to recover.`,
+    );
+    // A file without a column-layout block leaves the server's layout as it
+    // is; one that carries it replaces it.
+    await withToolHint(
+      tm1Client.processes.updateVariables(
+        processName,
+        parsed.variables,
+        parsed.variablesUIData.length > 0 ? parsed.variablesUIData : undefined,
+      ),
+      `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
+    );
+    await withToolHint(
+      tm1Client.processes.updateDataSource(processName, parsed.dataSource),
+      `Datasource update failed for '${processName}' (type=${parsed.dataSource.type}). Code+params+vars applied. Verify datasource credentials/path (ASCII file existence, ODBC DSN, view name) and re-run tm1_upsert_process with mode=update + dataSource={...} to recover.`,
+    );
 
     return {
       content: [
