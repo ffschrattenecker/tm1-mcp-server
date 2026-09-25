@@ -55,16 +55,21 @@ export function stripDefaultPhrase(
     return description;
   }
   const value = escapeRegExp(String(defaultValue));
-  return description
-    .replace(new RegExp(String.raw`\s*\(default:?\s*${value}\)`, "gi"), "")
-    .replace(
-      new RegExp(String.raw`\s*\bDefault:?\s*${value}(?:[.;]|(?=\s)|$)`, "gi"),
-      "",
-    )
-    .replace(/\s+([.,;])/g, "$1")
-    .trim()
-    // A phrase that opened the sentence leaves its trailing dash behind.
-    .replace(/^[—–-]\s*/, "");
+  return (
+    description
+      .replace(new RegExp(String.raw`\s*\(default:?\s*${value}\)`, "gi"), "")
+      .replace(
+        new RegExp(
+          String.raw`\s*\bDefault:?\s*${value}(?:[.;]|(?=\s)|$)`,
+          "gi",
+        ),
+        "",
+      )
+      .replace(/\s+([.,;])/g, "$1")
+      .trim()
+      // A phrase that opened the sentence leaves its trailing dash behind.
+      .replace(/^[—–-]\s*/, "")
+  );
 }
 
 export function slimJsonSchema(schema: unknown): unknown {
