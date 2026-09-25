@@ -65,6 +65,68 @@ function responseChars(result: McpToolResult): number {
   return JSON.stringify(result.structuredContent).length;
 }
 
+interface PagePayload {
+  total: number;
+  count: number;
+  offset: number;
+  has_more: boolean;
+  next_offset: number | null;
+  items: unknown[];
+  [k: string]: unknown;
+}
+
+function isPagePayload(value: unknown): value is PagePayload {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    Array.isArray(v.items) &&
+    typeof v.offset === "number" &&
+    typeof v.total === "number"
+  );
+}
+
+/**
+ * Cut an oversized page down to the longest prefix of its items that fits,
+ * turning it into an ordinary shorter page: count, has_more and next_offset
+ * are rewritten so the caller walks on from exactly where it stopped. The
+ * result is still valid JSON of the declared shape — unlike a text cut — and
+ * the call is not wasted. Returns undefined when not even one item fits (or
+ * the payload is not a page), leaving the caller to report the overflow.
+ */
+export function trimPageToFit(
+  result: McpToolResult,
+  maxChars: number,
+): McpToolResult | undefined {
+  const page = result.structuredContent;
+  if (!isPagePayload(page)) return undefined;
+  const withText = (result.content ?? []).some((c) => c.type === "text");
+  const build = (n: number): McpToolResult => {
+    const trimmed: PagePayload = {
+      ...page,
+      count: n,
+      has_more: true, // n < items.length: at least one item was dropped
+      next_offset: page.offset + n,
+      items: page.items.slice(0, n),
+    };
+    return {
+      ...result,
+      content: withText
+        ? [{ type: "text" as const, text: JSON.stringify(trimmed) }]
+        : [],
+      structuredContent: trimmed,
+    };
+  };
+  // Largest n in [1, items.length) whose serialization fits.
+  let lo = 0;
+  let hi = page.items.length - 1;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (responseChars(build(mid)) <= maxChars) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo > 0 ? build(lo) : undefined;
+}
+
 // How to narrow a call, derived from the tool's own input keys so a new tool
 // gets a correct hint without a per-tool table to keep in step.
 export function narrowingHint(inputKeys: ReadonlySet<string>): string {
@@ -230,8 +292,9 @@ export function withAnnotations(
 
   const SLOW_TOOL_MS = 5000;
 
-  // Replace an oversized success with an error that says how to narrow the
-  // call. Never truncate: a cut JSON payload is worse than none.
+  // An oversized page is cut to the items that fit (see trimPageToFit).
+  // Anything else becomes an error that says how to narrow the call — never a
+  // truncated text: a cut JSON payload is worse than none.
   const guardSize = (
     toolName: string,
     result: McpToolResult,
@@ -239,6 +302,14 @@ export function withAnnotations(
   ): McpToolResult => {
     const size = responseChars(result);
     if (size <= maxResponseChars) return result;
+    const trimmed = trimPageToFit(result, maxResponseChars);
+    if (trimmed) {
+      logger.info(
+        { tool: toolName, size, maxResponseChars },
+        "page trimmed to fit the response limit",
+      );
+      return trimmed;
+    }
     logger.warn(
       { tool: toolName, size, maxResponseChars },
       "response too large",
