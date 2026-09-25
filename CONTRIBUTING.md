@@ -5,7 +5,7 @@ and issues are welcome.
 
 ## Prerequisites
 
-- Node.js >= 20
+- Node.js >= 22.19
 - Access to a TM1 / Planning Analytics instance for live testing (the unit and
   property suites run without one)
 

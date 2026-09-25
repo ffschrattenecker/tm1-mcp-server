@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ⚠️ Behavior change
+
+- **Node.js 22.19 or newer is required.** Node 20 reached end of life in April 2026. CI now
+  tests Node 22 and 24.
+
 ## [6.0.1] - 2026-09-25
 
 ### Security

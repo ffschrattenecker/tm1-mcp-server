@@ -181,7 +181,7 @@ security notes and the `autoApprove` allowlist:
 
 ## Compatibility
 
-- Node.js >= 20
+- Node.js >= 22.19
 - TM1 11.8 / Planning Analytics 2.0 — the primary target; some metadata-write
   paths assume 11.x semantics, and v12-only fields (e.g.
   `DataSource.usesUnicode`) are dropped when `TM1_VERSION` says `11.x`
