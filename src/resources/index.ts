@@ -142,7 +142,7 @@ function registerConnectionResources(
         (await ctx.client()).server.getInfo(),
         (await ctx.client()).cubes.list(),
         (await ctx.client()).dimensions.list(),
-        (await ctx.client()).processes.list(),
+        (await ctx.client()).processes.list({ namesOnly: true }),
         (await ctx.client()).chores.list(),
         (await ctx.client()).security.listClients(),
       ]);
@@ -183,7 +183,11 @@ function registerConnectionResources(
     new ResourceTemplate(`${ctx.base}process/{name}/code`, {
       list: async () => {
         if (!ctx.enumerate()) return { resources: [] };
-        const procs = await (await ctx.client()).processes.list();
+        const procs = await (
+          await ctx.client()
+        ).processes.list({
+          namesOnly: true,
+        });
         return {
           resources: procs
             .filter((p) => !p.name.startsWith("}"))
@@ -198,7 +202,11 @@ function registerConnectionResources(
       },
       complete: {
         name: async (value: string) => {
-          const procs = await (await ctx.client()).processes.list();
+          const procs = await (
+            await ctx.client()
+          ).processes.list({
+            namesOnly: true,
+          });
           const lower = value.toLowerCase();
           return procs
             .filter(
@@ -242,7 +250,11 @@ function registerConnectionResources(
     },
     list: async () => {
       if (!ctx.enumerate()) return { resources: [] };
-      const procs = await (await ctx.client()).processes.list();
+      const procs = await (
+        await ctx.client()
+      ).processes.list({
+        namesOnly: true,
+      });
       return {
         resources: procs
           .filter((p) => !p.name.startsWith("}"))

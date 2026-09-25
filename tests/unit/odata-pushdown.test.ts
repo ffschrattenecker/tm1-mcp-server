@@ -311,6 +311,25 @@ describe("list_* OData push-down", () => {
       expect(page.total).toBe(1);
     });
 
+    it("selects Name only by default and Parameters only when asked", async () => {
+      const namesPaths: string[] = [];
+      const names = parse(
+        await register(
+          registerListProcesses,
+          processClient(PROCS, namesPaths),
+        )({ limit: 10 }),
+      );
+      expect(namesPaths[0]).toContain("$select=Name&");
+      expect(names.items[0]).toEqual({ name: "load.actuals" });
+
+      const paramPaths: string[] = [];
+      await register(
+        registerListProcesses,
+        processClient(PROCS, paramPaths),
+      )({ limit: 10, fields: ["name", "parameters"] });
+      expect(paramPaths[0]).toContain("$select=Name,Parameters");
+    });
+
     it("falls back to a full scan for nameRegex and for excludePattern", async () => {
       for (const args of [{ nameRegex: "^load" }, { excludePattern: "^zz" }]) {
         const paths: string[] = [];

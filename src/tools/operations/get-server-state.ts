@@ -52,7 +52,7 @@ export const registerGetServerState = defineTool({
         tm1Client.server.getInfo(),
         tm1Client.cubes.list(),
         tm1Client.dimensions.list(),
-        tm1Client.processes.list(),
+        tm1Client.processes.list({ namesOnly: true }),
         tm1Client.chores.list(),
         tm1Client.security.listClients(),
       ]);

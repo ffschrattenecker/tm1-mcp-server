@@ -107,7 +107,7 @@ export const registerImportProFile = defineTool({
       if (failure) return preflightResult(failure);
     }
 
-    const allProcs = await tm1Client.processes.list();
+    const allProcs = await tm1Client.processes.list({ namesOnly: true });
     const exists = allProcs.some(
       (p: { name: string }) => p.name === processName,
     );

@@ -26,7 +26,7 @@ export const registerListCubes = defineTool({
   name: "tm1_list_cubes",
   description: [
     "List cubes in the TM1 server. Control cubes ('}'-prefixed) excluded unless includeControl=true.",
-    "Combinable name filters (nameExact/nameContains/nameRegex) and projection toggles (includeDimensions, includeRules) trim payload on wide models.",
+    "Returns names; includeDimensions / includeRules add each cube's dimensions[] / hasRules. Combinable name filters: nameExact/nameContains/nameRegex.",
     "Paginated (default 50/page).",
   ],
   annotations: READ_ONLY,
@@ -44,10 +44,8 @@ export const registerListCubes = defineTool({
     includeDimensions: z
       .boolean()
       .optional()
-      .default(true)
-      .describe(
-        "Include the dimensions[] array per cube (default: true). Set false for compact output on wide cubes.",
-      ),
+      .default(false)
+      .describe("Include the dimensions[] array per cube."),
     includeRules: z
       .boolean()
       .optional()

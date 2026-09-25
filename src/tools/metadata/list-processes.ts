@@ -17,8 +17,8 @@ import { pageShapeFor } from "../schemas/common.js";
 export const registerListProcesses = defineTool({
   name: "tm1_list_processes",
   description: [
-    "List TurboIntegrator processes (with parameters) in the TM1 server. Control processes ('}'-prefixed) excluded unless includeControl=true.",
-    "Name filters (nameContains/nameRegex/nameNotContains/excludePattern) and fields=['name'] projection trim payload on large models.",
+    "List TurboIntegrator process names in the TM1 server; fields=['name','parameters'] adds each process's parameters. Control processes ('}'-prefixed) excluded unless includeControl=true.",
+    "Name filters: nameContains/nameRegex/nameNotContains/excludePattern.",
     "Paginated (default 50/page).",
   ],
   annotations: READ_ONLY,
@@ -59,7 +59,7 @@ export const registerListProcesses = defineTool({
       .array(z.enum(["name", "parameters"]))
       .optional()
       .describe(
-        "Projection. Default: all fields. Use ['name'] to skip parameters[] and shrink payload ~10x.",
+        "Projection. Default ['name']; include 'parameters' for parameter lists (~10x larger).",
       ),
   },
   handler: async (
@@ -77,14 +77,17 @@ export const registerListProcesses = defineTool({
     },
     tm1Client,
   ) => {
+    // Names only unless parameters are asked for: listing is how a model
+    // orients, and the parameter blocks are ~10x the bytes of the names.
+    const withParameters = fields?.includes("parameters") ?? false;
     type Row = Process | { name: string };
     const project = (list: Process[]): Row[] =>
-      fields && !fields.includes("parameters")
-        ? list.map((p) => ({ name: p.name }))
-        : list;
+      withParameters ? list : list.map((p) => ({ name: p.name }));
 
     const fullScan = async (): Promise<Row[]> => {
-      let processes: Process[] = await tm1Client.processes.list();
+      let processes: Process[] = await tm1Client.processes.list({
+        namesOnly: !withParameters,
+      });
 
       if (!includeControl)
         processes = processes.filter((p) => !p.name.startsWith("}"));
@@ -121,6 +124,7 @@ export const registerListProcesses = defineTool({
     let page: Page<Row>;
     if (canPushDown) {
       const { items, total } = await tm1Client.processes.list({
+        namesOnly: !withParameters,
         includeControl,
         ...(nameContains ? { nameContains } : {}),
         ...(nameNotContains ? { nameNotContains } : {}),

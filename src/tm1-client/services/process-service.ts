@@ -67,6 +67,12 @@ export interface ProcessVariableLayout {
 export interface ProcessListOpts extends NameFilterOpts {
   /** Set to slice server-side. Only legal when every active filter is in NameFilterOpts. */
   page?: PageOpts;
+  /**
+   * Select Name only; every process comes back with `parameters: []`. TM1
+   * then serializes no parameter blocks at all — for callers that only need
+   * names (counts, existence checks, listings) this is the cheap query.
+   */
+  namesOnly?: boolean;
 }
 
 // Encode a TI parameter for the OData write body.
@@ -143,9 +149,9 @@ export class ProcessService {
    * Name-only when v11 rejects the inline Parameters select.
    * GET /api/v1/Processes?$select=Name,Parameters
    */
-  // Unpaged form takes no options: filters only exist to make a server-side
-  // page honest, and every non-paged caller wants the whole collection.
-  async list(): Promise<Process[]>;
+  // Unpaged form takes no filters: they only exist to make a server-side page
+  // honest, and every non-paged caller wants the whole collection.
+  async list(opts?: Pick<ProcessListOpts, "namesOnly">): Promise<Process[]>;
   /**
    * Paged variant: with `page` set the slice happens server-side
    * (`$orderby=Name&$top&$skip&$count=true`) and the return carries the
@@ -173,6 +179,17 @@ export class ProcessService {
     // — TM1 v11 rejects $expand=Parameters with a syntax error. Use $select
     // instead, which returns Parameters inline. Param.Type comes back as the
     // already-decoded string "Numeric" / "String" (not the legacy int code).
+    const namesOnly = async (): Promise<Process[] | Paged<Process>> => {
+      const response = await this.http.request<{
+        "@odata.count"?: number;
+        value: Array<{ Name: string }>;
+      }>("GET", `/api/v1/Processes?$select=Name${query}`);
+      return wrap(
+        response.value.map((p) => ({ name: p.Name, parameters: [] })),
+        readCount(response),
+      );
+    };
+    if (opts.namesOnly) return namesOnly();
     try {
       const response = await this.http.request<{
         "@odata.count"?: number;
@@ -201,18 +218,7 @@ export class ProcessService {
       );
     } catch (e) {
       rethrowIfSystemic(e);
-      const response = await this.http.request<{
-        "@odata.count"?: number;
-        value: Array<{ Name: string }>;
-      }>("GET", `/api/v1/Processes?$select=Name${query}`);
-
-      return wrap(
-        response.value.map((p) => ({
-          name: p.Name,
-          parameters: [],
-        })),
-        readCount(response),
-      );
+      return namesOnly();
     }
   }
 

@@ -313,7 +313,7 @@ export const registerAuditNaming = defineTool({
     // ── Processes + (optional) variables ───────────────────────────────
     let processNames: string[] = [];
     if (want("processes") || want("processVariables")) {
-      const procs = await tm1Client.processes.list();
+      const procs = await tm1Client.processes.list({ namesOnly: true });
       processNames = (
         includeControl ? procs : procs.filter((p) => !isControlName(p.name))
       ).map((p) => p.name);
