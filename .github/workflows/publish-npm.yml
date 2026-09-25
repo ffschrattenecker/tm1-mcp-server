@@ -2,54 +2,108 @@ name: Publish to npm
 
 # Publishes @ffschrattenecker/tm1-mcp-server when a vX.Y.Z tag is pushed
 # (`npm version <level>` + `git push --follow-tags`, see RELEASING.md).
-# Runs on Linux, where `verify` is green; prepublishOnly runs it again.
+# workflow_dispatch re-runs a publish whose tag-push trigger never fired: pick
+# the tag (not a branch) as the ref.
+#
+# Two jobs on purpose. `build` runs everything that executes third-party code
+# (npm ci install scripts, the test suite) WITHOUT id-token, so none of it can
+# mint an npm publish token. `publish` holds id-token and only uploads the
+# already-built tarball — publishing a .tgz runs no lifecycle scripts.
 # Authenticates via npm trusted publishing (OIDC, configured on npmjs.com for
 # this repo + workflow file) — no token or secret needed.
 
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write # npm provenance
 
 concurrency:
   group: publish-npm
   cancel-in-progress: false
 
 jobs:
-  publish:
+  build:
     if: github.repository == 'ffschrattenecker/tm1-mcp-server'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # for the on-main check
+          persist-credentials: false
 
+      # No npm cache in the release path: a cache written by another run could
+      # otherwise feed into the published artefact.
+      # Node 24 bundles npm >= 11.5.1, which trusted publishing needs.
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
-          node-version: 22
-          cache: npm
-          registry-url: https://registry.npmjs.org
+          node-version: 24
+          package-manager-cache: false
 
       - name: Tag matches package.json
         run: |
+          if [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            echo "run this workflow on a vX.Y.Z tag, not $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
           v="$(node -p 'require("./package.json").version')"
           if [ "v$v" != "$GITHUB_REF_NAME" ]; then
             echo "tag $GITHUB_REF_NAME does not match package.json version $v" >&2
             exit 1
           fi
 
-      # Trusted publishing needs npm >= 11.5.1; Node 22 bundles npm 10.
-      - name: Upgrade npm
-        run: npm install -g npm@latest
+      - name: Tagged commit is on main
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "$GITHUB_REF_NAME ($GITHUB_SHA) is not on main" >&2
+            exit 1
+          fi
 
       - name: Install
         run: npm ci
+
+      - name: Verify
+        run: npm run verify
 
       - name: Smoke-test the tarball
         # No TM1 server in CI: tier 2 is always skipped, which exits 3 without --allow-skip.
         run: npm run smoke:tarball -- --target=none --allow-skip
 
+      - name: Pack
+        run: |
+          mkdir pkg
+          npm pack --pack-destination pkg
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tarball
+          path: pkg/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing + provenance
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: tarball
+
       - name: Publish
-        run: npm publish --provenance --access public
+        run: npm publish ./*.tgz --provenance --access public
