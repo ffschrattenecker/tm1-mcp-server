@@ -7,13 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Breaking
 
 - **`tm1_set_cube_rules` preflight.** Before writing, the full resulting text (after `edits`
   are applied) is checked with `tm1.CheckRules`. Any error returns `VALIDATION_ERROR` with
   `stage:"preflight"`, `check:"syntax"` and `errors[]`, and nothing is written. The Rules PATCH
   itself stores syntactically broken text without an error (verified on 11.8.03500), so until
   now the check was only as good as the caller's discipline. `preflight:false` opts out.
+- **`tm1_write_cells` refuses a `dimensions` list that does not cover the cube.** A dimension
+  left out used to land on its default member without an error. Verified on 11.8.03500: a
+  write that left out the measure dimension overwrote the value at its first element. Unknown and
+  duplicated names are refused too. Nothing is written in any of these cases. The one dimension
+  that may be left out is `Sandboxes` (added to every cube by `EnableSandboxDimension=true`).
+  It is now bound to `Base` explicitly, and the result says so as `sandboxDefaulted: "Base"`,
+  instead of relying on TM1's default member, which is `Base` only while no sandbox has
+  `IncludeInSandboxDimension=true`. `dimensions` may come in any order; each cell's elements
+  follow it. A named sandbox is addressable only once `IncludeInSandboxDimension` is true.
+
+### Added
+
+- `tm1_check_writable_coords` takes an optional `dimensions` list, resolved exactly like
+  `tm1_write_cells` (any order, `Sandboxes` bound to `Base`). The documented pre-write check can
+  then check the cell the write will address, instead of refusing the coordinates the write accepts.
 - `tm1_check_cube_rule` takes the same sources as `tm1_set_cube_rules`: `rules`, `edits` or
   `filePath`. A patch can be validated exactly as it would be installed, without the caller
   rebuilding the whole file to check it.
@@ -21,13 +36,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   identity. A client (e.g. the spms-tools plugin) can gate on the server version from a tool
   result instead of guessing it from which schema fields exist.
 
+### Known issues
+
+- `tm1_sample_cells` returns no cells on a cube with a `Sandboxes` dimension even when it holds
+  data (seen on 11.8.03500). Not investigated yet. Use `tm1_execute_mdx` with an explicit
+  `[Sandboxes].[Base]` until it is.
+
 ### Fixed
 
 - `tm1_invalidate_callgraph_cache` is annotated `readOnlyHint` and so is available in readonly
   mode. It only drops an in-memory index and touches no TM1 object. Its description no longer
   says to call it after every deploy: the server has invalidated on every mutating call since
   4.x, so the old advice cost a turn for nothing.
-
 - The preflight's reference-failure hint no longer says "correct the name". It asks the
   model to report each unresolved name to the user first. A near match (`SalesPlan` for
   `'Sales Plan'`) is a different object, and swapping it in unasked is the silent

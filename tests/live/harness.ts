@@ -207,6 +207,24 @@ export function skipUnlessRegistered(
  * crashed or interrupted suite. Idempotent — missing objects are ignored.
  * Call from a global afterAll or the last suite.
  */
+/**
+ * A raw REST call for fixtures no tool covers (e.g. TM1 sandboxes). The
+ * transport is private on TM1Client by design; tests reach it deliberately.
+ */
+export function rawRequest<T = unknown>(
+  h: LiveHarness,
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const http = (
+    h.client as unknown as {
+      http: { request: (m: string, p: string, b?: unknown) => Promise<T> };
+    }
+  ).http;
+  return http.request(method, path, body);
+}
+
 export async function sweepSandbox(h: LiveHarness): Promise<void> {
   const swallow = async (p: Promise<unknown>) => {
     try {
@@ -243,6 +261,29 @@ export async function sweepSandbox(h: LiveHarness): Promise<void> {
         h.call("tm1_delete_process", { processName: name, confirm: name }),
       );
     }
+  }
+
+  // 2b. TM1 sandboxes. One left behind with IncludeInSandboxDimension=true is
+  // a member of the shared Sandboxes dimension of every cube on the server.
+  try {
+    const sbs = await rawRequest<{ value?: Array<{ Name: string }> }>(
+      h,
+      "GET",
+      "/api/v1/Sandboxes?$select=Name",
+    );
+    for (const sb of sbs.value ?? []) {
+      if (sb.Name.includes(SANDBOX)) {
+        await swallow(
+          rawRequest(
+            h,
+            "DELETE",
+            `/api/v1/Sandboxes('${encodeURIComponent(sb.Name)}')`,
+          ),
+        );
+      }
+    }
+  } catch {
+    /* sandboxing disabled on this server */
   }
 
   // 3. Cubes (drops their views with them; frees the dimensions). includeControl

@@ -5,6 +5,7 @@ import { READ_ONLY } from "../annotations.js";
 import { WritableCoordsResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
+import { resolveCellAddress } from "../../lib/cell-address.js";
 
 interface CoordCheck {
   dimension: string;
@@ -17,7 +18,7 @@ interface CoordCheck {
 export const registerCheckWritableCoords = defineTool({
   name: "tm1_check_writable_coords",
   description:
-    "Pre-flight check before CellPutN/CellPutS. Verifies (1) every coord element exists, (2) every element is N-Level (writes to Consolidated elements silent-fail), and (3) whether the target cube has rules that may overlap the coord. Returns per-coord status + a rule-overlap warning. Use before writing cells in a TI process or via tm1_write_cells.",
+    "Pre-flight check before CellPutN/CellPutS. Verifies (1) every coord element exists, (2) every element is N-Level (writes to Consolidated elements silent-fail), and (3) whether the target cube has rules that may overlap the coord. Returns per-coord status + a rule-overlap warning. Use before writing cells in a TI process or via tm1_write_cells; pass the same dimensions list as the write to check exactly the cell it will address.",
   annotations: READ_ONLY,
   output: WritableCoordsResultSchema,
   input: {
@@ -25,10 +26,16 @@ export const registerCheckWritableCoords = defineTool({
     coords: z
       .array(z.string())
       .describe(
-        "Element name per dimension, in cube dimension order. Length must match cube.dimensions.length.",
+        "Element name per dimension: in cube dimension order, or in the order of dimensions when given.",
+      ),
+    dimensions: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "Dimension names for coords, any order — as passed to tm1_write_cells. Every cube dimension except Sandboxes (bound to Base) must be named.",
       ),
   },
-  handler: async ({ cubeName, coords }, tm1Client) => {
+  handler: async ({ cubeName, coords: given, dimensions }, tm1Client) => {
     const cubes = await tm1Client.cubes.list();
     const cubeMeta = cubes.find(
       (c) => c.name.toLowerCase() === cubeName.toLowerCase(),
@@ -40,7 +47,16 @@ export const registerCheckWritableCoords = defineTool({
       });
     }
     const dims = cubeMeta.dimensions;
-    if (coords.length !== dims.length) {
+    let coords = given;
+    let sandboxDefaulted: string | undefined;
+    if (dimensions !== undefined) {
+      if (given.length !== dimensions.length) {
+        throw dimensionCountMismatch(cubeName, dimensions, given);
+      }
+      const address = resolveCellAddress(cubeName, dims, dimensions);
+      coords = address.toCubeOrder(given);
+      sandboxDefaulted = address.sandboxDefaulted;
+    } else if (coords.length !== dims.length) {
       throw dimensionCountMismatch(cubeName, dims, coords);
     }
 
@@ -126,6 +142,7 @@ export const registerCheckWritableCoords = defineTool({
               allElementsNLevel: allNLevel,
               coords: checks,
               ruleOverlapWarn,
+              ...(sandboxDefaulted ? { sandboxDefaulted } : {}),
             },
             null,
             2,
