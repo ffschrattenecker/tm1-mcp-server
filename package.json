@@ -63,7 +63,8 @@
     "verify": "npm run typecheck && npm run typecheck:tests && npm run lint:no-flat-api && npm run lint:output-schema-budget && npm run lint:tool-registration && npm run lint:input-naming && npm run lint:mutation-envelope && npm run lint:format && npm run lint:eslint && npm run coverage:check",
     "tools:list": "node scripts/gen-tool-list.mjs",
     "tools:update-readme": "node scripts/gen-tool-list.mjs --write-readme",
-    "lint:eslint": "eslint ."
+    "lint:eslint": "eslint .",
+    "measure:tools": "node scripts/measure-tool-surface.mjs"
   },
   "keywords": [
     "mcp",
