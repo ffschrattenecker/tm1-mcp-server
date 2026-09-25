@@ -50,7 +50,8 @@ jobs:
         run: npm ci
 
       - name: Smoke-test the tarball
-        run: npm run smoke:tarball -- --target=none
+        # No TM1 server in CI: tier 2 is always skipped, which exits 3 without --allow-skip.
+        run: npm run smoke:tarball -- --target=none --allow-skip
 
       - name: Publish
         run: npm publish --provenance --access public
