@@ -6,14 +6,24 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
-        node: [20, 22]
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Setup Node ${{ matrix.node }}
         uses: actions/setup-node@v7
@@ -24,53 +34,21 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Typecheck
-        run: npm run typecheck
+      # The exact gate `npm publish` runs (prepublishOnly → verify), so a tag
+      # can never pass CI and then fail at publish time.
+      - name: Verify (typecheck, lints, format, tests + coverage ratchet)
+        run: npm run verify
 
-      - name: Lint (no flat TM1 API)
-        run: npm run lint:no-flat-api
+      # Tier 1 only: bin wiring, shebang, files allow-list, unconfigured start.
+      # No TM1 server in CI, so tier 2 is always skipped.
+      - name: Smoke-test the tarball
+        run: npm run smoke:tarball -- --target=none --allow-skip
 
-      - name: Lint (ESLint)
-        run: npm run lint:eslint
-
-      # `npm run verify` runs prettier --check and the README calls verify
-      # "everything CI runs". Without this step that claim was false in the
-      # direction that hurts: the local gate was STRICTER than the one guarding
-      # main, so a formatting-only diff could land green here and then red on
-      # the next contributor's machine.
-      - name: Lint (formatting)
-        run: npm run lint:format
-
-      - name: Build
-        run: npm run build
-
-      # Schema gates: registration parses src; the byte-budget gate measures
-      # the compiled dist payload, so both run after Build.
-      - name: Lint (output-schema byte budget)
-        run: npm run lint:output-schema-budget
-
-      - name: Lint (tool registration)
-        run: npm run lint:tool-registration
-
-      - name: Lint (input naming — no bare top-level name)
-        run: npm run lint:input-naming
-
-      - name: Lint (mutation envelope — actionResponse over hand-rolled)
-        run: npm run lint:mutation-envelope
-
-      # Runs the whole test suite under coverage, enforces the floors in
-      # coverage-thresholds.json (vitest), then runs the ratchet gate — which
-      # also fails when coverage has climbed well ABOVE the floor, so the floor
-      # gets raised instead of quietly rotting. See CONTRIBUTING "Coverage Policy".
-      - name: Tests + coverage ratchet
-        run: npm run coverage:check
-
-      # Gate on what consumers actually install: the published package ships
-      # only dist/ + runtime deps (files:["dist"]). Dev-only advisories (e.g.
-      # vite via vitest) don't reach users and must not block a release.
+      # Consumers install from npm-shrinkwrap.json, which pins the whole
+      # production tree, so this audits what they actually get. Dev-only
+      # advisories (e.g. vite via vitest) don't reach users.
       - name: Audit (production deps, high+)
         run: npm audit --omit=dev --audit-level=high
-        continue-on-error: false
 
       # Full-tree audit incl. devDependencies — informational, never blocks.
       - name: Audit (all deps, informational)
