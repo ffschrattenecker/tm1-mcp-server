@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [6.1.0] - 2026-09-26
+## [6.1.1] - 2026-09-26
+
+### Fixed
+
+- **Publishing.** The publish workflow handed npm the tarball as `pkg/<file>.tgz`, which npm reads
+  as a GitHub `user/repo` spec, so the 6.1.0 release failed at upload. Contents are identical to
+  6.1.0, which was tagged but never reached npm: install 6.1.1.
+
+## [6.1.0] - 2026-09-26 [not published]
 
 ### Added
 
@@ -1258,7 +1266,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.1.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.1.1...HEAD
+[6.1.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.1.0...v6.1.1
 [6.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.0.1...v6.1.0
 [6.0.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.0.0...v6.0.1
 [6.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v5.0.0...v6.0.0
