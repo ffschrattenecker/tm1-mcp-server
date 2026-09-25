@@ -4,6 +4,7 @@ import { z, type ZodRawShape } from "zod";
 import { registerGetDescendants } from "../../src/tools/metadata/get-descendants.js";
 import { HierarchyService } from "../../src/tm1-client/services/hierarchy-service.js";
 import type { TM1Client } from "../../src/tm1-client.js";
+import { answerHierarchy } from "../helpers/hierarchy-fake.js";
 
 // Synthetic hierarchy: consolidation "Total" with 5 leaf children. Children
 // are derived client-side from Parents, mirroring the real OData shape.
@@ -59,10 +60,8 @@ const POOL_WITH_EMPTY_CONSOLIDATION = [
 ];
 
 function makeTM1Client(pool: typeof POOL = POOL): TM1Client {
-  const request = async (_method: string, _path: string) => ({
-    Name: "H",
-    Elements: pool,
-  });
+  const request = async (_method: string, path: string) =>
+    answerHierarchy(pool, path);
   const hierarchies = new HierarchyService({
     request,
   } as unknown as ConstructorParameters<typeof HierarchyService>[0]);

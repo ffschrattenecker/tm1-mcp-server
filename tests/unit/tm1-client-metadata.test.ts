@@ -5,6 +5,10 @@ import type { FnSpy } from "../helpers/spy-types.js";
 import { TM1Client } from "../../src/tm1-client.js";
 import { SessionManager } from "../../src/session-manager.js";
 import type { TM1Config } from "../../src/config.js";
+import {
+  answerHierarchy,
+  type PoolElement,
+} from "../helpers/hierarchy-fake.js";
 import { baseTestConfig } from "../helpers/tm1-config.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -595,10 +599,26 @@ describe("TM1Client – Metadata Methods", () => {
   // ── getDescendants() ───────────────────────────────────────────────────────
 
   describe("getDescendants()", () => {
-    beforeEach(() => {
-      // Fallback for the /Edges request get() issues alongside the expand.
-      fetchSpy.mockResolvedValue(mockResponse({ value: [] }));
-    });
+    // Serves the pool for both the nested-element request and the
+    // full-hierarchy fallback; an unknown element answers 404 like TM1.
+    const serve = (pool: PoolElement[]) =>
+      fetchSpy.mockImplementation((url: string) => {
+        const body = answerHierarchy(pool, url);
+        if (body === undefined) {
+          return Promise.resolve({
+            ok: false,
+            status: 404,
+            statusText: "Not Found",
+            headers: new Headers(),
+            text: vi
+              .fn()
+              .mockResolvedValue(
+                JSON.stringify({ error: { message: "not found" } }),
+              ),
+          } as unknown as Response);
+        }
+        return Promise.resolve(mockResponse(body));
+      });
 
     const sampleHierarchy = {
       Name: "Region",
@@ -628,7 +648,7 @@ describe("TM1Client – Metadata Methods", () => {
     };
 
     it("should return all descendants of a consolidation", async () => {
-      fetchSpy.mockResolvedValueOnce(mockResponse(sampleHierarchy));
+      serve(sampleHierarchy.Elements);
       const result = await client.hierarchies.getDescendants(
         "Region",
         "Region",
@@ -639,7 +659,7 @@ describe("TM1Client – Metadata Methods", () => {
     });
 
     it("should respect depth limit", async () => {
-      fetchSpy.mockResolvedValueOnce(mockResponse(sampleHierarchy));
+      serve(sampleHierarchy.Elements);
       const result = await client.hierarchies.getDescendants(
         "Region",
         "Region",
@@ -653,7 +673,7 @@ describe("TM1Client – Metadata Methods", () => {
     });
 
     it("should filter to leaves only when leavesOnly=true", async () => {
-      fetchSpy.mockResolvedValueOnce(mockResponse(sampleHierarchy));
+      serve(sampleHierarchy.Elements);
       const result = await client.hierarchies.getDescendants(
         "Region",
         "Region",
@@ -668,7 +688,7 @@ describe("TM1Client – Metadata Methods", () => {
     });
 
     it("should return empty descendants for leaf element", async () => {
-      fetchSpy.mockResolvedValueOnce(mockResponse(sampleHierarchy));
+      serve(sampleHierarchy.Elements);
       const result = await client.hierarchies.getDescendants(
         "Region",
         "Region",
@@ -678,42 +698,109 @@ describe("TM1Client – Metadata Methods", () => {
     });
 
     it("should throw NOT_FOUND for unknown element", async () => {
-      fetchSpy.mockResolvedValueOnce(mockResponse(sampleHierarchy));
+      serve(sampleHierarchy.Elements);
       await expect(
         client.hierarchies.getDescendants("Region", "Region", "Mars"),
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
     });
   });
 
+  describe("subtree requests (T5)", () => {
+    // A chain Top > N1 > ... > N24 > Leaf: deeper than one nested request.
+    const chain: PoolElement[] = [
+      { Name: "Top", Type: "Consolidated", Level: 25, Parents: [] },
+      ...Array.from({ length: 24 }, (_, i) => ({
+        Name: `N${i + 1}`,
+        Type: "Consolidated",
+        Level: 24 - i,
+        Parents: [{ Name: i === 0 ? "Top" : `N${i}` }],
+      })),
+      { Name: "Leaf", Type: "Numeric", Level: 0, Parents: [{ Name: "N24" }] },
+    ];
+    const serveChain = () =>
+      fetchSpy.mockImplementation((url: string) =>
+        Promise.resolve(mockResponse(answerHierarchy(chain, url))),
+      );
+    const urls = () =>
+      fetchSpy.mock.calls.map(([u]) => decodeURIComponent(String(u)));
+
+    it("asks for the element's subtree, not the whole hierarchy", async () => {
+      serveChain();
+      const r = await client.hierarchies.getDescendants("D", "D", "N20");
+      expect(r.descendants.map((d) => d.name)).toEqual([
+        "N21",
+        "N22",
+        "N23",
+        "N24",
+        "Leaf",
+      ]);
+      expect(urls()).toHaveLength(1);
+      expect(urls()[0]).toContain("/Elements('N20')?");
+      expect(urls()[0]).not.toContain("$expand=Elements");
+    });
+
+    it("falls back to the full load when the subtree is deeper than one request reaches", async () => {
+      serveChain();
+      const r = await client.hierarchies.getDescendants("D", "D", "Top");
+      expect(r.descendants).toHaveLength(25);
+      expect(r.descendants.at(-1)).toMatchObject({ name: "Leaf", depth: 25 });
+      expect(urls()[1]).toContain("$expand=Elements");
+    });
+
+    it("walks ancestors upward and falls back past the nesting limit", async () => {
+      serveChain();
+      const near = await client.hierarchies.getAncestors("D", "D", "N3");
+      expect(near.paths).toEqual([["N3", "N2", "N1", "Top"]]);
+      expect(urls()).toHaveLength(1);
+
+      fetchSpy.mockClear();
+      serveChain();
+      const far = await client.hierarchies.getAncestors("D", "D", "Leaf");
+      expect(far.paths[0]).toHaveLength(26);
+      expect(urls()[1]).toContain("$expand=Elements");
+    });
+  });
+
   // ── getAncestors() ─────────────────────────────────────────────────────────
 
   describe("getAncestors()", () => {
-    beforeEach(() => {
-      // Fallback for the /Edges request get() issues alongside the expand.
-      fetchSpy.mockResolvedValue(mockResponse({ value: [] }));
-    });
+    // Serves the pool for both the nested-element request and the
+    // full-hierarchy fallback; an unknown element answers 404 like TM1.
+    const serve = (pool: PoolElement[]) =>
+      fetchSpy.mockImplementation((url: string) => {
+        const body = answerHierarchy(pool, url);
+        if (body === undefined) {
+          return Promise.resolve({
+            ok: false,
+            status: 404,
+            statusText: "Not Found",
+            headers: new Headers(),
+            text: vi
+              .fn()
+              .mockResolvedValue(
+                JSON.stringify({ error: { message: "not found" } }),
+              ),
+          } as unknown as Response);
+        }
+        return Promise.resolve(mockResponse(body));
+      });
 
     it("should walk single-parent path to root", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          Name: "Region",
-          Elements: [
-            { Name: "Total", Type: "Consolidated", Level: 2, Parents: [] },
-            {
-              Name: "Europe",
-              Type: "Consolidated",
-              Level: 1,
-              Parents: [{ Name: "Total" }],
-            },
-            {
-              Name: "DE",
-              Type: "Numeric",
-              Level: 0,
-              Parents: [{ Name: "Europe" }],
-            },
-          ],
-        }),
-      );
+      serve([
+        { Name: "Total", Type: "Consolidated", Level: 2, Parents: [] },
+        {
+          Name: "Europe",
+          Type: "Consolidated",
+          Level: 1,
+          Parents: [{ Name: "Total" }],
+        },
+        {
+          Name: "DE",
+          Type: "Numeric",
+          Level: 0,
+          Parents: [{ Name: "Europe" }],
+        },
+      ]);
       const result = await client.hierarchies.getAncestors(
         "Region",
         "Region",
@@ -724,33 +811,28 @@ describe("TM1Client – Metadata Methods", () => {
     });
 
     it("should return all distinct paths for multi-parent element", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          Name: "Region",
-          Elements: [
-            { Name: "Total", Type: "Consolidated", Level: 2, Parents: [] },
-            {
-              Name: "ByGeo",
-              Type: "Consolidated",
-              Level: 1,
-              Parents: [{ Name: "Total" }],
-            },
-            {
-              Name: "ByCurrency",
-              Type: "Consolidated",
-              Level: 1,
-              Parents: [{ Name: "Total" }],
-            },
-            // DE rolls up under both ByGeo and ByCurrency (alternate consolidations)
-            {
-              Name: "DE",
-              Type: "Numeric",
-              Level: 0,
-              Parents: [{ Name: "ByGeo" }, { Name: "ByCurrency" }],
-            },
-          ],
-        }),
-      );
+      serve([
+        { Name: "Total", Type: "Consolidated", Level: 2, Parents: [] },
+        {
+          Name: "ByGeo",
+          Type: "Consolidated",
+          Level: 1,
+          Parents: [{ Name: "Total" }],
+        },
+        {
+          Name: "ByCurrency",
+          Type: "Consolidated",
+          Level: 1,
+          Parents: [{ Name: "Total" }],
+        },
+        // DE rolls up under both ByGeo and ByCurrency (alternate consolidations)
+        {
+          Name: "DE",
+          Type: "Numeric",
+          Level: 0,
+          Parents: [{ Name: "ByGeo" }, { Name: "ByCurrency" }],
+        },
+      ]);
       const result = await client.hierarchies.getAncestors(
         "Region",
         "Region",
@@ -767,14 +849,7 @@ describe("TM1Client – Metadata Methods", () => {
     });
 
     it("should return empty ancestors for root element", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          Name: "Region",
-          Elements: [
-            { Name: "Total", Type: "Consolidated", Level: 0, Parents: [] },
-          ],
-        }),
-      );
+      serve([{ Name: "Total", Type: "Consolidated", Level: 0, Parents: [] }]);
       const result = await client.hierarchies.getAncestors(
         "Region",
         "Region",
@@ -785,9 +860,7 @@ describe("TM1Client – Metadata Methods", () => {
     });
 
     it("should throw NOT_FOUND for unknown element", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({ Name: "Region", Elements: [] }),
-      );
+      serve([]);
       await expect(
         client.hierarchies.getAncestors("Region", "Region", "Ghost"),
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
