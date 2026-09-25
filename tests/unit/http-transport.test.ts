@@ -264,4 +264,42 @@ describe("startHttpTransport (stateless, per-request)", () => {
 
     expect(status).toBe(413);
   });
+
+  // The SDK compares the Host header as a whole string, port included, so
+  // bare "localhost" in allowedHosts never matched `localhost:<port>`.
+  it.each(["127.0.0.1", "localhost", "[::1]"])(
+    "accepts Host: %s:<port> on a loopback bind",
+    async (hostName) => {
+      const port = await freePort();
+      close = await startHttpTransport(
+        buildServer,
+        makeConfig(port),
+        silentLogger,
+      );
+      const body = JSON.stringify(INIT);
+      const status = await new Promise<number>((resolve, reject) => {
+        const req = httpRequest(
+          {
+            host: "127.0.0.1",
+            port,
+            path: "/mcp",
+            method: "POST",
+            headers: {
+              Host: `${hostName}:${port}`,
+              "Content-Type": "application/json",
+              Accept: "application/json, text/event-stream",
+              "Content-Length": String(Buffer.byteLength(body)),
+            },
+          },
+          (res) => {
+            res.resume();
+            resolve(res.statusCode ?? 0);
+          },
+        );
+        req.on("error", reject);
+        req.end(body);
+      });
+      expect(status).toBe(200);
+    },
+  );
 });

@@ -37,7 +37,17 @@ export async function startHttpTransport(
   config: TM1Config,
   logger: pino.Logger,
 ): Promise<() => Promise<void>> {
-  const allowedHost = `${config.httpHost}:${config.httpPort}`;
+  // The SDK compares the Host header as one string, port included, so every
+  // entry needs the port. Loopback names are safe to always allow: a rebinding
+  // attacker's page sends its own hostname, never one of these.
+  const allowedHosts = [
+    ...new Set([
+      `${config.httpHost}:${config.httpPort}`,
+      `127.0.0.1:${config.httpPort}`,
+      `localhost:${config.httpPort}`,
+      `[::1]:${config.httpPort}`,
+    ]),
+  ];
 
   if (!config.httpToken) {
     logger.warn(
@@ -142,7 +152,7 @@ export async function startHttpTransport(
         // sessionIdGenerator omitted → stateless mode (single-use per request)
         enableJsonResponse: true,
         enableDnsRebindingProtection: true,
-        allowedHosts: [allowedHost, "127.0.0.1", "localhost"],
+        allowedHosts,
         allowedOrigins: config.httpAllowedOrigins,
       });
       res.on("close", () => {
