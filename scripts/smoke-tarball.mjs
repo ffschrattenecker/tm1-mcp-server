@@ -570,8 +570,11 @@ async function tier1(proj, opts) {
   //    leaves an MCP client spinning forever) and not a bare stack.
   // childEnv({}) strips every TM1_* variable (and DOTENV_CONFIG_PATH) from the
   // caller's shell. The child's cwd and package root are both under tmpdir(),
-  // so load-env.ts finds no .env either — this really is an unconfigured start.
-  const bareEnv = childEnv({});
+  // so load-env.ts finds no .env either. HOME/USERPROFILE point at the empty
+  // project dir too: without TM1_BASE_URL the server looks for connection
+  // folders under ~/.tm1/mcp-servers, and the developer's real ones must not
+  // turn this into a configured start.
+  const bareEnv = { ...childEnv({}), HOME: proj, USERPROFILE: proj };
   const started = Date.now();
   const noConfig = await run(process.execPath, [binTarget], {
     cwd: proj,
@@ -591,10 +594,12 @@ async function tier1(proj, opts) {
     );
   }
   const errText = noConfig.stderr;
-  const wanted = ["TM1_BASE_URL", "TM1_USER", "TM1_PASSWORD"];
+  // Both ways to configure it must be named: one TM1_BASE_URL, or a folder
+  // of connections.
+  const wanted = ["TM1_BASE_URL", "TM1_CONNECTIONS_DIR"];
   const missingFromMessage = wanted.filter((w) => !errText.includes(w));
   if (
-    !/Missing or empty required environment variables/i.test(errText) ||
+    !/No TM1 connections found/i.test(errText) ||
     missingFromMessage.length > 0
   ) {
     for (const l of tail(errText)) say(`   | ${l}`);
@@ -606,7 +611,7 @@ async function tier1(proj, opts) {
   // The diagnosis must be the FIRST thing on stderr. A stack trace above it
   // means the user has to read a crash dump to learn they forgot a variable.
   const firstErrLine = tail(errText, 200)[0] ?? "";
-  if (!firstErrLine.includes("Missing or empty required environment")) {
+  if (!firstErrLine.includes("No TM1 connections found")) {
     say(`   | ${firstErrLine}`);
     throw new Tier1Error(
       `stderr opens with something other than the configuration error`,
