@@ -56,6 +56,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A rejected login is never retried, so wrong credentials cannot lock the account.**
+  After a 401/403 on login the server kept trying: every request re-authenticated, fan-out
+  tools did so once per concurrency batch (about 50 attempts for a 400-element
+  `tm1_bulk_upsert_elements`), and the keep-alive timer added one attempt a minute
+  indefinitely. With `MaximumLoginAttempts=3` that locks the account within one tool call.
+  The first rejection is now remembered: every later call fails at once with
+  `AUTH_FAILED` without contacting TM1, and the keep-alive timer stops. Fix the
+  credentials and restart the MCP server.
 - **`tm1_clear_cube` refuses a call that still carries `dimensions`/`tuples`.** Removing
   the two inputs left them undeclared, and the SDK strips what a schema does not mention:
   a stored call meaning "clear this region" arrived as a bare `cubeName` and emptied the

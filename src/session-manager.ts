@@ -6,6 +6,7 @@ import {
 } from "./tm1-client/connection/profile.js";
 import { getTm1Dispatcher, tm1Fetch } from "./tm1-client/dispatcher.js";
 import { NAME, VERSION } from "./version.js";
+import { TM1Error, TM1ErrorCode } from "./types.js";
 import type pino from "pino";
 
 const USER_AGENT = `${NAME}/${VERSION}`;
@@ -42,6 +43,13 @@ export class SessionManager {
   private sessionCookie: string | null = null;
   private authInFlight: Promise<string> | null = null;
   private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+  // Set once TM1 rejects the configured credentials (401/403 on login).
+  // Credentials come from env and cannot change without a restart, so every
+  // later attempt would be rejected the same way — and each one counts
+  // against MaximumLoginAttempts. Latching here keeps one failed login from
+  // becoming dozens (fan-out tools, the 401 retry, the keep-alive timer)
+  // and locking the account.
+  private rejectedLogin: TM1Error | null = null;
   private readonly config: TM1Config;
   private readonly logger: pino.Logger;
   private readonly profile: ConnectionProfile;
@@ -74,6 +82,9 @@ export class SessionManager {
    * requests are using — the "staggered-401 re-auth churn" cascade.
    */
   async authenticate(staleCookie?: string): Promise<string> {
+    if (this.rejectedLogin) {
+      throw this.rejectedLogin;
+    }
     if (
       staleCookie !== undefined &&
       this.sessionCookie !== null &&
@@ -135,6 +146,24 @@ export class SessionManager {
 
     // Always consume body to release connection
     await response.text();
+
+    if (response.status === 401 || response.status === 403) {
+      this.rejectedLogin = new TM1Error({
+        code: TM1ErrorCode.AUTH_FAILED,
+        message:
+          `Authentication failed with status ${response.status}: ${response.statusText}. ` +
+          "No further login attempts are made, so the account is not locked out; " +
+          "fix the credentials and restart the MCP server.",
+        httpStatus: response.status,
+        endpoint: loginReq.url,
+      });
+      this.logger.error(
+        { endpoint: loginReq.url, status: response.status },
+        "Authentication rejected; login attempts stopped until restart",
+      );
+      this.stopKeepAlive();
+      throw this.rejectedLogin;
+    }
 
     if (!response.ok) {
       this.logger.error(
