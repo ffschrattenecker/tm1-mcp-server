@@ -121,3 +121,27 @@ describe("ConnectionRegistry.fromEnvironment", () => {
     await expect(reg.get("nope")).rejects.toThrow(/Unknown connection "nope"/);
   });
 });
+
+describe("ConnectionRegistry with no usable folder", () => {
+  it("fails at startup and names every folder's problem", () => {
+    const root = mkdtempSync(join(tmpdir(), "tm1-conns-"));
+    try {
+      writeConn(root, "a", ["TM1_USER=u"]);
+      writeConn(root, "b", [
+        "TM1_BASE_URL=http://b:1",
+        "TM1_MODE=sideways",
+        ...CREDS,
+      ]);
+      expect(() =>
+        ConnectionRegistry.fromEnvironment(
+          { TM1_CONNECTIONS_DIR: root },
+          logger,
+        ),
+      ).toThrow(
+        /No usable TM1 connection[\s\S]*a: .*TM1_BASE_URL[\s\S]*b: .*TM1_MODE/,
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

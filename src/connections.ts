@@ -96,6 +96,15 @@ export class ConnectionRegistry {
           `create <name>/.env folders under ${dir} (or point TM1_CONNECTIONS_DIR at them).`,
       );
     }
+    // Folders exist but none is usable: fail at startup with every reason,
+    // rather than serve tools whose `connection` enum is empty.
+    if (registry.usableNames.length === 0) {
+      const reasons = registry
+        .status()
+        .map((c) => `  ${c.name}: ${c.configError}`)
+        .join("\n");
+      throw new Error(`No usable TM1 connection under ${dir}:\n${reasons}`);
+    }
     return registry;
   }
 

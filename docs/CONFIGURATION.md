@@ -34,6 +34,27 @@ in is decided at startup:
 
 `TM1_CONNECTIONS=dev,test` narrows discovery to the named folders.
 
+**Set `TM1_CONNECTIONS_DIR` explicitly in the MCP entry.** The server also
+reads a `.env` from the directory the client starts it in (see above); one
+that sets `TM1_BASE_URL` would otherwise switch the server to a single
+connection without a word. An explicit dir wins over `TM1_BASE_URL`:
+
+```json
+{
+  "mcpServers": {
+    "tm1": {
+      "command": "tm1-mcp-server",
+      "env": { "TM1_CONNECTIONS_DIR": "C:/Users/you/.tm1/mcp-servers" }
+    }
+  }
+}
+```
+
+Tool names no longer carry the connection (`mcp__tm1__tm1_delete_cube` for all of
+them), so a client permission granted for one connection applies to every
+connection. Keep production folders `TM1_MODE=readonly` unless writes there are
+intended: the per-call refusal is then the barrier, not the approval prompt.
+
 With more than one connection every tool gains a required `connection`
 argument (an enum of the folder names); with one, the tool schemas are exactly
 as before. `tm1_list_connections` reports each connection's mode, TM1 version,
