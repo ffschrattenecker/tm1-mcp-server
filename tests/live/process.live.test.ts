@@ -89,8 +89,8 @@ describe.skipIf(!LIVE_ENABLED)("live: process (TI development)", () => {
     });
   });
 
-  it("get_process_code returns the four tabs and the prolog back", async () => {
-    const r = await h.ok("tm1_get_process_code", { processName: PROC_A });
+  it("get_process returns the four tabs and the prolog back", async () => {
+    const r = await h.ok("tm1_get_process", { processName: PROC_A });
     expect(r.json).toMatchObject({
       prolog: expect.any(String),
       metadata: expect.any(String),
@@ -100,10 +100,10 @@ describe.skipIf(!LIVE_ENABLED)("live: process (TI development)", () => {
     expect(r.json.prolog).toContain("nFoo = 1;");
   });
 
-  it("get_process_parameters returns the declared parameter", async () => {
-    const r = await h.ok("tm1_get_process_parameters", {
+  it("get_process returns the declared parameter", async () => {
+    const r = await h.ok("tm1_get_process", {
       processName: PROC_A,
-      format: "json",
+      includeCode: false,
     });
     expect(r.json.parameters).toBeInstanceOf(Array);
     const pAmount = r.json.parameters.find(
@@ -113,21 +113,21 @@ describe.skipIf(!LIVE_ENABLED)("live: process (TI development)", () => {
     expect(pAmount).toMatchObject({ name: "pAmount", type: "Numeric" });
   });
 
-  it("get_process_variables works", async () => {
-    const r = await h.ok("tm1_get_process_variables", {
+  it("get_process returns the variables", async () => {
+    const r = await h.ok("tm1_get_process", {
       processName: PROC_A,
-      format: "json",
+      includeCode: false,
     });
     expect(r.json.variables).toBeInstanceOf(Array);
   });
 
-  it("get_process_datasource returns a None-type datasource", async () => {
-    const r = await h.ok("tm1_get_process_datasource", {
+  it("get_process returns a None-type datasource", async () => {
+    const r = await h.ok("tm1_get_process", {
       processName: PROC_A,
-      format: "json",
+      includeCode: false,
     });
-    expect(r.json).toBeTruthy();
-    expect(r.json.type).toBeTruthy();
+    expect(r.json.dataSource).toBeTruthy();
+    expect(r.json.dataSource.type).toBeTruthy();
   });
 
   it("execute_process runs the harmless process successfully", async () => {
@@ -219,8 +219,8 @@ describe.skipIf(!LIVE_ENABLED)("live: process (TI development)", () => {
     });
   });
 
-  it("get_process_code on a nonexistent process yields an error envelope", async () => {
-    const r = await h.call("tm1_get_process_code", {
+  it("get_process on a nonexistent process yields an error envelope", async () => {
+    const r = await h.call("tm1_get_process", {
       processName: `${SANDBOX}_PROC_DOES_NOT_EXIST`,
     });
     expect(r.isError).toBe(true);
@@ -233,8 +233,8 @@ describe.skipIf(!LIVE_ENABLED)("live: process (TI development)", () => {
       confirm: PROC_B,
     });
     expect(r.json ?? r.text).toBeTruthy();
-    // Gone now: get_process_code should error.
-    const gone = await h.call("tm1_get_process_code", { processName: PROC_B });
+    // Gone now: get_process should error.
+    const gone = await h.call("tm1_get_process", { processName: PROC_B });
     expect(gone.isError).toBe(true);
   });
 
@@ -431,10 +431,11 @@ describe.skipIf(!LIVE_ENABLED)("live: process data sources", () => {
       mode: "upsert",
     });
 
-    const r = await h.ok("tm1_get_process_datasource", {
+    const r = await h.ok("tm1_get_process", {
       processName: PROC_DS_ASCII,
+      includeCode: false,
     });
-    expect(r.json).toMatchObject({
+    expect(r.json.dataSource).toMatchObject({
       type: "ASCII",
       asciiDelimiterType: "Character",
       asciiDelimiterChar: ";",
@@ -460,10 +461,11 @@ describe.skipIf(!LIVE_ENABLED)("live: process data sources", () => {
       mode: "upsert",
     });
 
-    const r = await h.ok("tm1_get_process_datasource", {
+    const r = await h.ok("tm1_get_process", {
       processName: PROC_DS_ODBC,
+      includeCode: false,
     });
-    expect(r.json).toMatchObject({
+    expect(r.json.dataSource).toMatchObject({
       type: "ODBC",
       dataSourceNameForServer: `${SANDBOX}_DSN`,
       userName: `${SANDBOX}_user`,
@@ -471,8 +473,8 @@ describe.skipIf(!LIVE_ENABLED)("live: process data sources", () => {
     });
     // TM1 hands back the stored password as an encrypted blob; what must never
     // reach the caller is that blob, whatever it decrypts to.
-    expect(r.json.password).toBe("[redacted]");
-    expect(r.json.password).not.toContain("not-a-real-password");
+    expect(r.json.dataSource.password).toBe("***");
+    expect(r.json.dataSource.password).not.toContain("not-a-real-password");
 
     // The same fields on the whole-process read path, which has its own
     // wire contract.

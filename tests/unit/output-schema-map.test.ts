@@ -265,13 +265,6 @@ describe("declared output schemas", () => {
       dataSource: { type: "None" },
       hasSecurityAccess: false,
     },
-    tm1_get_process_code: {
-      prolog: "# pro",
-      metadata: "",
-      data: "",
-      epilog: "",
-    },
-    tm1_get_process_datasource: { type: "None" },
     tm1_get_cell_value: { value: 42 },
     tm1_get_all_cube_rules: {
       count: 1,
@@ -481,14 +474,6 @@ describe("declared output schemas", () => {
       processName: "Load.Sales",
       errorCount: 0,
       errors: [],
-    },
-    tm1_get_process_parameters: {
-      processName: "Load.Sales",
-      parameters: [{ name: "p", type: "String", defaultValue: "x" }],
-    },
-    tm1_get_process_variables: {
-      processName: "Load.Sales",
-      variables: [{ name: "v1", type: "String", position: 1 }],
     },
     tm1_get_client: { Name: "admin", Enabled: true },
     tm1_get_cube_rules: {

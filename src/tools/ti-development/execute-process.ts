@@ -39,7 +39,7 @@ export const registerExecuteProcess = defineTool({
   description: [
     "Execute a TurboIntegrator process on the TM1 server with optional parameters.",
     "Non-idempotent: each call re-runs the process — do not retry blindly on transport errors without checking server state.",
-    "Before: tm1_check_process_code (syntax) and/or tm1_compile_process (full compile). Discover required params with tm1_get_process_parameters.",
+    "Before: tm1_check_process_code (syntax) and/or tm1_compile_process (full compile). Discover required params with tm1_get_process.",
     "When TM1 wrote an error log for the run (failure or minor errors), its last 40 lines come back as errorLog. For cascade siblings and older logs use tm1_diagnose_process_error.",
   ],
   annotations: DESTRUCTIVE,
@@ -101,7 +101,7 @@ export const registerExecuteProcess = defineTool({
           signal: extra?.signal,
           ...(timeoutMs ? { timeoutMs } : {}),
         }),
-        `Process '${processName}' failed at runtime. Inspect cascade with tm1_diagnose_process_error(processName='${processName}', includeRelated=true). Verify parameter shape via tm1_get_process_parameters; check syntax with tm1_compile_process before re-running.`,
+        `Process '${processName}' failed at runtime. Inspect cascade with tm1_diagnose_process_error(processName='${processName}', includeRelated=true). Verify parameter shape via tm1_get_process; check syntax with tm1_compile_process before re-running.`,
       );
       // TM1 names the run's own error log when it wrote one (minor errors
       // included). Attach its tail so judging the run takes no extra call.

@@ -59,7 +59,7 @@ describe.skipIf(!LIVE_ENABLED)("live: 5.0.0 deploy safety", () => {
     });
     expect(r.isError).toBe(true);
     expect(r.json.message).toContain(`needs confirm="${PROC}"`);
-    const code = await h.ok("tm1_get_process_code", { processName: PROC });
+    const code = await h.ok("tm1_get_process", { processName: PROC });
     expect(code.json.prolog).toBe("nX = 1;");
   });
 
@@ -75,7 +75,7 @@ describe.skipIf(!LIVE_ENABLED)("live: 5.0.0 deploy safety", () => {
       check: "references",
       issues: [{ kind: "cube", name: "Sales Plan" }],
     });
-    const code = await h.ok("tm1_get_process_code", { processName: PROC });
+    const code = await h.ok("tm1_get_process", { processName: PROC });
     expect(code.json.prolog).toBe("nX = 1;");
   });
 

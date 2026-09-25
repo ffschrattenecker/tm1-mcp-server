@@ -101,7 +101,7 @@ function captureRegistrations(): Map<
 
 describe("L8 auto-derived tool titles", () => {
   it("deriveTitle: strips tm1_, capitalizes words, keeps acronym casing", () => {
-    expect(deriveTitle("tm1_get_process_code")).toBe("Get Process Code");
+    expect(deriveTitle("tm1_get_process")).toBe("Get Process");
     expect(deriveTitle("tm1_list_cubes")).toBe("List Cubes");
     expect(deriveTitle("tm1_execute_mdx")).toBe("Execute MDX");
     expect(deriveTitle("tm1_create_mdx_view")).toBe("Create MDX View");

@@ -55,7 +55,6 @@ const TOOLS_WITH_EXTRAS: string[] = [
   "tm1_diff_process_with_file",
   "tm1_install_pro_bundle",
   "tm1_check_writable_coords",
-  "tm1_get_process_datasource",
   "tm1_get_client",
   "tm1_get_server_info",
   "tm1_analyze_callgraph",

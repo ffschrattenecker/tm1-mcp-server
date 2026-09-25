@@ -23,7 +23,7 @@ import { backupProcess } from "./process-backup.js";
 // The same data source shape the git round-trip and check_process_code use.
 // This tool used to carry its own copy, which had drifted: it was missing
 // `query`, so an ODBC source could be created here but its SQL could not —
-// while tm1_get_process_datasource reads it back.
+// while tm1_get_process reads it back.
 // Strict, so a misspelled field is rejected instead of silently dropped.
 const dataSourceSchema = sharedDataSourceSchema.strict();
 
@@ -274,7 +274,7 @@ export const registerUpsertProcess = defineTool({
     const { cleared: callgraphEntriesCleared } = invalidateCallgraphCache();
 
     // Read the code back: TM1 stores what REST sent, so a mismatch means the
-    // write did not land as sent. Saves the caller a get_process_code turn.
+    // write did not land as sent. Saves the caller a get_process turn.
     const sent = { prolog, metadata, data, epilog };
     const sentTabs = TABS.filter((t) => sent[t] !== undefined);
     let verified:

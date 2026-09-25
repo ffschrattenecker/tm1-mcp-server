@@ -26,7 +26,7 @@ export const registerSearchCode = defineTool({
     "Regex search across all TI process code (Prolog/Metadata/Data/Epilog).",
     "Returns matches paginated (default 50/page) with process name, tab, line number, and trimmed line text.",
     "Wrapper over tm1_get_all_processes_code that avoids dumping ~MB of code through the channel.",
-    "Use tm1_get_process_code on a hit to inspect the surrounding context.",
+    "Use tm1_get_process on a hit to inspect the surrounding context.",
     "Set groupBy='process' (or 'tab') for a sorted count aggregation instead of individual match lines.",
   ],
   annotations: READ_ONLY,

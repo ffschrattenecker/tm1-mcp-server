@@ -542,7 +542,7 @@ result on an active server usually means auditing is disabled (check
 
 Add `format: "markdown"` to any list_* tool or to these get_* tools for human-readable output:
 
-`tm1_get_server_info`, `tm1_get_server_state`, `tm1_get_cube_stats`, `tm1_get_message_log`, `tm1_get_transaction_log`, `tm1_get_process_parameters`, `tm1_get_process_variables`, `tm1_get_process_datasource`, `tm1_get_ancestors`, `tm1_get_descendants`, `tm1_get_element_attribute_values`, `tm1_get_client`.
+`tm1_get_server_info`, `tm1_get_server_state`, `tm1_get_cube_stats`, `tm1_get_message_log`, `tm1_get_transaction_log`, `tm1_get_ancestors`, `tm1_get_descendants`, `tm1_get_element_attribute_values`, `tm1_get_client`.
 
 Default `json` is preferred for agent consumption — the server parses it into `structuredContent` so typed clients can consume the payload directly.
 

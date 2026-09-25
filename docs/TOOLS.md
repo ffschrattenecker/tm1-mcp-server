@@ -48,7 +48,7 @@ datasource (562-589).
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (115)
+## Tools (112)
 
 ### analysis (10)
 
@@ -109,7 +109,7 @@ datasource (562-589).
 - `tm1_list_chores` — List chores in the TM1 server with schedule and assigned processes
 - `tm1_list_cubes` — List cubes in the TM1 server
 - `tm1_list_dimensions` — List dimensions (with their hierarchy names) in the TM1 server
-- `tm1_list_processes` — List TurboIntegrator processes (with parameters) in the TM1 server
+- `tm1_list_processes` — List TurboIntegrator process names in the TM1 server; fields=['name','parameters'] adds each process's parameters
 - `tm1_list_processes_grouped` — Group TI processes by name prefix to give a structural overview without listing every process
 - `tm1_resolve_default_members` — Resolve N hierarchies' effective default members in parallel from one tool call; pass items:[{dimensionName}] with a single entry for a one-off lookup
 
@@ -125,7 +125,7 @@ datasource (562-589).
 - `tm1_set_cube_rules` — Create or replace the rules for a TM1 cube
 - `tm1_unload_cube` — Unload a cube from memory
 
-### operations (15)
+### operations (16)
 
 - `tm1_cancel_job` — Cancel a running TM1 v12 job by its ID
 - `tm1_cancel_thread` — Cancel a running TM1 server thread by its ID
@@ -137,6 +137,7 @@ datasource (562-589).
 - `tm1_get_server_info` — Return TM1 server identity + curated configuration (TI, Rules, MTQ, JobQueuing, Memory, Logging, HTTP, Security) from /Configuration + /ActiveConfiguration
 - `tm1_get_server_state` — Health-check style snapshot of the TM1 server in one call
 - `tm1_get_transaction_log` — Fetch recent TM1 transaction log entries (cell writes), newest first
+- `tm1_list_connections` — List the TM1 connections this server can reach: name (the `connection` argument of every other tool), readonly/readwrite mode, TM1 version, and whether a sessio
 - `tm1_list_error_logs` — List TI process error log files on the TM1 server, newest first
 - `tm1_list_jobs` — List active jobs (Activity) on a TM1 v12 database — the running tasks that replaced v11 threads
 - `tm1_list_sessions` — List active sessions on the TM1 server with their associated user and threads
@@ -170,7 +171,7 @@ datasource (562-589).
 - `tm1_list_subsets` — List public + private subsets of a TM1 hierarchy
 - `tm1_update_subset` — Update a public TM1 subset (partial)
 
-### ti-development (21)
+### ti-development (17)
 
 - `tm1_check_process_code` — Validate TI process code WITHOUT saving it on the server (POST /api/v1/CompileProcess unbound)
 - `tm1_compile_process` — Compile a TI process to validate its syntax without executing it
@@ -183,10 +184,6 @@ datasource (562-589).
 - `tm1_export_process_to_pro` — Reverse of tm1_import_pro_file: serialize a TM1 process back to a .pro file body
 - `tm1_get_all_processes_code` — Bulk-load source code (Prolog/Metadata/Data/Epilog) of every TI process in one call, plus each process's HasSecurityAccess elevation flag (hasSecurityAccess) fo
 - `tm1_get_process` — Native full read of a TI process — the read-twin of tm1_upsert_process
-- `tm1_get_process_code` — Get the source code of all four tabs (Prolog, Metadata, Data, Epilog) of a TI process
-- `tm1_get_process_datasource` — Get the data source configuration of a TurboIntegrator process
-- `tm1_get_process_parameters` — Get the parameters of a TurboIntegrator process including names, types and defaults
-- `tm1_get_process_variables` — Get the variables (column-name mapping for ASCII/ODBC sources) of a TurboIntegrator process
 - `tm1_import_pro_file` — Parse a TM1 .pro file (Tabs / Parameters / Variables / DataSource) and deploy the process in one call
 - `tm1_import_process_from_git` — Deploy a TM1 process from the tm1-git two-file layout ('{name}.json' + '{name}.ti')
 - `tm1_install_pro_bundle` — Install all .pro files from a directory in one call

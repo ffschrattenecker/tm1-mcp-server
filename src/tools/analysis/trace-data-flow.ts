@@ -18,7 +18,7 @@ const FLOW_MAX_ITEMS = 500;
 export const registerTraceDataFlow = defineTool({
   name: "tm1_trace_data_flow",
   description: [
-    "Trace data flow into and out of a cube in one call, instead of analyze_object_usage + N× get_process_code.",
+    "Trace data flow into and out of a cube in one call, instead of analyze_object_usage + N× get_process.",
     "downstream: processes that READ the cube and which cubes they WRITE to (where the data flows next).",
     "upstream: processes that WRITE the cube and where they SOURCE data (read cubes + datasource).",
     "Combines code-level CellGet/CellPut/DB access with each process's datasource, so view-sourced reads",

@@ -25,11 +25,7 @@ import { registerTraceCellCalculation } from "./celldata/trace-cell-calculation.
 
 // TI development tools (process CRUD, execution, code, params, datasource)
 import { registerExecuteProcess } from "./ti-development/execute-process.js";
-import { registerGetProcessParameters } from "./ti-development/get-process-parameters.js";
-import { registerGetProcessCode } from "./ti-development/get-process-code.js";
 import { registerGetProcess } from "./ti-development/get-process.js";
-import { registerGetProcessDatasource } from "./ti-development/get-process-datasource.js";
-import { registerGetProcessVariables } from "./ti-development/get-process-variables.js";
 import { registerDeleteProcess } from "./ti-development/delete-process.js";
 import { registerCopyProcess } from "./ti-development/copy-process.js";
 import { registerCompileProcess } from "./ti-development/compile-process.js";
@@ -168,14 +164,10 @@ const REGISTRARS: ToolRegistrar[] = [
   registerTraceCellCalculation,
   registerCheckWritableCoords,
 
-  // TI development — writes go through registerUpsertProcess (bundled),
-  // reads remain atomic for inspection without pulling full process code.
+  // TI development — writes go through registerUpsertProcess and reads
+  // through registerGetProcess (include-flags pick the parts).
   registerExecuteProcess,
-  registerGetProcessParameters,
-  registerGetProcessCode,
   registerGetProcess,
-  registerGetProcessDatasource,
-  registerGetProcessVariables,
   registerDeleteProcess,
   registerCopyProcess,
   registerCompileProcess,

@@ -9,7 +9,7 @@ import { ConnectionRegistry } from "../../src/connections.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 
 // The MCP resource surface has no per-request parameters, so unlike the tool
-// path (tm1_get_process_code with maskSecrets=false) there is no opt-out —
+// path (tm1_get_process with maskSecrets=false) there is no opt-out —
 // credential redaction must be unconditional. These tests pin that contract
 // by capturing the registered read callbacks and invoking them directly.
 

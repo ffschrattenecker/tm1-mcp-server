@@ -116,7 +116,7 @@ describe.skipIf(!LIVE_ENABLED)(
       });
       expect(JSON.stringify(r.json)).toContain(PROC_IMPORT);
       // Confirm it really landed.
-      const got = await h.ok("tm1_get_process_code", {
+      const got = await h.ok("tm1_get_process", {
         processName: PROC_IMPORT,
       });
       expect(got.json.prolog).toContain("nFoo = 1;");

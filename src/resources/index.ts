@@ -230,7 +230,7 @@ function registerConnectionResources(
       );
       const code = await (await ctx.client()).processes.getCode(name);
       // Hard-mask credential literals unconditionally: resources take no
-      // parameters, so unlike tm1_get_process_code there is no maskSecrets
+      // parameters, so unlike tm1_get_process there is no maskSecrets
       // opt-out — returning the code verbatim would bypass the tool-path
       // redaction (ODBCOpen passwords, credential assignments).
       return asJsonContent(uri, {

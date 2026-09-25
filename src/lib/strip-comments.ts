@@ -1,4 +1,4 @@
-// Pure helpers for tm1_get_process_code's stripComments mode. No I/O.
+// Pure helpers for tm1_get_process's stripComments mode. No I/O.
 //
 // TM1 TI code uses only `#` line comments (no block comments); `#` starts a
 // comment that runs to end of line. Grown models accumulate large blocks of

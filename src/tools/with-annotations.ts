@@ -22,7 +22,7 @@ const TITLE_CASING: Record<string, string> = {
 };
 
 // Derive a human-readable title from a snake_case tool name:
-// "tm1_get_process_code" → "Get Process Code". Single point of derivation —
+// "tm1_get_process" → "Get Process". Single point of derivation —
 // no per-tool overrides in ANNOTATION_MAP.
 export function deriveTitle(toolName: string): string {
   return toolName

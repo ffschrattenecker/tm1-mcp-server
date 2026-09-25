@@ -7,7 +7,7 @@ import { z, type ZodRawShape } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import type { DataSource } from "../../src/types.js";
-import { registerGetProcessCode } from "../../src/tools/ti-development/get-process-code.js";
+import { registerGetProcess } from "../../src/tools/ti-development/get-process.js";
 import { registerGetAllProcessesCode } from "../../src/tools/ti-development/get-all-processes-code.js";
 import { registerExportProcessToPro } from "../../src/tools/ti-development/export-process-to-pro.js";
 import { registerExportProcessToGit } from "../../src/tools/ti-development/export-process-to-git.js";
@@ -129,11 +129,11 @@ function clientWith(
   } as unknown as TM1Client);
 }
 
-describe("tm1_get_process_code masks inline ODBC credentials", () => {
+describe("tm1_get_process masks inline ODBC credentials", () => {
   const client = clientWith({ "Load.Sales": { prolog: ODBC("S3cr3t_Pw!") } });
 
   it("masks the password by default", async () => {
-    const text = await run(registerGetProcessCode, client, {
+    const text = await run(registerGetProcess, client, {
       processName: "Load.Sales",
     });
     expect(text).not.toContain("S3cr3t_Pw!");
@@ -141,7 +141,7 @@ describe("tm1_get_process_code masks inline ODBC credentials", () => {
   });
 
   it("returns raw code when maskSecrets=false", async () => {
-    const text = await run(registerGetProcessCode, client, {
+    const text = await run(registerGetProcess, client, {
       processName: "Load.Sales",
       maskSecrets: false,
     });
@@ -541,7 +541,7 @@ describe("maskSecrets=false is ignored without operator consent (S8)", () => {
 
   it("masks anyway when TM1_ALLOW_UNMASKED_SECRETS is unset", async () => {
     delete process.env.TM1_ALLOW_UNMASKED_SECRETS;
-    const text = await run(registerGetProcessCode, codeClient, {
+    const text = await run(registerGetProcess, codeClient, {
       processName: "Load.Sales",
       maskSecrets: false,
     });
@@ -551,7 +551,7 @@ describe("maskSecrets=false is ignored without operator consent (S8)", () => {
 
   it("masks anyway when the variable holds anything other than 'true'", async () => {
     process.env.TM1_ALLOW_UNMASKED_SECRETS = "yes";
-    const text = await run(registerGetProcessCode, codeClient, {
+    const text = await run(registerGetProcess, codeClient, {
       processName: "Load.Sales",
       maskSecrets: false,
     });

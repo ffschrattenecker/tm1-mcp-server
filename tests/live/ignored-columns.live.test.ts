@@ -102,8 +102,8 @@ describe.skipIf(!LIVE_ENABLED)("live: ignored datasource columns", () => {
     for (const name of ALL) await dropProcess(h, name);
   }, 60_000);
 
-  it("tm1_get_process_variables reports the ignored column", async () => {
-    const r = await h.ok("tm1_get_process_variables", { processName: SRC });
+  it("tm1_get_process reports the ignored column with the variables", async () => {
+    const r = await h.ok("tm1_get_process", { processName: SRC });
     expect(r.json.variables.map((v: { name: string }) => v.name)).toEqual([
       "vsKeep",
       "vnKeep",
@@ -121,7 +121,7 @@ describe.skipIf(!LIVE_ENABLED)("live: ignored datasource columns", () => {
 
   it("tm1_copy_process carries the ignored column to the copy", async () => {
     await h.ok("tm1_copy_process", { sourceName: SRC, targetName: COPY });
-    const r = await h.ok("tm1_get_process_variables", { processName: COPY });
+    const r = await h.ok("tm1_get_process", { processName: COPY });
     expect(r.json.ignoredColumns).toEqual([{ position: 1, name: "vsDropped" }]);
   });
 
@@ -138,7 +138,7 @@ describe.skipIf(!LIVE_ENABLED)("live: ignored datasource columns", () => {
       processName: FROM_PRO,
       mode: "create",
     });
-    const r = await h.ok("tm1_get_process_variables", {
+    const r = await h.ok("tm1_get_process", {
       processName: FROM_PRO,
     });
     expect(r.json.ignoredColumns).toEqual([{ position: 1, name: "vsDropped" }]);
@@ -156,7 +156,7 @@ describe.skipIf(!LIVE_ENABLED)("live: ignored datasource columns", () => {
       processName: FROM_GIT,
       mode: "create",
     });
-    const r = await h.ok("tm1_get_process_variables", {
+    const r = await h.ok("tm1_get_process", {
       processName: FROM_GIT,
     });
     expect(r.json.ignoredColumns).toEqual([{ position: 1, name: "vsDropped" }]);

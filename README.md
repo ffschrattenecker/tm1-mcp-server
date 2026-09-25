@@ -18,7 +18,7 @@ published as `@ffschrattenecker/tm1-mcp-server`. The command is still `tm1-mcp-s
 
 ## Features
 
-115 tools across 12 categories — every one listed in
+112 tools across 12 categories — every one listed in
 [docs/TOOLS.md](docs/TOOLS.md), with working JSON payloads in
 [docs/EXAMPLES.md](docs/EXAMPLES.md). Past plain CRUD over the REST API:
 
@@ -200,7 +200,7 @@ security notes and the `autoApprove` allowlist:
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (115)
+## Tools (112)
 
 Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 
@@ -212,13 +212,13 @@ Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 | fileops | 5 |
 | metadata | 9 |
 | model-building | 9 |
-| operations | 15 |
+| operations | 16 |
 | scheduling | 5 |
 | security | 8 |
 | subsets | 5 |
-| ti-development | 21 |
+| ti-development | 17 |
 | views | 4 |
-| **Total** | **115** |
+| **Total** | **112** |
 
 <!-- TOOLS-AUTOGEN:END -->
 

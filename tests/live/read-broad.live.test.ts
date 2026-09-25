@@ -109,10 +109,7 @@ describe.skipIf(!LIVE_ENABLED)("live: broad read sweep", () => {
     // A real process is the only source of a populated DataSource shape —
     // ODBC/ASCII fields that a sandbox process never has.
     await h.ok("tm1_get_process", { processName: process });
-    await h.call("tm1_get_process_datasource", { processName: process });
-    await h.call("tm1_get_process_parameters", { processName: process });
-    await h.call("tm1_get_process_variables", { processName: process });
-    await h.call("tm1_get_process_code", { processName: process });
+    await h.call("tm1_get_process", { processName: process });
   });
 
   it("runs the whole-model read audits", async () => {
