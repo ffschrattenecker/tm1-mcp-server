@@ -19,10 +19,10 @@
     "then climbed to 63 on the second, which is why the floor lands at 61."
   ],
   "floors": {
-    "lines": 68,
-    "statements": 68,
-    "functions": 64,
-    "branches": 58
+    "lines": 71,
+    "statements": 70,
+    "functions": 66,
+    "branches": 61
   },
   "slack": 5,
   "headroomPoints": 2,

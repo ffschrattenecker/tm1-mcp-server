@@ -10,6 +10,7 @@ import {
   requireOverwriteConfirm,
 } from "../confirm.js";
 import { preflightResult, runPreflight } from "./preflight.js";
+import { backupProcess } from "./process-backup.js";
 
 // The same data source shape the git round-trip and check_process_code use.
 // This tool used to carry its own copy, which had drifted: it was missing
@@ -133,6 +134,9 @@ export const registerUpsertProcess = defineTool({
       if (failure) return preflightResult(failure);
     }
 
+    // Last step before the first write: a failed backup throws, nothing is written.
+    const backup = exists ? await backupProcess(tm1Client, processName) : null;
+
     if (!exists) {
       await tm1Client.processes.create(processName);
       trail.push("createProcess");
@@ -198,6 +202,7 @@ export const registerUpsertProcess = defineTool({
               action: exists ? "updated" : "created",
               appliedSteps: trail,
               callgraphEntriesCleared,
+              ...(backup ? { backup } : {}),
               ...(compile !== undefined ? { compile } : {}),
             },
             null,

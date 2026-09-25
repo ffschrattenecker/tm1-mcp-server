@@ -118,6 +118,28 @@ import with a clear error rather than deployed partially.
 by earlier versions are no longer importable — re-export from the server to
 regenerate them.
 
+## Process backups — `TM1_PROCESS_BACKUP_DIR`
+
+Before `tm1_upsert_process`, `tm1_import_pro_file`, `tm1_import_process_from_git`
+or `tm1_install_pro_bundle` replaces an installed process, the server exports the
+installed version as a tm1-git pair and returns its paths as `backup: { json, ti }`
+(per result entry for the bundle). Restore it with `tm1_import_process_from_git`.
+
+```env
+# TM1_PROCESS_BACKUP_DIR=/srv/tm1-backups   # default ~/.tm1-mcp-server/backups; "off" disables
+```
+
+- Files land under `<dir>/<host>_<port>[_<instance>_<database>]/<process>/<timestamp>.json|.ti`,
+  so several connections can share one directory. Nothing is pruned.
+- The directory is chosen by the server, not the caller, so it is independent of
+  `TM1_LOCAL_FILE_ROOT`. Restoring by path (`jsonPath`/`tiPath`) needs the backup
+  directory inside that root; otherwise pass the file contents inline.
+- The code is written **unmasked**: a masked backup would restore placeholder
+  literals and fail at runtime. The ODBC datasource password is never written.
+  Treat the directory like the TM1 data directory.
+- A backup that cannot be written refuses the overwrite; nothing is changed on
+  the server.
+
 ## TM1 v12 (Planning Analytics Engine)
 
 Setting `TM1_INSTANCE` + `TM1_DATABASE` auto-selects v12: requests are rerooted

@@ -23,6 +23,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    setupFiles: ["tests/setup/no-process-backup.ts"],
     include: [
       "tests/unit/**/*.test.ts",
       "tests/property/**/*.property.test.ts",

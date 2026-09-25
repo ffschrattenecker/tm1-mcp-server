@@ -9,6 +9,7 @@ import { IDEMPOTENT_DESTRUCTIVE, withVersion } from "../annotations.js";
 import { InstallProBundleResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { runPreflight, type PreflightFailure } from "./preflight.js";
+import { backupProcess, type ProcessBackup } from "./process-backup.js";
 
 interface FileResult {
   file: string;
@@ -18,6 +19,8 @@ interface FileResult {
   preflightErrors?: PreflightFailure["errors"];
   /** Unresolved cube/dimension references found by the preflight. */
   preflightIssues?: PreflightFailure["issues"];
+  /** Where the replaced version was saved, on an overwrite. */
+  backup?: ProcessBackup;
 }
 
 export const registerInstallProBundle = defineTool({
@@ -66,7 +69,7 @@ export const registerInstallProBundle = defineTool({
       .string()
       .optional()
       .describe(
-        "Required when any file would overwrite an installed process: the directory's last path segment, verbatim. dryRun lists the overwrites without needing it.",
+        "Required when any file would overwrite an installed process: the directory's last path segment, verbatim. dryRun lists the overwrites without needing it. Each replaced process is saved first; its result entry names the backup .json/.ti pair.",
       ),
     dryRun: z
       .boolean()
@@ -257,6 +260,11 @@ export const registerInstallProBundle = defineTool({
           continue;
         }
 
+        // A failed backup throws into the catch below: this file is not
+        // installed, and without continueOnError the run stops.
+        const backup = exists
+          ? await backupProcess(tm1Client, processName)
+          : null;
         if (!exists) await tm1Client.processes.create(processName);
         await tm1Client.processes.updateCode(processName, {
           prolog: parsed.prolog,
@@ -264,19 +272,28 @@ export const registerInstallProBundle = defineTool({
           data: parsed.data,
           epilog: parsed.epilog,
         });
-        if (parsed.parameters.length > 0) {
+        // On an update the file replaces the whole definition (see
+        // import-pro-file.ts): empty lists and a None datasource are applied.
+        if (exists || parsed.parameters.length > 0) {
           await tm1Client.processes.updateParameters(
             processName,
             parsed.parameters,
           );
         }
-        if (parsed.variables.length > 0) {
+        if (
+          exists ||
+          parsed.variables.length > 0 ||
+          parsed.variablesUIData.length > 0
+        ) {
           await tm1Client.processes.updateVariables(
             processName,
             parsed.variables,
+            parsed.variablesUIData.length > 0 || parsed.variables.length === 0
+              ? parsed.variablesUIData
+              : undefined,
           );
         }
-        if (parsed.dataSource.type !== "None") {
+        if (exists || parsed.dataSource.type !== "None") {
           await tm1Client.processes.updateDataSource(
             processName,
             parsed.dataSource,
@@ -287,6 +304,7 @@ export const registerInstallProBundle = defineTool({
           file,
           processName,
           status: exists ? "updated" : "created",
+          ...(backup ? { backup } : {}),
         });
       } catch (err) {
         const msg =

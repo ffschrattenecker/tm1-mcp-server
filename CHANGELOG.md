@@ -46,8 +46,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Lookups are capped at 200 distinct pairs per report; the rest counts as `unresolvableArgs`.
 
   New output field `elementRefsScanned`.
+- **An overwrite is refused when its backup cannot be written** (see Added). An unwritable
+  `TM1_PROCESS_BACKUP_DIR` used to be irrelevant to a deploy; now it fails with nothing
+  changed on the server. `TM1_PROCESS_BACKUP_DIR=off` restores the old behaviour.
+- **The import tools replace the whole definition on an update.** `tm1_import_pro_file`,
+  `tm1_import_process_from_git` and `tm1_install_pro_bundle` used to skip an empty parameter
+  list, an empty variable layout and a `None` datasource, so the installed values stayed. The
+  code tabs were already replaced in full. The result was that importing an older version
+  of a process did not restore it. Verified on 11.8.03500 while restoring a backup: the
+  parameter the newer version had added was still there. On a create nothing changes.
+  `tm1_upsert_process` still keeps whatever the call leaves out.
 
 ### Added
+
+- **Automatic backup before a process is overwritten.** `tm1_upsert_process`, both import
+  tools and `tm1_install_pro_bundle` export the installed version as a tm1-git pair before
+  their first write and return the paths as `backup: { json, ti }`. Restore it with
+  `tm1_import_process_from_git`. Until now the only rollback copy was one the caller had
+  remembered to export first. Details:
+  - The default directory is `~/.tm1-mcp-server/backups`, split per connection and process.
+    Set it with `TM1_PROCESS_BACKUP_DIR`, or turn backups off with `off`.
+  - The directory is chosen by the server, never by the caller, which is why it is on without
+    `TM1_LOCAL_FILE_ROOT`.
+  - The code is written unmasked, because a masked backup restores placeholder literals and
+    fails at runtime. The ODBC password is never written.
+  - The backup runs after the confirm check and the preflight, so a refused call leaves no file.
+  - Live-tested on 11.8.03500: overwrite, then restore from the backup, gives the same export as
+    before the overwrite. The one difference is line endings: the import writes CRLF.
 
 - `tm1_check_writable_coords` takes an optional `dimensions` list, resolved exactly like
   `tm1_write_cells` (any order, `Sandboxes` bound to `Base`). The documented pre-write check can

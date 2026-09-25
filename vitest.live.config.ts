@@ -17,7 +17,10 @@ export default defineConfig({
     // Installs the wire-contract recorder inside each test worker (globalSetup
     // runs in its own process, so a fetch patch there would never be seen).
     // Inert unless RECORD_CONTRACTS=1.
-    setupFiles: ["tests/live/contract-recorder.ts"],
+    setupFiles: [
+      "tests/setup/no-process-backup.ts",
+      "tests/live/contract-recorder.ts",
+    ],
     // Live calls hit a real server: auth round-trip, OData, process compile.
     // Generous timeout; transaction-log style calls are deliberately avoided.
     testTimeout: 120000,

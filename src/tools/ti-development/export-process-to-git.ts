@@ -4,11 +4,11 @@ import { z } from "zod";
 import { supportsCredentialExport } from "../../lib/credential-format.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { resolveLocalPath } from "../local-file.js";
-import { serializeProcessToGit } from "../../lib/git-process.js";
 import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
 import { ExportProcessToGitResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { readProcessAsGit } from "./process-backup.js";
 
 export const registerExportProcessToGit = defineTool({
   name: "tm1_export_process_to_git",
@@ -68,33 +68,12 @@ export const registerExportProcessToGit = defineTool({
           "includeDataSourcePassword is v12-only. On v11 the exported credential stops working when the TM1 service restarts, and the .json gives no sign of it. To clone a process with its password inside this instance use tm1_copy_process; to deploy elsewhere or later, export without the password and pass dataSourcePassword to tm1_import_process_from_git.",
       });
     }
-    const [codeBlob, parameters, layout, dataSource, deployMeta] =
-      await Promise.all([
-        tm1Client.processes.getCodeBlob(processName),
-        tm1Client.processes.getParameters(processName),
-        tm1Client.processes.getVariableLayout(processName),
-        tm1Client.processes.getDataSource(processName, {
-          includeSecrets: includeDataSourcePassword === true,
-        }),
-        tm1Client.processes.getDeployMeta(processName),
-      ]);
-
-    const doMask = resolveMaskSecrets(maskSecrets);
-    const mask = doMask ? maskCode : (s: string) => s;
-    const ti = mask(codeBlob);
-    const { json, credentialsOmitted } = serializeProcessToGit(
-      {
-        name: processName,
-        parameters,
-        variables: layout.variables,
-        ...(layout.variablesUIData !== undefined
-          ? { variablesUIData: layout.variablesUIData }
-          : {}),
-        dataSource,
-        hasSecurityAccess: deployMeta.hasSecurityAccess,
-      },
-      { includePassword: includeDataSourcePassword === true },
-    );
+    const pair = await readProcessAsGit(tm1Client, processName, {
+      includePassword: includeDataSourcePassword === true,
+    });
+    const mask = resolveMaskSecrets(maskSecrets) ? maskCode : (s: string) => s;
+    const ti = mask(pair.ti);
+    const { json, credentialsOmitted } = pair;
 
     const jsonFileName = `${processName}.json`;
     const tiFileName = `${processName}.ti`;
@@ -135,11 +114,11 @@ export const registerExportProcessToGit = defineTool({
             processName,
             jsonFileName,
             tiFileName,
-            parameterCount: parameters.length,
-            variableCount: layout.variables.length,
-            dataSourceType: dataSource.type,
+            parameterCount: pair.parameterCount,
+            variableCount: pair.variableCount,
+            dataSourceType: pair.dataSourceType,
             credentialsOmitted,
-            hasSecurityAccess: deployMeta.hasSecurityAccess,
+            hasSecurityAccess: pair.hasSecurityAccess,
             writtenTo,
             // Echo the file bodies inline only when NOT persisting to disk. With
             // writeToDir the caller already has the files, so returning the code

@@ -104,6 +104,23 @@ export class TM1Client {
   }
 
   /**
+   * Stable label for this connection, used to keep per-connection files (the
+   * process backups) apart: host and port, plus the v12 instance/database.
+   */
+  get connectionId(): string {
+    let host: string;
+    try {
+      const url = new URL(this.config.baseUrl);
+      host = url.port ? `${url.hostname}_${url.port}` : url.hostname;
+    } catch {
+      host = this.config.baseUrl;
+    }
+    return [host, this.config.instance, this.config.database]
+      .filter((part): part is string => Boolean(part))
+      .join("_");
+  }
+
+  /**
    * Authenticate and start the keep-alive timer.
    */
   async connect(): Promise<void> {

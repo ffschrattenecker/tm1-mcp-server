@@ -12,6 +12,7 @@ import {
   requireOverwriteConfirm,
 } from "../confirm.js";
 import { preflightResult, runPreflight } from "./preflight.js";
+import { backupProcess } from "./process-backup.js";
 
 export const registerImportProFile = defineTool({
   name: "tm1_import_pro_file",
@@ -126,6 +127,8 @@ export const registerImportProFile = defineTool({
 
     // Replacing an installed process is not undoable through the API.
     if (exists) requireOverwriteConfirm(confirm, processName, "process");
+    // Last step before the first write: a failed backup throws, nothing is written.
+    const backup = exists ? await backupProcess(tm1Client, processName) : null;
 
     const action = exists ? "updated" : "created";
     if (!exists) {
@@ -145,7 +148,11 @@ export const registerImportProFile = defineTool({
       `Code update failed after process '${processName}' was ${exists ? "located" : "created"}. PARTIAL APPLY: the process shell exists but tabs are stale/empty. Re-run tm1_import_pro_file with mode=update once root cause fixed, or tm1_delete_process to roll back.`,
     );
 
-    if (parsed.parameters.length > 0) {
+    // On an update the file replaces the whole definition, as the code tabs
+    // already do: an empty parameter list, variable layout or a None
+    // datasource is applied, not skipped. Skipping left the newer values in
+    // place, so importing an older version (a backup) did not restore it.
+    if (exists || parsed.parameters.length > 0) {
       await withToolHint(
         tm1Client.processes.updateParameters(processName, parsed.parameters),
         `Parameter update failed for '${processName}'. Code applied but parameters missing. Inspect parsed parameters and re-run tm1_upsert_process with mode=update + parameters=[...] to recover.`,
@@ -153,19 +160,23 @@ export const registerImportProFile = defineTool({
     }
     // Ignored columns live only in the UI data, so a file can carry column
     // layout with an empty variable list — patch on either.
-    if (parsed.variables.length > 0 || parsed.variablesUIData.length > 0) {
+    if (
+      exists ||
+      parsed.variables.length > 0 ||
+      parsed.variablesUIData.length > 0
+    ) {
       await withToolHint(
         tm1Client.processes.updateVariables(
           processName,
           parsed.variables,
-          parsed.variablesUIData.length > 0
+          parsed.variablesUIData.length > 0 || parsed.variables.length === 0
             ? parsed.variablesUIData
             : undefined,
         ),
         `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
       );
     }
-    if (parsed.dataSource.type !== "None") {
+    if (exists || parsed.dataSource.type !== "None") {
       await withToolHint(
         tm1Client.processes.updateDataSource(processName, parsed.dataSource),
         `Datasource update failed for '${processName}' (type=${parsed.dataSource.type}). Code+params+vars applied. Verify datasource credentials/path (ASCII file existence, ODBC DSN, view name) and re-run tm1_upsert_process with mode=update + dataSource={...} to recover.`,
@@ -180,6 +191,7 @@ export const registerImportProFile = defineTool({
             {
               action,
               processName,
+              ...(backup ? { backup } : {}),
               parsed: {
                 prologLines: parsed.prolog.split("\n").length,
                 metadataLines: parsed.metadata.split("\n").length,

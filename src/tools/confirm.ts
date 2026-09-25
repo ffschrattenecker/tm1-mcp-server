@@ -50,14 +50,15 @@ export function requireConfirm(
 // Overwrite guard for create-or-update tools (upsert_process, the import tools,
 // install_pro_bundle). Creating a new object needs no confirmation; replacing
 // an existing one does, because the previous version is not recoverable
-// through the API. Hence optional in the schema, required at runtime once the
+// through the API (the tools save a local backup, see process-backup.ts, but
+// that is a file on the MCP host, not an undo). Hence optional in the schema, required at runtime once the
 // target is known to exist.
 export const OVERWRITE_CONFIRM_SCHEMA = {
   confirm: z
     .string()
     .optional()
     .describe(
-      "Required only when the target already exists (an overwrite): repeat its name verbatim. Not needed to create.",
+      "Required only when the target already exists (an overwrite): repeat its name verbatim. Not needed to create. The replaced version is saved first; result.backup names the .json/.ti pair (restore: tm1_import_process_from_git).",
     ),
 };
 

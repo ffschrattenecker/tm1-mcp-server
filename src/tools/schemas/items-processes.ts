@@ -118,11 +118,17 @@ export const DiffProcessResultSchema = z
   })
   .passthrough();
 
+// Written by the overwrite tools before they replace an installed process:
+// the tm1-git pair of the previous version, restorable with
+// tm1_import_process_from_git. Absent on a create or with backups off.
+const ProcessBackupSchema = z.object({ json: z.string(), ti: z.string() });
+
 export const UpsertProcessResultSchema = z
   .object({
     processName: z.string(),
     action: z.enum(["created", "updated"]),
     appliedSteps: z.array(z.string()),
+    backup: ProcessBackupSchema.optional(),
   })
   .passthrough();
 
@@ -131,6 +137,7 @@ const InstallBundleEntrySchema = z
     file: z.string().optional(),
     processName: z.string().nullable().optional(),
     status: z.string(),
+    backup: ProcessBackupSchema.optional(),
   })
   .passthrough();
 
@@ -156,6 +163,7 @@ export const InstallProBundleResultSchema = z
 export const ImportProFileResultSchema = z.object({
   action: z.string(),
   processName: z.string(),
+  backup: ProcessBackupSchema.optional(),
   parsed: z.object({
     prologLines: z.number().int(),
     metadataLines: z.number().int(),
@@ -174,6 +182,7 @@ export const ImportProFileResultSchema = z.object({
 export const ImportProcessFromGitResultSchema = z.object({
   action: z.string(),
   processName: z.string(),
+  backup: ProcessBackupSchema.optional(),
   hasSecurityAccess: z.boolean().optional(),
   parsed: z.object({
     prologLines: z.number().int(),
