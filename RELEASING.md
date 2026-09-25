@@ -46,7 +46,8 @@ accumulated `[Unreleased]` changes.
 7. **Publish to npm:** pushing the `vX.Y.Z` tag (step 5) runs
    `.github/workflows/publish-npm.yml`, which checks the tag against `package.json`,
    runs the tier-1 tarball smoke test and publishes `@ffschrattenecker/tm1-mcp-server`
-   with provenance. It needs the `NPM_TOKEN` repository secret. A manual publish is
+   with provenance, authenticated via npm trusted publishing (OIDC — no token;
+   configured under the package's Settings → Trusted Publisher on npmjs.com). A manual publish is
    the fallback: `npm publish` — `prepublishOnly` runs `verify`, then
    `prepack` does a clean `rm -rf dist && build`, so the tarball can never carry
    stale cruft. Sanity-check first with `npm pack --dry-run` (watch total files /

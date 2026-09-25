@@ -3,8 +3,10 @@ name: Publish to npm
 # Publishes @ffschrattenecker/tm1-mcp-server when a vX.Y.Z tag is pushed
 # (`npm version <level>` + `git push --follow-tags`, see RELEASING.md).
 # Runs on Linux, where `verify` is green; prepublishOnly runs it again.
-# Needs the repository secret NPM_TOKEN (an npm automation token with publish
-# rights on the @ffschrattenecker scope).
+# Authenticates via npm trusted publishing (OIDC, configured on npmjs.com for
+# this repo + workflow file) — no long-lived token. NODE_AUTH_TOKEN is only a
+# fallback for the very first publish, before the package (and so its trusted
+# publisher) exists; delete the NPM_TOKEN secret once trusted publishing is set up.
 
 on:
   push:
@@ -39,6 +41,10 @@ jobs:
             echo "tag $GITHUB_REF_NAME does not match package.json version $v" >&2
             exit 1
           fi
+
+      # Trusted publishing needs npm >= 11.5.1; Node 22 bundles npm 10.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
 
       - name: Install
         run: npm ci
