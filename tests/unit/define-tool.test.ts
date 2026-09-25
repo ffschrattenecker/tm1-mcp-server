@@ -310,3 +310,37 @@ describe("defineTool with several connections", () => {
     expect(tools.has("tm1_spec_single_v12_only")).toBe(false);
   });
 });
+
+describe("connectionless tools", () => {
+  it("take no `connection` argument and receive the registry", async () => {
+    const server = new McpServer({ name: "t", version: "0.0.0" });
+    let config: Record<string, unknown> | undefined;
+    let cb: ((...a: unknown[]) => unknown) | undefined;
+    server.registerTool = ((...args: unknown[]) => {
+      config = args[1] as Record<string, unknown>;
+      cb = args[2] as (...a: unknown[]) => unknown;
+      return {} as ReturnType<typeof server.registerTool>;
+    }) as typeof server.registerTool;
+    const registry = ConnectionRegistry.of([
+      { name: "a", client: fakeClient },
+      { name: "b", client: fakeClient },
+    ]);
+
+    let seen: unknown;
+    defineTool({
+      name: "tm1_spec_connectionless",
+      description: "fixture",
+      annotations: READ_ONLY,
+      input: {},
+      connectionless: true,
+      handler: (_args, reg) => {
+        seen = reg;
+        return ok();
+      },
+    })(withAnnotations(server, mockLogger, "readwrite"), registry);
+
+    expect(Object.keys(config?.inputSchema as object)).toEqual([]);
+    await cb?.({});
+    expect(seen).toBe(registry);
+  });
+});

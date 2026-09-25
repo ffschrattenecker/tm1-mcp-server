@@ -50,7 +50,7 @@ export function asRegistry(source: ClientSource): ConnectionRegistry {
     : ConnectionRegistry.single(source);
 }
 
-export interface ToolSpec<I extends ZodRawShape> {
+interface ToolSpecBase<I extends ZodRawShape> {
   /** Wire name, `tm1_*`. */
   name: string;
   /**
@@ -78,9 +78,14 @@ export interface ToolSpec<I extends ZodRawShape> {
    * carried by tools that stay registered on both generations.
    */
   version?: 11 | 12;
+}
+
+/** A tool that acts on one TM1 connection — every tool but a handful. */
+interface ConnectionToolSpec<I extends ZodRawShape> extends ToolSpecBase<I> {
+  connectionless?: false;
   /**
-   * Handler. Receives the parsed args, the shared TM1 client, and the SDK's
-   * per-call extra (abort signal, request metadata).
+   * Handler. Receives the parsed args, the client of the connection the call
+   * targets, and the SDK's per-call extra (abort signal, request metadata).
    */
   handler: (
     args: Parameters<ToolCallback<I>>[0],
@@ -88,6 +93,25 @@ export interface ToolSpec<I extends ZodRawShape> {
     extra: Parameters<ToolCallback<I>>[1],
   ) => ReturnType<ToolCallback<I>>;
 }
+
+/**
+ * A tool about the connections themselves (tm1_list_connections): it takes no
+ * `connection` argument and gets the registry instead of a client, so calling
+ * it never logs in anywhere.
+ */
+interface ConnectionlessToolSpec<
+  I extends ZodRawShape,
+> extends ToolSpecBase<I> {
+  connectionless: true;
+  handler: (
+    args: Parameters<ToolCallback<I>>[0],
+    registry: ConnectionRegistry,
+    extra: Parameters<ToolCallback<I>>[1],
+  ) => ReturnType<ToolCallback<I>>;
+}
+
+export type ToolSpec<I extends ZodRawShape> =
+  ConnectionToolSpec<I> | ConnectionlessToolSpec<I>;
 
 /** What ./with-annotations.ts needs at registration time. */
 export interface ResolvedSpec {
@@ -151,6 +175,16 @@ export function defineTool<I extends ZodRawShape>(
 
   return (server, source) => {
     const registry = asRegistry(source);
+    if (spec.connectionless) {
+      const handler = spec.handler;
+      const cb = ((
+        args: Parameters<ToolCallback<I>>[0],
+        extra: Parameters<ToolCallback<I>>[1],
+      ) => handler(args, registry, extra)) as unknown as ToolCallback<I>;
+      server.tool(spec.name, description, spec.input, cb);
+      return;
+    }
+    const handler = spec.handler;
     if (spec.version !== undefined && !registry.hasVersion(spec.version)) {
       return;
     }
@@ -188,11 +222,7 @@ export function defineTool<I extends ZodRawShape>(
         });
       }
       const tm1Client = await registry.get(connection);
-      return spec.handler(
-        rest,
-        tm1Client,
-        extra,
-      );
+      return handler(rest, tm1Client, extra);
     }) as unknown as ToolCallback<I>;
     server.tool(spec.name, description, input, cb);
   };

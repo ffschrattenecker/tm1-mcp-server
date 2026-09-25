@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import type pino from "pino";
 import { loadServerSettings, type ServerSettings } from "./config.js";
 import { ConnectionRegistry } from "./connections.js";
+import { serverInstructions } from "./server-instructions.js";
 import { createLogger } from "./logger.js";
 import { registerAllPrompts } from "./prompts/index.js";
 import { registerAllResources, stateResourceUris } from "./resources/index.js";
@@ -72,6 +73,7 @@ function buildMcpServer(
         prompts: { listChanged: true },
         logging: {},
       },
+      instructions: serverInstructions(registry),
     },
   );
 

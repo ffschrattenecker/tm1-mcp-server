@@ -95,6 +95,7 @@ import { registerUpdateChore } from "./scheduling/update-chore.js";
 import { registerDeleteChore } from "./scheduling/delete-chore.js";
 
 // Operations tools
+import { registerListConnections } from "./operations/list-connections.js";
 import { registerGetMessageLog } from "./operations/get-message-log.js";
 import { registerGetThreads } from "./operations/get-threads.js";
 import { registerGetJobs } from "./operations/get-jobs.js";
@@ -239,6 +240,7 @@ const REGISTRARS: ToolRegistrar[] = [
   registerDeleteChore,
 
   // Operations
+  registerListConnections,
   registerGetMessageLog,
   registerGetThreads,
   registerGetJobs,
