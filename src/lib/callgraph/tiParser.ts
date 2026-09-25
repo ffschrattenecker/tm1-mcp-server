@@ -6,6 +6,11 @@ import {
   type TiWhileBlock,
   type TiFunctionCall,
 } from "./types.js";
+import { TI_VAR } from "../ti-identifier.js";
+
+const ASSIGN_RE = new RegExp(`^(${TI_VAR})\\s*=\\s*(.+?)\\s*;?\\s*$`);
+const EMPTY_ASSIGN_RE = new RegExp(`^${TI_VAR}\\s*=\\s*;$`);
+const ASSIGN_LIKE_RE = new RegExp(`^${TI_VAR}\\s*=\\s*.+$`);
 
 /**
  * Parses TI (TurboIntegrator) source code into an AST.
@@ -244,7 +249,7 @@ function parseBlock(
 
     // Assignment: variable = expression;
     // Check for empty right-hand side: y =; or y = ;
-    if (/^[A-Za-z_]\w*\s*=\s*;$/.test(trimmed)) {
+    if (EMPTY_ASSIGN_RE.test(trimmed)) {
       const varName = (trimmed.split(/\s*=/)[0] ?? "").trim();
       throw new ParseError(
         lineNum,
@@ -252,7 +257,7 @@ function parseBlock(
       );
     }
     // First check if line looks like an assignment but is missing semicolon
-    if (/^[A-Za-z_]\w*\s*=\s*.+$/.test(trimmed) && !trimmed.endsWith(";")) {
+    if (ASSIGN_LIKE_RE.test(trimmed) && !trimmed.endsWith(";")) {
       const upperFirst = (trimmed.split(/[\s=(]/)[0] ?? "").toUpperCase();
       if (
         !["IF", "ELSEIF", "ELSE", "ENDIF", "WHILE", "END"].includes(upperFirst)
@@ -477,7 +482,7 @@ function tryParseAssignment(
   // Match: identifier = expression;
   // The variable name can contain letters, digits, underscores
   // We need to be careful not to match == (comparison)
-  const match = line.match(/^([A-Za-z_]\w*)\s*=\s*(.+?)\s*;?\s*$/);
+  const match = line.match(ASSIGN_RE);
   if (!match) return null;
 
   const variable = match[1]!;

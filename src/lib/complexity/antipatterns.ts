@@ -9,6 +9,7 @@
 import { parseTiCode } from "../callgraph/tiParser.js";
 import type { TiStatement } from "../callgraph/types.js";
 import type { ProcessCodeInput, TiTab } from "./process-metrics.js";
+import { TI_VAR } from "../ti-identifier.js";
 
 export type Severity = "error" | "warn" | "info";
 
@@ -117,7 +118,8 @@ function hasSideEffectRhs(expr: string): boolean {
   return false;
 }
 
-const IDENTIFIER_RE = /\b([A-Za-z_]\w*)\b/g;
+// Lookarounds instead of \b: \b does not fire after a trailing `.`/`$`/`%`.
+const IDENTIFIER_RE = new RegExp(`(?<![\\w.$%\`])(${TI_VAR})`, "g");
 const EXPAND_VAR_RE = /%([A-Za-z_]\w*)%/g;
 
 /** Extract all potential variable-read tokens from a raw TI expression/arg/condition string. */

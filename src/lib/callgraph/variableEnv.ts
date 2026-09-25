@@ -11,6 +11,8 @@
  * because the value is no longer unambiguous at any given call site.
  */
 
+import { TI_VAR } from "../ti-identifier.js";
+
 export type TiVarType = "Numeric" | "String";
 
 export type VarBinding =
@@ -34,7 +36,7 @@ export interface ProcessEnv {
 
 const STRING_LITERAL_RE = /^'([^']*)'$/;
 const NUMERIC_LITERAL_RE = /^-?\d+(?:\.\d+)?$/;
-const IDENTIFIER_RE = /^[A-Za-z_]\w*$/;
+const IDENTIFIER_RE = new RegExp(`^${TI_VAR}$`);
 
 function neutralizeLine(line: string): string {
   return line
@@ -197,7 +199,9 @@ export function buildProcessEnv(
   const assignedOnce = new Map<string, VarBinding>();
   const seen = new Set<string>();
 
-  const assignRe = /^\s*([A-Za-z_]\w*)\s*=\s*(.+?)\s*;?\s*(?:#.*)?$/;
+  const assignRe = new RegExp(
+    `^\\s*(${TI_VAR})\\s*=\\s*(.+?)\\s*;?\\s*(?:#.*)?$`,
+  );
   const lines = text.split("\n");
   const limit =
     opts.stopAtLine !== undefined
