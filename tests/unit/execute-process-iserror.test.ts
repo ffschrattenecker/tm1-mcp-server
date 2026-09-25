@@ -99,7 +99,7 @@ describe("tm1_execute_process isError contract (T2.1)", () => {
       },
     );
     const out = JSON.parse(
-      (await cb({ processName: "P", confirm: "P" }, {})).content[0]!.text,
+      (await cb({ processName: "P", confirm: "P" }, {})).content[0].text,
     );
     expect(fetched).toEqual(["TM1ProcessError_x.log"]);
     expect(out.errorLog).toMatchObject({
@@ -124,7 +124,7 @@ describe("tm1_execute_process isError contract (T2.1)", () => {
       },
     );
     const res = await cb({ processName: "P", confirm: "P" }, {});
-    const out = JSON.parse(res.content[0]!.text);
+    const out = JSON.parse(res.content[0].text);
     expect(res.isError).toBe(true);
     expect(out.processErrorStatus).toBe("Aborted");
     expect(out.errorLog).toEqual({

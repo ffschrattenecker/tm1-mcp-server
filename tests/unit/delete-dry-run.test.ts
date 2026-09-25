@@ -64,7 +64,7 @@ function setup(register: typeof registerDeleteDimension) {
   );
   const call = (args: Record<string, unknown>) =>
     h!(parser!.parse(args)) as Promise<{
-      structuredContent: Record<string, any>;
+      structuredContent: Record<string, unknown>;
     }>;
   return { call, deleted };
 }
@@ -101,7 +101,7 @@ describe("delete dryRun", () => {
   });
 
   it("delete_cube reports an unreferenced cube as such", async () => {
-    const { call, deleted } = setup(registerDeleteCube as never);
+    const { call, deleted } = setup(registerDeleteCube);
     const res = await call({ cubeName: "HR", dryRun: true });
     expect(res.structuredContent.impact).toEqual({
       referencingSources: 0,
