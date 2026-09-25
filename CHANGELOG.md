@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.0] - 2026-09-26
+
 ### Added
 
 - **`tm1_delete_dimension` / `tm1_delete_cube` `dryRun`.** Returns every process and rule that
@@ -1256,7 +1258,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.0.1...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.1.0...HEAD
+[6.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.0.1...v6.1.0
 [6.0.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.0.0...v6.0.1
 [6.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v5.0.0...v6.0.0
 [5.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v4.1.0...v5.0.0
