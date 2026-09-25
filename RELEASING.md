@@ -44,6 +44,9 @@ tag publishes.
    and the publish workflow run tier 1 only; tier 2 is the local-only part.
 5. **Push `main` and wait for CI to go green.** It runs the same `verify` gate
    as the publish workflow, so a green CI means the tag will not fail on it.
+   If `publish-npm.yml` changed since the last release, also run it once with
+   **dry-run** checked on `main` (Actions → Publish to npm → Run workflow): a
+   broken workflow otherwise costs a version number.
 6. **Bump + tag atomically:** `npm version <patch|minor|major>` — this bumps
    `package.json`, commits, and creates the `vX.Y.Z` tag in one step (no manual
    tagging, no `git tag -f`).
