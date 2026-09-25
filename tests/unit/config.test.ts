@@ -96,6 +96,19 @@ describe("loadConfig", () => {
       expect(loadConfig().mode).toBe("readwrite");
     });
 
+    it("reads the env record it is given, not process.env", () => {
+      process.env.TM1_ENVIRONMENT = "dev";
+      const c = loadConfig({
+        TM1_BASE_URL: "https://tm1server:8010",
+        TM1_USER: "admin",
+        TM1_PASSWORD: "secret",
+        TM1_MODE: "readwrite",
+        TM1_ENVIRONMENT: "prod",
+      });
+      expect(c.environment).toBe("prod");
+      expect(c.mode).toBe("readonly");
+    });
+
     it("throws on an unknown value", () => {
       setRequiredEnv();
       process.env.TM1_ENVIRONMENT = "production";

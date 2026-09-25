@@ -256,18 +256,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
       `Invalid TM1_MODE: "${env.TM1_MODE}". Expected "readwrite" or "readonly".`,
     );
   }
-  const envRaw = process.env.TM1_ENVIRONMENT?.trim().toLowerCase() || undefined;
+  const envRaw = env.TM1_ENVIRONMENT?.trim().toLowerCase() || undefined;
   if (
     envRaw !== undefined &&
     !VALID_ENVIRONMENTS.includes(envRaw as (typeof VALID_ENVIRONMENTS)[number])
   ) {
     throw new Error(
-      `Invalid TM1_ENVIRONMENT: "${process.env.TM1_ENVIRONMENT}". Expected "dev", "test" or "prod".`,
+      `Invalid TM1_ENVIRONMENT: "${env.TM1_ENVIRONMENT}". Expected "dev", "test" or "prod".`,
     );
   }
   const environment = envRaw as TM1Config["environment"];
   const allowProdWrites =
-    process.env.TM1_ALLOW_PROD_WRITES?.trim().toLowerCase() === "true";
+    env.TM1_ALLOW_PROD_WRITES?.trim().toLowerCase() === "true";
   let mode = modeRaw as TM1Config["mode"];
   let modeReason: string | undefined;
   if (environment === "prod" && mode === "readwrite" && !allowProdWrites) {
