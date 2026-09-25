@@ -73,7 +73,12 @@ function build(reason) {
     `check-output-schema-budget: ${reason} — running \`npm run build\`…`,
   );
   try {
-    execFileSync("npm", ["run", "build"], { cwd: root, stdio: "inherit" });
+    // On Windows npm is npm.cmd, which Node only spawns through a shell.
+    execFileSync("npm", ["run", "build"], {
+      cwd: root,
+      stdio: "inherit",
+      shell: process.platform === "win32",
+    });
   } catch {
     console.error(
       "check-output-schema-budget: build failed; cannot measure outputSchema bytes.",
