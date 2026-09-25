@@ -428,7 +428,17 @@ async function packAndInstall(work, opts) {
       `${offenders.length} forbidden path(s) in the tarball — check "files" in package.json`,
     );
   }
-  say(`   ${entries.length} entries, no source/tests/maps/secrets`);
+  // The shrinkwrap is what pins the consumer's dependency tree (a plain
+  // package-lock.json is never published, and `overrides` don't apply to
+  // dependents). Without it, lockfile security fixes never reach users.
+  if (!entries.includes("package/npm-shrinkwrap.json")) {
+    throw new PackError(
+      "npm-shrinkwrap.json missing from the tarball — consumers would resolve dependencies unpinned",
+    );
+  }
+  say(
+    `   ${entries.length} entries, shrinkwrap present, no source/tests/maps/secrets`,
+  );
   say("");
 
   say(`## install`);
