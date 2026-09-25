@@ -115,64 +115,25 @@ function parseIntEnv(
   return n;
 }
 
-// `env` defaults to the process environment. The multi-connection registry
-// passes one record per connection folder instead (see ./connections.ts).
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
-  const baseUrl = env.TM1_BASE_URL;
-  const user = env.TM1_USER;
-  const password = env.TM1_PASSWORD;
+// Settings that belong to the server process rather than to one TM1
+// connection. loadConfig() folds them into every TM1Config; the
+// multi-connection entry point reads them once from the process env.
+export type ServerSettings = Pick<
+  TM1Config,
+  | "logLevel"
+  | "logFile"
+  | "transport"
+  | "httpHost"
+  | "httpPort"
+  | "httpAllowedOrigins"
+  | "httpToken"
+  | "responseMode"
+  | "maxResponseChars"
+>;
 
-  // CAM auth (mirrors TM1py's RestService._build_authorization_token):
-  //   TM1_CAM_PASSPORT set → "CAMPassport <token>"      (no user/password round-trip)
-  //   TM1_NAMESPACE set     → "CAMNamespace b64(u:p:ns)" (needs user + password + namespace)
-  //   neither               → "Basic b64(u:p)"           (native TM1)
-  // SSO/gateway (Windows SSPI) is intentionally unsupported here: TM1py only does
-  // it via the Windows-only requests_negotiate_sspi package. Supply a passport
-  // obtained out-of-band via TM1_CAM_PASSPORT instead.
-  const namespace = env.TM1_NAMESPACE || undefined;
-  const camPassport = env.TM1_CAM_PASSPORT || undefined;
-
-  // Required: baseUrl always. user/password only when NOT using a passport — a
-  // passport carries the authenticated identity, so TM1 needs no credentials.
-  // Empty strings are rejected (treated as unset). Password may be empty — some
-  // TM1 setups allow a blank password for the admin account — so we warn but
-  // don't block, letting the real 401 (if any) surface with context.
-  const missing: string[] = [];
-  if (!baseUrl) missing.push("TM1_BASE_URL");
-  if (!camPassport) {
-    if (!user) missing.push("TM1_USER");
-    if (password === undefined) missing.push("TM1_PASSWORD");
-  }
-
-  if (missing.length > 0) {
-    throw new Error(
-      `Missing or empty required environment variables: ${missing.join(", ")}. ` +
-        `Set them in your shell or .env file before starting the server.`,
-    );
-  }
-
-  if (!camPassport && password === "") {
-    process.stderr.write(
-      "[tm1-mcp-server] WARNING: TM1_PASSWORD is empty. " +
-        "If TM1 rejects with 401, check whether the account actually allows blank passwords.\n",
-    );
-  }
-
-  const sslRaw = env.TM1_SSL_REJECT_UNAUTHORIZED;
-  const rejectUnauthorized = sslRaw === undefined ? true : sslRaw !== "false";
-
-  const keepAliveIntervalMs = parseIntEnv(
-    "TM1_KEEP_ALIVE_INTERVAL",
-    env.TM1_KEEP_ALIVE_INTERVAL,
-    60000,
-  );
-
-  const requestTimeoutMs = parseIntEnv(
-    "TM1_REQUEST_TIMEOUT",
-    env.TM1_REQUEST_TIMEOUT,
-    30000,
-  );
-
+export function loadServerSettings(
+  env: NodeJS.ProcessEnv = process.env,
+): ServerSettings {
   const logLevelRaw = env.TM1_LOG_LEVEL ?? "info";
   const logLevel = VALID_LOG_LEVELS.includes(
     logLevelRaw as (typeof VALID_LOG_LEVELS)[number],
@@ -181,8 +142,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
     : "info";
 
   const logFile = env.TM1_LOG_FILE || undefined;
-
-  const tm1Version = env.TM1_VERSION || "11.8";
 
   const transportRaw = env.TM1_MCP_TRANSPORT ?? "stdio";
   const transport = VALID_TRANSPORTS.includes(
@@ -246,6 +205,106 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
     );
   }
 
+  // Same parse shape as TM1_MODE: case-insensitive, unknown value throws at
+  // startup rather than silently picking a wire format the operator did not ask
+  // for.
+  const responseModeRaw = (env.TM1_RESPONSE_MODE ?? "legacy")
+    .trim()
+    .toLowerCase();
+  if (
+    !VALID_RESPONSE_MODES.includes(
+      responseModeRaw as (typeof VALID_RESPONSE_MODES)[number],
+    )
+  ) {
+    throw new Error(
+      `Invalid TM1_RESPONSE_MODE: "${env.TM1_RESPONSE_MODE}". Expected "legacy" or "structured".`,
+    );
+  }
+  const responseMode = responseModeRaw as TM1Config["responseMode"];
+
+  // ~80k characters sits under Claude Code's default MCP output cap (25k
+  // tokens) with room for the envelope; 23 recorded results overflowed it.
+  const maxResponseChars = parseIntEnv(
+    "TM1_MAX_RESPONSE_CHARS",
+    env.TM1_MAX_RESPONSE_CHARS,
+    DEFAULT_MAX_RESPONSE_CHARS,
+  );
+
+  return {
+    logLevel,
+    logFile,
+    transport,
+    httpHost,
+    httpPort,
+    httpAllowedOrigins,
+    httpToken,
+    responseMode,
+    maxResponseChars,
+  };
+}
+
+// `env` defaults to the process environment. The multi-connection registry
+// passes one record per connection folder instead (see ./connections.ts).
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
+  const baseUrl = env.TM1_BASE_URL;
+  const user = env.TM1_USER;
+  const password = env.TM1_PASSWORD;
+
+  // CAM auth (mirrors TM1py's RestService._build_authorization_token):
+  //   TM1_CAM_PASSPORT set → "CAMPassport <token>"      (no user/password round-trip)
+  //   TM1_NAMESPACE set     → "CAMNamespace b64(u:p:ns)" (needs user + password + namespace)
+  //   neither               → "Basic b64(u:p)"           (native TM1)
+  // SSO/gateway (Windows SSPI) is intentionally unsupported here: TM1py only does
+  // it via the Windows-only requests_negotiate_sspi package. Supply a passport
+  // obtained out-of-band via TM1_CAM_PASSPORT instead.
+  const namespace = env.TM1_NAMESPACE || undefined;
+  const camPassport = env.TM1_CAM_PASSPORT || undefined;
+
+  // Required: baseUrl always. user/password only when NOT using a passport — a
+  // passport carries the authenticated identity, so TM1 needs no credentials.
+  // Empty strings are rejected (treated as unset). Password may be empty — some
+  // TM1 setups allow a blank password for the admin account — so we warn but
+  // don't block, letting the real 401 (if any) surface with context.
+  const missing: string[] = [];
+  if (!baseUrl) missing.push("TM1_BASE_URL");
+  if (!camPassport) {
+    if (!user) missing.push("TM1_USER");
+    if (password === undefined) missing.push("TM1_PASSWORD");
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing or empty required environment variables: ${missing.join(", ")}. ` +
+        `Set them in your shell or .env file before starting the server.`,
+    );
+  }
+
+  if (!camPassport && password === "") {
+    process.stderr.write(
+      "[tm1-mcp-server] WARNING: TM1_PASSWORD is empty. " +
+        "If TM1 rejects with 401, check whether the account actually allows blank passwords.\n",
+    );
+  }
+
+  const sslRaw = env.TM1_SSL_REJECT_UNAUTHORIZED;
+  const rejectUnauthorized = sslRaw === undefined ? true : sslRaw !== "false";
+
+  const keepAliveIntervalMs = parseIntEnv(
+    "TM1_KEEP_ALIVE_INTERVAL",
+    env.TM1_KEEP_ALIVE_INTERVAL,
+    60000,
+  );
+
+  const requestTimeoutMs = parseIntEnv(
+    "TM1_REQUEST_TIMEOUT",
+    env.TM1_REQUEST_TIMEOUT,
+    30000,
+  );
+
+  const server = loadServerSettings(env);
+
+  const tm1Version = env.TM1_VERSION || "11.8";
+
   // Case-insensitive so a `TM1_MODE=ReadWrite` typo resolves to readwrite rather
   // than silently falling back to readonly (dropping every write tool without a
   // word). A genuinely-unknown value throws at startup — parity with the numeric
@@ -275,31 +334,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
     modeReason =
       "TM1_ENVIRONMENT=prod forces readonly; set TM1_ALLOW_PROD_WRITES=true to allow writes.";
   }
-
-  // Same parse shape as TM1_MODE: case-insensitive, unknown value throws at
-  // startup rather than silently picking a wire format the operator did not ask
-  // for.
-  const responseModeRaw = (env.TM1_RESPONSE_MODE ?? "legacy")
-    .trim()
-    .toLowerCase();
-  if (
-    !VALID_RESPONSE_MODES.includes(
-      responseModeRaw as (typeof VALID_RESPONSE_MODES)[number],
-    )
-  ) {
-    throw new Error(
-      `Invalid TM1_RESPONSE_MODE: "${env.TM1_RESPONSE_MODE}". Expected "legacy" or "structured".`,
-    );
-  }
-  const responseMode = responseModeRaw as TM1Config["responseMode"];
-
-  // ~80k characters sits under Claude Code's default MCP output cap (25k
-  // tokens) with room for the envelope; 23 recorded results overflowed it.
-  const maxResponseChars = parseIntEnv(
-    "TM1_MAX_RESPONSE_CHARS",
-    env.TM1_MAX_RESPONSE_CHARS,
-    DEFAULT_MAX_RESPONSE_CHARS,
-  );
 
   // --- v12 (Planning Analytics Engine) connection ---------------------------
   const instance = env.TM1_INSTANCE || undefined;
@@ -379,6 +413,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
   }
 
   return {
+    ...server,
     baseUrl: baseUrl!,
     // In passport mode user/password are unused; default to "" so the type stays
     // a plain string and the Authorization header is built from the passport.
@@ -389,19 +424,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
     ssl: { rejectUnauthorized },
     keepAliveIntervalMs,
     requestTimeoutMs,
-    logLevel,
-    logFile,
     tm1Version: effectiveTm1Version,
-    transport,
-    httpHost,
-    httpPort,
-    httpAllowedOrigins,
-    httpToken,
     mode,
     ...(environment !== undefined ? { environment } : {}),
     ...(modeReason !== undefined ? { modeReason } : {}),
-    responseMode,
-    maxResponseChars,
     version,
     instance,
     database,
