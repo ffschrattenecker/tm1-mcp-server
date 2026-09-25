@@ -45,7 +45,6 @@ const TOOLS_WITH_EXTRAS: string[] = [
   "tm1_delete_element",
   "tm1_delete_process",
   "tm1_delete_subset",
-  "tm1_move_element",
   "tm1_update_element",
   "tm1_update_element_attribute_value",
   "tm1_update_subset",

@@ -52,7 +52,6 @@ import { registerCheckWritableCoords } from "./celldata/check-writable-coords.js
 import { registerCreateElement } from "./dimension-management/create-element.js";
 import { registerUpdateElement } from "./dimension-management/update-element.js";
 import { registerDeleteElement } from "./dimension-management/delete-element.js";
-import { registerMoveElement } from "./dimension-management/move-element.js";
 import { registerCreateDimension } from "./dimension-management/create-dimension.js";
 import { registerDeleteDimension } from "./dimension-management/delete-dimension.js";
 import { registerBulkUpsertElements } from "./dimension-management/bulk-upsert-elements.js";
@@ -198,7 +197,6 @@ const REGISTRARS: ToolRegistrar[] = [
   registerCreateElement,
   registerUpdateElement,
   registerDeleteElement,
-  registerMoveElement,
   registerListElementAttributes,
   registerCreateElementAttribute,
   registerGetElementAttributeValues,

@@ -357,27 +357,6 @@ export class ElementService {
   }
 
   /**
-   * Add an element as a component of a new parent.
-   * POST /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements('{newParent}')/Components
-   */
-  async move(
-    dimensionName: string,
-    hierarchyName: string,
-    elementName: string,
-    newParent: string,
-    weight?: number,
-  ): Promise<void> {
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(newParent)}')/Components`;
-    const body = {
-      "@odata.id": `Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(elementName)}')`,
-    };
-    await this.http.request<void>("POST", path, body);
-    await this.applyEdgeWeights(dimensionName, hierarchyName, newParent, [
-      { name: elementName, ...(weight !== undefined ? { weight } : {}) },
-    ]);
-  }
-
-  /**
    * Bulk upsert elements into a hierarchy. Two-pass to ensure leaves exist
    * before consolidations reference them: pass 1 creates/upserts every element
    * (PATCH on 409), pass 2 sets Components for Consolidated elements.

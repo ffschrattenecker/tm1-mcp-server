@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- **`tm1_move_element` is removed.** TM1 has no move: it is always an add plus a delete,
+  either of an edge (element under a parent) or of the element itself, and deleting the
+  element from the dimension also deletes all its values. The tool did only the add: it
+  attached the element to `newParent` and left it under its old parent, so it rolled up
+  twice. Use `tm1_update_element` to set a consolidation's components (attach under the new
+  parent, drop from the old one). `tm1_delete_element` only when the element should leave the
+  dimension together with its data.
 - **`tm1_write_cells` refuses a consolidated coordinate.** Every coordinate is resolved
   before anything is sent; if one names a C element the call aborts with
   `VALIDATION_ERROR` and nothing is written. Whether the server would accept such a write

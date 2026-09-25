@@ -15,7 +15,7 @@ Engine (rerooted REST, `s2s` auth live-validated).
 
 ## Features
 
-114 tools across 12 categories — every one listed in
+113 tools across 12 categories — every one listed in
 [docs/TOOLS.md](docs/TOOLS.md), with working JSON payloads in
 [docs/EXAMPLES.md](docs/EXAMPLES.md). Past plain CRUD over the REST API:
 
@@ -42,7 +42,7 @@ Engine (rerooted REST, `s2s` auth live-validated).
   in chat, plus five starting-point prompts.
 
 > **Token tip:** every registered tool's name + input schema costs context on
-> *each* turn, so exposing all 114 is wasteful when a session needs a slice.
+> *each* turn, so exposing all 113 is wasteful when a session needs a slice.
 > Narrow the surface with your client's tool filter; `TM1_MODE=readonly` already
 > trims it to read-only tools.
 
@@ -193,7 +193,7 @@ security notes and the `autoApprove` allowlist:
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (114)
+## Tools (113)
 
 Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 
@@ -201,7 +201,7 @@ Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 |---|---|
 | analysis | 10 |
 | celldata | 10 |
-| dimension-management | 13 |
+| dimension-management | 12 |
 | fileops | 5 |
 | metadata | 9 |
 | model-building | 9 |
@@ -211,7 +211,7 @@ Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 | subsets | 5 |
 | ti-development | 21 |
 | views | 4 |
-| **Total** | **114** |
+| **Total** | **113** |
 
 <!-- TOOLS-AUTOGEN:END -->
 
