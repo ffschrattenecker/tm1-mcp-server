@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`tm1_delete_dimension` / `tm1_delete_cube` `dryRun`.** Returns every process and rule that
+  references the object, per source, plus the cubes a dimension is part of. Nothing is deleted,
+  and it needs no `confirm` (the field is now optional in the schema and still required on the real
+  call). Before, the check before a delete took `tm1_analyze_object_usage` plus
+  `tm1_find_orphan_dimensions` as separate calls. Elements are not covered: the usage index does
+  not resolve element references.
 - **`TM1_ENVIRONMENT=dev|test|prod`, and `mode`/`environment` in `tm1_get_server_info`.**
   `mcpServer` now carries `mode` (`readonly`/`readwrite`), `environment` (`unspecified` when
   unset) and, when the mode was forced, `modeReason`. Before, a client could only guess which

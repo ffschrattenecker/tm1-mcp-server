@@ -89,51 +89,7 @@ export const registerAnalyzeObjectUsage = defineTool({
     });
 
     if (mode === "summary") {
-      // Aggregate per source (process or rule). Key by kind+name so a process
-      // and a cube-rule sharing a name don't collapse into one row.
-      const bySource = new Map<
-        string,
-        {
-          sourceKind: "process" | "rule";
-          sourceName: string;
-          accessTypes: Set<string>;
-          sections: Set<string>;
-          funcNames: Set<string>;
-          count: number;
-        }
-      >();
-      for (const u of all) {
-        const key = `${u.sourceKind}\x00${u.sourceName}`;
-        let s = bySource.get(key);
-        if (!s) {
-          s = {
-            sourceKind: u.sourceKind,
-            sourceName: u.sourceName,
-            accessTypes: new Set(),
-            sections: new Set(),
-            funcNames: new Set(),
-            count: 0,
-          };
-          bySource.set(key, s);
-        }
-        s.accessTypes.add(u.accessType);
-        s.sections.add(u.section);
-        if (u.funcName) s.funcNames.add(u.funcName);
-        s.count++;
-      }
-      const allSources = [...bySource.values()]
-        .map((s) => ({
-          sourceKind: s.sourceKind,
-          sourceName: s.sourceName,
-          accessTypes: [...s.accessTypes].sort(),
-          sections: [...s.sections].sort(),
-          funcNames: [...s.funcNames].sort(),
-          count: s.count,
-        }))
-        .sort(
-          (a, b) =>
-            b.count - a.count || a.sourceName.localeCompare(b.sourceName),
-        );
+      const allSources = summarizeBySource(all);
       const sumTruncated = allSources.length > effectiveLimit;
       const sources = sumTruncated
         ? allSources.slice(0, effectiveLimit)
@@ -177,3 +133,53 @@ export const registerAnalyzeObjectUsage = defineTool({
     };
   },
 });
+
+/** One row per referencing process or rule, most references first. */
+export function summarizeBySource(
+  all: ReturnType<typeof buildCubeOrDimUsages>,
+) {
+  // Aggregate per source (process or rule). Key by kind+name so a process
+  // and a cube-rule sharing a name don't collapse into one row.
+  const bySource = new Map<
+    string,
+    {
+      sourceKind: "process" | "rule";
+      sourceName: string;
+      accessTypes: Set<string>;
+      sections: Set<string>;
+      funcNames: Set<string>;
+      count: number;
+    }
+  >();
+  for (const u of all) {
+    const key = `${u.sourceKind}\x00${u.sourceName}`;
+    let s = bySource.get(key);
+    if (!s) {
+      s = {
+        sourceKind: u.sourceKind,
+        sourceName: u.sourceName,
+        accessTypes: new Set(),
+        sections: new Set(),
+        funcNames: new Set(),
+        count: 0,
+      };
+      bySource.set(key, s);
+    }
+    s.accessTypes.add(u.accessType);
+    s.sections.add(u.section);
+    if (u.funcName) s.funcNames.add(u.funcName);
+    s.count++;
+  }
+  return [...bySource.values()]
+    .map((s) => ({
+      sourceKind: s.sourceKind,
+      sourceName: s.sourceName,
+      accessTypes: [...s.accessTypes].sort(),
+      sections: [...s.sections].sort(),
+      funcNames: [...s.funcNames].sort(),
+      count: s.count,
+    }))
+    .sort(
+      (a, b) => b.count - a.count || a.sourceName.localeCompare(b.sourceName),
+    );
+}
