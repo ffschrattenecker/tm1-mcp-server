@@ -19,7 +19,8 @@
     "dist",
     "!dist/**/*.map",
     "NOTICE",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "npm-shrinkwrap.json"
   ],
   "prettier": {
     "semi": true,
