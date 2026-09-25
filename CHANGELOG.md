@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.0] - 2026-09-25
+
 ### Breaking
 
 - **Published as `@ffschrattenecker/tm1-mcp-server`.** This fork is no longer released under
@@ -1192,7 +1194,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v5.0.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.0.0...HEAD
+[6.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v5.0.0...v6.0.0
 [5.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v4.1.0...v5.0.0
 [4.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v3.1.0...v4.0.0
