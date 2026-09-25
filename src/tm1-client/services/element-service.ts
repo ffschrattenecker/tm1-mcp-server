@@ -7,7 +7,7 @@
 //
 // See docs/ARCHITECTURE.md for the layering.
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
-import { TM1Error } from "../../types.js";
+import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type {
   ElementAttributeValue,
   ElementCreate,
@@ -343,6 +343,34 @@ export class ElementService {
       scanned: inScope,
       truncated: total > maxScan,
     };
+  }
+
+  /**
+   * Type of one element, or null when the hierarchy has no such element.
+   * Keyed lookup, so TM1 applies its own case- and space-insensitive name
+   * matching and answers with the stored spelling.
+   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements('{name}')?$select=Name,Type
+   */
+  async getType(
+    dimensionName: string,
+    hierarchyName: string,
+    elementName: string,
+  ): Promise<{ name: string; type: string } | null> {
+    try {
+      const e = await this.http.request<{
+        Name: string;
+        Type: number | string;
+      }>(
+        "GET",
+        `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(elementName)}')?$select=Name,Type`,
+      );
+      return { name: e.Name, type: normalizeElementType(e.Type) };
+    } catch (err) {
+      if (err instanceof TM1Error && err.code === TM1ErrorCode.NOT_FOUND) {
+        return null;
+      }
+      throw err;
+    }
   }
 
   /**

@@ -4,6 +4,7 @@ import { rethrowIfSystemic } from "../../tm1-client/services/fallback.js";
 import { READ_ONLY } from "../annotations.js";
 import { WritableCoordsResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { memberRef } from "./member-ref.js";
 
 interface CoordCheck {
   dimension: string;
@@ -24,7 +25,7 @@ export const registerCheckWritableCoords = defineTool({
     coords: z
       .array(z.string())
       .describe(
-        "Element name per dimension, in cube dimension order. Length must match cube.dimensions.length.",
+        "Element per dimension, in cube dimension order. Length must match cube.dimensions.length. Accepts the same forms as tm1_write_cells: a bare name (default hierarchy) or [Dimension].[Hierarchy].[Element].",
       ),
   },
   handler: async ({ cubeName, coords }, tm1Client) => {
@@ -50,10 +51,15 @@ export const registerCheckWritableCoords = defineTool({
       dims.map(async (dim, idx) => {
         // coords.length === dims.length is guarded above
         const element = coords[idx]!;
+        // Same reading of `[Dim].[Hier].[Elem]` as tm1_write_cells, so the
+        // check probes the hierarchy the write would hit. One keyed lookup
+        // per coordinate instead of loading every hierarchy of the cube.
+        const ref = memberRef(dim, element);
         try {
-          const hier = await tm1Client.hierarchies.get(dim, dim);
-          const el = hier.elements.find(
-            (e) => e.name.toLowerCase() === element.toLowerCase(),
+          const el = await tm1Client.elements.getType(
+            ref.dimension,
+            ref.hierarchy,
+            ref.element,
           );
           if (!el) {
             return {
@@ -64,12 +70,13 @@ export const registerCheckWritableCoords = defineTool({
               isNLevel: false,
             };
           }
+          const type = el.type as CoordCheck["type"];
           return {
             dimension: dim,
-            element: el.name,
+            element: element === ref.element ? el.name : element,
             exists: true,
-            type: el.type,
-            isNLevel: el.type !== "Consolidated",
+            type,
+            isNLevel: type !== "Consolidated",
           };
         } catch (e) {
           // A transport/auth outage must not masquerade as a missing element —
