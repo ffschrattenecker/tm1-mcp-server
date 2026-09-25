@@ -4,9 +4,7 @@ name: Publish to npm
 # (`npm version <level>` + `git push --follow-tags`, see RELEASING.md).
 # Runs on Linux, where `verify` is green; prepublishOnly runs it again.
 # Authenticates via npm trusted publishing (OIDC, configured on npmjs.com for
-# this repo + workflow file) — no long-lived token. NODE_AUTH_TOKEN is only a
-# fallback for the very first publish, before the package (and so its trusted
-# publisher) exists; delete the NPM_TOKEN secret once trusted publishing is set up.
+# this repo + workflow file) — no token or secret needed.
 
 on:
   push:
@@ -55,5 +53,3 @@ jobs:
 
       - name: Publish
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
