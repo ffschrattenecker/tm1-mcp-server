@@ -215,14 +215,28 @@ function fail(message) {
 
 // ------------------------------------------------------------- process glue
 
+/** Quote one cmd.exe argument if it has anything beyond plain path chars. */
+function winQuote(arg) {
+  return /^[\w.:\\/=@-]+$/.test(arg) ? arg : `"${arg.replace(/"/g, '""')}"`;
+}
+
 /** Run a command to completion with a hard wall clock. Never inherits stdio. */
 function run(cmd, args, { cwd, env, timeoutMs }) {
   return new Promise((done) => {
-    const child = spawn(cmd, args, {
+    const spawnOpts = {
       cwd,
       env: env ?? process.env,
       stdio: ["ignore", "pipe", "pipe"],
-    });
+    };
+    // On Windows npm is npm.cmd, which Node only spawns through a shell — and
+    // a shell needs one pre-quoted command line, not an argv array.
+    const child =
+      process.platform === "win32" && cmd === "npm"
+        ? spawn([cmd, ...args].map(winQuote).join(" "), {
+            ...spawnOpts,
+            shell: true,
+          })
+        : spawn(cmd, args, spawnOpts);
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -410,7 +424,10 @@ async function packAndInstall(work, opts) {
   // `--dry-run` (which would re-run prepack and could describe a different
   // build). A `files` regression that pulls in .env or .mcp.json leaks
   // credentials to the registry, so this is checked before anything is run.
-  const listed = await run("tar", ["-tzf", tarball], {
+  // Relative name + cwd: GNU tar (e.g. Git for Windows) reads "C:\..." as a
+  // remote host.
+  const listed = await run("tar", ["-tzf", tarballName], {
+    cwd: work,
     timeoutMs: 60_000,
   });
   if (listed.code !== 0) {
@@ -479,6 +496,18 @@ async function packAndInstall(work, opts) {
   return { proj, tarball };
 }
 
+/**
+ * Where node_modules/.bin/<name> points. POSIX npm makes a symlink; Windows npm
+ * writes a sh shim (plus .cmd/.ps1) that execs "$basedir/<relative target>".
+ */
+function resolveBinShim(binLink) {
+  if (process.platform !== "win32") return realpathSync(binLink);
+  const shim = readFileSync(binLink, "utf8");
+  const m = /"\$basedir\/([^"]+\.js)"/.exec(shim);
+  if (!m) throw new Tier1Error(`unrecognised npm bin shim at ${binLink}`);
+  return realpathSync(resolve(dirname(binLink), m[1]));
+}
+
 /** Everything that must hold for the INSTALLED package. Throws Tier1Error. */
 async function tier1(proj, opts) {
   say(`## tier 1 — installed artefact`);
@@ -490,7 +519,7 @@ async function tier1(proj, opts) {
   if (!existsSync(binLink)) {
     throw new Tier1Error(`no bin shim at node_modules/.bin/tm1-mcp-server`);
   }
-  const binTarget = realpathSync(binLink);
+  const binTarget = resolveBinShim(binLink);
   const expectedDir =
     join(proj, "node_modules", ...PKG.name.split("/"), "dist") + sep;
   if (!realpathSync(binTarget).startsWith(realpathSync(expectedDir))) {
@@ -596,7 +625,7 @@ async function tier1(proj, opts) {
 // ------------------------------------------------------------------ tier 2
 
 async function tier2(proj, target, opts) {
-  const binTarget = realpathSync(
+  const binTarget = resolveBinShim(
     join(proj, "node_modules", ".bin", "tm1-mcp-server"),
   );
 
