@@ -8,14 +8,27 @@
 import { Agent, fetch as undiciFetch } from "undici";
 import type { TM1Config } from "../config.js";
 
-let cachedAgent: Agent | undefined;
+//
+// headersTimeout/bodyTimeout are switched off on purpose. undici's defaults
+// (300 s each) end any request that has not answered after five minutes with
+// UND_ERR_HEADERS_TIMEOUT — measured: a 400 s budget died at 300.8 s on both
+// fetch paths. A TI process runs as long as it runs and TM1 has no timeout
+// for it, so the only limit is our own per-request AbortSignal (timeoutMs),
+// which http.ts maps to LOCK_TIMEOUT.
+const agents = new Map<boolean, Agent>();
 
-export function getTm1Dispatcher(config: TM1Config): Agent | undefined {
-  if (config.ssl.rejectUnauthorized) return undefined;
-  if (!cachedAgent) {
-    cachedAgent = new Agent({ connect: { rejectUnauthorized: false } });
+export function getTm1Dispatcher(config: TM1Config): Agent {
+  const verify = config.ssl.rejectUnauthorized;
+  let agent = agents.get(verify);
+  if (!agent) {
+    agent = new Agent({
+      connect: { rejectUnauthorized: verify },
+      headersTimeout: 0,
+      bodyTimeout: 0,
+    });
+    agents.set(verify, agent);
   }
-  return cachedAgent;
+  return agent;
 }
 
 // Node's BUILT-IN fetch silently drops Set-Cookie headers when handed a
