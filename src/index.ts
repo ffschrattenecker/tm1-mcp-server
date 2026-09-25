@@ -139,7 +139,11 @@ async function main(): Promise<void> {
     );
   }
 
-  if (config.mode === "readonly") {
+  if (config.modeReason) {
+    logger.warn(
+      `${config.modeReason} Write and destructive tools will not be registered.`,
+    );
+  } else if (config.mode === "readonly") {
     logger.info(
       "TM1_MODE=readonly — write and destructive tools will not be registered",
     );

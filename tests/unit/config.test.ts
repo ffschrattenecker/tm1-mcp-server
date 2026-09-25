@@ -59,6 +59,50 @@ describe("loadConfig", () => {
     expect(loadConfig().responseMode).toBe("legacy");
   });
 
+  describe("TM1_ENVIRONMENT", () => {
+    it("is undefined when unset and leaves TM1_MODE alone", () => {
+      setRequiredEnv();
+      process.env.TM1_MODE = "readwrite";
+      const c = loadConfig();
+      expect(c.environment).toBeUndefined();
+      expect(c.mode).toBe("readwrite");
+      expect(c.modeReason).toBeUndefined();
+    });
+
+    it("forces prod to readonly and says why", () => {
+      setRequiredEnv();
+      process.env.TM1_MODE = "readwrite";
+      process.env.TM1_ENVIRONMENT = "Prod";
+      const c = loadConfig();
+      expect(c.environment).toBe("prod");
+      expect(c.mode).toBe("readonly");
+      expect(c.modeReason).toContain("TM1_ALLOW_PROD_WRITES");
+    });
+
+    it("keeps prod readwrite with TM1_ALLOW_PROD_WRITES=true", () => {
+      setRequiredEnv();
+      process.env.TM1_MODE = "readwrite";
+      process.env.TM1_ENVIRONMENT = "prod";
+      process.env.TM1_ALLOW_PROD_WRITES = "true";
+      const c = loadConfig();
+      expect(c.mode).toBe("readwrite");
+      expect(c.modeReason).toBeUndefined();
+    });
+
+    it("does not touch dev", () => {
+      setRequiredEnv();
+      process.env.TM1_MODE = "readwrite";
+      process.env.TM1_ENVIRONMENT = "dev";
+      expect(loadConfig().mode).toBe("readwrite");
+    });
+
+    it("throws on an unknown value", () => {
+      setRequiredEnv();
+      process.env.TM1_ENVIRONMENT = "production";
+      expect(() => loadConfig()).toThrow(/Invalid TM1_ENVIRONMENT/);
+    });
+  });
+
   it("honours an explicit TM1_RESPONSE_MODE=structured opt-in", () => {
     setRequiredEnv();
     process.env.TM1_RESPONSE_MODE = "structured";

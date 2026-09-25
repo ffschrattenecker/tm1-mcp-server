@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`TM1_ENVIRONMENT=dev|test|prod`, and `mode`/`environment` in `tm1_get_server_info`.**
+  `mcpServer` now carries `mode` (`readonly`/`readwrite`), `environment` (`unspecified` when
+  unset) and, when the mode was forced, `modeReason`. Before, a client could only guess which
+  environment it was on from free-text labels, and inferred readonly from missing tools.
+  `TM1_ENVIRONMENT=prod` forces readonly even under `TM1_MODE=readwrite`, unless
+  `TM1_ALLOW_PROD_WRITES=true` is set too. A readwrite `.env` copied from a dev instance is the
+  easy way to end up with write tools on production. An unknown value refuses to start, like
+  `TM1_MODE`.
 - **`tm1_execute_process` attaches the run's error log.** When TM1 names an error log for the run
   (a failure, or `HasMinorErrors` on a run that committed), the last 40 lines come back as
   `errorLog`. A run that reports `CompletedWithMessages` can still have skipped every record, and

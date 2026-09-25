@@ -29,11 +29,20 @@ export const registerGetServerInfo = defineTool({
   handler: async ({ format }, tm1Client) => {
     const info = await tm1Client.server.getInfo();
     const x = info.extra ?? {};
+    const access = tm1Client.access;
 
     const payload = {
       // The MCP server's own package identity, so a client can gate on it
       // without parsing the initialize handshake.
-      mcpServer: { name: NAME, version: VERSION },
+      // mode/environment let a client read what this connection may do and
+      // where it points, instead of inferring it from which tools are listed.
+      mcpServer: {
+        name: NAME,
+        version: VERSION,
+        mode: access.mode,
+        environment: access.environment ?? "unspecified",
+        ...(access.modeReason ? { modeReason: access.modeReason } : {}),
+      },
       serverName: info.serverName,
       productVersion: info.productVersion,
       productEdition: info.productEdition,

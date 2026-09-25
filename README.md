@@ -86,6 +86,7 @@ TM1_PASSWORD=your-password
 TM1_SSL_REJECT_UNAUTHORIZED=false
 TM1_VERSION=11.8
 TM1_MODE=readonly                   # readonly (default) | readwrite
+# TM1_ENVIRONMENT=prod              # dev | test | prod; prod forces readonly
 # TM1_RESPONSE_MODE=structured      # legacy (default) | structured
 # TM1_MAX_RESPONSE_CHARS=80000      # larger results fail with RESPONSE_TOO_LARGE
 # TM1_LOCAL_FILE_ROOT=/srv/tm1-git  # optional; enables host-disk file params
@@ -103,7 +104,9 @@ Analytics Engine) connection and its auth modes, host-disk file access.
 > tools are registered, so it cannot mutate or delete anything. Set
 > `TM1_MODE=readwrite` explicitly to enable the full lifecycle (cell writes,
 > cube/dimension/process deletion, TI execution), and never point a `readwrite`
-> server at production without reviewing the write path first.
+> server at production without reviewing the write path first. Label production
+> with `TM1_ENVIRONMENT=prod`: it then stays readonly even under
+> `TM1_MODE=readwrite`, unless `TM1_ALLOW_PROD_WRITES=true` is set as well.
 
 Host-disk file access is default-off in the same spirit: the `.pro` and git
 tools accept inline content, and touch host paths only once

@@ -103,6 +103,19 @@ export class TM1Client {
     return this.config.version;
   }
 
+  /** Effective tool mode, the environment label, and why mode was forced. */
+  get access(): {
+    mode: TM1Config["mode"];
+    environment: TM1Config["environment"];
+    modeReason: string | undefined;
+  } {
+    return {
+      mode: this.config.mode,
+      environment: this.config.environment,
+      modeReason: this.config.modeReason,
+    };
+  }
+
   /**
    * Stable label for this connection, used to keep per-connection files (the
    * process backups) apart: host and port, plus the v12 instance/database.

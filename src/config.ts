@@ -37,6 +37,13 @@ export interface TM1Config {
   // TM1_MODE=readwrite, so an unconfigured server cannot mutate or delete TM1
   // objects by accident.
   mode: "readwrite" | "readonly";
+  // TM1_ENVIRONMENT: what this connection points at, as the operator labelled
+  // it. Undefined when unset. "prod" forces mode to readonly unless
+  // TM1_ALLOW_PROD_WRITES=true — a readwrite .env copied from a dev instance
+  // must not quietly give an agent write tools on production.
+  environment?: "dev" | "test" | "prod" | undefined;
+  // Why mode differs from TM1_MODE, when it does.
+  modeReason?: string | undefined;
   // How a successful tool result is put on the wire.
   //
   //   "legacy" (default) — the JSON body ships BOTH ways: as content[0].text and
@@ -80,6 +87,7 @@ export interface TM1Config {
 const VALID_LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
 const VALID_TRANSPORTS = ["stdio", "http"] as const;
 const VALID_MODES = ["readwrite", "readonly"] as const;
+const VALID_ENVIRONMENTS = ["dev", "test", "prod"] as const;
 const VALID_RESPONSE_MODES = ["legacy", "structured"] as const;
 const VALID_AUTH_MODES = [
   "s2s",
@@ -248,7 +256,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
       `Invalid TM1_MODE: "${env.TM1_MODE}". Expected "readwrite" or "readonly".`,
     );
   }
-  const mode = modeRaw as TM1Config["mode"];
+  const envRaw = process.env.TM1_ENVIRONMENT?.trim().toLowerCase() || undefined;
+  if (
+    envRaw !== undefined &&
+    !VALID_ENVIRONMENTS.includes(envRaw as (typeof VALID_ENVIRONMENTS)[number])
+  ) {
+    throw new Error(
+      `Invalid TM1_ENVIRONMENT: "${process.env.TM1_ENVIRONMENT}". Expected "dev", "test" or "prod".`,
+    );
+  }
+  const environment = envRaw as TM1Config["environment"];
+  const allowProdWrites =
+    process.env.TM1_ALLOW_PROD_WRITES?.trim().toLowerCase() === "true";
+  let mode = modeRaw as TM1Config["mode"];
+  let modeReason: string | undefined;
+  if (environment === "prod" && mode === "readwrite" && !allowProdWrites) {
+    mode = "readonly";
+    modeReason =
+      "TM1_ENVIRONMENT=prod forces readonly; set TM1_ALLOW_PROD_WRITES=true to allow writes.";
+  }
 
   // Same parse shape as TM1_MODE: case-insensitive, unknown value throws at
   // startup rather than silently picking a wire format the operator did not ask
@@ -372,6 +398,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
     httpAllowedOrigins,
     httpToken,
     mode,
+    ...(environment !== undefined ? { environment } : {}),
+    ...(modeReason !== undefined ? { modeReason } : {}),
     responseMode,
     maxResponseChars,
     version,

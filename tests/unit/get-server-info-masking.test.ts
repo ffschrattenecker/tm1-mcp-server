@@ -13,7 +13,10 @@ type ToolCb = (
   extra: Record<string, unknown>,
 ) => Promise<{ content: Array<{ type: string; text: string }> }>;
 
-function capture(extra: Record<string, unknown>): ToolCb {
+function capture(
+  extra: Record<string, unknown>,
+  access: Record<string, unknown> = { mode: "readwrite" },
+): ToolCb {
   let cb: ToolCb | undefined;
   const server = {
     tool: (_n: string, _d: string, _s: unknown, handler: ToolCb) => {
@@ -21,6 +24,7 @@ function capture(extra: Record<string, unknown>): ToolCb {
     },
   } as unknown as McpServer;
   const tm1 = contractCheckedClient({
+    access,
     server: {
       getInfo: async () => ({
         serverName: "testserver",
@@ -33,6 +37,35 @@ function capture(extra: Record<string, unknown>): ToolCb {
   if (!cb) throw new Error("handler not registered");
   return cb;
 }
+
+describe("tm1_get_server_info – mcpServer access", () => {
+  it("reports mode, environment and why prod was forced readonly", async () => {
+    const cb = capture(
+      {},
+      {
+        mode: "readonly",
+        environment: "prod",
+        modeReason: "TM1_ENVIRONMENT=prod forces readonly",
+      },
+    );
+    const payload = JSON.parse(
+      (await cb({ format: "json" }, {})).content[0].text,
+    );
+    expect(payload.mcpServer).toMatchObject({
+      mode: "readonly",
+      environment: "prod",
+      modeReason: "TM1_ENVIRONMENT=prod forces readonly",
+    });
+  });
+
+  it("says unspecified when no environment is set", async () => {
+    const payload = JSON.parse(
+      (await capture({})({ format: "json" }, {})).content[0].text,
+    );
+    expect(payload.mcpServer.environment).toBe("unspecified");
+    expect(payload.mcpServer.modeReason).toBeUndefined();
+  });
+});
 
 describe("tm1_get_server_info – _raw credential masking", () => {
   it("masks credential-named values in the raw config dump", async () => {
