@@ -5,6 +5,7 @@ import path from "node:path";
 import { z, type ZodRawShape } from "zod";
 import { applyRulesPatch } from "../../src/lib/rules-patch.js";
 import { registerSetCubeRules } from "../../src/tools/model-building/set-cube-rules.js";
+import { registerCheckCubeRule } from "../../src/tools/model-building/check-cube-rule.js";
 import { TM1Error } from "../../src/types.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 
@@ -60,8 +61,14 @@ describe("applyRulesPatch", () => {
 
 describe("tm1_set_cube_rules sources", () => {
   const written: Array<[string, string]> = [];
+  const checked: string[] = [];
+  let checkErrors: Array<{ lineNumber?: number; message: string }> = [];
   const client = {
     cubes: {
+      checkRule: async (_c: string, t: string) => {
+        checked.push(t);
+        return checkErrors;
+      },
       getRules: async () => ({
         cubeName: "Sales",
         rulesText: STORED,
@@ -73,10 +80,13 @@ describe("tm1_set_cube_rules sources", () => {
     },
   } as unknown as TM1Client;
 
-  function call(args: Record<string, unknown>) {
+  function call(
+    args: Record<string, unknown>,
+    register: typeof registerSetCubeRules = registerSetCubeRules,
+  ) {
     let h: ((a: unknown) => Promise<unknown>) | null = null;
     let parser: z.ZodObject<ZodRawShape> | null = null;
-    registerSetCubeRules(
+    register(
       {
         tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
           parser = z.object(s);
@@ -87,11 +97,15 @@ describe("tm1_set_cube_rules sources", () => {
     );
     return h!(parser!.parse(args)) as Promise<{
       structuredContent: Record<string, unknown>;
+      content: Array<{ text: string }>;
+      isError?: boolean;
     }>;
   }
 
   afterEach(() => {
     written.length = 0;
+    checked.length = 0;
+    checkErrors = [];
     delete process.env.TM1_LOCAL_FILE_ROOT;
   });
 
@@ -156,5 +170,52 @@ describe("tm1_set_cube_rules sources", () => {
     await expect(
       call({ cubeName: "Sales", confirm: "Salez", rules: "SKIPCHECK;" }),
     ).rejects.toThrow(/confirm mismatch/);
+  });
+
+  it("preflight checks the full patched text and a failure writes nothing", async () => {
+    checkErrors = [{ lineNumber: 2, message: "Syntax error" }];
+    const res = await call({
+      cubeName: "Sales",
+      confirm: "Sales",
+      edits: [{ find: "['Fcst'] - ['Plan'];", replace: "['Fcst'] - ;" }],
+    });
+    expect(checked).toEqual([
+      STORED.replace("['Fcst'] - ['Plan'];", "['Fcst'] - ;"),
+    ]);
+    expect(written).toEqual([]);
+    expect(res.isError).toBe(true);
+    expect(JSON.parse(res.content[0].text)).toMatchObject({
+      stage: "preflight",
+      check: "syntax",
+      errors: [{ lineNumber: 2 }],
+    });
+  });
+
+  it("preflight:false writes without checking", async () => {
+    checkErrors = [{ lineNumber: 1, message: "Syntax error" }];
+    await call({
+      cubeName: "Sales",
+      confirm: "Sales",
+      rules: "SKIPCHECK;",
+      preflight: false,
+    });
+    expect(checked).toEqual([]);
+    expect(written).toEqual([["Sales", "SKIPCHECK;"]]);
+  });
+
+  it("tm1_check_cube_rule validates an edits patch as it would be installed", async () => {
+    const res = await call(
+      {
+        cubeName: "Sales",
+        edits: [{ find: "['Fcst']", replace: "['Actual']" }],
+      },
+      registerCheckCubeRule,
+    );
+    expect(checked).toEqual([STORED.replace("['Fcst']", "['Actual']")]);
+    expect(written).toEqual([]);
+    expect(JSON.parse(res.content[0].text)).toMatchObject({
+      ok: true,
+      lineCount: 6,
+    });
   });
 });

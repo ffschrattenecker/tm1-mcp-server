@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`tm1_set_cube_rules` preflight.** Before writing, the full resulting text (after `edits`
+  are applied) is checked with `tm1.CheckRules`. Any error returns `VALIDATION_ERROR` with
+  `stage:"preflight"`, `check:"syntax"` and `errors[]`, and nothing is written. The Rules PATCH
+  itself stores syntactically broken text without an error (verified on 11.8.03500), so until
+  now the check was only as good as the caller's discipline. `preflight:false` opts out.
+- `tm1_check_cube_rule` takes the same sources as `tm1_set_cube_rules`: `rules`, `edits` or
+  `filePath`. A patch can be validated exactly as it would be installed, without the caller
+  rebuilding the whole file to check it.
 - `tm1_get_server_info` returns `mcpServer: { name, version }`, the MCP server's own package
   identity. A client (e.g. the spms-tools plugin) can gate on the server version from a tool
   result instead of guessing it from which schema fields exist.
