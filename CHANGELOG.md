@@ -68,6 +68,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A TM1 request can wait longer than five minutes.** undici, the HTTP client underneath,
+  ends every request that has not answered after 300 s with `UND_ERR_HEADERS_TIMEOUT`, no
+  matter what `timeoutMs` allowed — measured at 300.8 s against a 400 s budget, on both
+  fetch paths. A TI process runs as long as it runs and TM1 has no timeout for it, so
+  `tm1_execute_process` with a long `timeoutMs` failed after five minutes as
+  `CONNECTION_FAILED` ("server unreachable") while the process kept running. undici's
+  timeouts are now off; `timeoutMs` is the only limit. Verified: a 320 s answer arrives.
+- **Process analysis reads variable names with `.`, `$`, `%` and backtick.** TM1 compiles
+  them (measured on 11.8 and 12.5), but the parser and the analyzers accepted only
+  letters, digits and `_`. A line like `v.Col = 1;` failed the parse, and the whole tab
+  dropped out of complexity scoring and the antipattern lint without a word.
+- **The ReDoS guard on user regexes rejects repeated alternations.** Patterns such as
+  `^(\w|\w)*!$` passed `safe-regex`, which measures only nested quantifiers, and took
+  23.5 s on a 30-character input, blocking the whole server. Any unbounded repetition over
+  a group containing `|` is now refused; a character class (`[ab]*`) does the same job.
+- **`tm1_get_descendants` and `tm1_get_ancestors` fetch only the part of the hierarchy
+  they answer about.** Both loaded the whole hierarchy with every element's parents and
+  edges on each call. They now expand from the element itself, up to 20 levels, and fall
+  back to the full load only for deeper trees. On an 11,111-element test dimension: 14 KB
+  instead of 3 MB for a mid-level subtree, 1 KB instead of 3 MB for a leaf's ancestors.
+  Results were compared live against the full load on both versions: no difference.
+- **`tm1_check_writable_coords` looks up each coordinate by key and understands
+  `[Dimension].[Hierarchy].[Element]`.** It loaded every hierarchy of the cube in full to
+  find one name per dimension (19 MB for an 8-dimension cube in a test), and it only
+  searched the default hierarchy, so a qualified coordinate that `tm1_write_cells` accepts
+  came back as missing. It now reads coordinates exactly like `tm1_write_cells`.
+- **`fetchAll` and `limit: 0` on `tm1_execute_mdx` and `tm1_get_view` stop at 5000 cells,
+  as documented.** Both returned the whole cellset regardless (20,000 cells were 2 MB of
+  JSON in a test). The first 5000 cells are now requested from TM1, and
+  `has_more`/`next_offset` say where to continue.
 - **Process deploys now remove what the source no longer has.** `tm1_import_process_from_git`
   and `tm1_import_pro_file` skipped the parameter, variable and data-source step whenever
   the file had an empty list or a `None` source, so a parameter removed in Git, or a source

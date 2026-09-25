@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { MdxAxis, CellValue } from "../../types.js";
-import { PAGINATION_SCHEMA } from "../pagination.js";
+import { PAGINATION_SCHEMA, UNBOUNDED_MAX_ITEMS } from "../pagination.js";
 import { FORMAT_SCHEMA, payloadResponse } from "../format.js";
 import { withToolHint } from "../error-format.js";
 import { clipAxesToWindow } from "../../tm1-client/services/cellset-transform.js";
@@ -108,7 +108,7 @@ export const registerExecuteMdx = defineTool({
   name: "tm1_execute_mdx",
   description: [
     "Execute an MDX query against the TM1 server and return structured cell data with axes (page-envelope shape consistent with list_*).",
-    "format='markdown' renders a pivot grid (2 axes, full result — set fetchAll=true to avoid a partial grid) or a flat coordinate table; 'json' (default) returns the structured envelope.",
+    "format='markdown' renders a pivot grid (2 axes; set fetchAll=true to get up to 5000 cells in one grid) or a flat coordinate table; 'json' (default) returns the structured envelope.",
     "Related: tm1_create_mdx_view to persist a query as a public view, tm1_sample_cells for cheap sparsity probe, tm1_get_cell_value for a single coordinate.",
   ],
   annotations: READ_ONLY,
@@ -133,8 +133,11 @@ export const registerExecuteMdx = defineTool({
     extra,
   ) => {
     const all = fetchAll === true || limit === 0;
-    const top = all ? undefined : limit;
-    const skip = all ? undefined : offset;
+    // "All" is the documented first slab of UNBOUNDED_MAX_ITEMS, pushed down
+    // to TM1 as $top — not the whole cellset. has_more/next_offset then say
+    // where to resume, exactly as for any other page.
+    const top = all ? UNBOUNDED_MAX_ITEMS : limit;
+    const skip = all ? 0 : offset;
     const result = await withToolHint(
       tm1Client.cells.executeMdx(mdx, top, skip, {
         signal: extra?.signal,
@@ -146,12 +149,10 @@ export const registerExecuteMdx = defineTool({
     const total = result.totalCellCount;
     const count = result.cells.length;
     const off = all ? 0 : offset;
-    const has_more = !all && off + count < total;
+    const has_more = off + count < total;
     // Clip axes to the returned cell page so a capped read over a huge view
-    // doesn't ship the full tuple list. fetchAll keeps the whole cellset.
-    const { axes, clipped } = all
-      ? { axes: result.axes, clipped: false }
-      : clipAxesToWindow(result.axes, count, off);
+    // doesn't ship the full tuple list.
+    const { axes, clipped } = clipAxesToWindow(result.axes, count, off);
     const envelope: MdxEnvelope = {
       axes,
       total,
