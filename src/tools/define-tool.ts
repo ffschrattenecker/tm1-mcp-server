@@ -26,14 +26,29 @@ import type {
   McpServer,
   ToolCallback,
 } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ZodObject, ZodRawShape, ZodTypeAny } from "zod";
+import { z, type ZodObject, type ZodRawShape, type ZodTypeAny } from "zod";
 import type { TM1Client } from "../tm1-client.js";
+import { ConnectionRegistry } from "../connections.js";
+import { TM1Error, TM1ErrorCode } from "../types.js";
 import type { Tm1ToolAnnotations } from "./annotations.js";
 import { asOutputSchema } from "./schemas/output-schema.js";
 import { markdownCapable } from "./schemas/markdown-capable.js";
 
+/**
+ * Where a tool gets its client from: the multi-connection registry in
+ * production, or one prebuilt client (unit tests, embedders), which is wrapped
+ * as a single-connection registry.
+ */
+export type ClientSource = TM1Client | ConnectionRegistry;
+
 /** Registrar shape expected by the REGISTRARS array in ./index.ts. */
-export type ToolRegistrar = (server: McpServer, tm1Client: TM1Client) => void;
+export type ToolRegistrar = (server: McpServer, source: ClientSource) => void;
+
+export function asRegistry(source: ClientSource): ConnectionRegistry {
+  return source instanceof ConnectionRegistry
+    ? source
+    : ConnectionRegistry.single(source);
+}
 
 export interface ToolSpec<I extends ZodRawShape> {
   /** Wire name, `tm1_*`. */
@@ -55,13 +70,14 @@ export interface ToolSpec<I extends ZodRawShape> {
   /** MCP behavior hints — one of the presets in ./annotations.js. */
   annotations: Tm1ToolAnnotations;
   /**
-   * Registration gate for tools that exist on one TM1 generation only (v11
-   * threads vs v12 jobs, v11-only save_data). Returning false skips the tool
-   * entirely — it never appears in tools/list. This is deliberately separate
-   * from the `requiresVersion` annotation, which is a client-facing HINT and
-   * is also carried by tools that stay registered on both generations.
+   * Gate for tools that exist on one TM1 generation only (v11 threads vs v12
+   * jobs, v11-only save_data). The tool is registered only when at least one
+   * connection runs that version, and a call against a connection on the other
+   * version is refused. This is deliberately separate from the
+   * `requiresVersion` annotation, which is a client-facing HINT and is also
+   * carried by tools that stay registered on both generations.
    */
-  enabled?: (tm1Client: TM1Client) => boolean;
+  version?: 11 | 12;
   /**
    * Handler. Receives the parsed args, the shared TM1 client, and the SDK's
    * per-call extra (abort signal, request metadata).
@@ -133,15 +149,51 @@ export function defineTool<I extends ZodRawShape>(
     ...(outputSchema === undefined ? {} : { outputSchema }),
   });
 
-  return (server, tm1Client) => {
-    if (spec.enabled && !spec.enabled(tm1Client)) return;
+  return (server, source) => {
+    const registry = asRegistry(source);
+    if (spec.version !== undefined && !registry.hasVersion(spec.version)) {
+      return;
+    }
+    // One connection: the input shape is exactly what the tool declares. More
+    // than one: every tool takes a `connection` naming the target.
+    const input = registry.isSingle
+      ? spec.input
+      : {
+          ...spec.input,
+          connection: z
+            .enum(registry.usableNames as [string, ...string[]])
+            .describe("Target TM1 connection."),
+        };
     // ToolCallback<I> is a conditional type over an unresolved generic, so TS
     // cannot check the lambda against it — the cast asserts what the
     // ToolSpec.handler signature already pins down (same args, same return).
-    const cb = ((
-      args: Parameters<ToolCallback<I>>[0],
+    const cb = (async (
+      args: Parameters<ToolCallback<I>>[0] & { connection?: string },
       extra: Parameters<ToolCallback<I>>[1],
-    ) => spec.handler(args, tm1Client, extra)) as unknown as ToolCallback<I>;
-    server.tool(spec.name, description, spec.input, cb);
+    ) => {
+      const { connection, ...rest } = args;
+      const info = registry.resolveInfo(connection);
+      if (!spec.annotations.readOnlyHint && info.mode === "readonly") {
+        throw new TM1Error({
+          code: TM1ErrorCode.PERMISSION_DENIED,
+          message: `${spec.name} changes TM1, but connection "${info.name}" is readonly.`,
+          hint: "Set TM1_MODE=readwrite in that connection's .env to allow writes.",
+        });
+      }
+      if (spec.version !== undefined && info.version !== spec.version) {
+        throw new TM1Error({
+          code: TM1ErrorCode.UNSUPPORTED_OPERATION,
+          message: `${spec.name} needs TM1 v${spec.version}; connection "${info.name}" is v${info.version}.`,
+          hint: `Pick a v${spec.version} connection, or use the v${info.version} equivalent.`,
+        });
+      }
+      const tm1Client = await registry.get(connection);
+      return spec.handler(
+        rest,
+        tm1Client,
+        extra,
+      );
+    }) as unknown as ToolCallback<I>;
+    server.tool(spec.name, description, input, cb);
   };
 }

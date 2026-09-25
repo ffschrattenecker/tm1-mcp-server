@@ -14,7 +14,7 @@ export const registerSaveData = defineTool({
     "Executes as an unbound TI process via ExecuteProcessWithReturn; no process object is created on the server.",
   ],
   annotations: withVersion(IDEMPOTENT_WRITE, "v11"),
-  enabled: (tm1Client) => tm1Client.version === 11,
+  version: 11,
   output: MutationResultSchema,
   input: {
     cube: z

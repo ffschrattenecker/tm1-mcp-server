@@ -12,7 +12,7 @@ export const registerUnloadCube = defineTool({
   // v11 only. v12 answers tm1.Unload with "Demand load, loading and unloading
   // of cubes is no longer supported." — the feature is gone, with no successor
   // endpoint, so the tool is withheld rather than offered and refused.
-  enabled: (tm1Client) => tm1Client.version === 11,
+  version: 11,
   output: MutationResultSchema,
   input: {
     cubeName: z.string().describe("Name of the cube to unload"),

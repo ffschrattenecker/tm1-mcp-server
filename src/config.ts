@@ -439,3 +439,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
     iamUrl,
   };
 }
+
+/**
+ * Stable label for a connection: host and port, plus the v12
+ * instance/database. Keys per-connection state (process backups, the callgraph
+ * cache, mutation events) — two folders pointing at the same server share it,
+ * which is correct: they see the same objects.
+ */
+export function connectionIdOf(
+  config: Pick<TM1Config, "baseUrl" | "instance" | "database">,
+): string {
+  let host: string;
+  try {
+    const url = new URL(config.baseUrl);
+    host = url.port ? `${url.hostname}_${url.port}` : url.hostname;
+  } catch {
+    host = config.baseUrl;
+  }
+  return [host, config.instance, config.database]
+    .filter((part): part is string => Boolean(part))
+    .join("_");
+}

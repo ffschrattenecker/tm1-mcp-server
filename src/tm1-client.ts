@@ -3,7 +3,7 @@
 // (authenticate / keep-alive / logout) lives here; everything else is
 // delegated to the relevant service.
 import type pino from "pino";
-import type { TM1Config } from "./config.js";
+import { connectionIdOf, type TM1Config } from "./config.js";
 import type { SessionManager } from "./session-manager.js";
 import { TM1HttpClient } from "./tm1-client/http.js";
 import { BatchService } from "./tm1-client/services/batch-service.js";
@@ -121,16 +121,7 @@ export class TM1Client {
    * process backups) apart: host and port, plus the v12 instance/database.
    */
   get connectionId(): string {
-    let host: string;
-    try {
-      const url = new URL(this.config.baseUrl);
-      host = url.port ? `${url.hostname}_${url.port}` : url.hostname;
-    } catch {
-      host = this.config.baseUrl;
-    }
-    return [host, this.config.instance, this.config.database]
-      .filter((part): part is string => Boolean(part))
-      .join("_");
+    return connectionIdOf(this.config);
   }
 
   /**

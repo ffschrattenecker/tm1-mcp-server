@@ -1,7 +1,7 @@
 // HTTP transport layer for TM1Client. Owns request/response, retry, auth-retry,
 // and TM1-specific error classification. Domain methods live in tm1-client.ts.
 import type pino from "pino";
-import type { TM1Config } from "../config.js";
+import { connectionIdOf, type TM1Config } from "../config.js";
 import type { SessionManager } from "../session-manager.js";
 import {
   createConnectionProfile,
@@ -175,14 +175,22 @@ export class TM1HttpClient {
 
           const retryResult = await this.handleResponse<T>(retryResponse, path);
           if (!isSafeMethod) {
-            tm1Events.emit("mutation", { method, path });
+            tm1Events.emit("mutation", {
+              method,
+              path,
+              connectionId: connectionIdOf(this.config),
+            });
           }
           return retryResult;
         }
 
         const result = await this.handleResponse<T>(response, path);
         if (!isSafeMethod) {
-          tm1Events.emit("mutation", { method, path });
+          tm1Events.emit("mutation", {
+            method,
+            path,
+            connectionId: connectionIdOf(this.config),
+          });
         }
         return result;
       } catch (error) {
@@ -283,7 +291,11 @@ export class TM1HttpClient {
     }
     const text = await response.text();
     if (!isSafeHttpMethod(method)) {
-      tm1Events.emit("mutation", { method, path });
+      tm1Events.emit("mutation", {
+        method,
+        path,
+        connectionId: connectionIdOf(this.config),
+      });
     }
     return text;
   }
@@ -338,7 +350,11 @@ export class TM1HttpClient {
       throw this.classifyHttpError(response.status, path, errBody || undefined);
     }
     if (!isSafeHttpMethod(method)) {
-      tm1Events.emit("mutation", { method, path });
+      tm1Events.emit("mutation", {
+        method,
+        path,
+        connectionId: connectionIdOf(this.config),
+      });
     }
   }
 

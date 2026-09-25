@@ -103,14 +103,17 @@ export function getCallgraphCacheStats(): Array<{
 
 /**
  * Build a full ReferenceIndex from a connected TM1 server.
- * TTL-cached (60 s) per `includeControl` flag. Concurrent calls share one inflight promise.
+ * TTL-cached (60 s) per connection and `includeControl` flag — one server
+ * process serves several TM1 connections, so the key must name the connection
+ * or one server's index would be answered for another. Concurrent calls share
+ * one inflight promise.
  */
 export async function buildIndexFromTM1(
   tm1Client: TM1Client,
   opts: BuildIndexOpts = {},
 ): Promise<ReferenceIndex> {
   const includeControl = opts.includeControl ?? false;
-  const key = `inc=${includeControl}`;
+  const key = `${tm1Client.connectionId}|inc=${includeControl}`;
 
   if (!opts.bypassCache) {
     const hit = cache.get(key);

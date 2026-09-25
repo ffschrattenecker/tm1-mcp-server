@@ -66,7 +66,13 @@ describe("R2-05: HTTP layer emits mutation events", () => {
     );
 
     await client.request("POST", "/api/v1/Dimensions", { Name: "Test" });
-    expect(events).toEqual([{ method: "POST", path: "/api/v1/Dimensions" }]);
+    expect(events).toEqual([
+      {
+        method: "POST",
+        path: "/api/v1/Dimensions",
+        connectionId: "tm1server_8010",
+      },
+    ]);
   });
 
   it("emits on successful DELETE", async () => {
@@ -83,7 +89,11 @@ describe("R2-05: HTTP layer emits mutation events", () => {
 
     await client.request("DELETE", "/api/v1/Cubes('Old')");
     expect(events).toEqual([
-      { method: "DELETE", path: "/api/v1/Cubes('Old')" },
+      {
+        method: "DELETE",
+        path: "/api/v1/Cubes('Old')",
+        connectionId: "tm1server_8010",
+      },
     ]);
   });
 

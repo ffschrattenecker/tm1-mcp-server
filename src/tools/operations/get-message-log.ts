@@ -17,7 +17,7 @@ export const registerGetMessageLog = defineTool({
   // v12 deprecated MessageLogEntry/MessageLogEntries (and the MessageLog /
   // TailMessageLog functions) in 12.0.0; all of them serve empty with no
   // successor endpoint.
-  enabled: (tm1Client) => tm1Client.version === 11,
+  version: 11,
   output: {
     count: z.number().int(),
     entries: z.array(MessageLogEntrySchema),

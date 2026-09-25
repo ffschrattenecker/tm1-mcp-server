@@ -12,6 +12,8 @@ import { EventEmitter } from "node:events";
 export interface Tm1MutationEvent {
   method: string;
   path: string;
+  /** connectionIdOf() of the connection that mutated; see config.ts. */
+  connectionId?: string;
 }
 
 interface Tm1Events {

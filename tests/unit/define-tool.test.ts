@@ -15,6 +15,7 @@ import { READ_ONLY, DESTRUCTIVE } from "../../src/tools/annotations.js";
 import { strictVariants } from "../../src/tools/schemas/markdown-capable.js";
 import { FORMAT_SCHEMA } from "../../src/tools/format.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
+import { ConnectionRegistry } from "../../src/connections.js";
 
 const mockLogger = {
   info: vi.fn(),
@@ -195,5 +196,117 @@ describe("defineTool", () => {
     })(wrapped, fakeClient);
 
     expect(registered).toEqual(["tm1_spec_readonly_kept"]);
+  });
+});
+
+describe("defineTool with several connections", () => {
+  const v11 = { version: 11 } as TM1Client;
+  const v12 = { version: 12 } as TM1Client;
+  const registry = ConnectionRegistry.of([
+    { name: "dev", client: v11, mode: "readwrite" },
+    { name: "prod", client: v12, mode: "readonly" },
+  ]);
+
+  function capture() {
+    const server = new McpServer({ name: "t", version: "0.0.0" });
+    const tools = new Map<
+      string,
+      { config: Record<string, unknown>; cb: (...a: unknown[]) => unknown }
+    >();
+    server.registerTool = ((...args: unknown[]) => {
+      tools.set(args[0] as string, {
+        config: args[1] as Record<string, unknown>,
+        cb: args[2] as (...a: unknown[]) => unknown,
+      });
+      return {} as ReturnType<typeof server.registerTool>;
+    }) as typeof server.registerTool;
+    return { wrapped: withAnnotations(server, mockLogger, "readwrite"), tools };
+  }
+
+  const errorText = (r: unknown) =>
+    (r as { content: { text: string }[] }).content[0].text;
+
+  it("adds a required `connection` enum and routes the call to that client", async () => {
+    const { wrapped, tools } = capture();
+    let seen: { args: unknown; client: TM1Client } | undefined;
+    defineTool({
+      name: "tm1_spec_multi_route",
+      description: "fixture",
+      annotations: READ_ONLY,
+      input: { cubeName: z.string() },
+      handler: (args, client) => {
+        seen = { args, client };
+        return ok();
+      },
+    })(wrapped, registry);
+
+    const tool = tools.get("tm1_spec_multi_route")!;
+    const input = tool.config.inputSchema as z.ZodRawShape;
+    expect(Object.keys(input)).toEqual(["cubeName", "connection"]);
+    expect(
+      (input.connection as unknown as { options: string[] }).options,
+    ).toEqual(["dev", "prod"]);
+
+    await tool.cb({ cubeName: "C", connection: "prod" });
+    expect(seen?.client).toBe(v12);
+    // The handler never sees the routing argument.
+    expect(seen?.args).toEqual({ cubeName: "C" });
+  });
+
+  it("refuses a write tool against a readonly connection", async () => {
+    const { wrapped, tools } = capture();
+    const handler = vi.fn(ok);
+    defineTool({
+      name: "tm1_spec_multi_write",
+      description: "fixture",
+      annotations: DESTRUCTIVE,
+      input: { cubeName: z.string() },
+      handler,
+    })(wrapped, registry);
+
+    const result = await tools
+      .get("tm1_spec_multi_write")!
+      .cb({ cubeName: "C", connection: "prod" });
+    expect(errorText(result)).toMatch(/PERMISSION_DENIED/);
+    expect(errorText(result)).toMatch(/prod.{0,2} is readonly/);
+    expect(handler).not.toHaveBeenCalled();
+
+    await tools
+      .get("tm1_spec_multi_write")!
+      .cb({ cubeName: "C", connection: "dev" });
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("registers a version-gated tool when any connection matches, refusing the others", async () => {
+    const { wrapped, tools } = capture();
+    const handler = vi.fn(ok);
+    defineTool({
+      name: "tm1_spec_multi_v11",
+      description: "fixture",
+      annotations: READ_ONLY,
+      version: 11,
+      input: {},
+      handler,
+    })(wrapped, registry);
+
+    const result = await tools
+      .get("tm1_spec_multi_v11")!
+      .cb({ connection: "prod" });
+    expect(errorText(result)).toMatch(/needs TM1 v11/);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("skips a version-gated tool no connection can serve", () => {
+    const { wrapped, tools } = capture();
+    defineTool({
+      name: "tm1_spec_single_v12_only",
+      description: "fixture",
+      annotations: READ_ONLY,
+      version: 12,
+      input: {},
+      handler: ok,
+    })(wrapped, ConnectionRegistry.single(v11));
+
+    expect(tools.has("tm1_spec_single_v12_only")).toBe(false);
   });
 });

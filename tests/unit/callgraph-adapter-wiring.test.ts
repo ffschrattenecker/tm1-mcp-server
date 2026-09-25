@@ -10,7 +10,7 @@ import {
 import type { TM1Client } from "../../src/tm1-client.js";
 
 // Minimal stub exposing only what buildIndexInternal touches. An empty model is
-// enough to populate exactly one cache entry (key `inc=false`).
+// enough to populate exactly one cache entry (key `<connectionId>|inc=false`).
 const stubClient = contractCheckedClient({
   processes: { fetchForCallgraph: async () => [] },
   cubes: { getAllRules: async () => [] },
@@ -132,5 +132,42 @@ describe("P2 — invalidation is precise and cannot publish a stale index", () =
   it("a build with no concurrent invalidation still publishes", async () => {
     await buildIndexFromTM1(stubClient);
     expect(getCallgraphCacheStats()).toHaveLength(1);
+  });
+});
+
+describe("the callgraph cache is scoped per connection", () => {
+  beforeEach(() => {
+    invalidateCallgraphCache();
+  });
+
+  it("does not answer one connection's index for another", async () => {
+    const clientFor = (connectionId: string, processName: string) =>
+      ({
+        connectionId,
+        processes: {
+          fetchForCallgraph: async () => [
+            {
+              name: processName,
+              prolog: "",
+              metadata: "",
+              data: "",
+              epilog: "",
+              parameters: [],
+              parameterDefaults: {},
+            },
+          ],
+        },
+        cubes: { getAllRules: async () => [] },
+        chores: { list: async () => [] },
+      }) as unknown as TM1Client;
+
+    const a = await buildIndexFromTM1(clientFor("host-a_1", "OnlyOnA"));
+    const b = await buildIndexFromTM1(clientFor("host-b_1", "OnlyOnB"));
+
+    expect(a).not.toBe(b);
+    expect(getCallgraphCacheStats().map((s) => s.key)).toEqual([
+      "host-a_1|inc=false",
+      "host-b_1|inc=false",
+    ]);
   });
 });

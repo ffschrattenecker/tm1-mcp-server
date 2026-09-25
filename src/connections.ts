@@ -22,7 +22,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse as parseDotenv } from "dotenv";
-import type pino from "pino";
+import pino from "pino";
 import { loadConfig, type TM1Config } from "./config.js";
 import { SessionManager } from "./session-manager.js";
 import { TM1Client } from "./tm1-client.js";
@@ -97,19 +97,32 @@ export class ConnectionRegistry {
   /** Wrap one prebuilt client (tests, embedders). */
   static single(
     client: TM1Client,
-    logger: pino.Logger,
-    info: Partial<ConnectionInfo> = {},
+    logger: pino.Logger = pino({ level: "silent" }),
+  ): ConnectionRegistry {
+    return ConnectionRegistry.of([{ name: "default", client }], logger);
+  }
+
+  /**
+   * Prebuilt clients under explicit names. The owner keeps the clients'
+   * lifecycle: disconnectAll() leaves them alone. Mode defaults to readwrite
+   * because the registration-time gate (TM1_MODE via withAnnotations) already
+   * decided what an embedder may call.
+   */
+  static of(
+    clients: ReadonlyArray<{
+      name: string;
+      client: TM1Client;
+      mode?: TM1Config["mode"];
+    }>,
+    logger: pino.Logger = pino({ level: "silent" }),
   ): ConnectionRegistry {
     const registry = new ConnectionRegistry(logger);
-    registry.entries.set("default", {
-      info: {
-        name: "default",
-        version: client.version,
-        mode: "readwrite",
-        ...info,
-      },
-      client,
-    });
+    for (const { name, client, mode } of clients) {
+      registry.entries.set(name, {
+        info: { name, version: client.version, mode: mode ?? "readwrite" },
+        client,
+      });
+    }
     return registry;
   }
 
@@ -188,7 +201,7 @@ export class ConnectionRegistry {
 
   /** True when tools should not expose a `connection` argument at all. */
   get isSingle(): boolean {
-    return this.entries.size === 1;
+    return this.usableNames.length === 1;
   }
 
   get anyReadwrite(): boolean {
@@ -215,7 +228,7 @@ export class ConnectionRegistry {
   /** Resolve a connection name (optional when there is only one). */
   private entryFor(name: string | undefined): Entry {
     if (name === undefined) {
-      if (this.isSingle) return [...this.entries.values()][0]!;
+      if (this.isSingle) return this.entries.get(this.usableNames[0]!)!;
       throw new TM1Error({
         code: TM1ErrorCode.VALIDATION_ERROR,
         message: `connection is required. One of: ${this.names.join(", ")}.`,

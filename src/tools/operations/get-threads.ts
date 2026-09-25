@@ -16,7 +16,7 @@ const registerListThreads = defineTool({
   description:
     "List active threads on the TM1 server (running processes, chores, MDX queries, etc.). Paginated (default 50/page). (v11 only)",
   annotations: READ_ONLY,
-  enabled: (tm1Client) => tm1Client.version === 11,
+  version: 11,
   output: pageShapeFor(ThreadSchema),
   input: { ...PAGINATION_SCHEMA, ...FORMAT_SCHEMA },
   handler: async ({ limit, offset, fetchAll, format }, tm1Client) => {
@@ -42,7 +42,7 @@ const registerCancelThread = defineTool({
     "(v11 only)",
   ],
   annotations: DESTRUCTIVE,
-  enabled: (tm1Client) => tm1Client.version === 11,
+  version: 11,
   output: MutationResultSchema,
   input: {
     id: z.number().int().describe("Thread ID to cancel"),

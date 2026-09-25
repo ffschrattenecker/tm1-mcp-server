@@ -18,7 +18,7 @@ export const registerGetAuditLog = defineTool({
   annotations: withVersion(READ_ONLY, "v11"),
   // v12 deprecated AuditLogEntry/AuditLogEntries in 12.0.0 and serves an empty
   // collection with no successor endpoint, so the tool can only mislead there.
-  enabled: (tm1Client) => tm1Client.version === 11,
+  version: 11,
   output: {
     count: z.number().int(),
     entries: z.array(AuditLogEntrySchema),
