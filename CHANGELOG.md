@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- **Exported files hold the process code unmasked; only the inline copy is masked.**
+  `tm1_export_process_to_git` and `tm1_export_process_to_pro` wrote `'***'` over
+  credential literals into the files too, so a re-import deployed
+  `ODBCOpen(..., '***')` and similar broken code, although both tools promised a
+  round-trip. Files written via `writeToDir`/`writeToFile` now carry the code exactly as it
+  is on the server, and re-import intact (verified on 11.8 and 12.5). `maskSecrets` now
+  governs only the inline response the model sees. **A written file contains any password
+  literal the process code has** — keep such files out of version control or remove the
+  literals from the code. The data-source password rules (`includeDataSourcePassword`) are
+  unchanged.
 - **An unknown `TM1_MCP_TRANSPORT` or `TM1_LOG_LEVEL` stops the server at startup.** A
   typo used to fall back silently: `TM1_MCP_TRANSPORT=htttp` started on stdio and the
   expected `/mcp` port never bound, an unknown log level became `info`. Both now throw

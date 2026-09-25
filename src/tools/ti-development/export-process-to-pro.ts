@@ -16,7 +16,7 @@ export const registerExportProcessToPro = defineTool({
     "Reverse of tm1_import_pro_file: serialize a TM1 process back to a .pro file body.",
     "Fetches code (Prolog/Metadata/Data/Epilog), parameters, variables (including the columns set to Ignore), and datasource in parallel.",
     "Returns the .pro content inline by default; pass writeToFile to also persist to an absolute path on the MCP host.",
-    "Round-trip safe with tm1_import_pro_file — useful for syncing live server state into a Git repo.",
+    "A file written via writeToFile is round-trip safe with tm1_import_pro_file — useful for syncing live server state into a Git repo. The inline copy has credential literals masked by default and is for reading, not re-importing.",
     "NOT a drop-in replacement for the .pro file in TM1's Datadir: the output omits TM1's BOM, its '601' version header and CRLF line endings. Measured on 11.8: TM1 does load such a file at startup and rewrites it in its own dialect, but it decodes slot 565 with its own scheme — a password written here becomes garbage that TM1 then persists, so the process looks configured and fails at runtime. Deploy via tm1_import_pro_file, not by copying into the Datadir.",
   ],
   annotations: READ_ONLY,
@@ -34,8 +34,9 @@ export const registerExportProcessToPro = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Redact credential literals in the exported code (inline and written file). Masks the password arg of ODBCOpen() and quoted values " +
-          "assigned to credential-named identifiers (pPwd, sToken, …). Default: true. Set false only when explicitly auditing credentials.",
+        "Redact credential literals in the code returned INLINE (password arg of ODBCOpen(), quoted values assigned to credential-named " +
+          "identifiers such as pPwd or sToken). Default: true. A file written via writeToFile always holds the code unmasked, so it " +
+          "re-imports intact — treat it as containing any password literal the code has.",
       ),
     includeDataSourcePassword: z
       .boolean()
@@ -88,20 +89,27 @@ export const registerExportProcessToPro = defineTool({
       includeDataSourcePassword && dataSource.password,
     );
 
-    const mask = resolveMaskSecrets(maskSecrets) ? maskCode : (s: string) => s;
-    const proContent = serializeToPro({
-      name: processName,
-      prolog: mask(code.prolog),
-      metadata: mask(code.metadata),
-      data: mask(code.data),
-      epilog: mask(code.epilog),
-      parameters,
-      variables: layout.variables,
-      ...(layout.variablesUIData !== undefined
-        ? { variablesUIData: layout.variablesUIData }
-        : {}),
-      dataSource,
-    });
+    // The file is the deployable copy and gets the code as it is: a masked
+    // literal would re-import as broken code ('***' instead of the password).
+    // Masking applies to what goes back to the model — the inline body.
+    const build = (mask: (s: string) => string) =>
+      serializeToPro({
+        name: processName,
+        prolog: mask(code.prolog),
+        metadata: mask(code.metadata),
+        data: mask(code.data),
+        epilog: mask(code.epilog),
+        parameters,
+        variables: layout.variables,
+        ...(layout.variablesUIData !== undefined
+          ? { variablesUIData: layout.variablesUIData }
+          : {}),
+        dataSource,
+      });
+    const proContent = build((s) => s);
+    const inlineContent = resolveMaskSecrets(maskSecrets)
+      ? build(maskCode)
+      : proContent;
 
     let writtenTo: string | null = null;
     if (writeToFile) {
@@ -127,7 +135,7 @@ export const registerExportProcessToPro = defineTool({
             credentialsIncluded,
             // Written to disk only when credentials are in play — otherwise
             // the caller already has the body and it stays out of the context.
-            ...(includeDataSourcePassword ? {} : { content: proContent }),
+            ...(includeDataSourcePassword ? {} : { content: inlineContent }),
           }),
         },
       ],

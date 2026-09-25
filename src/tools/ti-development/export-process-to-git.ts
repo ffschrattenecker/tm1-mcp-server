@@ -15,8 +15,8 @@ export const registerExportProcessToGit = defineTool({
   description: [
     "Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' (parameters, variables, ignored datasource columns, datasource) plus a '{name}.ti' (Prolog/Metadata/Data/Epilog as plain code).",
     "The .ti holds the code in TM1's native `Code` representation (#region <Tab> / #endregion, CRLF, empty tabs omitted); the .json holds the structure. Code lives outside the JSON so Git diffs stay readable.",
-    "Returns both file bodies (json + ti) inline by default. Pass writeToDir to persist them to disk instead: the code is then written to files and omitted from the response to avoid duplicating it into the context window; only metadata (filenames, counts, writtenTo paths) comes back. Round-trip safe with tm1_import_process_from_git.",
-    "Security: the ODBC datasource password is stripped unless includeDataSourcePassword is set (which also requires writeToDir); credential literals in the TI code are masked when maskSecrets is on; credentialsOmitted=true flags when a password was stripped.",
+    "Returns both file bodies (json + ti) inline by default. Pass writeToDir to persist them to disk instead: the code is then written to files and omitted from the response to avoid duplicating it into the context window; only metadata (filenames, counts, writtenTo paths) comes back. Files written via writeToDir are round-trip safe with tm1_import_process_from_git; the inline .ti has credential literals masked by default and is for reading, not re-importing.",
+    "Security: the ODBC datasource password is stripped unless includeDataSourcePassword is set (which also requires writeToDir); credential literals in the TI code are masked in the inline response when maskSecrets is on, never in written files (those must re-import intact); credentialsOmitted=true flags when a password was stripped.",
     "includeDataSourcePassword is v12-only: what v11 hands out expires with the server run, so exporting it would produce a file that looks complete and fails later.",
   ],
   annotations: READ_ONLY,
@@ -34,8 +34,7 @@ export const registerExportProcessToGit = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Redact credential literals in the exported .ti code (inline and written file) and credential pairs (PWD=, UID=) in the datasource's ODBC connection string in the .json. " +
-          "Masks the password arg of ODBCOpen() and quoted values assigned to credential-named identifiers (pPwd, sToken, …). Default: true. Set false only when explicitly auditing credentials.",
+        "Redact credential literals in the .ti code returned INLINE (password arg of ODBCOpen(), quoted values assigned to credential-named identifiers such as pPwd or sToken). Default: true. Files written via writeToDir always hold the code unmasked, so they re-import intact — treat them as containing any password literal the code has.",
       ),
     includeDataSourcePassword: z
       .boolean()
@@ -79,9 +78,11 @@ export const registerExportProcessToGit = defineTool({
         tm1Client.processes.getDeployMeta(processName),
       ]);
 
-    const doMask = resolveMaskSecrets(maskSecrets);
-    const mask = doMask ? maskCode : (s: string) => s;
-    const ti = mask(codeBlob);
+    // The file is the deployable copy and gets the code as it is: a masked
+    // literal would re-import as broken code ('***' instead of the password).
+    // Masking applies to what goes back to the model — the inline body.
+    const ti = codeBlob;
+    const inlineTi = resolveMaskSecrets(maskSecrets) ? maskCode(ti) : ti;
     const { json, credentialsOmitted } = serializeProcessToGit(
       {
         name: processName,
@@ -144,7 +145,7 @@ export const registerExportProcessToGit = defineTool({
             // Echo the file bodies inline only when NOT persisting to disk. With
             // writeToDir the caller already has the files, so returning the code
             // would just duplicate thousands of tokens into the context window.
-            ...(writeToDir ? {} : { json, ti }),
+            ...(writeToDir ? {} : { json, ti: inlineTi }),
           }),
         },
       ],
