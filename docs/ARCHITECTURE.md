@@ -13,7 +13,7 @@ truth for any contributor adding TM1 calls or new tools.
                        │ tools call
                        ▼
 ┌──────────────────────────────────────────────┐
-│  src/tools/**            MCP tool surface     │  114 tools, one file each
+│  src/tools/**            MCP tool surface     │  ~110 tools, one file each
 │  (Zod schemas, MCP envelopes, validation)     │  (+ prompts, resources)
 └──────────────────────┬───────────────────────┘
                        │ uses
@@ -81,7 +81,9 @@ tools/prompts/resources, and connects it to a transport:
 | **stdio** (default) | local Claude Code / Claude Desktop | `StdioServerTransport`                                    |
 | **Streamable HTTP** | `TM1_MCP_TRANSPORT=http`           | stateless JSON, single `POST /mcp`, optional bearer token |
 
-Tool registration is gated by `config.mode` (env `TM1_MODE`):
+Tool registration is gated by `config.mode` (env `TM1_MODE`); with several
+connections, write tools are registered when any connection is readwrite and
+refused per call against a readonly one (see Connections below):
 
 - **`readonly` (default)** — write and destructive tools are never registered,
   so the server cannot mutate or delete anything.
@@ -91,6 +93,22 @@ Tool registration is gated by `config.mode` (env `TM1_MODE`):
 Each tool declares its mutating nature via `src/tools/with-annotations.ts`
 (`readOnlyHint` / `destructiveHint`); the gate in `index.ts` uses that to decide
 what to register.
+
+## Connections
+
+`src/connections.ts` owns a `ConnectionRegistry`: one entry per TM1 connection
+(a `<name>/.env` folder, or the legacy single `TM1_BASE_URL` config). Each
+entry builds its own `TM1Client` + `SessionManager` on first use. Tools never see
+the registry: `defineTool` adds a `connection` enum to the input shape when
+there is more than one connection, strips it before the handler runs, applies
+the per-connection readonly and version gates, and hands the handler the
+resolved client — so a tool file is written exactly as for one server.
+`connectionless: true` tools (`tm1_list_connections`, the callgraph-cache reset)
+receive the registry instead and take no `connection`.
+
+Process-global state is keyed by `connectionIdOf(config)` (host, port, v12
+instance/database): the callgraph cache, mutation events, and the
+resource-subscription routing.
 
 ## Service-class pattern (TM1py-style)
 

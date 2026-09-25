@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- **One server for all TM1 connections.** Without `TM1_BASE_URL`, the server discovers every
+  `<name>/.env` under `~/.tm1/mcp-servers` (or `TM1_CONNECTIONS_DIR`) and every tool takes a
+  `connection` argument. Replace the per-instance MCP entries with a single one: the client then
+  carries one tool list instead of one per TM1 instance. Setups with `TM1_BASE_URL` keep working
+  unchanged as a single connection. See docs/CONFIGURATION.md, "Several TM1 connections".
+- **`tm1_get_process_code`, `tm1_get_process_parameters`, `tm1_get_process_variables` and
+  `tm1_get_process_datasource` are removed.** `tm1_get_process` returns every part, each behind
+  an include-flag (`includeCode=false` for parameters/variables/datasource only). The datasource
+  now sits under `dataSource`.
+- **`tm1_list_processes` returns names only by default.** Pass `fields=['name','parameters']`
+  for parameter lists; TM1 is then asked for the parameters too, instead of on every listing.
+- **`tm1_list_cubes` defaults to `includeDimensions=false`.**
+
+### Added
+
+- `tm1_list_connections`: configured connections, their mode, environment, version and session state.
+- Oversized paginated results are cut to the items that fit, with `has_more`/`next_offset`
+  pointing at the rest, instead of failing with `RESPONSE_TOO_LARGE`.
+- Server `instructions` (≤500 characters) tell the model how to pick a connection and keep
+  results small.
+
+### Fixed
+
+- The callgraph cache is keyed per connection, so an index built for one TM1 server is never
+  answered for another.
+
 ## [6.1.1] - 2026-09-26
 
 ### Fixed

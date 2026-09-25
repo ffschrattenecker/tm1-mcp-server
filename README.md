@@ -108,6 +108,24 @@ Analytics Engine) connection and its auth modes, host-disk file access.
 > with `TM1_ENVIRONMENT=prod`: it then stays readonly even under
 > `TM1_MODE=readwrite`, unless `TM1_ALLOW_PROD_WRITES=true` is set as well.
 
+### Several TM1 servers — one process
+
+Give each connection its own folder with a `.env` under `~/.tm1/mcp-servers/`
+(or the folder named by `TM1_CONNECTIONS_DIR`) and leave `TM1_BASE_URL` unset:
+
+```text
+~/.tm1/mcp-servers/
+  dev/.env        # TM1_BASE_URL=…  TM1_MODE=readwrite
+  prod/.env       # TM1_BASE_URL=…  (readonly: the default)
+```
+
+One server then serves them all: every tool takes a `connection` argument and
+`tm1_list_connections` shows what is configured. Each folder sets its own
+`TM1_MODE` — a write against a readonly connection is refused per call — and
+no connection logs in before its first use. One entry replaces one MCP server
+per TM1 instance, so the client carries one tool list instead of N.
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md#several-tm1-connections) has the details.
+
 Host-disk file access is default-off in the same spirit: the `.pro` and git
 tools accept inline content, and touch host paths only once
 `TM1_LOCAL_FILE_ROOT` names an allowed directory (paths outside it, and `..`

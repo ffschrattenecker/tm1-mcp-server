@@ -21,6 +21,45 @@ config's `env` block. **Do not put `TM1_PASSWORD` in `.mcp.json` or
 `settings.json`** — those files are routinely shared or committed. Keep secrets
 in a `.env` that stays out of version control.
 
+## Several TM1 connections
+
+One server process can serve any number of TM1 connections. Which mode it runs
+in is decided at startup:
+
+| Environment                 | Connections                                   |
+| --------------------------- | --------------------------------------------- |
+| `TM1_CONNECTIONS_DIR` set   | one per `<name>/.env` folder in that dir      |
+| `TM1_BASE_URL` set (no dir) | a single connection, as before v7             |
+| neither                     | one per `<name>/.env` in `~/.tm1/mcp-servers` |
+
+`TM1_CONNECTIONS=dev,test` narrows discovery to the named folders.
+
+With more than one connection every tool gains a required `connection`
+argument (an enum of the folder names); with one, the tool schemas are exactly
+as before. `tm1_list_connections` reports each connection's mode, TM1 version,
+whether a session is open, and any configuration error. It makes no TM1 call.
+
+**Per-connection settings come from the folder only.** Connection keys
+(`TM1_BASE_URL`, `TM1_USER`, `TM1_MODE`, `TM1_VERSION`, the v12 and CAM keys, …)
+in the server's own environment are not inherited, so a `TM1_MODE=readwrite` in
+the launching shell cannot arm a folder that does not set it. Server-level keys
+(`TM1_LOG_*`, `TM1_MCP_*`, `TM1_RESPONSE_MODE`, `TM1_MAX_RESPONSE_CHARS`) are read
+from the process environment and cannot be overridden by a folder.
+
+**Mode is enforced per call.** Write tools are listed when at least one
+connection is readwrite; calling one against a readonly connection returns
+`PERMISSION_DENIED` without touching TM1. Version-specific tools (v11 threads,
+v12 jobs) are listed when any connection runs that version and refused against
+the others.
+
+**Nothing logs in at startup.** Each connection authenticates on its first
+tool call. A folder whose `.env` is invalid is listed with its error and
+skipped; the other connections keep working.
+
+Resources are namespaced per connection: `tm1://<connection>/process/{name}/code`.
+A resources/list only enumerates objects of connections that are already
+connected, so browsing resources never logs in to every server.
+
 ## Response size — `TM1_MAX_RESPONSE_CHARS`
 
 A successful result longer than this many characters (default 80000) is replaced
