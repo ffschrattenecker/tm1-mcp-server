@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- **An unknown `TM1_MCP_TRANSPORT` or `TM1_LOG_LEVEL` stops the server at startup.** A
+  typo used to fall back silently: `TM1_MCP_TRANSPORT=htttp` started on stdio and the
+  expected `/mcp` port never bound, an unknown log level became `info`. Both now throw
+  like `TM1_MODE` and the numeric variables already did, and both are case-insensitive.
+  A configuration carrying such a typo no longer starts until it is corrected.
 - **`tm1_move_element` is removed.** TM1 has no move: it is always an add plus a delete,
   either of an edge (element under a parent) or of the element itself, and deleting the
   element from the dimension also deletes all its values. The tool did only the add: it
@@ -63,6 +68,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`tm1_list_error_logs` with `groupBy: "process"` works on schema-checking clients.** The
+  audit branch returns `groupBy`, `processName`, `since`, `totalFiles` and `groupCount`
+  around the page, but the published output schema declared only the page, so every
+  client that validates `structuredContent` rejected the call with `-32602`. The five
+  fields are declared now.
+- **`tm1_list_clients` with `fields` that leave out `name` no longer fails.** Every such
+  projection (`["type"]`, `["enabled"]`, ...) dropped `Name`, which the item schema
+  requires, and the call ended in an output-schema error. `Name` is always included now.
+- **The HTTP transport accepts `Host: localhost:<port>` and `[::1]:<port>`.** The SDK
+  compares the Host header as one string including the port, so the bare `localhost` and
+  `127.0.0.1` entries in the DNS-rebinding allow-list never matched and a client using
+  `http://localhost:3000/mcp` got 403. All loopback names now carry the port.
 - **`tm1_update_element` says what it replaces and reports type conversions.** `components`
   replaces the element's whole child list (`[]` removes every child), which the
   description never said; it now does, and explains that moving an element means updating

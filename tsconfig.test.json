@@ -28,6 +28,8 @@
     // is orthogonal to this flag and stays on.
     "noUncheckedIndexedAccess": false
   },
-  "include": ["src/**/*", "tests/**/*"],
+  // scripts/*.ts are run by hand with tsx and had no gate at all: three of
+  // them broke with the defineTool migration and nobody noticed for a month.
+  "include": ["src/**/*", "tests/**/*", "scripts/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
