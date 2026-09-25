@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`tm1_set_cube_rules` and `tm1_write_cells` read back what they wrote.** `set_cube_rules`
+  returns `verified.textMatches`; `write_cells` re-reads up to 20 of the written cells and lists
+  any whose stored value differs in `verified.mismatches` (a rule or spread overriding the value).
+  Each replaces a separate read-back call. A failed read-back is reported as `readBackError` and
+  never turns a landed write into an error.
 - **`tm1_upsert_process` `dryRun`.** Runs the syntax and the reference check on the process as it
   would be after the call, reports both (neither stops the other), and diffs it against the
   installed version with credentials masked. Nothing is written. It needs no `confirm` and does not

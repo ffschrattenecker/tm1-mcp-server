@@ -121,7 +121,18 @@ describe("tm1_set_cube_rules sources", () => {
     expect(res.structuredContent).toMatchObject({
       mode: "patch",
       editsApplied: 1,
+      // The mock's getRules still returns the old text: the read-back sees it.
+      verified: { textMatches: false },
     });
+  });
+
+  it("reads the stored text back after writing", async () => {
+    const res = await call({
+      cubeName: "Sales",
+      confirm: "Sales",
+      rules: STORED,
+    });
+    expect(res.structuredContent.verified).toEqual({ textMatches: true });
   });
 
   it("a failing edit writes nothing", async () => {

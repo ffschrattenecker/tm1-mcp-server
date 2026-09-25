@@ -7,6 +7,13 @@ import { defineTool } from "../define-tool.js";
 import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
 import { resolveCellAddress } from "../../lib/cell-address.js";
 
+const READ_BACK_LIMIT = 20;
+
+function sameValue(sent: number | string, stored: unknown): boolean {
+  if (typeof sent === "number") return Number(stored) === sent;
+  return String(stored ?? "") === sent;
+}
+
 export const registerWriteCells = defineTool({
   name: "tm1_write_cells",
   description: [
@@ -15,7 +22,8 @@ export const registerWriteCells = defineTool({
     "Writes to consolidated cells are rejected by TM1.",
     "Every cube dimension must be named (any order) — a dimension left out would land on its default member, so the call is refused. Only Sandboxes may be left out: it is bound to Base and echoed as sandboxDefaulted. A named sandbox is addressable only once its IncludeInSandboxDimension is true.",
     "Before: tm1_check_writable_coords to validate that target coordinates are leaf-level and addressable.",
-    "Related: tm1_clear_cube for bulk wipe, tm1_get_cell_value to read back, tm1_execute_process for production data loads.",
+    "The written cells are read back (up to 20; verified.mismatches lists any that differ, e.g. a rule or spread overriding the value), so no separate tm1_get_cell_value is needed.",
+    "Related: tm1_clear_cube for bulk wipe, tm1_execute_process for production data loads.",
   ],
   annotations: DESTRUCTIVE,
   output: MutationResultSchema,
@@ -65,14 +73,39 @@ export const registerWriteCells = defineTool({
       await tm1Client.cubes.getDimensionNames(cubeName),
       dimensions,
     );
-    await tm1Client.cells.writeCells(
-      cubeName,
-      address.dimensions,
-      cells.map((c) => ({ ...c, elements: address.toCubeOrder(c.elements) })),
-    );
+    const ordered = cells.map((c) => ({
+      ...c,
+      elements: address.toCubeOrder(c.elements),
+    }));
+    await tm1Client.cells.writeCells(cubeName, address.dimensions, ordered);
+    // Read back a bounded sample: each read is its own MDX round trip. The
+    // write has landed by now, so a failed read-back is reported, not thrown.
+    const sample = ordered.slice(0, READ_BACK_LIMIT);
+    let verified: Record<string, unknown>;
+    try {
+      const readBack = await Promise.all(
+        sample.map((c) => tm1Client.cells.getValue(cubeName, c.elements)),
+      );
+      verified = {
+        checked: sample.length,
+        ...(cells.length > sample.length
+          ? { unchecked: cells.length - sample.length }
+          : {}),
+        mismatches: sample
+          .map((c, i) => ({
+            elements: c.elements,
+            sent: c.value,
+            stored: readBack[i],
+          }))
+          .filter((m) => !sameValue(m.sent, m.stored)),
+      };
+    } catch (e) {
+      verified = { checked: 0, readBackError: (e as Error).message };
+    }
     return actionResponse({
       success: true,
       cellsWritten: cells.length,
+      verified,
       ...(address.sandboxDefaulted
         ? { sandboxDefaulted: address.sandboxDefaulted }
         : {}),

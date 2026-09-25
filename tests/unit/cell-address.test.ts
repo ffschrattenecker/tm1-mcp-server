@@ -71,7 +71,10 @@ describe("resolveCellAddress", () => {
 });
 
 describe("tm1_write_cells address resolution", () => {
-  function setup(cubeDims: string[]) {
+  function setup(
+    cubeDims: string[],
+    getValue: (c: string, e: string[]) => Promise<unknown> = async () => 5,
+  ) {
     const writes: Array<{ dims: string[]; cells: unknown }> = [];
     const client = {
       cubes: { getDimensionNames: async () => cubeDims },
@@ -79,6 +82,7 @@ describe("tm1_write_cells address resolution", () => {
         writeCells: async (_c: string, dims: string[], cells: unknown) => {
           writes.push({ dims, cells });
         },
+        getValue,
       },
     } as unknown as TM1Client;
     let h: ((a: unknown) => Promise<unknown>) | null = null;
@@ -116,6 +120,45 @@ describe("tm1_write_cells address resolution", () => {
     expect(res.structuredContent).toMatchObject({
       success: true,
       sandboxDefaulted: "Base",
+    });
+  });
+
+  it("reads the cells back in cube order and lists the ones that differ", async () => {
+    const reads: string[][] = [];
+    const { call } = setup(SANDBOXED, async (_c, e) => {
+      reads.push(e);
+      return e[1] === "R1" ? 5 : 0;
+    });
+    const res = await call({
+      cubeName: "C",
+      confirm: "C",
+      dimensions: ["Measure", "Row"],
+      cells: [
+        { elements: ["Amount", "R1"], value: 5 },
+        { elements: ["Amount", "R2"], value: 7 },
+      ],
+    });
+    expect(reads[0]).toEqual(["Base", "R1", "Amount"]);
+    expect(res.structuredContent.verified).toEqual({
+      checked: 2,
+      mismatches: [{ elements: ["Base", "R2", "Amount"], sent: 7, stored: 0 }],
+    });
+  });
+
+  it("reports a failed read-back without failing the write", async () => {
+    const { call, writes } = setup(SANDBOXED, async () => {
+      throw new Error("timeout");
+    });
+    const res = await call({
+      cubeName: "C",
+      confirm: "C",
+      dimensions: ["Measure", "Row"],
+      cells: [{ elements: ["Amount", "R1"], value: 5 }],
+    });
+    expect(writes).toHaveLength(1);
+    expect(res.structuredContent).toMatchObject({
+      success: true,
+      verified: { checked: 0, readBackError: "timeout" },
     });
   });
 

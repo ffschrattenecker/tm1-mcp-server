@@ -15,7 +15,7 @@ export const registerSetCubeRules = defineTool({
     "Create or replace the rules for a TM1 cube.",
     "SKIPCHECK; belongs at the top and FEEDERS; before all feeder definitions — SKIPCHECK is what makes feeders take effect, so rules with feeders need it.",
     "Pass exactly one source: rules (the full text — replaces everything), edits (find/replace patch against the current text; each find must match exactly once, else nothing is written), or filePath (full text from a host file under TM1_LOCAL_FILE_ROOT).",
-    "The full resulting text is syntax-checked before anything is written (preflight). After: tm1_get_cube_rules to read back; the callgraph cache is dropped automatically.",
+    "The full resulting text is syntax-checked before anything is written (preflight). The stored text is read back after writing (verified.textMatches), so no separate tm1_get_cube_rules is needed; the callgraph cache is dropped automatically.",
   ],
   annotations: IDEMPOTENT_DESTRUCTIVE,
   output: MutationResultSchema,
@@ -74,6 +74,16 @@ export const registerSetCubeRules = defineTool({
       tm1Client.cubes.updateRules(cubeName, text),
       `Inspect details for the offending line.`,
     );
+    // Read back what TM1 stored, compared with line endings normalized. The
+    // write has landed by now, so a failed read-back is reported, not thrown.
+    const norm = (x: string) => x.replace(/\r\n/g, "\n").trimEnd();
+    let verified: { textMatches: boolean } | { readBackError: string };
+    try {
+      const stored = (await tm1Client.cubes.getRules(cubeName)).rulesText;
+      verified = { textMatches: norm(stored) === norm(text) };
+    } catch (e) {
+      verified = { readBackError: (e as Error).message };
+    }
     const lineCount = text.split("\n").length;
     // Rule changes shift call edges (DB(), feeders) — drop callgraph TTL early.
     const { cleared: callgraphEntriesCleared } = invalidateCallgraphCache();
@@ -84,6 +94,7 @@ export const registerSetCubeRules = defineTool({
       lineCount,
       ...(edits !== undefined ? { editsApplied: edits.length } : {}),
       callgraphEntriesCleared,
+      verified,
     });
   },
 });
