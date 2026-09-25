@@ -1,12 +1,15 @@
 {
-  "name": "tm1-mcp-server",
+  "name": "@ffschrattenecker/tm1-mcp-server",
   "version": "5.0.0",
   "description": "MCP server for IBM Planning Analytics / TM1 — full model lifecycle via REST API",
   "repository": {
     "type": "git",
-    "url": "https://github.com/flameY3T1/tm1-mcp-server.git"
+    "url": "https://github.com/ffschrattenecker/tm1-mcp-server.git"
   },
-  "author": "flameY3T1",
+  "author": "ffschrattenecker",
+  "contributors": [
+    "flameY3T1 (original author)"
+  ],
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -96,5 +99,9 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0",
     "vitest": "^4.1.10"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

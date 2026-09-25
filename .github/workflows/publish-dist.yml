@@ -45,7 +45,7 @@ jobs:
         run: |
           npm pack --pack-destination "$RUNNER_TEMP"
           mkdir "$RUNNER_TEMP/stage"
-          tar -xzf "$RUNNER_TEMP"/tm1-mcp-server-*.tgz -C "$RUNNER_TEMP/stage" --strip-components=1
+          tar -xzf "$RUNNER_TEMP"/*.tgz -C "$RUNNER_TEMP/stage" --strip-components=1
           node -e '
             const fs = require("fs");
             const f = process.argv[1];

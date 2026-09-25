@@ -8,14 +8,14 @@ import {
   type ConnectionProfile,
 } from "./connection/profile.js";
 import { TM1Error, TM1ErrorCode } from "../types.js";
-import { NAME, VERSION } from "../version.js";
+import { PRODUCT, VERSION } from "../version.js";
 import { getTm1Dispatcher, tm1Fetch } from "./dispatcher.js";
 import { tm1Events } from "../lib/tm1-events.js";
 import { maskSecretValues } from "../lib/mask-secrets.js";
 
 const MAX_NETWORK_RETRIES = 3;
 const BACKOFF_BASE_MS = 1000;
-const USER_AGENT = `${NAME}/${VERSION}`;
+const USER_AGENT = `${PRODUCT}/${VERSION}`;
 
 // R2-22: any successful mutating HTTP call invalidates the callgraph
 // reference-index cache. Cheap (Map.clear()) and rebuild is lazy on next

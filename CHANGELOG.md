@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- **Published as `@ffschrattenecker/tm1-mcp-server`.** This fork is no longer released under
+  the unscoped `tm1-mcp-server` npm name, which belongs to upstream (flameY3T1). Install with
+  `npx -y @ffschrattenecker/tm1-mcp-server`. The command is still `tm1-mcp-server`, and the
+  User-Agent keeps the unscoped name.
 - **`tm1_set_cube_rules` preflight.** Before writing, the full resulting text (after `edits`
   are applied) is checked with `tm1.CheckRules`. Any error returns `VALIDATION_ERROR` with
   `stage:"preflight"`, `check:"syntax"` and `errors[]`, and nothing is written. The Rules PATCH
@@ -33,8 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `filePath`. A patch can be validated exactly as it would be installed, without the caller
   rebuilding the whole file to check it.
 - `tm1_get_server_info` returns `mcpServer: { name, version }`, the MCP server's own package
-  identity. A client (e.g. the spms-tools plugin) can gate on the server version from a tool
-  result instead of guessing it from which schema fields exist.
+  identity. A client can gate on the server version from a tool result instead of guessing it
+  from which schema fields exist.
 
 ### Known issues
 
@@ -1144,9 +1148,9 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/flameY3T1/tm1-mcp-server/compare/v5.0.0...HEAD
-[5.0.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v4.1.0...v5.0.0
-[4.1.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v4.0.0...v4.1.0
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v5.0.0...HEAD
+[5.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v4.1.0...v5.0.0
+[4.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v4.0.0...v4.1.0
 [4.0.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v3.1.0...v4.0.0
 [3.1.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v3.0.1...v3.1.0
 [3.0.1]: https://github.com/flameY3T1/tm1-mcp-server/compare/v3.0.0...v3.0.1

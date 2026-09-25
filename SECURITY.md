@@ -14,7 +14,7 @@ Only the latest `2.x` release line receives security fixes.
 **Do not open a public issue for security problems.**
 
 Report privately via GitHub's
-[**Report a vulnerability**](https://github.com/flameY3T1/tm1-mcp-server/security/advisories/new)
+[**Report a vulnerability**](https://github.com/ffschrattenecker/tm1-mcp-server/security/advisories/new)
 (Security → Advisories → _Report a vulnerability_). This opens a confidential
 advisory visible only to you and the maintainer.
 

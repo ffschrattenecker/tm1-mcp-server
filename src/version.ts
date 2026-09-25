@@ -16,3 +16,6 @@ try {
 
 export const VERSION = pkg.version;
 export const NAME = pkg.name;
+// NAME without its npm scope: an HTTP User-Agent product token may not
+// contain "@" or "/".
+export const PRODUCT = NAME.replace(/^@[^/]+\//, "");

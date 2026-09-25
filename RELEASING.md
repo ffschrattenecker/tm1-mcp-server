@@ -43,7 +43,11 @@ accumulated `[Unreleased]` changes.
    pack/install, `3` tier 2 skipped (nothing checked against a server — add
    `--allow-skip` only if you accept that). This is the only check that touches
    compiled `dist/`; `verify` and the live suite both run against source.
-7. **Publish to npm:** `npm publish` — `prepublishOnly` runs `verify`, then
+7. **Publish to npm:** pushing the `vX.Y.Z` tag (step 5) runs
+   `.github/workflows/publish-npm.yml`, which checks the tag against `package.json`,
+   runs the tier-1 tarball smoke test and publishes `@ffschrattenecker/tm1-mcp-server`
+   with provenance. It needs the `NPM_TOKEN` repository secret. A manual publish is
+   the fallback: `npm publish` — `prepublishOnly` runs `verify`, then
    `prepack` does a clean `rm -rf dist && build`, so the tarball can never carry
    stale cruft. Sanity-check first with `npm pack --dry-run` (watch total files /
    size; no `dist.bak`, `.env`, `.mcp.json`, tests, or maps).

@@ -8,6 +8,9 @@ LLM client (Claude Code, Claude Desktop, etc.).
 Tested against TM1 11.8 (REST, Basic/CAM auth) and TM1 12.5 / Planning Analytics
 Engine (rerooted REST, `s2s` auth live-validated).
 
+A fork of [flameY3T1/tm1-mcp-server](https://github.com/flameY3T1/tm1-mcp-server),
+published as `@ffschrattenecker/tm1-mcp-server`. The command is still `tm1-mcp-server`.
+
 > **Companion — TM1 IDE for VS Code.** Pair this server with the
 > [**flameY3T1.vscode-tm1-ide**](https://marketplace.visualstudio.com/items?itemName=flameY3T1.vscode-tm1-ide)
 > extension to browse and inspect the **live** data, cubes and TI code on the
@@ -48,18 +51,18 @@ Engine (rerooted REST, `s2s` auth live-validated).
 
 ## Install
 
-**Option A — npm (recommended).** No clone, no build: `npx -y tm1-mcp-server`
+**Option A — npm (recommended).** No clone, no build: `npx -y @ffschrattenecker/tm1-mcp-server`
 always pulls the latest published version. Or install the CLI globally:
 
 ```bash
-npm install -g tm1-mcp-server
+npm install -g @ffschrattenecker/tm1-mcp-server
 tm1-mcp-server
 ```
 
 **Option B — clone and build** (source / development install):
 
 ```bash
-git clone https://github.com/flameY3T1/tm1-mcp-server.git
+git clone https://github.com/ffschrattenecker/tm1-mcp-server.git
 cd tm1-mcp-server
 npm install
 npm run build
@@ -68,7 +71,7 @@ node dist/index.js
 
 To update: `npx` picks up new versions on next start (if one is cached,
 `npm cache clean --force`); a global install takes
-`npm install -g tm1-mcp-server@latest`; a source install takes
+`npm install -g @ffschrattenecker/tm1-mcp-server@latest`; a source install takes
 `git pull && npm install && npm run build`. Always **restart the MCP client**
 afterwards — the server process is only spawned at client startup.
 
@@ -156,7 +159,7 @@ For the `npx` install:
   "mcpServers": {
     "tm1": {
       "command": "npx",
-      "args": ["-y", "tm1-mcp-server"]
+      "args": ["-y", "@ffschrattenecker/tm1-mcp-server"]
     }
   }
 }

@@ -12,7 +12,7 @@ and issues are welcome.
 ## Setup
 
 ```bash
-git clone https://github.com/flameY3T1/tm1-mcp-server.git
+git clone https://github.com/ffschrattenecker/tm1-mcp-server.git
 cd tm1-mcp-server
 npm install
 cp .env.example .env   # fill in TM1 connection details

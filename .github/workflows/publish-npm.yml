@@ -1,0 +1,52 @@
+name: Publish to npm
+
+# Publishes @ffschrattenecker/tm1-mcp-server when a vX.Y.Z tag is pushed
+# (`npm version <level>` + `git push --follow-tags`, see RELEASING.md).
+# Runs on Linux, where `verify` is green; prepublishOnly runs it again.
+# Needs the repository secret NPM_TOKEN (an npm automation token with publish
+# rights on the @ffschrattenecker scope).
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'ffschrattenecker/tm1-mcp-server'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Tag matches package.json
+        run: |
+          v="$(node -p 'require("./package.json").version')"
+          if [ "v$v" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match package.json version $v" >&2
+            exit 1
+          fi
+
+      - name: Install
+        run: npm ci
+
+      - name: Smoke-test the tarball
+        run: npm run smoke:tarball -- --target=none
+
+      - name: Publish
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -482,7 +482,7 @@ async function tier1(proj, opts) {
   }
   const binTarget = realpathSync(binLink);
   const expectedDir =
-    join(proj, "node_modules", "tm1-mcp-server", "dist") + sep;
+    join(proj, "node_modules", ...PKG.name.split("/"), "dist") + sep;
   if (!realpathSync(binTarget).startsWith(realpathSync(expectedDir))) {
     throw new Tier1Error(
       `bin shim resolves outside the installed package: ${binTarget}`,
@@ -515,7 +515,7 @@ async function tier1(proj, opts) {
   const installedPkgPath = join(
     proj,
     "node_modules",
-    "tm1-mcp-server",
+    ...PKG.name.split("/"),
     "package.json",
   );
   const installedPkg = JSON.parse(readFileSync(installedPkgPath, "utf8"));
