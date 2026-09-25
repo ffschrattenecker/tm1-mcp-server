@@ -795,6 +795,31 @@ describe("TM1Client – Cell Data Methods", () => {
       expect(delUrl).toContain("/api/v1/Processes('");
     });
 
+    it("clear timeout leaves the temp TI running and says the cube will end up empty", async () => {
+      const c = newClient("11.8");
+      fetchSpy
+        .mockResolvedValueOnce(mock204()) // create process
+        .mockImplementationOnce(
+          (_u: string, opts: { signal: AbortSignal }) =>
+            new Promise((_res, rej) => {
+              opts.signal.addEventListener("abort", () =>
+                rej(opts.signal.reason as DOMException),
+              );
+            }),
+        ); // execute never answers
+
+      const err = await c.cubes
+        .clear("Sales", { timeoutMs: 50 })
+        .catch((e: unknown) => e);
+      expect(err).toMatchObject({ code: "LOCK_TIMEOUT" });
+      expect((err as Error).message).toMatch(/keeps running on the server/);
+      expect((err as Error).message).toMatch(/Do not retry/);
+      // Deleting a TI that still waits on a lock cancels it (12.5), so the
+      // temp process must survive a timeout.
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect((err as Error).message).toMatch(/}TempClear_Sales_\d+/);
+    });
+
     it("11.x clear: an execute with no status code is not a confirmed clear (T-4)", async () => {
       // `?? "CompletedSuccessfully"` used to report an unverified clear as a
       // successful one. For a destructive operation the unknown has to surface.

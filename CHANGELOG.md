@@ -68,6 +68,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Process deploys now remove what the source no longer has.** `tm1_import_process_from_git`
+  and `tm1_import_pro_file` skipped the parameter, variable and data-source step whenever
+  the file had an empty list or a `None` source, so a parameter removed in Git, or a source
+  switched to None, stayed on the server while the import reported success. TM1 applies
+  all three (measured on 11.8 and 12.5), and the imports now always send them.
+  `tm1_upsert_process` did the same with `variables: []`, which was a silent no-op while
+  `parameters: []` cleared; it now clears too.
+- **`tm1_upsert_process` can set the column layout and warns when it goes stale.** A
+  variables update alone keeps the server's `VariablesUIData` (measured on both versions),
+  so after a change in column count the ignore markers point at the wrong columns. The new
+  `variablesUIData` input is sent verbatim, taken from `tm1_get_process_variables` or an
+  export; without it, the result carries a `warning` when the kept layout no longer fits
+  the new variables. No layout is ever constructed.
+- **`tm1_clear_cube` tells the truth when it times out.** A clear that outlasted the 30 s
+  request timeout failed with a plain `LOCK_TIMEOUT`, so the model concluded the cube still
+  held its data. Measured on the test servers: the clear keeps running after the client
+  gives up, and on 12.5 the clean-up `DELETE` of the temporary process cancelled a clear
+  still waiting on a lock. On a timeout the temporary process is now left to finish and
+  the error says the cube will end up empty, not to retry, and which process to delete
+  afterwards. New `timeoutMs` input (1 s to 1 h) for large cubes.
 - **`tm1_list_error_logs` with `groupBy: "process"` works on schema-checking clients.** The
   audit branch returns `groupBy`, `processName`, `since`, `totalFiles` and `groupCount`
   around the page, but the published output schema declared only the page, so every

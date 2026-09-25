@@ -71,6 +71,6 @@ describe("tm1_clear_cube legacy arguments", () => {
   it("still clears the whole cube for the current two-argument call", async () => {
     const { client, clear } = makeClient();
     await handlerFor(client)({ cubeName: "Sales", confirm: "Sales" });
-    expect(clear).toHaveBeenCalledWith("Sales");
+    expect(clear).toHaveBeenCalledWith("Sales", undefined);
   });
 });

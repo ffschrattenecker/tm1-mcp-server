@@ -20,6 +20,15 @@ export const registerClearCube = defineTool({
   input: {
     cubeName: z.string().describe("Cube to empty completely"),
     ...CONFIRM_SCHEMA,
+    timeoutMs: z
+      .number()
+      .int()
+      .min(1000)
+      .max(3600000)
+      .optional()
+      .describe(
+        "Override the default 30s request timeout (ms, 1000–3600000). A clear that outlasts it keeps running on the server and still empties the cube; the call then reports a timeout instead of success.",
+      ),
     // Removed in 4.0.0, still DECLARED so a stored old call is refused instead
     // of silently widened: the SDK strips properties the schema does not
     // mention, so an undeclared field reaches the handler as if it was never
@@ -33,7 +42,10 @@ export const registerClearCube = defineTool({
       .optional()
       .describe("REMOVED — passing this fails the call. Do not send it."),
   },
-  handler: async ({ cubeName, confirm, dimensions, tuples }, tm1Client) => {
+  handler: async (
+    { cubeName, confirm, timeoutMs, dimensions, tuples },
+    tm1Client,
+  ) => {
     if (dimensions !== undefined || tuples !== undefined) {
       throw new TM1Error({
         code: TM1ErrorCode.VALIDATION_ERROR,
@@ -43,7 +55,10 @@ export const registerClearCube = defineTool({
       });
     }
     requireConfirm(confirm, cubeName, "cube");
-    await tm1Client.cubes.clear(cubeName);
+    await tm1Client.cubes.clear(
+      cubeName,
+      timeoutMs !== undefined ? { timeoutMs } : undefined,
+    );
     return actionResponse({ success: true, cubeName, summary: "all cells" });
   },
 });

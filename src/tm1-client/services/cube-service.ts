@@ -6,7 +6,7 @@
 // god-class split — see docs/ARCHITECTURE.md).
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type { Cube, CubeRules, RuleSyntaxError } from "../../types.js";
-import type { TM1HttpClient } from "../http.js";
+import type { RequestOptions, TM1HttpClient } from "../http.js";
 import {
   filterClause,
   nameFilterPredicates,
@@ -313,8 +313,11 @@ export class CubeService {
    * Lock and Unlock. CubeClearData() is the only route measured to work, and
    * it takes a cube name and nothing else, so there is no region to scope.
    */
-  async clear(cubeName: string): Promise<void> {
-    await this.clearViaTI(cubeName);
+  async clear(
+    cubeName: string,
+    opts?: Pick<RequestOptions, "timeoutMs">,
+  ): Promise<void> {
+    await this.clearViaTI(cubeName, opts);
   }
 
   /**
@@ -332,7 +335,10 @@ export class CubeService {
   }
 
   // 11.x fallback: deploy ephemeral TI with CubeClearData(), execute, delete.
-  private async clearViaTI(cubeName: string): Promise<void> {
+  private async clearViaTI(
+    cubeName: string,
+    opts?: Pick<RequestOptions, "timeoutMs">,
+  ): Promise<void> {
     // Cap the sanitized cube name so the temp process name stays under TM1's
     // ~256-char process-name limit (prefix + timestamp suffix add ~25 chars).
     const safeName = cubeName.replace(/[^A-Za-z0-9_]/g, "_").slice(0, 200);
@@ -350,14 +356,38 @@ export class CubeService {
       DataSource: { Type: "None" },
     });
 
+    let timedOut = false;
     try {
-      const result = await this.http.request<{
-        ProcessExecuteStatusCode?: string;
-      }>(
-        "POST",
-        `/api/v1/Processes('${enc(procName)}')/tm1.ExecuteWithReturn`,
-        {},
-      );
+      const result = await this.http
+        .request<{
+          ProcessExecuteStatusCode?: string;
+        }>(
+          "POST",
+          `/api/v1/Processes('${enc(procName)}')/tm1.ExecuteWithReturn`,
+          {},
+          opts,
+        )
+        .catch((err: unknown) => {
+          // A client-side timeout does not stop the TI — but deleting the
+          // process does, when it is still waiting on a lock (measured on
+          // 12.5: the cube kept its data). So on a timeout the process is left
+          // in place to finish; 11.8 held the DELETE until the TI was done
+          // anyway. Reporting a bare timeout would tell the model the cube
+          // still holds its data — the one reading this must not give.
+          if (
+            err instanceof TM1Error &&
+            err.code === TM1ErrorCode.LOCK_TIMEOUT
+          ) {
+            timedOut = true;
+            throw new TM1Error({
+              code: TM1ErrorCode.LOCK_TIMEOUT,
+              message: `Cube clear for '${cubeName}' did not answer within the request timeout, but the clear keeps running on the server — expect the cube to end up empty. Do not retry; check it with tm1_get_cube_stats once the server is idle. The temporary process '${procName}' was left in place so the clear can finish; delete it afterwards with tm1_delete_process.`,
+              endpoint: err.endpoint,
+              hint: "Pass a larger timeoutMs for big cubes or a busy server so the call waits for the clear to finish.",
+            });
+          }
+          throw err;
+        });
       // ExecuteWithReturn returns HTTP 200 even when the process aborts; the real
       // outcome is in ProcessExecuteStatusCode. Without this check an aborted
       // clear (e.g. lock, security) would be reported as a successful clear.
@@ -400,10 +430,11 @@ export class CubeService {
       }
     } finally {
       try {
-        await this.http.request<void>(
-          "DELETE",
-          `/api/v1/Processes('${enc(procName)}')`,
-        );
+        if (!timedOut)
+          await this.http.request<void>(
+            "DELETE",
+            `/api/v1/Processes('${enc(procName)}')`,
+          );
       } catch (cleanupErr) {
         this.http.logger.warn(
           { proc: procName, err: String(cleanupErr) },
