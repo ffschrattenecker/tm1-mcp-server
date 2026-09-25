@@ -174,15 +174,43 @@ describe("TM1Client – Dimension Management Methods", () => {
       expect(body).toEqual({ Name: "Deutschland" });
     });
 
-    it("should update element type", async () => {
+    it("reads the prior type and reports an in-place conversion", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse(200, { Type: "Numeric" }));
       fetchSpy.mockResolvedValueOnce(mockResponse(204));
 
-      await client.elements.update("Region", "Region", "Germany", {
+      const r = await client.elements.update("Region", "Region", "Germany", {
         type: "Consolidated",
       });
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      const [probeUrl, probe] = fetchSpy.mock.calls[0];
+      expect(probe.method).toBe("GET");
+      expect(String(probeUrl)).toContain("Elements('Germany')?$select=Type");
+      const body = JSON.parse(fetchSpy.mock.calls[1][1].body);
       expect(body).toEqual({ Type: "Consolidated" });
+      expect(r.typeChange).toEqual({ from: "Numeric", to: "Consolidated" });
+    });
+
+    it("reports no type change when the type is already the requested one", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse(200, { Type: 3 }));
+      fetchSpy.mockResolvedValueOnce(mockResponse(204));
+
+      const r = await client.elements.update("Region", "Region", "Europe", {
+        type: "Consolidated",
+      });
+
+      expect(r.typeChange).toBeNull();
+    });
+
+    it("sends an empty component list: [] removes every child", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse(204));
+
+      await client.elements.update("Region", "Region", "Europe", {
+        components: [],
+      });
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      expect(body).toEqual({ Components: [] });
     });
 
     it("should update element components", async () => {
@@ -213,6 +241,7 @@ describe("TM1Client – Dimension Management Methods", () => {
     });
 
     it("should update multiple fields at once", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse(200, { Type: "Numeric" }));
       fetchSpy.mockResolvedValueOnce(mockResponse(204));
 
       await client.elements.update("Region", "Region", "Germany", {
@@ -220,7 +249,7 @@ describe("TM1Client – Dimension Management Methods", () => {
         type: "String",
       });
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      const body = JSON.parse(fetchSpy.mock.calls[1][1].body);
       expect(body).toEqual({ Name: "Deutschland", Type: "String" });
     });
 

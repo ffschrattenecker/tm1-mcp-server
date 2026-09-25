@@ -63,6 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`tm1_update_element` says what it replaces and reports type conversions.** `components`
+  replaces the element's whole child list (`[]` removes every child), which the
+  description never said; it now does, and explains that moving an element means updating
+  both parents. A `type` change is converted in place, and Numeric to Consolidated/String
+  discards the element's leaf values: the result now carries `typeChange` plus a `warning`,
+  as `tm1_bulk_upsert_elements` already did. The annotation changes from
+  `IDEMPOTENT_WRITE` to `IDEMPOTENT_DESTRUCTIVE` (`destructiveHint: true`), so clients that
+  confirm destructive calls now ask before it runs.
 - **`fast-uri` override moved out of the vulnerable range.** The override pinned `^3.1.5`,
   but the advisories cover `>=3.0.0 <=3.1.5` (high, among them SSRF via IPv6
   normalization), so `npm audit --omit=dev --audit-level=high` failed in CI. It is now

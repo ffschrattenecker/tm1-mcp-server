@@ -177,8 +177,22 @@ export class ElementService {
     hierarchyName: string,
     elementName: string,
     update: ElementUpdate,
-  ): Promise<void> {
+  ): Promise<{ typeChange: { from: string; to: string } | null }> {
     const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(elementName)}')`;
+    // Read the prior type so an in-place conversion is reported: turning a
+    // Numeric element into Consolidated/String discards its leaf cell values.
+    // Same probe and outage guard as bulkUpsert; an unreadable type reports
+    // nothing rather than guessing.
+    let from: string | null = null;
+    if (update.type !== undefined) {
+      const existing = await this.http
+        .request<{ Type: number | string }>("GET", `${path}?$select=Type`)
+        .catch((e: unknown): null => {
+          rethrowIfSystemic(e);
+          return null;
+        });
+      from = existing ? normalizeElementType(existing.Type) : null;
+    }
     const body: Record<string, unknown> = {};
     if (update.newName !== undefined) {
       body.Name = update.newName;
@@ -202,6 +216,12 @@ export class ElementService {
         update.components,
       );
     }
+    return {
+      typeChange:
+        from !== null && update.type !== undefined && from !== update.type
+          ? { from, to: update.type }
+          : null,
+    };
   }
 
   /**
