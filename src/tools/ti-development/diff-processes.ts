@@ -197,7 +197,7 @@ export function diffParams(a: ProcessParameter[], b: ProcessParameter[]) {
   };
 }
 
-function diffVars(a: ProcessVariable[], b: ProcessVariable[]) {
+export function diffVars(a: ProcessVariable[], b: ProcessVariable[]) {
   const ma = new Map(a.map((v) => [v.name, v]));
   const mb = new Map(b.map((v) => [v.name, v]));
   const added: string[] = [];
@@ -259,7 +259,7 @@ function diffIgnoredColumns(a: IgnoredColumn[], b: IgnoredColumn[]) {
   };
 }
 
-function diffDs(a: DataSource, b: DataSource) {
+export function diffDs(a: DataSource, b: DataSource) {
   const diffs: string[] = [];
   const fields: Array<keyof DataSource> = [
     "type",

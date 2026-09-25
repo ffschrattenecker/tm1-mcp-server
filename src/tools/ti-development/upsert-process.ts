@@ -15,7 +15,8 @@ import {
   runPreflight,
   type PreflightPayload,
 } from "./preflight.js";
-import { diffParams, tabCodeDiff } from "./diff-processes.js";
+import { diffDs, diffParams, diffVars, tabCodeDiff } from "./diff-processes.js";
+import type { DataSource } from "../../types.js";
 import { maskCode } from "../../lib/mask-secrets.js";
 import { backupProcess } from "./process-backup.js";
 
@@ -167,8 +168,33 @@ export const registerUpsertProcess = defineTool({
         ]),
       );
       const params = diffParams(installedParams, payload.parameters ?? []);
+      // Variables and datasource change only when the caller sends them; a
+      // datasource swap must not come back as "identical".
+      const sendsVars = variables !== undefined && variables.length > 0;
+      const [installedVars, installedDs] = await Promise.all([
+        sendsVars && exists
+          ? tm1Client.processes.getVariableLayout(processName)
+          : Promise.resolve({ variables: [] }),
+        dataSource !== undefined && exists
+          ? tm1Client.processes.getDataSource(processName)
+          : Promise.resolve({} as DataSource),
+      ]);
+      const vars = sendsVars
+        ? diffVars(installedVars.variables, variables)
+        : undefined;
+      const ds =
+        dataSource !== undefined
+          ? // updateDataSource PATCHes only the fields sent; the rest stay.
+            diffDs(installedDs, {
+              ...installedDs,
+              ...(dataSource as DataSource),
+            })
+          : undefined;
       const identical =
-        Object.values(tabs).every((t) => t.identical) && params.identical;
+        Object.values(tabs).every((t) => t.identical) &&
+        params.identical &&
+        (vars?.identical ?? true) &&
+        (ds?.identical ?? true);
       return {
         content: [
           {
@@ -178,9 +204,15 @@ export const registerUpsertProcess = defineTool({
               dryRun: true,
               action: exists ? "wouldUpdate" : "wouldCreate",
               appliedSteps: [],
-              ...(exists ? { needsConfirm: processName } : {}),
+              overwritesExisting: exists,
               checks,
-              diff: { identical, tabs, parameters: params },
+              diff: {
+                identical,
+                tabs,
+                parameters: params,
+                ...(vars ? { variables: vars } : {}),
+                ...(ds ? { dataSource: ds } : {}),
+              },
             }),
           },
         ],

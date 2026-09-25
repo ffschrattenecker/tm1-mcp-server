@@ -33,6 +33,14 @@ function client(opts: {
         code ?? { prolog: "", metadata: "", data: "", epilog: "" },
       getParameters: async () => [],
       getVariables: async () => [],
+      getVariableLayout: async () => ({
+        variables: [{ name: "vA", type: "String", position: 1 }],
+        ignoredColumns: [],
+      }),
+      getDataSource: async () => ({
+        type: "ASCII",
+        dataSourceNameForServer: "old.csv",
+      }),
       create: async () => {
         writes.push("create");
         code = { prolog: "", metadata: "", data: "", epilog: "" };
@@ -82,7 +90,7 @@ describe("tm1_upsert_process dryRun", () => {
       dryRun: true,
       action: "wouldUpdate",
       appliedSteps: [],
-      needsConfirm: "P",
+      overwritesExisting: true,
       checks: {
         ok: false,
         syntax: { ok: false },
@@ -101,6 +109,39 @@ describe("tm1_upsert_process dryRun", () => {
       call(c, { processName: "P", prolog: "x = 2;" }),
     ).rejects.toThrow();
     expect(writes).toEqual([]);
+  });
+
+  it("a datasource-only change is not identical", async () => {
+    const { c } = client({ installed: { prolog: "x = 1;" } });
+    const out = JSON.parse(
+      (
+        await call(c, {
+          processName: "P",
+          dataSource: { type: "ASCII", dataSourceNameForServer: "new.csv" },
+          dryRun: true,
+        })
+      ).content[0].text,
+    );
+    expect(out.diff.identical).toBe(false);
+    expect(out.diff.dataSource.differences[0]).toContain("new.csv");
+  });
+
+  it("a variables-only change is not identical", async () => {
+    const { c } = client({ installed: { prolog: "x = 1;" } });
+    const out = JSON.parse(
+      (
+        await call(c, {
+          processName: "P",
+          variables: [{ name: "vB", type: "String", position: 1 }],
+          dryRun: true,
+        })
+      ).content[0].text,
+    );
+    expect(out.diff.identical).toBe(false);
+    expect(out.diff.variables).toMatchObject({
+      added: ["vB"],
+      removed: ["vA"],
+    });
   });
 
   it("masks credentials in the diff", async () => {
@@ -122,7 +163,7 @@ describe("tm1_upsert_process dryRun", () => {
         .content[0].text,
     );
     expect(out.action).toBe("wouldCreate");
-    expect(out.needsConfirm).toBeUndefined();
+    expect(out.overwritesExisting).toBe(false);
     expect(out.checks.ok).toBe(true);
   });
 });

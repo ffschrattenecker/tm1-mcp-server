@@ -31,7 +31,6 @@ export const registerDeleteDimension = defineTool({
         success: true,
         dryRun: true,
         dimensionName,
-        needsConfirm: dimensionName,
         impact: await deleteImpact(tm1Client, "dimension", dimensionName),
       });
     }

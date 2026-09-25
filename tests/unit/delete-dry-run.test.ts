@@ -75,7 +75,6 @@ describe("delete dryRun", () => {
     const res = await call({ dimensionName: "Region", dryRun: true });
     expect(res.structuredContent).toMatchObject({
       dryRun: true,
-      needsConfirm: "Region",
       impact: {
         usedInCubes: ["Sales"],
         referencingSources: 2,

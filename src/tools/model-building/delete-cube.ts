@@ -33,7 +33,6 @@ export const registerDeleteCube = defineTool({
         success: true,
         dryRun: true,
         cubeName,
-        needsConfirm: cubeName,
         impact: await deleteImpact(tm1Client, "cube", cubeName),
       });
     }
