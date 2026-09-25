@@ -143,7 +143,7 @@ function buildHunks(ops: EditOp[], contextLines: number): DiffHunk[] {
 
 const NORM = (s: string): string => s.replace(/\r\n/g, "\n").trimEnd();
 
-function tabCodeDiff(
+export function tabCodeDiff(
   codeA: string,
   codeB: string,
   contextLines: number,
@@ -163,7 +163,7 @@ function tabCodeDiff(
 
 // ── param / var / datasource diff ────────────────────────────────────────────
 
-function diffParams(a: ProcessParameter[], b: ProcessParameter[]) {
+export function diffParams(a: ProcessParameter[], b: ProcessParameter[]) {
   const ma = new Map(a.map((p) => [p.name, p]));
   const mb = new Map(b.map((p) => [p.name, p]));
   const added: string[] = [];

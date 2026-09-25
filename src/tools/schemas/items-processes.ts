@@ -126,9 +126,10 @@ const ProcessBackupSchema = z.object({ json: z.string(), ti: z.string() });
 export const UpsertProcessResultSchema = z
   .object({
     processName: z.string(),
-    action: z.enum(["created", "updated"]),
+    action: z.enum(["created", "updated", "wouldCreate", "wouldUpdate"]),
     appliedSteps: z.array(z.string()),
     backup: ProcessBackupSchema.optional(),
+    dryRun: z.boolean().optional(),
   })
   .passthrough();
 

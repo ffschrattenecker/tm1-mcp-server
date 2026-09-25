@@ -110,3 +110,58 @@ export function preflightResult(failure: PreflightFailure) {
     isError: true as const,
   };
 }
+
+export interface PreflightChecks {
+  ok: boolean;
+  syntax: {
+    ok: boolean;
+    errors: Array<{
+      procedure?: string | undefined;
+      lineNumber?: number | undefined;
+      message: string;
+    }>;
+  };
+  references: {
+    ok: boolean;
+    unresolved: number;
+    issues: RefIssue[];
+    partial: boolean;
+    unresolvableArgs: number;
+  };
+}
+
+/**
+ * Both checks, neither short-circuiting the other: the dryRun report the
+ * user approves from. runPreflight stops at the first failure because the
+ * install is refused either way; a pre-approval report needs every finding.
+ */
+export async function runChecks(
+  tm1Client: TM1Client,
+  p: PreflightPayload,
+): Promise<PreflightChecks> {
+  const [check, refs] = await Promise.all([
+    tm1Client.processes.check({
+      name: p.name,
+      prolog: p.prolog,
+      metadata: p.metadata,
+      data: p.data,
+      epilog: p.epilog,
+      ...(p.parameters !== undefined ? { parameters: p.parameters } : {}),
+      ...(p.variables !== undefined ? { variables: p.variables } : {}),
+      ...(p.dataSource !== undefined ? { dataSource: p.dataSource } : {}),
+    }),
+    checkProcessRefs(tm1Client, p),
+  ]);
+  const references = {
+    ok: refs.unresolved === 0,
+    unresolved: refs.unresolved,
+    issues: refs.issues,
+    partial: refs.partial,
+    unresolvableArgs: refs.unresolvableArgs,
+  };
+  return {
+    ok: check.success && references.ok,
+    syntax: { ok: check.success, errors: check.errors },
+    references,
+  };
+}
