@@ -23,7 +23,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse as parseDotenv } from "dotenv";
 import pino from "pino";
-import { loadConfig, type TM1Config } from "./config.js";
+import { connectionIdOf, loadConfig, type TM1Config } from "./config.js";
 import { SessionManager } from "./session-manager.js";
 import { TM1Client } from "./tm1-client.js";
 import { TM1Error, TM1ErrorCode } from "./types.js";
@@ -47,9 +47,14 @@ export interface ConnectionInfo {
   /** Folder the `.env` came from; undefined for the legacy single connection. */
   dir?: string | undefined;
   mode?: TM1Config["mode"] | undefined;
+  environment?: TM1Config["environment"];
+  /** Why mode differs from TM1_MODE (prod forces readonly). */
+  modeReason?: string | undefined;
   version?: 11 | 12 | undefined;
   tm1Version?: string | undefined;
   baseUrl?: string | undefined;
+  /** connectionIdOf() — what mutation events and caches are keyed by. */
+  connectionId?: string | undefined;
   /** Set when the folder's `.env` could not be turned into a config. */
   configError?: string | undefined;
 }
@@ -119,7 +124,12 @@ export class ConnectionRegistry {
     const registry = new ConnectionRegistry(logger);
     for (const { name, client, mode } of clients) {
       registry.entries.set(name, {
-        info: { name, version: client.version, mode: mode ?? "readwrite" },
+        info: {
+          name,
+          version: client.version,
+          mode: mode ?? "readwrite",
+          connectionId: client.connectionId,
+        },
         client,
       });
     }
@@ -132,9 +142,12 @@ export class ConnectionRegistry {
         name,
         dir,
         mode: config.mode,
+        environment: config.environment,
+        modeReason: config.modeReason,
         version: config.version,
         tm1Version: config.tm1Version,
         baseUrl: config.baseUrl,
+        connectionId: connectionIdOf(config),
       },
       config,
     });
@@ -210,6 +223,12 @@ export class ConnectionRegistry {
 
   hasVersion(version: 11 | 12): boolean {
     return [...this.entries.values()].some((e) => e.info.version === version);
+  }
+
+  /** A client exists and is not mid-login. Never triggers a login itself. */
+  isConnected(name: string): boolean {
+    const entry = this.entries.get(name);
+    return entry?.client !== undefined && entry.connecting === undefined;
   }
 
   info(name: string): ConnectionInfo | undefined {

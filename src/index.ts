@@ -3,12 +3,11 @@ import "./load-env.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type pino from "pino";
-import { loadConfig, type TM1Config } from "./config.js";
+import { loadServerSettings, type ServerSettings } from "./config.js";
+import { ConnectionRegistry } from "./connections.js";
 import { createLogger } from "./logger.js";
-import { SessionManager } from "./session-manager.js";
-import { TM1Client } from "./tm1-client.js";
 import { registerAllPrompts } from "./prompts/index.js";
-import { registerAllResources } from "./resources/index.js";
+import { registerAllResources, stateResourceUris } from "./resources/index.js";
 import { SubscriptionRegistry } from "./resources/subscriptions.js";
 import { installPaginatedListHandler } from "./resources/list-handler.js";
 import { registerAllTools } from "./tools/index.js";
@@ -32,7 +31,7 @@ async function startStdioTransport(
 // Build a fully-registered MCP server (tools + resources + prompts). Called once
 // for stdio, and once per request for the stateless HTTP transport — so the
 // per-build logging is at debug to avoid per-request spam. Registration is pure
-// in-memory wiring (no I/O); the TM1 client is shared, not rebuilt.
+// in-memory wiring (no I/O); the connection registry is shared, not rebuilt.
 //
 // Capabilities are declared explicitly per MCP spec recommendation:
 //   tools / resources / prompts — auto-registered by the SDK when the respective
@@ -57,8 +56,8 @@ export interface BuiltMcpServer {
 }
 
 function buildMcpServer(
-  tm1Client: TM1Client,
-  config: TM1Config,
+  registry: ConnectionRegistry,
+  settings: ServerSettings,
   logger: pino.Logger,
 ): BuiltMcpServer {
   const server = new McpServer(
@@ -79,21 +78,24 @@ function buildMcpServer(
   // Register all tools — wrap the server so each registration receives the
   // annotation hint from ANNOTATION_MAP without editing call sites. In readonly
   // mode the proxy silently drops write/destructive tools so they never appear
-  // in the tool listing — no autoApprove lists needed.
+  // in the tool listing — no autoApprove lists needed. With several
+  // connections, write tools are listed when ANY connection is readwrite and
+  // refused per call against a readonly one (see defineTool).
+  const mode = registry.anyReadwrite ? "readwrite" : "readonly";
   registerAllTools(
     withAnnotations(
       server,
       logger,
-      config.mode,
-      config.responseMode,
-      config.maxResponseChars,
+      mode,
+      settings.responseMode,
+      settings.maxResponseChars,
     ),
-    tm1Client,
+    registry,
   );
-  logger.debug(`All MCP tools registered (mode: ${config.mode})`);
+  logger.debug(`All MCP tools registered (mode: ${mode})`);
 
   // Register MCP Resources (URI-addressable read-only views over TM1 objects).
-  const resourceCatalog = registerAllResources(server, tm1Client);
+  const resourceCatalog = registerAllResources(server, registry);
 
   // R2-07: replace the SDK's default ListResourcesRequestSchema handler with a
   // cursor-aware override that paginates the combined static + template list.
@@ -101,7 +103,11 @@ function buildMcpServer(
 
   // R2-05: install subscribe/unsubscribe handlers and bridge HTTP-layer mutation
   // events to notifications/resources/updated for subscribers of tm1://server/state.
-  const subscriptions = new SubscriptionRegistry(server, logger);
+  const subscriptions = new SubscriptionRegistry(
+    server,
+    logger,
+    stateResourceUris(registry),
+  );
   subscriptions.install();
 
   // Register MCP Prompts (parameterised workflow templates surfaced as slash-commands).
@@ -117,36 +123,44 @@ function buildMcpServer(
 }
 
 async function main(): Promise<void> {
-  const config = loadConfig();
-  const logger = createLogger(config);
+  const settings = loadServerSettings();
+  const logger = createLogger(settings);
 
   logger.info("Starting TM1 MCP Server");
 
-  const sessionManager = new SessionManager(config, logger);
-  const tm1Client = new TM1Client(config, sessionManager, logger);
-
-  // Try to connect to TM1, but don't block MCP server startup.
-  // request() calls ensureSession() on every tool invocation, so a tool call
-  // will retry auth if the initial connect failed. Keeps Claude able to list
-  // tools and report a meaningful error instead of crashing the whole process.
-  try {
-    await tm1Client.connect();
-    logger.info("TM1 client connected");
-  } catch (err) {
-    logger.warn(
-      { err },
-      "Initial TM1 connection failed — server will retry on first tool call",
-    );
+  // One registry for every configured connection (see ./connections.ts).
+  // Clients are built lazily on first use, so startup costs no TM1 logins.
+  const registry = ConnectionRegistry.fromEnvironment(process.env, logger);
+  for (const c of registry.status()) {
+    if (c.configError) {
+      logger.warn(
+        { connection: c.name, err: c.configError },
+        "connection unusable",
+      );
+    } else {
+      logger.info(
+        {
+          connection: c.name,
+          mode: c.mode,
+          environment: c.environment,
+          version: c.tm1Version,
+        },
+        "connection configured",
+      );
+      if (c.modeReason) {
+        logger.warn(
+          { connection: c.name },
+          `${c.modeReason} Write and destructive tools are refused on this connection.`,
+        );
+      }
+    }
   }
 
-  if (config.modeReason) {
-    logger.warn(
-      `${config.modeReason} Write and destructive tools will not be registered.`,
-    );
-  } else if (config.mode === "readonly") {
-    logger.info(
-      "TM1_MODE=readonly — write and destructive tools will not be registered",
-    );
+  // A single connection keeps the old behavior of logging in at startup, in
+  // the background: request() re-authenticates on every call anyway, so a
+  // failed login here only delays the error to the first tool call.
+  if (registry.isSingle) {
+    void registry.get(undefined);
   }
 
   // Branch on transport. stdio is the default for local MCP-client setups
@@ -159,19 +173,19 @@ async function main(): Promise<void> {
   // transport's own teardown — nothing process-scoped is left for us here.
   let stdioDispose: (() => void) | undefined;
   const httpCloser =
-    config.transport === "http"
+    settings.transport === "http"
       ? await startHttpTransport(
-          () => buildMcpServer(tm1Client, config, logger),
-          config,
+          () => buildMcpServer(registry, settings, logger),
+          settings,
           logger,
         )
       : await (async () => {
-          const built = buildMcpServer(tm1Client, config, logger);
+          const built = buildMcpServer(registry, settings, logger);
           stdioDispose = built.dispose;
           return startStdioTransport(built.server, logger);
         })();
   logger.info(
-    `MCP server configured (mode: ${config.mode}, transport: ${config.transport})`,
+    `MCP server configured (connections: ${registry.names.join(", ")}, transport: ${settings.transport})`,
   );
 
   // Graceful shutdown — ensure TM1 session is always cleaned up.
@@ -190,11 +204,7 @@ async function main(): Promise<void> {
     } catch (err) {
       logger.error({ err }, "Error closing transport");
     }
-    try {
-      await tm1Client.disconnect();
-    } catch (err) {
-      logger.error({ err }, "Error during disconnect");
-    }
+    await registry.disconnectAll();
     process.exit(exitCode);
   };
 
@@ -211,7 +221,7 @@ async function main(): Promise<void> {
   // Parent process death — only meaningful on stdio (Claude spawns us as a
   // child). For http we ignore stdin events since the process lifecycle is
   // independent.
-  if (config.transport === "stdio") {
+  if (settings.transport === "stdio") {
     process.stdin.on("end", () => {
       logger.info("stdin ended (parent process gone), shutting down");
       void shutdown("stdin-end");

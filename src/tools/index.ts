@@ -1,6 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ToolRegistrar } from "./define-tool.js";
-import type { TM1Client } from "../tm1-client.js";
+import type { ClientSource, ToolRegistrar } from "./define-tool.js";
 
 // Metadata tools
 import { registerListCubes } from "./metadata/list-cubes.js";
@@ -286,7 +285,7 @@ const REGISTRARS: ToolRegistrar[] = [
 
 export function registerAllTools(
   server: McpServer,
-  tm1Client: TM1Client,
+  source: ClientSource,
 ): void {
-  for (const register of REGISTRARS) register(server, tm1Client);
+  for (const register of REGISTRARS) register(server, source);
 }

@@ -8,6 +8,7 @@
 // is loaded; output schemas are client-side only in Claude Code.
 //
 // Usage: node scripts/measure-tool-surface.mjs [readwrite|readonly] [--top N]
+//        [--dir <connections folder>]   measure multi-connection mode instead
 // Prints one JSON summary line, then the N largest tools.
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
@@ -19,18 +20,25 @@ const mode =
   args.find((a) => a === "readwrite" || a === "readonly") ?? "readwrite";
 const topIdx = args.indexOf("--top");
 const top = topIdx >= 0 ? Number(args[topIdx + 1]) : 10;
+const dirIdx = args.indexOf("--dir");
+const dir = dirIdx >= 0 ? args[dirIdx + 1] : undefined;
+
+// Legacy single connection (TM1_BASE_URL) unless --dir names a folder of
+// connections. Either way the user's own ~/.tm1 folders are never read.
+const connectionEnv = dir
+  ? { TM1_CONNECTIONS_DIR: dir }
+  : {
+      TM1_BASE_URL: "http://127.0.0.1:1",
+      TM1_USER: "measure",
+      TM1_PASSWORD: "measure",
+      TM1_MODE: mode,
+    };
+const inherited = Object.fromEntries(
+  Object.entries(process.env).filter(([k]) => !k.startsWith("TM1_")),
+);
 
 const child = spawn(process.execPath, [join(root, "dist", "index.js")], {
-  env: {
-    ...process.env,
-    TM1_BASE_URL: "http://127.0.0.1:1",
-    TM1_USER: "measure",
-    TM1_PASSWORD: "measure",
-    TM1_MODE: mode,
-    TM1_LOG_LEVEL: "silent",
-    // Keep the measurement independent of the user's connection folders.
-    TM1_CONNECTIONS_DIR: join(root, ".no-connections"),
-  },
+  env: { ...inherited, ...connectionEnv, TM1_LOG_LEVEL: "silent" },
   stdio: ["pipe", "pipe", "ignore"],
 });
 
@@ -66,7 +74,7 @@ function report(tools) {
   const sum = (f) => tools.reduce((acc, t) => acc + f(t), 0);
   console.log(
     JSON.stringify({
-      mode,
+      mode: dir ? "connections-dir" : mode,
       tools: tools.length,
       totalChars: len(tools),
       nameChars: sum((t) => t.name.length),

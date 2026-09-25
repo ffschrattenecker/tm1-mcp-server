@@ -140,3 +140,37 @@ describe("R2-05: SubscriptionRegistry", () => {
     expect(mockLogger.warn).toHaveBeenCalled();
   });
 });
+
+describe("SubscriptionRegistry with several connections", () => {
+  it("only notifies the state resource of the connection that mutated", async () => {
+    const { server, sendResourceUpdated, handlers } = makeServer();
+    const registry = new SubscriptionRegistry(
+      server,
+      mockLogger,
+      new Map([
+        ["tm1://dev/server/state", "dev-host_1"],
+        ["tm1://prod/server/state", "prod-host_1"],
+      ]),
+    );
+    registry.install();
+    try {
+      const subscribe = handlers.get(SubscribeRequestSchema)!;
+      await subscribe({ params: { uri: "tm1://dev/server/state" } });
+      await subscribe({ params: { uri: "tm1://prod/server/state" } });
+
+      tm1Events.emit("mutation", {
+        method: "POST",
+        path: "/api/v1/Dimensions",
+        connectionId: "prod-host_1",
+      });
+      await new Promise((r) => setImmediate(r));
+
+      expect(sendResourceUpdated).toHaveBeenCalledOnce();
+      expect(sendResourceUpdated).toHaveBeenCalledWith({
+        uri: "tm1://prod/server/state",
+      });
+    } finally {
+      registry.dispose();
+    }
+  });
+});

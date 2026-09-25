@@ -7,7 +7,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type pino from "pino";
-import type { TM1Config } from "./config.js";
+import type { ServerSettings } from "./config.js";
 
 // Streamable HTTP transport (stateless JSON, single /mcp endpoint).
 //
@@ -26,7 +26,7 @@ import type { TM1Config } from "./config.js";
 // protection. allowedHosts/Origins narrow what the transport accepts.
 export async function startHttpTransport(
   buildServer: () => { server: McpServer; dispose: () => void },
-  config: TM1Config,
+  config: ServerSettings,
   logger: pino.Logger,
 ): Promise<() => Promise<void>> {
   const allowedHost = `${config.httpHost}:${config.httpPort}`;

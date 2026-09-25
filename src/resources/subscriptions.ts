@@ -21,10 +21,13 @@ import {
 import type pino from "pino";
 import { tm1Events, type Tm1MutationEvent } from "../lib/tm1-events.js";
 
-// URIs whose contents are sensitive to *any* mutation. The server-state
-// resource aggregates counts across cubes/dims/processes/chores/clients —
-// almost any non-safe call can change it.
-const STATE_SENSITIVE_URIS = new Set<string>(["tm1://server/state"]);
+// The server-state resource aggregates counts across cubes/dims/processes/
+// chores/clients — almost any non-safe call can change it. With several
+// connections there is one such resource per connection; stateUris maps each
+// to the connectionId whose mutations affect it.
+const SINGLE_STATE_URIS: ReadonlyMap<string, string> = new Map([
+  ["tm1://server/state", ""],
+]);
 
 export class SubscriptionRegistry {
   // URIs the client has asked us to push updates for.
@@ -34,6 +37,7 @@ export class SubscriptionRegistry {
   constructor(
     private readonly server: McpServer,
     private readonly logger: pino.Logger,
+    private readonly stateUris: ReadonlyMap<string, string> = SINGLE_STATE_URIS,
   ) {}
 
   /** Install subscribe/unsubscribe request handlers + mutation listener. */
@@ -83,13 +87,16 @@ export class SubscriptionRegistry {
     return this.subscribed.size;
   }
 
-  private onMutation(_e: Tm1MutationEvent): void {
+  private onMutation(e: Tm1MutationEvent): void {
     // Iterate subscribed URIs and notify those affected by this mutation.
     // Currently only the aggregate state resource is mutation-sensitive;
     // future entries can branch on e.path / e.method for finer-grained
     // notifications (e.g. tm1://process/{name}/code on /Processes mutations).
     for (const uri of this.subscribed) {
-      if (!STATE_SENSITIVE_URIS.has(uri)) continue;
+      const target = this.stateUris.get(uri);
+      if (target === undefined) continue;
+      // An empty target or an untagged event matches any connection.
+      if (target && e.connectionId && target !== e.connectionId) continue;
       // Fire-and-forget; missing transport (server not connected) throws.
       this.server.server.sendResourceUpdated({ uri }).catch((err) => {
         this.logger.warn({ err, uri }, "sendResourceUpdated failed");
