@@ -4,10 +4,10 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 2.x     | ✅        |
-| < 2.0   | ❌        |
+| 6.x     | ✅        |
+| < 6.0   | ❌        |
 
-Only the latest `2.x` release line receives security fixes.
+Only the latest `6.x` release line receives security fixes.
 
 ## Reporting a Vulnerability
 

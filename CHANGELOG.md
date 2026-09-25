@@ -12,6 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Node.js 22.19 or newer is required.** Node 20 reached end of life in April 2026. CI now
   tests Node 22 and 24.
 
+### Security
+
+- **Consumers now get the pinned dependency tree.** The package ships `npm-shrinkwrap.json`, so
+  `npx` installs the exact versions CI tested and audited. Before, the lockfile was never published
+  and dependencies resolved fresh on every install, so the 6.0.1 lockfile fixes did not reach users.
+- **Hardened release pipeline.** npm publishing runs in a separate job that holds the OIDC
+  token and only uploads the tarball built and tested in the previous job.
+
+### Note
+
+- 6.0.1 was tagged but never published to npm (the tag push did not trigger the publish
+  workflow). Its fixes ship in the next release.
+
 ## [6.0.1] - 2026-09-25
 
 ### Security

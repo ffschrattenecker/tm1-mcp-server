@@ -20,39 +20,47 @@ accumulated `[Unreleased]` changes.
 
 ## Cutting a release
 
+Everything that can change files or fail happens BEFORE the tag: pushing the
+tag publishes.
+
 1. **Decide the version** from what sits under `[Unreleased]` (semver):
    - `patch` — fixes only, no new tools/behavior.
    - `minor` — new tool or capability, backward-compatible.
    - `major` — breaking change to a tool's contract.
-2. **Finalize the changelog:** rename `## [Unreleased]` → `## [X.Y.Z] - YYYY-MM-DD`,
+2. **Refresh the tool list** if tools changed: `npm run tools:update-readme`
+   (regenerates `docs/TOOLS.md` and the category table in `README.md`). Commit.
+3. **Finalize the changelog:** rename `## [Unreleased]` → `## [X.Y.Z] - YYYY-MM-DD`,
    add a fresh empty `## [Unreleased]` above it, and update the compare links at
    the bottom (`[Unreleased]: …/compare/vX.Y.Z...HEAD` and a new
    `[X.Y.Z]: …/compare/vPREV...vX.Y.Z`). Commit.
-3. **Bump + tag atomically:** `npm version <patch|minor|major>` — this bumps
-   `package.json`, commits, and creates the `vX.Y.Z` tag in one step (no manual
-   tagging, no `git tag -f`).
-4. **Refresh the tool list** if tools changed: `npm run tools:update-readme`
-   (regenerates `docs/TOOLS.md` and the category table in `README.md`).
-5. **Push:** `git push --follow-tags origin main`.
-6. **Smoke-test the tarball:** `npm run smoke:tarball` — packs the real tarball,
+4. **Smoke-test the tarball:** `npm run smoke:tarball` — packs the real tarball,
    installs it into a throwaway project under `os.tmpdir()`, and drives the
    installed binary. Tier 1 (always) checks the `bin` entry, the shebang, the
-   `files` allow-list and an unconfigured start; tier 2 (needs `tm1-test` in
-   `.mcp.json`) does a real MCP handshake in `TM1_MODE=readonly` and asserts the
-   structured-response contract. Exit codes: `1` tier 1, `5` tier 2, `4`
-   pack/install, `3` tier 2 skipped (nothing checked against a server — add
-   `--allow-skip` only if you accept that). This is the only check that touches
-   compiled `dist/`; `verify` and the live suite both run against source.
-7. **Publish to npm:** pushing the `vX.Y.Z` tag (step 5) runs
-   `.github/workflows/publish-npm.yml`, which checks the tag against `package.json`,
-   runs the tier-1 tarball smoke test and publishes `@ffschrattenecker/tm1-mcp-server`
-   with provenance, authenticated via npm trusted publishing (OIDC — no token;
-   configured under the package's Settings → Trusted Publisher on npmjs.com). A manual publish is
-   the fallback: `npm publish` — `prepublishOnly` runs `verify`, then
-   `prepack` does a clean `rm -rf dist && build`, so the tarball can never carry
-   stale cruft. Sanity-check first with `npm pack --dry-run` (watch total files /
-   size; no `dist.bak`, `.env`, `.mcp.json`, tests, or maps).
-8. **GitHub release:** create a release for the `vX.Y.Z` tag with the changelog
+   `files` allow-list, the shipped `npm-shrinkwrap.json` and an unconfigured
+   start; tier 2 (needs `tm1-test` in `.mcp.json`) does a real MCP handshake in
+   `TM1_MODE=readonly` and asserts the structured-response contract. Exit codes:
+   `1` tier 1, `5` tier 2, `4` pack/install, `3` tier 2 skipped (nothing
+   checked against a server — add `--allow-skip` only if you accept that). CI
+   and the publish workflow run tier 1 only; tier 2 is the local-only part.
+5. **Push `main` and wait for CI to go green.** It runs the same `verify` gate
+   as the publish workflow, so a green CI means the tag will not fail on it.
+6. **Bump + tag atomically:** `npm version <patch|minor|major>` — this bumps
+   `package.json`, commits, and creates the `vX.Y.Z` tag in one step (no manual
+   tagging, no `git tag -f`).
+7. **Push — this publishes:** `git push --follow-tags origin main` runs
+   `.github/workflows/publish-npm.yml`. Its `build` job checks the tag against
+   `package.json` and that the tagged commit is on `main`, runs `verify` and
+   the tier-1 smoke test, and packs the tarball; its `publish` job (the only
+   one holding `id-token`) publishes that tarball with provenance, authenticated
+   via npm trusted publishing (OIDC — no token; configured under the package's
+   Settings → Trusted Publisher on npmjs.com).
+8. **Confirm it published:** a run for the tag must appear under Actions, and
+   `npm view @ffschrattenecker/tm1-mcp-server dist-tags` must show the new
+   version. If the tag push never triggered a run, start the workflow manually
+   (Actions → Publish to npm → Run workflow, **ref = the tag**) — never move or
+   re-push the tag. A manual `npm publish` from a machine is the last resort:
+   it has no provenance and needs an interactive 2FA login.
+9. **GitHub release:** create a release for the `vX.Y.Z` tag with the changelog
    section as the body (title style: `vX.Y.Z — <short theme>`).
 
 ## Guardrails already wired
@@ -61,6 +69,9 @@ accumulated `[Unreleased]` changes.
   cruft. Runs on `npm pack` and `npm publish`.
 - `prepublishOnly` (`npm run verify`) — publish aborts if the full gate
   (typecheck + lints + tests) is not green.
+- `npm-shrinkwrap.json` (not `package-lock.json`) — it is published and
+  pins the whole dependency tree for consumers, so lockfile security fixes
+  actually reach `npx` users. Keep it committed; `npm install` updates it.
 - `files: ["dist", "!dist/**/*.map"]` — only compiled output ships; source,
   tests, and secrets never do. `smoke:tarball` asserts this held by listing the
   real tarball, since a broken `files` entry is how credentials reach npm.
