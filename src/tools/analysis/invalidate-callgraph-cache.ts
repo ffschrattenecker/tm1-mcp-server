@@ -1,5 +1,5 @@
 import { defineTool } from "../define-tool.js";
-import { IDEMPOTENT_WRITE } from "../annotations.js";
+import { READ_ONLY } from "../annotations.js";
 import { InvalidateCallgraphCacheResultSchema } from "../schemas/items.js";
 import {
   invalidateCallgraphCache,
@@ -9,8 +9,8 @@ import {
 export const registerInvalidateCallgraphCache = defineTool({
   name: "tm1_invalidate_callgraph_cache",
   description:
-    "Drop the in-memory ReferenceIndex cache used by tm1_analyze_callgraph / tm1_analyze_object_usage / tm1_analyze_chore_graph. Call this after deploying new processes/rules/chores. The next analysis call will rebuild the index (single bulk fetch).",
-  annotations: IDEMPOTENT_WRITE,
+    "Drop the in-memory ReferenceIndex cache used by tm1_analyze_callgraph / tm1_analyze_object_usage / tm1_analyze_chore_graph. Rarely needed: every successful mutating call through this server already drops it. Use it only after changes made outside this server (Workspace, TI, another client). The next analysis call rebuilds the index (single bulk fetch). Touches no TM1 object, so it is available in readonly mode.",
+  annotations: READ_ONLY,
   output: InvalidateCallgraphCacheResultSchema,
   // Takes no arguments: the cache is process-wide.
   input: {},

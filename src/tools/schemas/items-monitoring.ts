@@ -17,6 +17,7 @@ import { AuditLogDetailSchema } from "../../schemas/monitoring.js";
 
 export const ServerInfoSchema = z
   .object({
+    mcpServer: z.object({ name: z.string(), version: z.string() }).optional(),
     serverName: z.string(),
     productVersion: z.string(),
     productEdition: z.string().optional(),

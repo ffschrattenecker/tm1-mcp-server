@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tm1_get_server_info` returns `mcpServer: { name, version }`, the MCP server's own package
+  identity. A client (e.g. the spms-tools plugin) can gate on the server version from a tool
+  result instead of guessing it from which schema fields exist.
+
 ### Fixed
+
+- `tm1_invalidate_callgraph_cache` is annotated `readOnlyHint` and so is available in readonly
+  mode. It only drops an in-memory index and touches no TM1 object. Its description no longer
+  says to call it after every deploy: the server has invalidated on every mutating call since
+  4.x, so the old advice cost a turn for nothing.
 
 - The preflight's reference-failure hint no longer says "correct the name". It asks the
   model to report each unresolved name to the user first. A near match (`SalesPlan` for

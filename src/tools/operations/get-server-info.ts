@@ -3,6 +3,7 @@ import { maskSecretsDeep } from "../../lib/mask-secrets.js";
 import { READ_ONLY } from "../annotations.js";
 import { ServerInfoSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { NAME, VERSION } from "../../version.js";
 
 // Pull a nested key path from the raw merged configuration. Returns undefined if any
 // segment is missing — TM1 versions vary in which sections they expose.
@@ -30,6 +31,9 @@ export const registerGetServerInfo = defineTool({
     const x = info.extra ?? {};
 
     const payload = {
+      // The MCP server's own package identity, so a client can gate on it
+      // without parsing the initialize handshake.
+      mcpServer: { name: NAME, version: VERSION },
       serverName: info.serverName,
       productVersion: info.productVersion,
       productEdition: info.productEdition,
