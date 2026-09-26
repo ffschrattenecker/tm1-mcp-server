@@ -81,6 +81,15 @@ export function escapeOdataLiteral(value: string): string {
   return value.replace(/'/g, "''");
 }
 
+/**
+ * An entity key for a URL path segment such as `Cubes('<key>')`: doubled `'`,
+ * then percent-encoded. Without the doubling a name containing `'` breaks the
+ * key and makes the object unreachable.
+ */
+export function odataKey(value: string): string {
+  return encodeURIComponent(escapeOdataLiteral(String(value)));
+}
+
 /** Join filter predicates with `and` into a `&$filter=…` fragment. Empty string when none. */
 export function filterClause(predicates: readonly string[]): string {
   return predicates.length === 0 ? "" : `&$filter=${predicates.join(" and ")}`;

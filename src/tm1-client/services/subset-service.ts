@@ -8,10 +8,7 @@ import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type { Subset, SubsetCreate } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
 import { rethrowIfSystemic } from "./fallback.js";
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
+import { odataKey } from "./odata-page.js";
 
 export class SubsetService {
   constructor(private readonly http: TM1HttpClient) {}
@@ -27,7 +24,7 @@ export class SubsetService {
       isPrivate: boolean,
     ) => {
       try {
-        const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/${segment}?$select=Name,Expression,Alias`;
+        const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/${segment}?$select=Name,Expression,Alias`;
         const response = await this.http.request<{
           value: Array<{ Name: string; Expression?: string; Alias?: string }>;
         }>("GET", path);
@@ -63,7 +60,7 @@ export class SubsetService {
     isPrivate = false,
   ): Promise<Subset> {
     const segment = isPrivate ? "PrivateSubsets" : "Subsets";
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/${segment}('${enc(subsetName)}')?$expand=Elements($select=Name)&$select=Name,Expression,Alias`;
+    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/${segment}('${odataKey(subsetName)}')?$expand=Elements($select=Name)&$select=Name,Expression,Alias`;
     const response = await this.http.request<{
       Name: string;
       Expression?: string;
@@ -91,7 +88,7 @@ export class SubsetService {
     hierarchyName: string,
     subset: SubsetCreate,
   ): Promise<void> {
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Subsets`;
+    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Subsets`;
 
     if (subset.expression && subset.elements && subset.elements.length > 0) {
       throw new TM1Error({
@@ -118,7 +115,7 @@ export class SubsetService {
     } else {
       body["Elements@odata.bind"] = subset.elements!.map(
         (e) =>
-          `Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(e)}')`,
+          `Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(e)}')`,
       );
     }
     await this.http.request<void>("POST", path, body);
@@ -138,7 +135,7 @@ export class SubsetService {
       alias?: string | undefined;
     },
   ): Promise<void> {
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Subsets('${enc(subsetName)}')`;
+    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Subsets('${odataKey(subsetName)}')`;
     const body: Record<string, unknown> = {};
     if (update.alias !== undefined) body.Alias = update.alias;
     if (update.expression !== undefined) {
@@ -147,7 +144,7 @@ export class SubsetService {
       body.Expression = "";
       body["Elements@odata.bind"] = update.elements.map(
         (e) =>
-          `Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(e)}')`,
+          `Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(e)}')`,
       );
     }
     await this.http.request<void>("PATCH", path, body);
@@ -164,7 +161,7 @@ export class SubsetService {
   ): Promise<void> {
     await this.http.request<void>(
       "DELETE",
-      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Subsets('${enc(subsetName)}')`,
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Subsets('${odataKey(subsetName)}')`,
     );
   }
 }

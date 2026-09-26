@@ -16,6 +16,7 @@ import type {
 } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
 import { rethrowIfSystemicOrDenied } from "./fallback.js";
+import { odataKey } from "./odata-page.js";
 
 // TM1 references the per-run TI error file inside the free-text message, either
 // wrapped in angle brackets (e.g. German `Fehlerdatei: <…log>`) or bare
@@ -103,9 +104,6 @@ export function toOdataDateTime(input: string): string {
 // enc stays plain — it also wraps whole $filter/$orderby clauses below, where
 // the inner string literals are already single-quote-escaped via esc().
 const enc = encodeURIComponent;
-// OData entity-key encoder: double ' per OData literal rules, then percent-encode.
-const encKey = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
 
 export class ServerService {
   constructor(private readonly http: TM1HttpClient) {}
@@ -619,7 +617,7 @@ export class ServerService {
    * GET /api/v1/ErrorLogFiles('<filename>')/Content
    */
   async getErrorLogContent(filename: string): Promise<string> {
-    const path = `/api/v1/ErrorLogFiles('${encKey(filename)}')/Content`;
+    const path = `/api/v1/ErrorLogFiles('${odataKey(filename)}')/Content`;
     return await this.http.requestRaw("GET", path);
   }
 }

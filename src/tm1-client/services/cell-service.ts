@@ -16,10 +16,7 @@ import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { escapeMdxName } from "../../lib/mdx.js";
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
 import { freeCellset, transformCellsetResponse } from "./cellset-transform.js";
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
+import { odataKey } from "./odata-page.js";
 
 /**
  * Split one entry of a cell coordinate into (hierarchy, element).
@@ -74,7 +71,7 @@ export class CellService {
       return null;
     }
 
-    const cubePath = `/api/v1/Cubes('${enc(cubeName)}')?$expand=Dimensions($select=Name)`;
+    const cubePath = `/api/v1/Cubes('${odataKey(cubeName)}')?$expand=Dimensions($select=Name)`;
     const cubeMeta = await this.http.request<{
       Name: string;
       Dimensions: Array<{ Name: string }>;
@@ -249,14 +246,14 @@ export class CellService {
       try {
         await this.http.request<void>(
           "PATCH",
-          `/api/v1/Cellsets('${enc(id)}')/Cells(0)`,
+          `/api/v1/Cellsets('${odataKey(id)}')/Cells(0)`,
           { Value: c.value },
         );
       } finally {
         try {
           await this.http.request<void>(
             "DELETE",
-            `/api/v1/Cellsets('${enc(id)}')`,
+            `/api/v1/Cellsets('${odataKey(id)}')`,
           );
         } catch {
           // cleanup best-effort
@@ -283,7 +280,7 @@ export class CellService {
       try {
         await this.http.request<void>(
           "PATCH",
-          `/api/v1/Cellsets('${enc(cellset.ID)}')/Cells`,
+          `/api/v1/Cellsets('${odataKey(cellset.ID)}')/Cells`,
           chunk.map((c, ordinal) => ({ Ordinal: ordinal, Value: c.value })),
         );
         written += chunk.length;
@@ -299,7 +296,7 @@ export class CellService {
         try {
           await this.http.request<void>(
             "DELETE",
-            `/api/v1/Cellsets('${enc(cellset.ID)}')`,
+            `/api/v1/Cellsets('${odataKey(cellset.ID)}')`,
           );
         } catch {
           // cleanup best-effort
@@ -355,7 +352,7 @@ export class CellService {
       Dimensions: Array<{ Name: string }>;
     }>(
       "GET",
-      `/api/v1/Cubes('${enc(cubeName)}')?$expand=Dimensions($select=Name)`,
+      `/api/v1/Cubes('${odataKey(cubeName)}')?$expand=Dimensions($select=Name)`,
     );
     const dims = cubeMeta.Dimensions.map((d) => d.Name);
     if (elements.length !== dims.length) {
@@ -366,7 +363,7 @@ export class CellService {
     }
     return dims.map((d, i) => {
       const { hierarchy, element } = splitHierarchyQualified(elements[i]!, d);
-      return `Dimensions('${enc(d)}')/Hierarchies('${enc(hierarchy)}')/Elements('${enc(element)}')`;
+      return `Dimensions('${odataKey(d)}')/Hierarchies('${odataKey(hierarchy)}')/Elements('${odataKey(element)}')`;
     });
   }
 
@@ -385,7 +382,7 @@ export class CellService {
       value?: Array<RawFedCell>;
     }>(
       "POST",
-      `/api/v1/Cubes('${enc(cubeName)}')/tm1.CheckFeeders?$expand=Cube($select=Name),Tuple($select=Name)`,
+      `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.CheckFeeders?$expand=Cube($select=Name),Tuple($select=Name)`,
       { "Tuple@odata.bind": binds },
       opts,
     );
@@ -408,7 +405,7 @@ export class CellService {
       Statements?: string[];
     }>(
       "POST",
-      `/api/v1/Cubes('${enc(cubeName)}')/tm1.TraceFeeders?$expand=FedCells/Cube($select=Name),FedCells/Tuple($select=Name)`,
+      `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.TraceFeeders?$expand=FedCells/Cube($select=Name),FedCells/Tuple($select=Name)`,
       { "Tuple@odata.bind": binds },
       opts,
     );
@@ -449,7 +446,7 @@ export class CellService {
     }
     const response = await this.http.request<RawCalcComponent>(
       "POST",
-      `/api/v1/Cubes('${enc(cubeName)}')/tm1.TraceCellCalculation?$expand=${expandParts.join(",")}`,
+      `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.TraceCellCalculation?$expand=${expandParts.join(",")}`,
       { "Tuple@odata.bind": binds },
       opts,
     );

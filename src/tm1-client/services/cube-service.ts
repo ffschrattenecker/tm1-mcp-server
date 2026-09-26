@@ -15,12 +15,9 @@ import {
   type NameFilterOpts,
   type Paged,
   type PageOpts,
+  odataKey,
 } from "./odata-page.js";
 import { classifyExecution } from "./process-status.js";
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
 
 export interface AllRulesOpts {
   /** Include control cubes (`}`-prefixed). Default false. */
@@ -95,7 +92,7 @@ export class CubeService {
    * GET /api/v1/Cubes('{name}')?$expand=Dimensions($select=Name)
    */
   async getDimensionNames(cubeName: string): Promise<string[]> {
-    const path = `/api/v1/Cubes('${enc(cubeName)}')?$expand=Dimensions($select=Name)`;
+    const path = `/api/v1/Cubes('${odataKey(cubeName)}')?$expand=Dimensions($select=Name)`;
     const response = await this.http.request<{
       Name: string;
       Dimensions: Array<{ Name: string }>;
@@ -118,7 +115,7 @@ export class CubeService {
     try {
       await this.http.request<{ Name: string }>(
         "GET",
-        `/api/v1/Cubes('${enc(cubeName)}')?$select=Name`,
+        `/api/v1/Cubes('${odataKey(cubeName)}')?$select=Name`,
       );
       return true;
     } catch (e) {
@@ -136,7 +133,7 @@ export class CubeService {
     await this.http.request<void>("POST", "/api/v1/Cubes", {
       Name: name,
       Dimensions: dimensionNames.map((d) => ({
-        "@odata.id": `Dimensions('${enc(d)}')`,
+        "@odata.id": `Dimensions('${odataKey(d)}')`,
       })),
     });
   }
@@ -146,7 +143,10 @@ export class CubeService {
    * DELETE /api/v1/Cubes('{name}')
    */
   async delete(name: string): Promise<void> {
-    await this.http.request<void>("DELETE", `/api/v1/Cubes('${enc(name)}')`);
+    await this.http.request<void>(
+      "DELETE",
+      `/api/v1/Cubes('${odataKey(name)}')`,
+    );
   }
 
   /**
@@ -154,7 +154,7 @@ export class CubeService {
    * GET /api/v1/Cubes('{name}')/Rules
    */
   async getRules(cubeName: string): Promise<CubeRules> {
-    const path = `/api/v1/Cubes('${enc(cubeName)}')/Rules`;
+    const path = `/api/v1/Cubes('${odataKey(cubeName)}')/Rules`;
     // TM1 returns 404/204 both for "cube missing" and "cube has no rules";
     // an empty 200 body (response undefined) also means "no rules". For any
     // of those, probe `/Cubes('X')?$select=Name` to disambiguate so callers
@@ -163,7 +163,7 @@ export class CubeService {
       try {
         await this.http.request<{ Name: string }>(
           "GET",
-          `/api/v1/Cubes('${enc(cubeName)}')?$select=Name`,
+          `/api/v1/Cubes('${odataKey(cubeName)}')?$select=Name`,
         );
       } catch (probeErr) {
         if (probeErr instanceof TM1Error && probeErr.httpStatus === 404) {
@@ -281,7 +281,7 @@ export class CubeService {
    * text, so it travels in `rulesText` like every other statement.
    */
   async updateRules(cubeName: string, rulesText: string): Promise<void> {
-    const cubePath = `/api/v1/Cubes('${enc(cubeName)}')`;
+    const cubePath = `/api/v1/Cubes('${odataKey(cubeName)}')`;
     await this.http.request<void>("PATCH", cubePath, { Rules: rulesText });
   }
 
@@ -293,7 +293,7 @@ export class CubeService {
     cubeName: string,
     ruleText: string,
   ): Promise<RuleSyntaxError[]> {
-    const path = `/api/v1/Cubes('${enc(cubeName)}')/tm1.CheckRules`;
+    const path = `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.CheckRules`;
     const response = await this.http.request<{
       value?: Array<{ Message: string; LineNumber?: number }>;
     }>("POST", path, { Rules: ruleText });
@@ -330,7 +330,7 @@ export class CubeService {
   async unload(cubeName: string): Promise<void> {
     await this.http.request<void>(
       "POST",
-      `/api/v1/Cubes('${enc(cubeName)}')/tm1.Unload`,
+      `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.Unload`,
     );
   }
 
@@ -363,7 +363,7 @@ export class CubeService {
           ProcessExecuteStatusCode?: string;
         }>(
           "POST",
-          `/api/v1/Processes('${enc(procName)}')/tm1.ExecuteWithReturn`,
+          `/api/v1/Processes('${odataKey(procName)}')/tm1.ExecuteWithReturn`,
           {},
           opts,
         )
@@ -425,7 +425,7 @@ export class CubeService {
             verdict.outcome === "rolled_back"
               ? `Cube clear via TI was rolled back for cube '${cubeName}' (status: ${verdict.processErrorStatus}). Nothing was cleared — the cube is unchanged.`
               : `Cube clear via TI could not be confirmed for cube '${cubeName}': ${verdict.processErrorStatus} The clear may or may not have run — check the cube before retrying.`,
-          endpoint: `/api/v1/Processes('${enc(procName)}')/tm1.ExecuteWithReturn`,
+          endpoint: `/api/v1/Processes('${odataKey(procName)}')/tm1.ExecuteWithReturn`,
         });
       }
     } finally {
@@ -433,7 +433,7 @@ export class CubeService {
         if (!timedOut)
           await this.http.request<void>(
             "DELETE",
-            `/api/v1/Processes('${enc(procName)}')`,
+            `/api/v1/Processes('${odataKey(procName)}')`,
           );
       } catch (cleanupErr) {
         this.http.logger.warn(

@@ -3,6 +3,7 @@
 // TM1HttpClient. v11 = identity reroot + existing GET-ProductVersion login;
 // v12 = database-rooted paths + POST /{instance}/auth/v1/session login.
 import type { TM1Config } from "../../config.js";
+import { odataKey } from "../services/odata-page.js";
 
 export interface LoginRequest {
   url: string;
@@ -15,11 +16,6 @@ export interface ConnectionProfile {
   resolveApiPath(path: string): string;
   buildLoginRequest(): Promise<LoginRequest>;
 }
-
-// OData single-quote escaping for a key segment (double the apostrophes),
-// then URL-encode. Mirrors the `enc` helper used across the service layer.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
 
 function buildBasicToken(user: string, password: string): string {
   return "Basic " + Buffer.from(`${user}:${password}`).toString("base64");
@@ -122,7 +118,7 @@ function createV12Profile(config: TM1Config): ConnectionProfile {
   const database = config.database ?? "";
   // encodeURIComponent (not `enc`) for the instance: it's a bare path segment,
   // not an OData quoted key — no apostrophe-doubling needed, just percent-encoding.
-  const dbRoot = `/${encodeURIComponent(instance)}/api/v1/Databases('${enc(database)}')`;
+  const dbRoot = `/${encodeURIComponent(instance)}/api/v1/Databases('${odataKey(database)}')`;
   return {
     // Replacement FUNCTION, not a string: String.replace treats "$&"/"$$"/"$1"
     // in a string replacement specially, which would corrupt dbRoot if instance

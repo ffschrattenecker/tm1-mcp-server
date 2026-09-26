@@ -6,9 +6,8 @@ import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { compileUserRegex } from "../../lib/safe-regex.js";
 import type { Hierarchy, HierarchyElement } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
-import { pageClauseList, readNestedCount } from "./odata-page.js";
+import { pageClauseList, readNestedCount, odataKey } from "./odata-page.js";
 
-// OData key encoder: double ' per OData literal rules, then percent-encode.
 // How many levels one nested $expand reaches. TM1 answered 20 on 11.8 and
 // 12.5; a hierarchy deeper than that falls back to the full load.
 const NEST_LEVELS = 20;
@@ -30,9 +29,6 @@ interface DescendantsResult {
     depth: number;
   }>;
 }
-
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
 
 /**
  * A hierarchy plus the size of the element set the request selected, so
@@ -136,7 +132,7 @@ export class HierarchyService {
     const pushDown = topN !== undefined && !needsClientPostFilter;
     if (pushDown) elementClauses.push(...pageClauseList({ top: topN, skip }));
 
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')?$expand=Elements(${elementClauses.join(";")})`;
+    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')?$expand=Elements(${elementClauses.join(";")})`;
     const rawResponse = await this.http.request<{
       Name: string;
       "Elements@odata.count"?: number;
@@ -246,7 +242,7 @@ export class HierarchyService {
     hierarchyName: string,
   ): Promise<Array<{ name: string; type: HierarchyElement["type"] }>> {
     const path =
-      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')` +
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')` +
       `/Elements?$select=Name,Type`;
     const response = await this.http.request<{
       value?: Array<{ Name: string; Type: string }>;
@@ -462,8 +458,8 @@ export class HierarchyService {
       expand = `${nav}($select=${select};$expand=${expand})`;
     }
     const path =
-      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')` +
-      `/Elements('${enc(element)}')?$select=${select}` +
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')` +
+      `/Elements('${odataKey(element)}')?$select=${select}` +
       (levels > 0 ? `&$expand=${expand}` : "");
     try {
       return await this.http.request<NestedElement>("GET", path);
@@ -537,7 +533,7 @@ export class HierarchyService {
   async create(dimensionName: string, hierarchyName: string): Promise<void> {
     await this.http.request<void>(
       "POST",
-      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies`,
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies`,
       { Name: hierarchyName },
     );
   }
@@ -549,7 +545,7 @@ export class HierarchyService {
   async delete(dimensionName: string, hierarchyName: string): Promise<void> {
     await this.http.request<void>(
       "DELETE",
-      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')`,
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')`,
     );
   }
 }

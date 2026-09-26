@@ -11,10 +11,7 @@ import type { Chore, ChoreCreate, ChoreResult } from "../../types.js";
 import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { classifyChoreExecution } from "./chore-status.js";
 import { rethrowIfSystemic } from "./fallback.js";
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
+import { odataKey } from "./odata-page.js";
 
 function frequencyDuration(f: ChoreCreate["frequency"]): string {
   return `P${f.days}DT${String(f.hours).padStart(2, "0")}H${String(f.minutes).padStart(2, "0")}M${String(f.seconds).padStart(2, "0")}S`;
@@ -71,7 +68,7 @@ export class ChoreService {
    * PATCH /api/v1/Chores('{name}') with { Active: bool }
    */
   async toggleActive(choreName: string, active: boolean): Promise<void> {
-    const path = `/api/v1/Chores('${enc(choreName)}')`;
+    const path = `/api/v1/Chores('${odataKey(choreName)}')`;
     await this.http.request<void>("PATCH", path, { Active: active });
   }
 
@@ -95,13 +92,13 @@ export class ChoreService {
     choreName: string,
     opts?: RequestOptions,
   ): Promise<ChoreResult> {
-    const plain = `/api/v1/Chores('${enc(choreName)}')/tm1.Execute`;
+    const plain = `/api/v1/Chores('${odataKey(choreName)}')/tm1.Execute`;
 
     if (this.withReturnSupported === false) {
       return this.executeWithoutStatus(plain, opts);
     }
 
-    const withReturn = `/api/v1/Chores('${enc(choreName)}')/tm1.ExecuteWithReturn?$expand=ErrorLogFile`;
+    const withReturn = `/api/v1/Chores('${odataKey(choreName)}')/tm1.ExecuteWithReturn?$expand=ErrorLogFile`;
     try {
       const response = await this.http.request<{
         ChoreExecuteStatusCode?: string;
@@ -173,7 +170,7 @@ export class ChoreService {
       Frequency: frequencyDuration(chore.frequency),
       Tasks: chore.steps.map((step, idx) => ({
         Step: idx,
-        "Process@odata.bind": `Processes('${enc(step.process)}')`,
+        "Process@odata.bind": `Processes('${odataKey(step.process)}')`,
         Parameters: step.parameters.map((p) => ({
           Name: p.name,
           Value: p.value,
@@ -198,7 +195,7 @@ export class ChoreService {
       steps?: ChoreCreate["steps"] | undefined;
     },
   ): Promise<void> {
-    const path = `/api/v1/Chores('${enc(choreName)}')`;
+    const path = `/api/v1/Chores('${odataKey(choreName)}')`;
     const body: Record<string, unknown> = {};
     if (updates.startTime !== undefined) body.StartTime = updates.startTime;
     if (updates.active !== undefined) body.Active = updates.active;
@@ -212,7 +209,7 @@ export class ChoreService {
     if (updates.steps !== undefined) {
       body.Tasks = updates.steps.map((step, idx) => ({
         Step: idx,
-        "Process@odata.bind": `Processes('${enc(step.process)}')`,
+        "Process@odata.bind": `Processes('${odataKey(step.process)}')`,
         Parameters: step.parameters.map((p) => ({
           Name: p.name,
           Value: p.value,
@@ -229,7 +226,7 @@ export class ChoreService {
   async delete(choreName: string): Promise<void> {
     await this.http.request<void>(
       "DELETE",
-      `/api/v1/Chores('${enc(choreName)}')`,
+      `/api/v1/Chores('${odataKey(choreName)}')`,
     );
   }
 }

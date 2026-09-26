@@ -18,10 +18,7 @@ import type {
 import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { freeCellset, transformCellsetResponse } from "./cellset-transform.js";
 import { rethrowIfSystemicOrDenied } from "./fallback.js";
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
+import { odataKey } from "./odata-page.js";
 
 export class ViewService {
   constructor(private readonly http: TM1HttpClient) {}
@@ -49,7 +46,7 @@ export class ViewService {
           value: Array<{ Name: string; MDX?: string }>;
         }>(
           "GET",
-          `/api/v1/Cubes('${enc(cubeName)}')/${collection}?$select=Name,MDX`,
+          `/api/v1/Cubes('${odataKey(cubeName)}')/${collection}?$select=Name,MDX`,
         );
         return res.value.map((v) => ({
           name: v.Name,
@@ -96,7 +93,7 @@ export class ViewService {
 
     const axesExpand =
       "Axes($expand=Tuples($expand=Members($select=Name;$expand=Hierarchy($select=Name))))";
-    const path = `/api/v1/Cubes('${enc(cubeName)}')/Views('${enc(viewName)}')/tm1.Execute?$expand=${cellsExpand},${axesExpand}`;
+    const path = `/api/v1/Cubes('${odataKey(cubeName)}')/Views('${odataKey(viewName)}')/tm1.Execute?$expand=${cellsExpand},${axesExpand}`;
 
     const response = await this.http.request<{
       ID: string;
@@ -157,7 +154,7 @@ export class ViewService {
     const fetchBase = async (
       segment: "Views" | "PrivateViews",
     ): Promise<RawBase> => {
-      const path = `/api/v1/Cubes('${enc(cubeName)}')/${segment}('${enc(viewName)}')?$select=Name,MDX`;
+      const path = `/api/v1/Cubes('${odataKey(cubeName)}')/${segment}('${odataKey(viewName)}')?$select=Name,MDX`;
       return this.http.request<RawBase>("GET", path);
     };
 
@@ -218,7 +215,7 @@ export class ViewService {
       `Columns/${subsetExpand}`,
       `Rows/${subsetExpand}`,
     ].join(",");
-    const nativePath = `/api/v1/Cubes('${enc(cubeName)}')/${resolvedSeg}('${enc(viewName)}')/tm1.NativeView?$expand=${nativeExpand}`;
+    const nativePath = `/api/v1/Cubes('${odataKey(cubeName)}')/${resolvedSeg}('${odataKey(viewName)}')/tm1.NativeView?$expand=${nativeExpand}`;
 
     let native: RawNative;
     try {
@@ -275,7 +272,7 @@ export class ViewService {
   ): Promise<void> {
     await this.http.request<void>(
       "POST",
-      `/api/v1/Cubes('${enc(cubeName)}')/Views`,
+      `/api/v1/Cubes('${odataKey(cubeName)}')/Views`,
       {
         "@odata.type": "#ibm.tm1.api.v1.MDXView",
         Name: viewName,
@@ -297,7 +294,7 @@ export class ViewService {
     spec: NativeViewCreate,
   ): Promise<void> {
     const hierPath = (a: NativeViewAxisSpec): string =>
-      `Dimensions('${enc(a.dimension)}')/Hierarchies('${enc(a.hierarchy ?? a.dimension)}')`;
+      `Dimensions('${odataKey(a.dimension)}')/Hierarchies('${odataKey(a.hierarchy ?? a.dimension)}')`;
 
     const mapAxis = (a: NativeViewAxisSpec): Record<string, unknown> => {
       const sources = [a.subset, a.expression, a.elements].filter(
@@ -314,7 +311,7 @@ export class ViewService {
       }
       if (a.subset !== undefined) {
         return {
-          "Subset@odata.bind": `${hierPath(a)}/Subsets('${enc(a.subset)}')`,
+          "Subset@odata.bind": `${hierPath(a)}/Subsets('${odataKey(a.subset)}')`,
         };
       }
       if (a.expression !== undefined) {
@@ -329,7 +326,7 @@ export class ViewService {
         Subset: {
           "Hierarchy@odata.bind": hierPath(a),
           "Elements@odata.bind": (a.elements ?? []).map(
-            (e) => `${hierPath(a)}/Elements('${enc(e)}')`,
+            (e) => `${hierPath(a)}/Elements('${odataKey(e)}')`,
           ),
         },
       };
@@ -349,7 +346,7 @@ export class ViewService {
       }
       const axis = mapAxis(t);
       axis["Selected@odata.bind"] =
-        `${hierPath(t)}/Elements('${enc(t.selected)}')`;
+        `${hierPath(t)}/Elements('${odataKey(t.selected)}')`;
       return axis;
     };
 
@@ -366,7 +363,7 @@ export class ViewService {
 
     await this.http.request<void>(
       "POST",
-      `/api/v1/Cubes('${enc(cubeName)}')/Views`,
+      `/api/v1/Cubes('${odataKey(cubeName)}')/Views`,
       body,
     );
   }
@@ -378,7 +375,7 @@ export class ViewService {
   async delete(cubeName: string, viewName: string): Promise<void> {
     await this.http.request<void>(
       "DELETE",
-      `/api/v1/Cubes('${enc(cubeName)}')/Views('${enc(viewName)}')`,
+      `/api/v1/Cubes('${odataKey(cubeName)}')/Views('${odataKey(viewName)}')`,
     );
   }
 }

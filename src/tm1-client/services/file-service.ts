@@ -23,12 +23,7 @@
 import type { TM1HttpClient } from "../http.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { rethrowIfSystemic } from "./fallback.js";
-
-// OData entity-key encoder: double single quotes per OData literal rules, then
-// percent-encode. Without the doubling a name containing ' breaks the key and
-// makes the object unreachable.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
+import { odataKey } from "./odata-page.js";
 
 // Split a user-supplied file path into segments, rejecting "." / ".." so a
 // crafted name cannot traverse outside the Contents root.
@@ -122,7 +117,7 @@ export class FileService {
           endpoint: url,
         });
       }
-      url += `/Contents('${enc(hit.id)}')`;
+      url += `/Contents('${odataKey(hit.id)}')`;
       entry = hit;
     }
     return { url, entry };
@@ -167,9 +162,9 @@ export class FileService {
       return (await this.appsChildren(url)).map((e) => e.name);
     }
     const buildUrl = (root: string): string => {
-      let url = `/api/v1/Contents('${enc(root)}')`;
+      let url = `/api/v1/Contents('${odataKey(root)}')`;
       for (const seg of segments) {
-        url += `/Contents('${enc(seg)}')`;
+        url += `/Contents('${odataKey(seg)}')`;
       }
       url += "/Contents?$select=Name";
       return url;
@@ -216,9 +211,9 @@ export class FileService {
       return this.http.requestRawBytes("GET", this.appsContentUrl(url, entry));
     }
     const buildUrl = (root: string): string => {
-      let url = `/api/v1/Contents('${enc(root)}')`;
+      let url = `/api/v1/Contents('${odataKey(root)}')`;
       for (const p of parts) {
-        url += `/Contents('${enc(p)}')`;
+        url += `/Contents('${odataKey(p)}')`;
       }
       url += "/Content";
       return url;
@@ -253,11 +248,11 @@ export class FileService {
     const buildUrl = (root: string): string => {
       const segs = parts
         .slice(0, -1)
-        .map((s) => `/Contents('${enc(s)}')`)
+        .map((s) => `/Contents('${odataKey(s)}')`)
         .join("");
       // parts.length > 0 is guarded above
       const last = parts[parts.length - 1]!;
-      return `/api/v1/Contents('${enc(root)}')${segs}/Contents('${enc(last)}')?$select=Name`;
+      return `/api/v1/Contents('${odataKey(root)}')${segs}/Contents('${odataKey(last)}')?$select=Name`;
     };
     const probe = async (url: string): Promise<boolean> => {
       try {
@@ -297,14 +292,14 @@ export class FileService {
     const leaf = parts[parts.length - 1]!;
     const parentSegs = parts
       .slice(0, -1)
-      .map((s) => `/Contents('${enc(s)}')`)
+      .map((s) => `/Contents('${odataKey(s)}')`)
       .join("");
 
     const tryRoot = async (
       root: "Files" | "Blobs",
     ): Promise<{ created: boolean; root: "Files" | "Blobs" }> => {
-      const parentUrl = `/api/v1/Contents('${enc(root)}')${parentSegs}/Contents`;
-      const contentUrl = `/api/v1/Contents('${enc(root)}')${parentSegs}/Contents('${enc(leaf)}')/Content`;
+      const parentUrl = `/api/v1/Contents('${odataKey(root)}')${parentSegs}/Contents`;
+      const contentUrl = `/api/v1/Contents('${odataKey(root)}')${parentSegs}/Contents('${odataKey(leaf)}')/Content`;
 
       const existed = await this.exists(fileName).catch(() => false);
       if (!existed) {
@@ -321,7 +316,7 @@ export class FileService {
         // created and could not fill is removed again, so a failed upload does
         // not leave an empty file under the name.
         if (!existed) {
-          const url = `/api/v1/Contents('${enc(root)}')${parentSegs}/Contents('${enc(leaf)}')`;
+          const url = `/api/v1/Contents('${odataKey(root)}')${parentSegs}/Contents('${odataKey(leaf)}')`;
           await this.http.request("DELETE", url).catch(() => undefined);
         }
         throw e;
@@ -370,8 +365,8 @@ export class FileService {
       return;
     }
     const buildUrl = (root: string): string => {
-      const segs = parts.map((s) => `/Contents('${enc(s)}')`).join("");
-      return `/api/v1/Contents('${enc(root)}')${segs}`;
+      const segs = parts.map((s) => `/Contents('${odataKey(s)}')`).join("");
+      return `/api/v1/Contents('${odataKey(root)}')${segs}`;
     };
     try {
       await this.http.request("DELETE", buildUrl("Files"));
@@ -430,8 +425,8 @@ export class FileService {
         ? `&$filter=${encodeURIComponent(filters.join(" and "))}`
         : "";
     const buildUrl = (root: string): string => {
-      let url = `/api/v1/Contents('${enc(root)}')`;
-      for (const seg of segments) url += `/Contents('${enc(seg)}')`;
+      let url = `/api/v1/Contents('${odataKey(root)}')`;
+      for (const seg of segments) url += `/Contents('${odataKey(seg)}')`;
       url += `/Contents?$select=Name${filter}`;
       return url;
     };
