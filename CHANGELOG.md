@@ -93,6 +93,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `^(\w|\w)*!$` passed `safe-regex`, which measures only nested quantifiers, and took
   23.5 s on a 30-character input, blocking the whole server. Any unbounded repetition over
   a group containing `|` is now refused; a character class (`[ab]*`) does the same job.
+- **`tm1_diff_processes` and `tm1_diff_process_with_file` compare the delimiter type and
+  the ODBC unicode flag.** Two ASCII processes that differed only in delimited against
+  fixed-width columns came back `identical: true`. Both tools now share one data-source
+  comparison. A missing value counts as its default, so a v12 source that never reports
+  `usesUnicode` does not differ from one that says `false`.
 - **`tm1_write_cells` sends at most 8 cells at a time when a batch is refused.** A refused
   batch is re-walked cell by cell to find the offender, and that walk ran every cell of the
   chunk at once: up to 500 cells at three requests each, all landing on TM1 together.

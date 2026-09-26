@@ -259,7 +259,8 @@ function diffIgnoredColumns(a: IgnoredColumn[], b: IgnoredColumn[]) {
   };
 }
 
-function diffDs(a: DataSource, b: DataSource) {
+// Shared with tm1_diff_process_with_file so both diffs check the same fields.
+export function diffDs(a: DataSource, b: DataSource) {
   const diffs: string[] = [];
   const fields: Array<keyof DataSource> = [
     "type",
@@ -284,6 +285,19 @@ function diffDs(a: DataSource, b: DataSource) {
         `${String(f)}: ${JSON.stringify(a[f])} → ${JSON.stringify(b[f])}`,
       );
   }
+  // Compared with their defaults filled in: the .pro parser sets the
+  // delimiter type only on ASCII sources and v12 never returns usesUnicode,
+  // so a bare comparison would report a difference nobody made.
+  const delimiter = (d: DataSource) =>
+    d.type === "ASCII" ? (d.asciiDelimiterType ?? "Character") : undefined;
+  if (delimiter(a) !== delimiter(b))
+    diffs.push(
+      `asciiDelimiterType: ${JSON.stringify(delimiter(a))} → ${JSON.stringify(delimiter(b))}`,
+    );
+  if ((a.usesUnicode ?? false) !== (b.usesUnicode ?? false))
+    diffs.push(
+      `usesUnicode: ${JSON.stringify(a.usesUnicode ?? false)} → ${JSON.stringify(b.usesUnicode ?? false)}`,
+    );
   return { identical: diffs.length === 0, differences: diffs };
 }
 
