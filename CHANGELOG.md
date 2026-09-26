@@ -93,6 +93,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `^(\w|\w)*!$` passed `safe-regex`, which measures only nested quantifiers, and took
   23.5 s on a 30-character input, blocking the whole server. Any unbounded repetition over
   a group containing `|` is now refused; a character class (`[ab]*`) does the same job.
+- **`tm1_write_cells` sends at most 8 cells at a time when a batch is refused.** A refused
+  batch is re-walked cell by cell to find the offender, and that walk ran every cell of the
+  chunk at once: up to 500 cells at three requests each, all landing on TM1 together.
 - **`tm1_list_error_logs` reads v12 log names.** v12 names its logs
   `ProcessLog_<ts>_<id>_<process>.jsonl`. `groupBy: "process"` put every one of them under
   `(unparsed)`, and `processName` matched none. Both now read the v12 name.

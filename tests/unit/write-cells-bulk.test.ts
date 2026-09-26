@@ -138,6 +138,37 @@ describe("CellService.writeCells — bulk cellset", () => {
       expect(perCell).toHaveLength(2);
     });
 
+    it("walks the fallback at most 8 cells at a time", async () => {
+      // Up to 500 cells per chunk, three requests each: unbounded, that is
+      // 1500 requests landing on TM1 at once.
+      let inFlight = 0;
+      let peak = 0;
+      const http = contractCheckedHttp({
+        request: vi.fn(async (method: string, path: string, body?: unknown) => {
+          inFlight++;
+          peak = Math.max(peak, inFlight);
+          await new Promise((r) => setTimeout(r, 1));
+          inFlight--;
+          if (path === "/api/v1/ExecuteMDX") return { ID: "cs" };
+          if (method === "PATCH" && failBulk(body)) {
+            throw new TM1Error({
+              code: TM1ErrorCode.TM1_ERROR,
+              message: "CubeCellWriteStatusElementIsConsolidated",
+            });
+          }
+          return undefined;
+        }),
+      } as unknown as TM1HttpClient);
+
+      await new CellService(http).writeCells(
+        "Sales",
+        ["Product", "Measure"],
+        Array.from({ length: 40 }, (_, i) => cell(`P${i}`, i)),
+      );
+
+      expect(peak).toBeLessThanOrEqual(8);
+    });
+
     it("names the refused coordinates when the retry also fails", async () => {
       // Both shapes rejected: the bulk PATCH and the per-cell one. Only then
       // is the write genuinely impossible, and the caller needs the

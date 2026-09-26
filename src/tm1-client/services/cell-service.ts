@@ -14,6 +14,7 @@ import type {
 } from "../../types.js";
 import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { escapeMdxName } from "../../lib/mdx.js";
+import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
 import { freeCellset, transformCellsetResponse } from "./cellset-transform.js";
 
 // OData key encoder: double ' per OData literal rules, then percent-encode.
@@ -307,7 +308,8 @@ export class CellService {
 
       if (!bulkFailed) continue;
 
-      const results = await Promise.allSettled(chunk.map(writeOne));
+      // Bounded: a chunk holds up to 500 cells at three requests each.
+      const results = await mapSettledWithConcurrency(chunk, 8, writeOne);
       const failed: Array<{ elements: string[]; error: string }> = [];
       results.forEach((r, j) => {
         if (r.status === "fulfilled") {
