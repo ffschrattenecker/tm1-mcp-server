@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`tm1_create_subset`, `tm1_update_subset` and `tm1_delete_subset` take `isPrivate`.**
+  Private subsets belong to the signed-in user and stay invisible to everyone else, so a
+  working subset no longer has to land in the public list. The same name can exist once
+  public and once private. Reading and listing private subsets worked already.
+
 - **The five file tools reach the Applications tree.** `tm1_list_files`,
   `tm1_search_files`, `tm1_get_file_content`, `tm1_upload_file` and `tm1_delete_file` take
   `container`, which stays `files` by default — the data directory TI processes read from.
@@ -93,6 +98,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `^(\w|\w)*!$` passed `safe-regex`, which measures only nested quantifiers, and took
   23.5 s on a 30-character input, blocking the whole server. Any unbounded repetition over
   a group containing `|` is now refused; a character class (`[ab]*`) does the same job.
+- **`tm1_update_subset` can change the element list.** Passing `elements` always failed
+  with 400 "both a list of Elements and an Expression", on 11.8 and 12.5 alike, and
+  binding elements without that expression appends instead of replacing. The tool now
+  drops the old list first, then binds the new one in the order given; an MDX subset
+  becomes static, and `[]` empties it. The two steps are not atomic, so a list naming an
+  unknown element gets the old definition written back. Passing `expression` and `elements`
+  together, or nothing at all, used to report success while dropping or changing nothing;
+  both are now refused.
 - **`tm1_diff_processes` and `tm1_diff_process_with_file` compare the delimiter type and
   the ODBC unicode flag.** Two ASCII processes that differed only in delimited against
   fixed-width columns came back `identical: true`. Both tools now share one data-source

@@ -1,6 +1,6 @@
 {
   "recordedAgainst": ["11.8.02900.8"],
-  "recordedAt": "2026-09-21",
+  "recordedAt": "2026-09-26",
   "endpoints": {
     "DELETE /api/v1/Chores('*') !404": {
       "error": {
@@ -573,9 +573,58 @@
         "Type?": "string"
       }
     },
+    "GET /api/v1/Dimensions('*')/Hierarchies('*')/Elements('*')": {
+      "@odata.context": "string",
+      "@odata.etag": "string",
+      "@odata.id?": "string",
+      "Components[]?": {
+        "@odata.etag": "string",
+        "Components[]": {
+          "@odata.etag": "string",
+          "Components[]": "unknown",
+          "Level": "number",
+          "Name": "string",
+          "Type": "string"
+        },
+        "Level": "number",
+        "Name": "string",
+        "Type": "string"
+      },
+      "Level?": "number",
+      "Name?": "string",
+      "Parents[]?": {
+        "@odata.etag": "string",
+        "Level": "number",
+        "Name": "string",
+        "Parents[]": {
+          "@odata.etag": "string",
+          "Level": "number",
+          "Name": "string",
+          "Parents[]": "unknown"
+        }
+      },
+      "Type?": "string"
+    },
     "GET /api/v1/Dimensions('*')/Hierarchies('*')/PrivateSubsets": {
       "@odata.context": "string",
       "value[]": "unknown"
+    },
+    "GET /api/v1/Dimensions('*')/Hierarchies('*')/PrivateSubsets('*')": {
+      "@odata.context": "string",
+      "@odata.etag": "string",
+      "Alias": "string",
+      "Elements[]": {
+        "@odata.etag": "string",
+        "Name": "string"
+      },
+      "Expression": "null",
+      "Name": "string"
+    },
+    "GET /api/v1/Dimensions('*')/Hierarchies('*')/PrivateSubsets('*') !404": {
+      "error": {
+        "code": "string",
+        "message": "string"
+      }
     },
     "GET /api/v1/Dimensions('*')/Hierarchies('*')/Subsets": {
       "@odata.context": "string",
@@ -824,15 +873,31 @@
       "Type": "string",
       "UniqueName": "string"
     },
+    "PATCH /api/v1/Dimensions('*')/Hierarchies('*')/PrivateSubsets('*')": {
+      "@odata.context": "string",
+      "@odata.etag": "string",
+      "Attributes": {
+        "Caption": "string"
+      },
+      "Expression": "null",
+      "Name": "string",
+      "UniqueName": "string"
+    },
     "PATCH /api/v1/Dimensions('*')/Hierarchies('*')/Subsets('*')": {
       "@odata.context": "string",
       "@odata.etag": "string",
       "Attributes": {
         "Caption": "string"
       },
-      "Expression": "string",
+      "Expression": "null|string",
       "Name": "string",
       "UniqueName": "string"
+    },
+    "PATCH /api/v1/Dimensions('*')/Hierarchies('*')/Subsets('*') !404": {
+      "error": {
+        "code": "string",
+        "message": "string"
+      }
     },
     "PATCH /api/v1/Processes('*')": {
       "@odata.context": "string",
@@ -1081,6 +1146,16 @@
       "Level": "number",
       "Name": "string",
       "Type": "string",
+      "UniqueName": "string"
+    },
+    "POST /api/v1/Dimensions('*')/Hierarchies('*')/PrivateSubsets": {
+      "@odata.context": "string",
+      "@odata.etag": "string",
+      "Attributes": {
+        "Caption": "string"
+      },
+      "Expression": "null",
+      "Name": "string",
       "UniqueName": "string"
     },
     "POST /api/v1/Dimensions('*')/Hierarchies('*')/Subsets": {

@@ -162,11 +162,11 @@ datasource (562-589).
 
 ### subsets (5)
 
-- `tm1_create_subset` — Create a public TM1 subset
-- `tm1_delete_subset` — Delete a public TM1 subset
+- `tm1_create_subset` — Create a TM1 subset, public by default or private with isPrivate=true (private subsets belong to the signed-in user and are invisible to others; the same name m
+- `tm1_delete_subset` — Delete a TM1 subset, public by default or private with isPrivate=true
 - `tm1_get_subset` — Get a single TM1 subset with its MDX expression (if any) and resolved element list
 - `tm1_list_subsets` — List public + private subsets of a TM1 hierarchy
-- `tm1_update_subset` — Update a public TM1 subset (partial)
+- `tm1_update_subset` — Update an existing TM1 subset in place, public by default or private with isPrivate=true
 
 ### ti-development (21)
 
