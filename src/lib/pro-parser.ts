@@ -110,6 +110,9 @@ function parseSections(lines: string[]): {
     "574": [],
     "575": [],
   };
+  // Sections read by their line count keep trailing blank lines and spaces:
+  // TM1 stores and returns them, so trimming made every re-import differ.
+  const counted = new Set<string>();
 
   let i = 0;
   while (i < lines.length) {
@@ -125,6 +128,7 @@ function parseSections(lines: string[]): {
       // TM1 writes an explicit line count ("572,138"). Trust it, so code lines
       // that look like a header (e.g. a literal "930,0") stay in the section.
       const count = parseInt(rawCount, 10);
+      counted.add(code);
       for (let taken = 0; taken < count && i < lines.length; taken++, i++) {
         map[code]!.push(lines[i]!);
       }
@@ -138,11 +142,16 @@ function parseSections(lines: string[]): {
     }
   }
 
+  // A countless section runs to the next header, so its tail is ambiguous.
+  const text = (code: string) => {
+    const joined = map[code]!.join("\n");
+    return counted.has(code) ? joined : joined.trimEnd();
+  };
   return {
-    prolog: map["572"]!.join("\n").trimEnd(),
-    metadata: map["573"]!.join("\n").trimEnd(),
-    data: map["574"]!.join("\n").trimEnd(),
-    epilog: map["575"]!.join("\n").trimEnd(),
+    prolog: text("572"),
+    metadata: text("573"),
+    data: text("574"),
+    epilog: text("575"),
   };
 }
 

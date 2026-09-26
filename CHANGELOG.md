@@ -98,6 +98,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `^(\w|\w)*!$` passed `safe-regex`, which measures only nested quantifiers, and took
   23.5 s on a 30-character input, blocking the whole server. Any unbounded repetition over
   a group containing `|` is now refused; a character class (`[ab]*`) does the same job.
+- **A `.pro` round trip keeps trailing blank lines and spaces.** The parser trimmed the end of
+  every code tab, but TM1 stores and returns that whitespace, so exporting a process and
+  importing the file changed its code. Measured on 11.8 and 12.5: all four tabs now come back
+  byte for byte. Only sections without a line count, which run into the next header, are still
+  trimmed.
 - **`tm1_update_subset` can change the element list.** Passing `elements` always failed
   with 400 "both a list of Elements and an Expression", on 11.8 and 12.5 alike, and
   binding elements without that expression appends instead of replacing. The tool now
