@@ -98,6 +98,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `^(\w|\w)*!$` passed `safe-regex`, which measures only nested quantifiers, and took
   23.5 s on a 30-character input, blocking the whole server. Any unbounded repetition over
   a group containing `|` is now refused; a character class (`[ab]*`) does the same job.
+- **The attribute value tools check the attribute before touching the attribute cube.** A
+  dimension without attributes has no `}ElementAttributes_` cube, and an unknown attribute
+  name is not a member of it; both came back as a raw MDX syntax error.
+  `tm1_get_element_attribute_values` now returns an empty list when the dimension has no
+  attributes, and `tm1_update_element_attribute_value` answers NOT_FOUND saying the
+  dimension has none, or naming the attributes that exist. Names match ignoring case and
+  spaces, as in TM1.
 - **`tm1_check_cube_rule` returns a rule with syntax errors as a normal result.** It flagged
   that answer as a tool error, and the error envelope carries no `structuredContent`, so a
   client reading only structured output got nothing. It now returns `ok: false` with the

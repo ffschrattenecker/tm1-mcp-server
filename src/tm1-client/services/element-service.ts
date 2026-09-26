@@ -799,6 +799,10 @@ export class ElementService {
     elementName: string,
     hierarchyName: string = dimensionName,
   ): Promise<ElementAttributeValue[]> {
+    // No attribute defined means no }ElementAttributes_ cube, and the MDX
+    // below would fail with a raw syntax error. Nothing to read is the answer.
+    if ((await this.listAttributes(dimensionName, hierarchyName)).length === 0)
+      return [];
     // Escape `]` → `]]` in every bracketed identifier: an element or dimension
     // named e.g. `Foo]` would otherwise break out of its MDX identifier and
     // shift the read onto arbitrary members (MDX injection).
@@ -844,6 +848,20 @@ export class ElementService {
     value: number | string,
     hierarchyName: string = dimensionName,
   ): Promise<void> {
+    // Check the attribute first: without it TM1 answers with a raw MDX syntax
+    // error (no attribute at all means no attribute cube). TM1 matches
+    // attribute names ignoring case and spaces, so compare the same way.
+    const attrs = await this.listAttributes(dimensionName, hierarchyName);
+    const key = (n: string) => n.replace(/\s/g, "").toLowerCase();
+    if (!attrs.some((a) => key(a.name) === key(attributeName))) {
+      throw new TM1Error({
+        code: TM1ErrorCode.NOT_FOUND,
+        message:
+          attrs.length === 0
+            ? `Dimension '${dimensionName}' has no attributes; create '${attributeName}' with tm1_create_element_attribute first.`
+            : `Attribute '${attributeName}' does not exist on dimension '${dimensionName}'. Existing: ${attrs.map((a) => a.name).join(", ")}.`,
+      });
+    }
     const ctrlCube = `}ElementAttributes_${dimensionName}`;
     const esc = (s: string): string => s.replace(/]/g, "]]");
     // Qualified for the same reason as getAttributeValues; writeCells passes a

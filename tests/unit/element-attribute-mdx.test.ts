@@ -67,12 +67,15 @@ describe("ElementService.getAttributeValues — MDX identifier escaping (M8)", (
 
   it("doubles `]` in the dimension and element names", async () => {
     fetchSpy.mockResolvedValueOnce(
+      mockResponse({ value: [{ Name: "Caption", Type: "String" }] }),
+    );
+    fetchSpy.mockResolvedValueOnce(
       mockResponse({ ID: "cs-1", Cells: [], Axes: [{ Tuples: [] }] }),
     );
 
     await client.elements.getAttributeValues("Region]evil", "Foo]Bar");
 
-    const firstCall = fetchSpy.mock.calls[0];
+    const firstCall = fetchSpy.mock.calls[1];
     const sentMdx = (
       JSON.parse(String((firstCall[1] as { body: string }).body)) as {
         MDX: string;
@@ -95,25 +98,34 @@ describe("ElementService.getAttributeValues — MDX identifier escaping (M8)", (
 
   it("names the default hierarchy when none is given", async () => {
     fetchSpy.mockResolvedValueOnce(
+      mockResponse({ value: [{ Name: "Caption", Type: "String" }] }),
+    );
+    fetchSpy.mockResolvedValueOnce(
       mockResponse({ ID: "cs-1", Cells: [], Axes: [{ Tuples: [] }] }),
     );
     await client.elements.getAttributeValues("Region", "North");
-    expect(mdxOf(fetchSpy.mock.calls[0])).toContain(
+    expect(mdxOf(fetchSpy.mock.calls[1])).toContain(
       "WHERE ([Region].[Region].[North])",
     );
   });
 
   it("reads an element of an alternate hierarchy", async () => {
     fetchSpy.mockResolvedValueOnce(
+      mockResponse({ value: [{ Name: "Caption", Type: "String" }] }),
+    );
+    fetchSpy.mockResolvedValueOnce(
       mockResponse({ ID: "cs-1", Cells: [], Axes: [{ Tuples: [] }] }),
     );
     await client.elements.getAttributeValues("Region", "North", "Sales]Alt");
-    expect(mdxOf(fetchSpy.mock.calls[0])).toContain(
+    expect(mdxOf(fetchSpy.mock.calls[1])).toContain(
       "WHERE ([Region].[Sales]]Alt].[North])",
     );
   });
 
   it("writes to an element of an alternate hierarchy", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockResponse({ value: [{ Name: "Caption", Type: "String" }] }),
+    );
     fetchSpy.mockResolvedValueOnce(mockResponse({ ID: "cs-1" }));
     fetchSpy.mockResolvedValue(mockResponse({}));
     await client.elements.updateAttributeValue(
@@ -123,6 +135,48 @@ describe("ElementService.getAttributeValues — MDX identifier escaping (M8)", (
       "N",
       "Alt",
     );
-    expect(mdxOf(fetchSpy.mock.calls[0])).toContain("[Region].[Alt].[North]");
+    expect(mdxOf(fetchSpy.mock.calls[1])).toContain("[Region].[Alt].[North]");
+  });
+
+  // Measured on 11.8 and 12.5: a dimension without attributes has no
+  // }ElementAttributes_ cube, and both calls failed with a raw MDX syntax error.
+  it("reads no values, without MDX, when the dimension has no attributes", async () => {
+    fetchSpy.mockResolvedValueOnce(mockResponse({ value: [] }));
+    expect(await client.elements.getAttributeValues("Region", "North")).toEqual(
+      [],
+    );
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it("refuses to write when the dimension has no attributes", async () => {
+    fetchSpy.mockResolvedValueOnce(mockResponse({ value: [] }));
+    await expect(
+      client.elements.updateAttributeValue("Region", "North", "Caption", "N"),
+    ).rejects.toThrow(/has no attributes/);
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it("refuses an unknown attribute and names the existing ones", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockResponse({ value: [{ Name: "Caption", Type: "String" }] }),
+    );
+    await expect(
+      client.elements.updateAttributeValue("Region", "North", "Nope", "N"),
+    ).rejects.toThrow(/'Nope' does not exist.*Existing: Caption/);
+  });
+
+  it("matches the attribute name ignoring case and spaces, as TM1 does", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockResponse({ value: [{ Name: "Caption Text", Type: "String" }] }),
+    );
+    fetchSpy.mockResolvedValueOnce(mockResponse({ ID: "cs-1" }));
+    fetchSpy.mockResolvedValue(mockResponse({}));
+    await client.elements.updateAttributeValue(
+      "Region",
+      "North",
+      "captiontext",
+      "N",
+    );
+    expect(fetchSpy.mock.calls.length).toBeGreaterThan(1);
   });
 });
