@@ -14,6 +14,7 @@ import { pageShapeFor } from "../schemas/common.js";
 // Best-effort extraction of {process, ts} from an error-log filename.
 // Two known patterns (see server-service.listErrorLogFiles):
 //   modern v11: TM1ProcessError_<ts>_<id>_<proc>(_<hash>)?.log
+//   v12:        ProcessLog_<ts>_<id>_<proc>.jsonl
 //   legacy:     <proc>_<ts>.log
 // Process names may contain underscores, so the modern parse greedily captures
 // the tail and strips a trailing session-hash token (_<hex6+>). This is a
@@ -22,6 +23,9 @@ export function parseLogName(filename: string): {
   process: string | null;
   ts: string | null;
 } {
+  // v12 names carry no session hash, so nothing to strip.
+  const v12 = filename.match(/^ProcessLog_(\d{14})_\d+_(.+)\.jsonl$/i);
+  if (v12) return { ts: v12[1]!, process: v12[2]! };
   const modern = filename.match(/^TM1ProcessError_(\d{14})_\d+_(.+)\.log$/i);
   if (modern) {
     // Strip the trailing TM1 session-hash token. Real-world v11 hashes are
@@ -108,7 +112,7 @@ export const registerListErrorLogs = defineTool({
       .string()
       .optional()
       .describe(
-        "Optional process-name filter — matches both modern v11 'TM1ProcessError_<ts>_<id>_<processName>_<hash>.log' and legacy '<processName>_<ts>.log' filename patterns.",
+        "Optional process-name filter — matches modern v11 'TM1ProcessError_<ts>_<id>_<processName>_<hash>.log', v12 'ProcessLog_<ts>_<id>_<processName>.jsonl' and legacy '<processName>_<ts>.log' filename patterns.",
       ),
     since: z
       .string()

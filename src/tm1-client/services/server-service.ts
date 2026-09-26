@@ -584,6 +584,7 @@ export class ServerService {
       const proc = opts.processName.toLowerCase();
       // TM1 v11+ pattern with session hash: TM1ProcessError_<ts>_<id>_<proc>_<hash>.log
       // TM1 pattern without hash:           TM1ProcessError_<ts>_<id>_<proc>.log
+      // TM1 v12 pattern:                    ProcessLog_<ts>_<id>_<proc>.jsonl
       // Legacy/manual pattern:              <proc>_<ts>.log
       entries = entries.filter((e) => {
         const f = e.filename.toLowerCase();
@@ -591,6 +592,7 @@ export class ServerService {
           f === proc ||
           f.startsWith(`${proc}_`) ||
           f.endsWith(`_${proc}.log`) ||
+          f.endsWith(`_${proc}.jsonl`) ||
           f.includes(`_${proc}_`)
         );
       });
