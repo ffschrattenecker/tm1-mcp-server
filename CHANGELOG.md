@@ -98,6 +98,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `^(\w|\w)*!$` passed `safe-regex`, which measures only nested quantifiers, and took
   23.5 s on a 30-character input, blocking the whole server. Any unbounded repetition over
   a group containing `|` is now refused; a character class (`[ab]*`) does the same job.
+- **`tm1_check_cube_rule` returns a rule with syntax errors as a normal result.** It flagged
+  that answer as a tool error, and the error envelope carries no `structuredContent`, so a
+  client reading only structured output got nothing. It now returns `ok: false` with the
+  errors; `isError` is left for calls that actually failed.
 - **`tm1_get_element_attribute_values` and `tm1_update_element_attribute_value` reach
   alternate hierarchies.** Both take an optional `hierarchyName` and always name the hierarchy
   in the MDX. Before, an element that exists only in an alternate hierarchy could be neither

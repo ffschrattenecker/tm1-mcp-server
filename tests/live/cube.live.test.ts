@@ -186,6 +186,18 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
     expect(r.json.errorCount).toBe(0);
   });
 
+  it("check_cube_rule answers a broken rule as a result, not a tool error", async () => {
+    const r = await h.call("tm1_check_cube_rule", {
+      cubeName: C1,
+      rules: `['${D1_PLAIN}'] = N: 1 +;`,
+    });
+    const sc = r.result.structuredContent as
+      { ok: boolean; errorCount: number } | undefined;
+    expect(r.isError).toBe(false);
+    expect(sc?.ok).toBe(false);
+    expect(sc?.errorCount).toBeGreaterThan(0);
+  });
+
   it("set_cube_rules then get_cube_rules reads the rule back", async () => {
     const rules = `SKIPCHECK;\n['${D1_PLAIN}'] = N: 1;\nFEEDERS;`;
     await h.ok("tm1_set_cube_rules", { cubeName: C1, rules, confirm: C1 });
