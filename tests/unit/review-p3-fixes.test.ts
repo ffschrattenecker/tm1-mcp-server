@@ -16,3 +16,21 @@ describe("TI parser: `;;` inside a string literal", () => {
     expect(computeTabMetrics("nI = 1;;").parseError).toBe(true);
   });
 });
+
+describe("v12 readiness: ODBC", () => {
+  it("flags SetODBCUnicodeInterface without claiming ODBC is gone", () => {
+    const e =
+      V12_DEPRECATED_TI.get("setodbcunicodeinterface") ??
+      [...V12_DEPRECATED_TI.values()].find(
+        (x) => x.name === "SetOdbcUnicodeInterface",
+      );
+    expect(e?.issue).not.toMatch(/data sources removed/i);
+  });
+
+  it("does not flag the ODBC functions v12 still compiles", () => {
+    const hits = scanForDeprecatedTi(
+      "ODBCOpen('X','u','p');\nODBCOutput('X','q');\nODBCClose('X');",
+    );
+    expect(hits).toEqual([]);
+  });
+});

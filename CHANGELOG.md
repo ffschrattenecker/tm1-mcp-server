@@ -107,6 +107,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`;;` inside a TI string literal is no longer a parse error.** TM1 compiles
   `sQ = 'a;;b';`, but the TI parser refused it, so `tm1_audit_complexity` scored the whole
   tab as unparseable with every metric at 0.
+- **`tm1_check_v12_readiness` gives the right reason for `SetODBCUnicodeInterface`.** It said
+  ODBC data sources were removed in v12. They are not: `ODBCOpen`, `ODBCOutput` and
+  `ODBCClose` compile on 12.5; only `SetODBCUnicodeInterface` does not exist there.
 - **`tm1_get_element_attribute_values` and `tm1_update_element_attribute_value` reach
   alternate hierarchies.** Both take an optional `hierarchyName` and always name the hierarchy
   in the MDX. Before, an element that exists only in an alternate hierarchy could be neither
