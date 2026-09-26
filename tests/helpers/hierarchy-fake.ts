@@ -29,11 +29,9 @@ export function answerHierarchy(pool: PoolElement[], rawUrl: string): unknown {
           .map((e) => e.Name);
   const build = (n: string, depth: number): Record<string, unknown> => {
     const e = byName.get(n)!;
-    const node: Record<string, unknown> = {
-      Name: e.Name,
-      Type: e.Type,
-      Level: e.Level,
-    };
+    // Only what the request selected: the upward walk asks for Name,Level.
+    const node: Record<string, unknown> = { Name: e.Name, Level: e.Level };
+    if (url.includes("$select=Name,Type")) node.Type = e.Type;
     if (depth < levels) {
       node[nav] = children(n)
         .filter((c) => byName.has(c))

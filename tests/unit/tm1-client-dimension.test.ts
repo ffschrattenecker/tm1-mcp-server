@@ -191,7 +191,9 @@ describe("TM1Client – Dimension Management Methods", () => {
     });
 
     it("reports no type change when the type is already the requested one", async () => {
-      fetchSpy.mockResolvedValueOnce(mockResponse(200, { Type: 3 }));
+      fetchSpy.mockResolvedValueOnce(
+        mockResponse(200, { Name: "Europe", Type: "Consolidated" }),
+      );
       fetchSpy.mockResolvedValueOnce(mockResponse(204));
 
       const r = await client.elements.update("Region", "Region", "Europe", {
