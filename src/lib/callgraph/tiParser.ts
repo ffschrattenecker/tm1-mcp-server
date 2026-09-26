@@ -174,8 +174,9 @@ function parseBlock(
     const upper = trimmed.toUpperCase();
     const lineNum = i + 1; // 1-based line numbers
 
-    // Check for double semicolon (two semicolons on one line is always an error)
-    if (trimmed.includes(";;")) {
+    // Check for double semicolon outside string literals (TM1 accepts
+    // `sQ = 'a;;b';`; `''` inside a literal splits it harmlessly)
+    if (trimmed.replace(/'[^']*'/g, "''").includes(";;")) {
       throw new ParseError(
         lineNum,
         `Double semicolon in line ${lineNum}: each statement needs exactly one semicolon`,
