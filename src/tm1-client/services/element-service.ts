@@ -797,6 +797,7 @@ export class ElementService {
   async getAttributeValues(
     dimensionName: string,
     elementName: string,
+    hierarchyName: string = dimensionName,
   ): Promise<ElementAttributeValue[]> {
     // Escape `]` → `]]` in every bracketed identifier: an element or dimension
     // named e.g. `Foo]` would otherwise break out of its MDX identifier and
@@ -804,11 +805,16 @@ export class ElementService {
     const esc = (s: string): string => s.replace(/]/g, "]]");
     const dim = esc(dimensionName);
     const elem = esc(elementName);
+    const hier = esc(hierarchyName);
     const ctrlCube = `}ElementAttributes_${dim}`;
     const mdx =
       `SELECT {[}ElementAttributes_${dim}].MEMBERS} ON COLUMNS ` +
       `FROM [${ctrlCube}] ` +
-      `WHERE ([${dim}].[${elem}])`;
+      // Always name the hierarchy: the attribute cube spans every hierarchy of
+      // the dimension, and v12 refuses a bare name another hierarchy shares
+      // ("Member name A is ambiguous"), while v11 finds a bare name only in
+      // the default hierarchy.
+      `WHERE ([${dim}].[${hier}].[${elem}])`;
     const result = await this.cells.executeMdx(mdx);
     const out: ElementAttributeValue[] = [];
     const tuples = result.axes[0]?.tuples ?? [];
@@ -836,12 +842,17 @@ export class ElementService {
     elementName: string,
     attributeName: string,
     value: number | string,
+    hierarchyName: string = dimensionName,
   ): Promise<void> {
     const ctrlCube = `}ElementAttributes_${dimensionName}`;
+    const esc = (s: string): string => s.replace(/]/g, "]]");
+    // Qualified for the same reason as getAttributeValues; writeCells passes a
+    // `[Dim].[Hier].[Elem]` coordinate through unchanged.
+    const member = `[${esc(dimensionName)}].[${esc(hierarchyName)}].[${esc(elementName)}]`;
     await this.cells.writeCells(
       ctrlCube,
       [dimensionName, `}ElementAttributes_${dimensionName}`],
-      [{ elements: [elementName, attributeName], value }],
+      [{ elements: [member, attributeName], value }],
     );
   }
 }

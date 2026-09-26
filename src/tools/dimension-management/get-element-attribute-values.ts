@@ -12,7 +12,7 @@ import { defineTool } from "../define-tool.js";
 export const registerGetElementAttributeValues = defineTool({
   name: "tm1_get_element_attribute_values",
   description:
-    "Read all attribute values (Numeric/String/Alias) for a single element via MDX on the }ElementAttributes_{Dim} control cube. Use this to verify alias values, attribute lookups, or to debug rules referencing ATTRN/ATTRS.",
+    "Read all attribute values (Numeric/String/Alias) for a single element via MDX on the }ElementAttributes_{Dim} control cube. Attribute definitions are dimension-wide. A leaf (N) element has one set of values across all hierarchies, but a consolidated (C) element has its own values per hierarchy, so pass hierarchyName for a consolidation or any element of an alternate hierarchy. Use this to verify alias values, attribute lookups, or to debug rules referencing ATTRN/ATTRS.",
   annotations: READ_ONLY,
   output: {
     dimensionName: z.string(),
@@ -24,12 +24,22 @@ export const registerGetElementAttributeValues = defineTool({
     elementName: z
       .string()
       .describe("Element whose attribute values should be read"),
+    hierarchyName: z
+      .string()
+      .optional()
+      .describe(
+        "Hierarchy the element belongs to (default: the same-named default hierarchy). Needed for elements of an alternate hierarchy.",
+      ),
     ...FORMAT_SCHEMA,
   },
-  handler: async ({ dimensionName, elementName, format }, tm1Client) => {
+  handler: async (
+    { dimensionName, elementName, hierarchyName, format },
+    tm1Client,
+  ) => {
     const values = await tm1Client.elements.getAttributeValues(
       dimensionName,
       elementName,
+      hierarchyName,
     );
     const payload = { dimensionName, elementName, attributes: values };
     type Row = (typeof values)[number];

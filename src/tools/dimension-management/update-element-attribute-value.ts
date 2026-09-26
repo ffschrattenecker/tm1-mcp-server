@@ -6,7 +6,7 @@ import { defineTool } from "../define-tool.js";
 export const registerUpdateElementAttributeValue = defineTool({
   name: "tm1_update_element_attribute_value",
   description:
-    "Set a single attribute value on an element by writing to the }ElementAttributes_{Dim} control cube. For reproducible deployments prefer a TI process (CellPutS / CellPutN / AttrPutS / AttrPutN). Use this REST-direct tool for ad-hoc / debugging scenarios.",
+    "Set a single attribute value on an element by writing to the }ElementAttributes_{Dim} control cube. Pass hierarchyName for an element of an alternate hierarchy. A leaf's value is shared by every hierarchy of the dimension; a consolidation's value is set for that hierarchy only. For reproducible deployments prefer a TI process (CellPutS / CellPutN / AttrPutS / AttrPutN). Use this REST-direct tool for ad-hoc / debugging scenarios.",
   annotations: IDEMPOTENT_WRITE,
   output: MutationResultSchema,
   input: {
@@ -14,6 +14,12 @@ export const registerUpdateElementAttributeValue = defineTool({
     elementName: z
       .string()
       .describe("Element whose attribute value should be set"),
+    hierarchyName: z
+      .string()
+      .optional()
+      .describe(
+        "Hierarchy the element belongs to (default: the same-named default hierarchy). Needed for elements of an alternate hierarchy.",
+      ),
     attributeName: z
       .string()
       .describe("Attribute name (must already exist as schema)"),
@@ -24,7 +30,7 @@ export const registerUpdateElementAttributeValue = defineTool({
       ),
   },
   handler: async (
-    { dimensionName, elementName, attributeName, value },
+    { dimensionName, elementName, hierarchyName, attributeName, value },
     tm1Client,
   ) => {
     await tm1Client.elements.updateAttributeValue(
@@ -32,6 +38,7 @@ export const registerUpdateElementAttributeValue = defineTool({
       elementName,
       attributeName,
       value,
+      hierarchyName,
     );
     return actionResponse({
       success: true,

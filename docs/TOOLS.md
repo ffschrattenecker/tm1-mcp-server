@@ -81,13 +81,13 @@ datasource (562-589).
 - `tm1_bulk_upsert_elements` — Create or update multiple elements in a TM1 hierarchy in bulk (two-pass: leafs first, then consolidations)
 - `tm1_create_dimension` — Create a new TM1 dimension with a default hierarchy of the same name
 - `tm1_create_element` — Create a new element in a TM1 dimension hierarchy
-- `tm1_create_element_attribute` — Create an element attribute definition (schema) on a TM1 hierarchy
+- `tm1_create_element_attribute` — Create an element attribute definition (schema) on a TM1 dimension
 - `tm1_create_hierarchy` — Create a new (alternate) hierarchy inside an existing dimension
 - `tm1_delete_dimension` — Delete a TM1 dimension and all its hierarchies
 - `tm1_delete_element` — Delete an element from a TM1 dimension hierarchy
 - `tm1_delete_hierarchy` — Delete a hierarchy from a dimension
 - `tm1_get_element_attribute_values` — Read all attribute values (Numeric/String/Alias) for a single element via MDX on the }ElementAttributes_{Dim} control cube
-- `tm1_list_element_attributes` — List element attribute definitions of a TM1 hierarchy with their types (Numeric/String/Alias)
+- `tm1_list_element_attributes` — List element attribute definitions of a TM1 dimension with their types (Numeric/String/Alias); every hierarchy returns the same dimension-wide list
 - `tm1_update_element` — Update an existing element in a TM1 dimension hierarchy (name, type, or components)
 - `tm1_update_element_attribute_value` — Set a single attribute value on an element by writing to the }ElementAttributes_{Dim} control cube
 

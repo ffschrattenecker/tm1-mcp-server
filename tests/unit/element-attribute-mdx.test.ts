@@ -85,4 +85,44 @@ describe("ElementService.getAttributeValues — MDX identifier escaping (M8)", (
     expect(sentMdx).not.toContain("Foo]Bar]");
     expect(sentMdx).not.toContain("[Region]evil]");
   });
+
+  // The attribute cube spans every hierarchy of the dimension. Measured: v12
+  // refuses a bare name another hierarchy shares ("Member name A is
+  // ambiguous"), and v11 finds a bare name only in the default hierarchy.
+  const mdxOf = (call: unknown[]) =>
+    (JSON.parse(String((call[1] as { body: string }).body)) as { MDX: string })
+      .MDX;
+
+  it("names the default hierarchy when none is given", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockResponse({ ID: "cs-1", Cells: [], Axes: [{ Tuples: [] }] }),
+    );
+    await client.elements.getAttributeValues("Region", "North");
+    expect(mdxOf(fetchSpy.mock.calls[0])).toContain(
+      "WHERE ([Region].[Region].[North])",
+    );
+  });
+
+  it("reads an element of an alternate hierarchy", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockResponse({ ID: "cs-1", Cells: [], Axes: [{ Tuples: [] }] }),
+    );
+    await client.elements.getAttributeValues("Region", "North", "Sales]Alt");
+    expect(mdxOf(fetchSpy.mock.calls[0])).toContain(
+      "WHERE ([Region].[Sales]]Alt].[North])",
+    );
+  });
+
+  it("writes to an element of an alternate hierarchy", async () => {
+    fetchSpy.mockResolvedValueOnce(mockResponse({ ID: "cs-1" }));
+    fetchSpy.mockResolvedValue(mockResponse({}));
+    await client.elements.updateAttributeValue(
+      "Region",
+      "North",
+      "Caption",
+      "N",
+      "Alt",
+    );
+    expect(mdxOf(fetchSpy.mock.calls[0])).toContain("[Region].[Alt].[North]");
+  });
 });

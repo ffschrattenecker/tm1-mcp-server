@@ -98,6 +98,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `^(\w|\w)*!$` passed `safe-regex`, which measures only nested quantifiers, and took
   23.5 s on a 30-character input, blocking the whole server. Any unbounded repetition over
   a group containing `|` is now refused; a character class (`[ab]*`) does the same job.
+- **`tm1_get_element_attribute_values` and `tm1_update_element_attribute_value` reach
+  alternate hierarchies.** Both take an optional `hierarchyName` and always name the hierarchy
+  in the MDX. Before, an element that exists only in an alternate hierarchy could be neither
+  read nor set. On 12.5 even a default-hierarchy read failed with "Member name A is
+  ambiguous" once another hierarchy held an element of the same name. Attribute definitions
+  belong to the dimension. Values of a leaf are shared by every hierarchy, but a
+  consolidation has its own values in each hierarchy, so reading one needs the right
+  `hierarchyName`. The
+  `tm1_create_element_attribute` and `tm1_list_element_attributes` descriptions now say the
+  list is dimension-wide.
 - **A `.pro` round trip keeps trailing blank lines and spaces.** The parser trimmed the end of
   every code tab, but TM1 stores and returns that whitespace, so exporting a process and
   importing the file changed its code. Measured on 11.8 and 12.5: all four tabs now come back
