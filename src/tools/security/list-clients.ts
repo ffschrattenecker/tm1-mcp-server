@@ -94,7 +94,7 @@ export const registerListClients = defineTool({
         get: (c) =>
           c.groupCount !== undefined
             ? `${c.groupCount} (count)`
-            : (c.Groups ?? []).join(", "),
+            : (c.Groups ?? []).map((g) => g.Name).join(", "),
       },
     ]);
     return pageResponse(projectedPage, format, { title: "Clients", columns });

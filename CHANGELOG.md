@@ -102,6 +102,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that answer as a tool error, and the error envelope carries no `structuredContent`, so a
   client reading only structured output got nothing. It now returns `ok: false` with the
   errors; `isError` is left for calls that actually failed.
+- **`tm1_list_clients` and `tm1_list_groups` show names in markdown.** The Groups and Clients
+  columns printed `[object Object]` for every entry.
 - **`tm1_get_element_attribute_values` and `tm1_update_element_attribute_value` reach
   alternate hierarchies.** Both take an optional `hierarchyName` and always name the hierarchy
   in the MDX. Before, an element that exists only in an alternate hierarchy could be neither

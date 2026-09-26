@@ -36,6 +36,15 @@ describe.skipIf(!LIVE_ENABLED)("live: broad read sweep", () => {
       ?.name;
   });
 
+  it("renders client groups and group members as names in markdown", async () => {
+    const clients = await h.ok("tm1_list_clients", { format: "markdown" });
+    const groups = await h.ok("tm1_list_groups", { format: "markdown" });
+    expect(clients.text).not.toContain("[object Object]");
+    expect(groups.text).not.toContain("[object Object]");
+    // Every server has the admin group, and someone is in it.
+    expect(groups.text).toMatch(/\| ADMIN \| \S/);
+  });
+
   it("finds something to read", () => {
     // Not an assertion about any particular model — only that the server has
     // enough content for the rest of this file to mean anything.
