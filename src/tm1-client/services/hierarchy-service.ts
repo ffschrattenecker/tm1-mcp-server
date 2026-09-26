@@ -473,7 +473,8 @@ export class HierarchyService {
           code: TM1ErrorCode.NOT_FOUND,
           message: `Element '${element}' not found in ${dimensionName}.${hierarchyName}`,
           httpStatus: e.httpStatus,
-          endpoint: e.endpoint,
+          // The nested $expand runs to kilobytes; the path alone locates it.
+          endpoint: e.endpoint?.split("?")[0],
         });
       }
       throw e;

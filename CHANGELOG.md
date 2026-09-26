@@ -99,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   back to the full load only for deeper trees. On an 11,111-element test dimension: 14 KB
   instead of 3 MB for a mid-level subtree, 1 KB instead of 3 MB for a leaf's ancestors.
   Results were compared live against the full load on both versions: no difference.
+  A missing element reports the element path, not the nested expand query behind it.
 - **`tm1_check_writable_coords` looks up each coordinate by key and understands
   `[Dimension].[Hierarchy].[Element]`.** It loaded every hierarchy of the cube in full to
   find one name per dimension (19 MB for an 8-dimension cube in a test), and it only
