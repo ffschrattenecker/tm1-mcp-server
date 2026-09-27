@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.0.0] - 2026-09-27
+
 ### Breaking
 
 - **One server for all TM1 connections.** Without `TM1_BASE_URL`, the server discovers every
@@ -25,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `tm1_list_connections`: configured connections, their mode, environment, version and session state.
+- `TM1_ENVIRONMENT` / `TM1_ALLOW_PROD_WRITES` are read per connection folder, never inherited from
+  the launching shell. A prod connection forced to readonly says so in `tm1_list_connections` and in
+  the refusal hint of a write tool.
 - Oversized paginated results are cut to the items that fit, with `has_more`/`next_offset`
   pointing at the rest, instead of failing with `RESPONSE_TOO_LARGE`.
 - Server `instructions` (≤500 characters) tell the model how to pick a connection and keep
@@ -1294,7 +1299,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.1.1...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v7.0.0...HEAD
+[7.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.1.1...v7.0.0
 [6.1.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.1.0...v6.1.1
 [6.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.0.1...v6.1.0
 [6.0.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.0.0...v6.0.1
