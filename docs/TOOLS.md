@@ -61,7 +61,7 @@ datasource (562-589).
 - `tm1_check_v12_readiness` — Static gap-analysis against the TM1 / Planning Analytics v12 (Cloud Native) deprecation list
 - `tm1_find_orphan_dimensions` — Identify dimensions not referenced by any cube — a model-hygiene check
 - `tm1_invalidate_callgraph_cache` — Drop the in-memory ReferenceIndex cache used by tm1_analyze_callgraph / tm1_analyze_object_usage / tm1_analyze_chore_graph
-- `tm1_trace_data_flow` — Trace data flow into and out of a cube in one call, instead of analyze_object_usage + N× get_process_code
+- `tm1_trace_data_flow` — Trace data flow into and out of a cube in one call, instead of analyze_object_usage + N× get_process
 
 ### celldata (10)
 
