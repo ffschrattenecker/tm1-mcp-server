@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `tm1_list_connections` returns each connection's `environment` and, for a prod connection forced
+  to readonly, its `modeReason`. 7.0.0 documented both but left them out of the output.
+
 ## [7.0.0] - 2026-09-27
 
 ### Breaking

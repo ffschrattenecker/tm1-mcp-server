@@ -137,7 +137,7 @@ datasource (562-589).
 - `tm1_get_server_info` — Return TM1 server identity + curated configuration (TI, Rules, MTQ, JobQueuing, Memory, Logging, HTTP, Security) from /Configuration + /ActiveConfiguration
 - `tm1_get_server_state` — Health-check style snapshot of the TM1 server in one call
 - `tm1_get_transaction_log` — Fetch recent TM1 transaction log entries (cell writes), newest first
-- `tm1_list_connections` — List the TM1 connections this server can reach: name (the `connection` argument of every other tool), readonly/readwrite mode, TM1 version, and whether a sessio
+- `tm1_list_connections` — List the TM1 connections this server can reach: name (the `connection` argument of every other tool), readonly/readwrite mode, TM1_ENVIRONMENT label (and why mo
 - `tm1_list_error_logs` — List TI process error log files on the TM1 server, newest first
 - `tm1_list_jobs` — List active jobs (Activity) on a TM1 v12 database — the running tasks that replaced v11 threads
 - `tm1_list_sessions` — List active sessions on the TM1 server with their associated user and threads
