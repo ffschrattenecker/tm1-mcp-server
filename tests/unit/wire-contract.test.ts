@@ -124,6 +124,15 @@ describe("diffAgainstShape", () => {
     expect(diffAgainstShape({ value: [{ Name: "a" }] }, CONTRACT)).toEqual([]);
   });
 
+  it("accepts either variant of a key recorded as both scalar and array", () => {
+    // What a merge of two versions produces when one sends null, the other [].
+    const merged: Shape = { "Names?": "null", "Names[]?": "string" };
+    const exact = { mode: "exact" } as const;
+    expect(diffAgainstShape({ Names: null }, merged, exact)).toEqual([]);
+    expect(diffAgainstShape({ Names: ["a"] }, merged, exact)).toEqual([]);
+    expect(diffAgainstShape({ Names: [1] }, merged, exact)).toHaveLength(1);
+  });
+
   it("rejects a key the server never sends", () => {
     const problems = diffAgainstShape(
       { value: [{ Name: "a", Invented: true }] },

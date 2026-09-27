@@ -285,11 +285,15 @@ export function diffAgainstShape(
     return problems;
   }
 
-  const byName = new Map<string, { shape: Shape; isArray: boolean }>();
+  // A key can be recorded both ways — `k` and `k[]` — when versions disagree:
+  // LDAP VerifyCertServerName is an array on 11.8.02900 and null on 11.8.03500.
+  // Keep both, and check a value against the one matching its array-ness.
+  const byName = new Map<string, Array<{ shape: Shape; isArray: boolean }>>();
   for (const [k, v] of Object.entries(contract)) {
     const bare = stripOpt(k);
     const isArray = bare.endsWith("[]");
-    byName.set(isArray ? bare.slice(0, -2) : bare, { shape: v, isArray });
+    const name = isArray ? bare.slice(0, -2) : bare;
+    byName.set(name, [...(byName.get(name) ?? []), { shape: v, isArray }]);
   }
 
   for (const [k, v] of Object.entries(payload)) {
@@ -299,7 +303,9 @@ export function diffAgainstShape(
     if (v === undefined) continue;
     // `*` stands for a map keyed by model object names (see
     // collapseNameKeyedMaps): any key is allowed, every value must match.
-    const entry = byName.get(k) ?? byName.get("*");
+    const entries = byName.get(k) ?? byName.get("*");
+    const entry =
+      entries?.find((e) => e.isArray === Array.isArray(v)) ?? entries?.[0];
     if (!entry) {
       // OData control information (`@odata.count`, `Elements@odata.nextLink`,
       // …) is protocol, not model: whether the server emits it depends on the
