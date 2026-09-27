@@ -1,3 +1,6 @@
+// Cube/dim names come from semi-trusted rule text, so key segments go through
+// odataKey — a `'` must not pass through raw.
+import { odataKey } from "../../tm1-client/services/odata-page.js";
 import { parseRules } from "./rulesParser.js";
 
 export interface RulesLintDiagnose {
@@ -11,12 +14,6 @@ export type ApiRequestFn = (
   method: string,
   path: string,
 ) => Promise<{ statusCode: number; body: string }>;
-
-// OData key-segment encoding: double single quotes (OData literal escaping)
-// before percent-encoding, matching every service's `enc` helper. Cube/dim
-// names here come from semi-trusted rule text, so a `'` must not pass through raw.
-const odataKey = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
 
 // ─── String/comment neutralization ──────────────────────────────────────────
 

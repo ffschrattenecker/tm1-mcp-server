@@ -6,11 +6,12 @@ import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { compileUserRegex } from "../../lib/safe-regex.js";
 import type { Hierarchy, HierarchyElement } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
-import { pageClauseList, readNestedCount } from "./odata-page.js";
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
+import {
+  escapeOdataLiteral,
+  odataKey as enc,
+  pageClauseList,
+  readNestedCount,
+} from "./odata-page.js";
 
 /**
  * A hierarchy plus the size of the element set the request selected, so
@@ -66,11 +67,12 @@ function elementFilters(opts: ElementFilterOpts | undefined): {
   const filters: string[] = [];
   if (opts?.level !== undefined) filters.push(`Level eq ${opts.level}`);
   if (opts?.levelMax !== undefined) filters.push(`Level le ${opts.levelMax}`);
-  const escapeOdata = (s: string) => s.replace(/'/g, "''");
   if (opts?.nameContains)
-    filters.push(`contains(Name, '${escapeOdata(opts.nameContains)}')`);
+    filters.push(`contains(Name, '${escapeOdataLiteral(opts.nameContains)}')`);
   if (opts?.nameStartsWith)
-    filters.push(`startswith(Name, '${escapeOdata(opts.nameStartsWith)}')`);
+    filters.push(
+      `startswith(Name, '${escapeOdataLiteral(opts.nameStartsWith)}')`,
+    );
   const typeOrdinal =
     opts?.elementType && opts.elementType !== "All"
       ? TYPE_ORDINAL[opts.elementType]

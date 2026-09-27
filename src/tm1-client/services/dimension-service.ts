@@ -13,6 +13,7 @@ import {
   type NameFilterOpts,
   type Paged,
   type PageOpts,
+  odataKey as enc,
 } from "./odata-page.js";
 
 export type DefaultMemberSource =
@@ -30,10 +31,6 @@ export interface DefaultMemberResolution {
   };
   warning?: string;
 }
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
 
 /**
  * Decode a TM1 `}DimensionProperties.LAST_TIME_UPDATED` cell — a 14-digit

@@ -7,13 +7,11 @@
 import type { TM1HttpClient } from "../http.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { rethrowIfSystemic } from "./fallback.js";
+import { escapeOdataLiteral, odataKey as enc } from "./odata-page.js";
 
 // OData entity-key encoder: double single quotes per OData literal rules, then
 // percent-encode. Without the doubling a name containing ' breaks the key and
 // makes the object unreachable.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
-
 // Split a user-supplied file path into segments, rejecting "." / ".." so a
 // crafted name cannot traverse outside the Contents root.
 function splitPath(raw: string): string[] {
@@ -208,16 +206,15 @@ export class FileService {
   }): Promise<string[]> {
     const operator = opts.operator ?? "and";
     const segments = opts.path ? splitPath(opts.path) : [];
-    const escape = (s: string): string => s.replace(/'/g, "''");
     const filters: string[] = [];
     if (opts.startswith) {
       filters.push(
-        `startswith(tolower(Name),tolower('${escape(opts.startswith)}'))`,
+        `startswith(tolower(Name),tolower('${escapeOdataLiteral(opts.startswith)}'))`,
       );
     }
     if (opts.contains && opts.contains.length > 0) {
       const subs = opts.contains.map(
-        (s) => `contains(tolower(Name),tolower('${escape(s)}'))`,
+        (s) => `contains(tolower(Name),tolower('${escapeOdataLiteral(s)}'))`,
       );
       filters.push(`(${subs.join(` ${operator} `)})`);
     }

@@ -8,10 +8,7 @@ import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type { Subset, SubsetCreate } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
 import { rethrowIfSystemic } from "./fallback.js";
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
+import { odataKey as enc } from "./odata-page.js";
 
 export class SubsetService {
   constructor(private readonly http: TM1HttpClient) {}

@@ -21,11 +21,12 @@
 // emitted expression in TypeScript so the property can be tested directly;
 // tests/unit/naming-odata-filter.test.ts asserts it over every rule class,
 // and the live suite asserts that TM1 agrees.
+import { escapeOdataLiteral } from "../../tm1-client/services/odata-page.js";
 import { SERVER_RESERVED_CHARS } from "./rules.js";
 
 /** OData string literal: single quotes double. */
 function lit(value: string): string {
-  return `'${value.replace(/'/g, "''")}'`;
+  return `'${escapeOdataLiteral(value)}'`;
 }
 
 /**

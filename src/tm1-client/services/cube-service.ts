@@ -15,12 +15,9 @@ import {
   type NameFilterOpts,
   type Paged,
   type PageOpts,
+  odataKey as enc,
 } from "./odata-page.js";
 import { classifyExecution } from "./process-status.js";
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
 
 export interface AllRulesOpts {
   /** Include control cubes (`}`-prefixed). Default false. */

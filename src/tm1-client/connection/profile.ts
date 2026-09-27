@@ -3,6 +3,7 @@
 // TM1HttpClient. v11 = identity reroot + existing GET-ProductVersion login;
 // v12 = database-rooted paths + POST /{instance}/auth/v1/session login.
 import type { TM1Config } from "../../config.js";
+import { odataKey as enc } from "../services/odata-page.js";
 
 export interface LoginRequest {
   url: string;
@@ -15,11 +16,6 @@ export interface ConnectionProfile {
   resolveApiPath(path: string): string;
   buildLoginRequest(): Promise<LoginRequest>;
 }
-
-// OData single-quote escaping for a key segment (double the apostrophes),
-// then URL-encode. Mirrors the `enc` helper used across the service layer.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
 
 function buildBasicToken(user: string, password: string): string {
   return "Basic " + Buffer.from(`${user}:${password}`).toString("base64");

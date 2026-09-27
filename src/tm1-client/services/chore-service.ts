@@ -11,10 +11,7 @@ import type { Chore, ChoreCreate, ChoreResult } from "../../types.js";
 import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { classifyChoreExecution } from "./chore-status.js";
 import { rethrowIfSystemic } from "./fallback.js";
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
+import { odataKey as enc } from "./odata-page.js";
 
 function frequencyDuration(f: ChoreCreate["frequency"]): string {
   return `P${f.days}DT${String(f.hours).padStart(2, "0")}H${String(f.minutes).padStart(2, "0")}M${String(f.seconds).padStart(2, "0")}S`;

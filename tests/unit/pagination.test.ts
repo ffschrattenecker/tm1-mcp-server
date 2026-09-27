@@ -12,6 +12,7 @@ import {
   escapeOdataLiteral,
   filterClause,
   nameFilterPredicates,
+  odataKey,
   pageClauseList,
   pageClauses,
   readCount,
@@ -253,6 +254,12 @@ describe("odata-page clause builders", () => {
     expect(
       nameFilterPredicates({ includeControl: true, nameExact: "d'Or" }),
     ).toEqual(["Name eq 'd''Or'"]);
+  });
+
+  it("odataKey doubles quotes, then percent-encodes URL-significant chars", () => {
+    expect(odataKey("O'Brien")).toBe("O''Brien");
+    expect(odataKey("a#b?c%d&e/f g")).toBe("a%23b%3Fc%25d%26e%2Ff%20g");
+    expect(odataKey("}Clients")).toBe("%7DClients");
   });
 
   it("reads collection and nested counts, and reports absence as undefined", () => {

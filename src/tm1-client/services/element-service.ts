@@ -23,6 +23,7 @@ import type {
 } from "./batch-service.js";
 import type { CellService } from "./cell-service.js";
 import { rethrowIfSystemic } from "./fallback.js";
+import { escapeOdataLiteral, odataKey as enc } from "./odata-page.js";
 
 // Max in-flight per-element REST calls within a single bulkUpsert pass. Bounds
 // pressure on TM1's worker pool (mirrors the cap the feeder-audit fan-out uses)
@@ -44,10 +45,6 @@ export interface ElementDeleteResult {
   deleted: boolean;
   error?: { code: string; message: string };
 }
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
 
 // TM1 signals "element already exists" with different HTTP statuses across
 // versions: some return 409 Conflict, but v11.x (REST 11.8) returns 400 with
@@ -275,7 +272,7 @@ export class ElementService {
     elements: ElementCreate[],
   ): Promise<BulkUpsertPlan> {
     const base = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements`;
-    const lit = (n: string) => `'${n.replace(/'/g, "''")}'`;
+    const lit = (n: string) => `'${escapeOdataLiteral(n)}'`;
     const current = new Map<string, { type: string; children: string[] }>();
     const names = [...new Set(elements.map((e) => e.name))];
     for (let i = 0; i < names.length; i += 40) {

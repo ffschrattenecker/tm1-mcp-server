@@ -17,10 +17,7 @@ import { escapeMdxName } from "../../lib/mdx.js";
 import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
 import { bindLeftOutSandbox } from "../../lib/cell-address.js";
 import { freeCellset, transformCellsetResponse } from "./cellset-transform.js";
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
+import { odataKey as enc } from "./odata-page.js";
 
 // Build a fully-qualified MDX member reference for a write coordinate.
 // A caller may pass a pre-qualified ref to target an ALTERNATE hierarchy

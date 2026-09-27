@@ -6,10 +6,7 @@
 // See docs/ARCHITECTURE.md for the layering.
 import type { Client, ClientCreate, ClientUpdate, Group } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
-
-// OData key encoder: double ' per OData literal rules, then percent-encode.
-const enc = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
+import { odataKey as enc } from "./odata-page.js";
 
 export class SecurityService {
   constructor(private readonly http: TM1HttpClient) {}

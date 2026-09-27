@@ -16,6 +16,7 @@ import type {
 } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
 import { rethrowIfSystemicOrDenied } from "./fallback.js";
+import { escapeOdataLiteral, odataKey as encKey } from "./odata-page.js";
 
 // TM1 references the per-run TI error file inside the free-text message, either
 // wrapped in angle brackets (e.g. German `Fehlerdatei: <…log>`) or bare
@@ -101,11 +102,8 @@ export function toOdataDateTime(input: string): string {
 }
 
 // enc stays plain — it also wraps whole $filter/$orderby clauses below, where
-// the inner string literals are already single-quote-escaped via esc().
+// the inner string literals are already single-quote-escaped via escapeOdataLiteral().
 const enc = encodeURIComponent;
-// OData entity-key encoder: double ' per OData literal rules, then percent-encode.
-const encKey = (s: string): string =>
-  encodeURIComponent(String(s).replace(/'/g, "''"));
 
 export class ServerService {
   constructor(private readonly http: TM1HttpClient) {}
@@ -201,16 +199,18 @@ export class ServerService {
   ): Promise<MessageLogEntry[]> {
     const top = opts.top ?? 100;
     // Inner-literal single-quote escaping per OData; the whole clause is then
-    // URL-encoded with enc() below (mirrors getAuditLog()'s esc()+enc() pattern).
-    const esc = (s: string): string => s.replace(/'/g, "''");
+    // URL-encoded with enc() below (mirrors getAuditLog()'s escapeOdataLiteral()+enc() pattern).
     const filters: string[] = [];
     if (opts.filter)
       filters.push(
-        `contains(tolower(Message),'${esc(opts.filter.toLowerCase())}')`,
+        `contains(tolower(Message),'${escapeOdataLiteral(opts.filter.toLowerCase())}')`,
       );
     if (opts.level)
-      filters.push(`toupper(Level) eq '${esc(opts.level.toUpperCase())}'`);
-    if (opts.logger) filters.push(`Logger eq '${esc(opts.logger)}'`);
+      filters.push(
+        `toupper(Level) eq '${escapeOdataLiteral(opts.level.toUpperCase())}'`,
+      );
+    if (opts.logger)
+      filters.push(`Logger eq '${escapeOdataLiteral(opts.logger)}'`);
     if (opts.since) filters.push(`TimeStamp ge ${toOdataDateTime(opts.since)}`);
     if (opts.until) filters.push(`TimeStamp le ${toOdataDateTime(opts.until)}`);
 
@@ -315,13 +315,13 @@ export class ServerService {
     until?: string | undefined; // ISO timestamp
     includeDetails?: boolean | undefined;
   }): Promise<AuditLogEntry[]> {
-    const esc = (s: string): string => s.replace(/'/g, "''");
     const filters: string[] = [];
-    if (opts.user) filters.push(`UserName eq '${esc(opts.user)}'`);
+    if (opts.user)
+      filters.push(`UserName eq '${escapeOdataLiteral(opts.user)}'`);
     if (opts.objectType)
-      filters.push(`ObjectType eq '${esc(opts.objectType)}'`);
+      filters.push(`ObjectType eq '${escapeOdataLiteral(opts.objectType)}'`);
     if (opts.objectName)
-      filters.push(`ObjectName eq '${esc(opts.objectName)}'`);
+      filters.push(`ObjectName eq '${escapeOdataLiteral(opts.objectName)}'`);
     if (opts.since) filters.push(`TimeStamp ge ${toOdataDateTime(opts.since)}`);
     if (opts.until) filters.push(`TimeStamp le ${toOdataDateTime(opts.until)}`);
 
@@ -466,8 +466,8 @@ export class ServerService {
     until?: string | undefined;
   }): Promise<TransactionLogEntry[]> {
     const filters: string[] = [];
-    if (q.cubeName) filters.push(`Cube eq '${q.cubeName.replace(/'/g, "''")}'`);
-    if (q.user) filters.push(`User eq '${q.user.replace(/'/g, "''")}'`);
+    if (q.cubeName) filters.push(`Cube eq '${escapeOdataLiteral(q.cubeName)}'`);
+    if (q.user) filters.push(`User eq '${escapeOdataLiteral(q.user)}'`);
     if (q.since) filters.push(`TimeStamp ge ${toOdataDateTime(q.since)}`);
     if (q.until) filters.push(`TimeStamp le ${toOdataDateTime(q.until)}`);
     const qs: string[] = [`$top=${q.top}`, `$orderby=TimeStamp desc`];

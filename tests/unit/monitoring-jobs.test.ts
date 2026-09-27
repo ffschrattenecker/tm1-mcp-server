@@ -95,7 +95,7 @@ describe("MonitoringService.cancelJob", () => {
     await svc.cancelJob("j'1");
     expect(request).toHaveBeenCalledWith(
       "POST",
-      "/api/v1/Jobs('j%27%271')/tm1.Cancel",
+      "/api/v1/Jobs('j''1')/tm1.Cancel",
       {},
     );
   });

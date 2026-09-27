@@ -5,11 +5,7 @@
 // See docs/ARCHITECTURE.md for the layering.
 import type { Job, Session, Thread } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
-
-function encKey(s: string): string {
-  // Double single-quotes for OData escaping, then percent-encode all URL-unsafe chars
-  return encodeURIComponent(String(s).replace(/'/g, "''")).replace(/'/g, "%27");
-}
+import { odataKey as encKey } from "./odata-page.js";
 
 export class MonitoringService {
   constructor(private readonly http: TM1HttpClient) {}
