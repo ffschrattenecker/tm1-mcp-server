@@ -28,6 +28,34 @@ describe("buildSampleCellsMdx", () => {
     expect(r.mdx).not.toContain("WHERE (");
   });
 
+  // TM1's NONEMPTY() returns nothing once Sandboxes is in the row set, so an
+  // unfiltered Sandboxes is pinned to Base in WHERE instead.
+  it("pins an unfiltered Sandboxes to Base in WHERE, out of the crossjoin", () => {
+    const r = buildSampleCellsMdx({
+      cubeName: "Cube_X",
+      dimensions: ["Sandboxes", "Row", "Measure"],
+      maxCells: 5,
+      leavesOnly: true,
+    });
+    expect(r.rowDims).toEqual(["Row"]);
+    expect(r.whereDims).toEqual(["Sandboxes"]);
+    expect(r.sandboxPin).toEqual({ dimension: "Sandboxes", element: "Base" });
+    expect(r.mdx).toContain("WHERE ([Sandboxes].[Base])");
+    expect(r.mdx).not.toContain("TM1SUBSETALL([Sandboxes])");
+  });
+
+  it("leaves an explicit Sandboxes filter alone", () => {
+    const r = buildSampleCellsMdx({
+      cubeName: "Cube_X",
+      dimensions: ["Sandboxes", "Row", "Measure"],
+      maxCells: 5,
+      filters: { Sandboxes: "MySandbox" },
+      leavesOnly: true,
+    });
+    expect(r.sandboxPin).toBeUndefined();
+    expect(r.mdx).toContain("WHERE ([Sandboxes].[MySandbox])");
+  });
+
   it("maxCells=0 omits HEAD()", () => {
     const r = buildSampleCellsMdx({
       cubeName: "Cube_X",

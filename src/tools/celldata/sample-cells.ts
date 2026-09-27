@@ -92,6 +92,9 @@ export const registerSampleCells = defineTool({
         if (typeof val === "string") whereCoords[dim] = val;
       }
     }
+    if (built.sandboxPin) {
+      whereCoords[built.sandboxPin.dimension] = built.sandboxPin.element;
+    }
     const sampled = transformSampleCells({ result, whereCoords });
     const truncated = requested > 0 && sampled.length > requested;
     const cells = truncated ? sampled.slice(0, requested) : sampled;
