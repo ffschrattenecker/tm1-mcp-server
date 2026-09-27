@@ -148,6 +148,37 @@ describe("CellService.writeCells — bulk cellset", () => {
       ).rejects.toThrow(/partially applied/);
     });
 
+    it("caps the per-cell re-walk at 8 requests in flight", async () => {
+      // A 500-cell chunk re-walked unbounded put ~1500 requests on the server
+      // at once. The bound holds whatever the chunk size.
+      let inFlight = 0;
+      let peak = 0;
+      let seq = 0;
+      const http = contractCheckedHttp({
+        request: vi.fn(async (method: string, path: string, body?: unknown) => {
+          inFlight++;
+          peak = Math.max(peak, inFlight);
+          await new Promise((r) => setTimeout(r, 1));
+          inFlight--;
+          if (path === "/api/v1/ExecuteMDX") return { ID: `cs${seq++}` };
+          if (method === "PATCH" && Array.isArray(body)) {
+            throw new TM1Error({
+              code: TM1ErrorCode.TM1_ERROR,
+              message: "CubeCellWriteStatusElementIsConsolidated",
+            });
+          }
+          return undefined;
+        }),
+      } as unknown as TM1HttpClient);
+      await new CellService(http).writeCells(
+        "Sales",
+        ["Product", "Measure"],
+        Array.from({ length: 50 }, (_, i) => cell(`P${i}`, i)),
+      );
+      expect(peak).toBeLessThanOrEqual(8);
+      expect(peak).toBeGreaterThan(1);
+    });
+
     it("reports what landed and what did not", async () => {
       // Only the bulk PATCH fails; the per-cell retries succeed, so the report
       // must not claim a failure that the fallback resolved.

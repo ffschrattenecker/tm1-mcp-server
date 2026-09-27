@@ -16,8 +16,12 @@ import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { escapeMdxName } from "../../lib/mdx.js";
 import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
 import { bindLeftOutSandbox } from "../../lib/cell-address.js";
+import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
 import { freeCellset, transformCellsetResponse } from "./cellset-transform.js";
 import { odataKey as enc } from "./odata-page.js";
+
+// In-flight cap for the per-cell re-walk after a refused bulk write.
+const FALLBACK_CONCURRENCY = 8;
 
 // Build a fully-qualified MDX member reference for a write coordinate.
 // A caller may pass a pre-qualified ref to target an ALTERNATE hierarchy
@@ -280,7 +284,13 @@ export class CellService {
 
       if (!bulkFailed) continue;
 
-      const results = await Promise.allSettled(chunk.map(writeOne));
+      // Bounded: re-walking a 500-cell chunk unbounded put ~1500 requests
+      // (cellset, PATCH, delete per cell) in flight against the worker pool.
+      const results = await mapSettledWithConcurrency(
+        chunk,
+        FALLBACK_CONCURRENCY,
+        (c) => writeOne(c),
+      );
       const failed: Array<{ elements: string[]; error: string }> = [];
       results.forEach((r, j) => {
         if (r.status === "fulfilled") {
