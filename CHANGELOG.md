@@ -53,6 +53,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check addresses the same cell. *Action:* name every cube dimension. Ported from the
   ffschrattenecker fork.
 
+- **`tm1_set_cube_rules` refuses rules with syntax errors.** The text is checked with
+  `tm1.CheckRules` before the write. TM1's own Rules PATCH stores broken text without an
+  error (measured on v11 and v12), and the broken statements then compute nothing: the cell
+  keeps its old value and nothing reports why. Any error now fails the call with
+  `VALIDATION_ERROR`, the errors with their line numbers, and nothing written.
+  *Action:* none for valid rules; `preflight: false` writes the text as is. Found by the
+  ffschrattenecker fork.
+
 - **`tm1_clear_cube` takes only `cubeName` and `confirm`.** The `dimensions` and
   `tuples` inputs are gone. They advertised a region clear the server cannot do: no
   build declares a `tm1.Clear` action, and the only route that works is an ephemeral TI

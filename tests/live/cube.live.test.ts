@@ -207,6 +207,21 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
     expect(String(text)).toContain(D1_PLAIN);
   });
 
+  it("set_cube_rules refuses broken rules and leaves the stored text alone", async () => {
+    // The Rules PATCH itself stores broken text with a 200; only the
+    // tm1.CheckRules preflight stops it.
+    const before = await h.ok("tm1_get_cube_rules", { cubeName: C1 });
+    const r = await h.call("tm1_set_cube_rules", {
+      cubeName: C1,
+      rules: "SKIPCHECK;\n['x'] = N: NOPE(1, ;\n",
+      confirm: C1,
+    });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("VALIDATION_ERROR");
+    const after = await h.ok("tm1_get_cube_rules", { cubeName: C1 });
+    expect(after.text).toBe(before.text);
+  });
+
   it("get_all_cube_rules includes the sandbox cube (summary mode)", async () => {
     const r = await h.ok("tm1_get_all_cube_rules", {
       onlyWithRules: true,
