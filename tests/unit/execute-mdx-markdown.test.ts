@@ -156,4 +156,31 @@ describe("renderMdxMarkdown", () => {
     };
     expect(renderMdxMarkdown(env)).toContain("A\\|B");
   });
+
+  it("escapes backslashes before pipes so a trailing \\ cannot unescape one", () => {
+    const env = {
+      axes: [{ tuples: [{ members: [member("C:\\dir\\")] }] }],
+      total: 1,
+      count: 1,
+      offset: 0,
+      has_more: false,
+      next_offset: null,
+      items: [cell("a\\|b")],
+    };
+    const md = renderMdxMarkdown(env);
+    expect(md).toContain("| C:\\\\dir\\\\ | a\\\\\\|b |");
+  });
+
+  it("escapes raw values exactly once and flattens newlines", () => {
+    const env = {
+      axes: [{ tuples: [tuple("Jan")] }],
+      total: 1,
+      count: 1,
+      offset: 0,
+      has_more: false,
+      next_offset: null,
+      items: [{ value: "x|y\nz", formattedValue: "" }],
+    };
+    expect(renderMdxMarkdown(env)).toContain("| Jan | x\\|y z |");
+  });
 });

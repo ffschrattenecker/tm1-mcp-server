@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { MdxAxis, CellValue } from "../../types.js";
 import { PAGINATION_SCHEMA } from "../pagination.js";
-import { FORMAT_SCHEMA, payloadResponse } from "../format.js";
+import { FORMAT_SCHEMA, mdEscape, payloadResponse } from "../format.js";
 import { withToolHint } from "../error-format.js";
 import { clipAxesToWindow } from "../../tm1-client/services/cellset-transform.js";
 import { MdxResultSchema } from "../schemas/items.js";
@@ -22,11 +22,6 @@ export interface MdxEnvelope {
   items: Array<{ value: CellValue; formattedValue: string }>;
 }
 
-function mdCell(v: unknown): string {
-  if (v === null || v === undefined) return "";
-  return String(v).replace(/\|/g, "\\|").replace(/\n/g, " ");
-}
-
 const tupleLabel = (tuple: MdxAxis["tuples"][number]): string =>
   tuple.members.map((m) => m.name).join(" / ");
 
@@ -34,7 +29,7 @@ const axisHeader = (axis: MdxAxis): string =>
   axis.tuples[0]?.members.map((m) => m.hierarchyName).join(" / ") || "Axis";
 
 const cellText = (c: { value: CellValue; formattedValue: string }): string =>
-  c.formattedValue !== "" ? c.formattedValue : mdCell(c.value);
+  c.formattedValue !== "" ? c.formattedValue : (c.value ?? "").toString();
 
 // Render an MDX cellset envelope as Markdown.
 //
@@ -73,33 +68,33 @@ export function renderMdxMarkdown(env: MdxEnvelope): string {
     const rows = axes[1]!.tuples;
     const colCount = cols.length;
     const context = contextAxes
-      .map((ax) => mdCell(tupleLabel(ax.tuples[0]!)))
+      .map((ax) => mdEscape(tupleLabel(ax.tuples[0]!)))
       .filter((s) => s.length > 0)
       .join(" · ");
     const head = context ? [meta, "", `**Context:** ${context}`] : [meta];
-    const header = `| ${mdCell(axisHeader(axes[1]!))} | ${cols.map((t) => mdCell(tupleLabel(t))).join(" | ")} |`;
+    const header = `| ${mdEscape(axisHeader(axes[1]!))} | ${cols.map((t) => mdEscape(tupleLabel(t))).join(" | ")} |`;
     const sep = `| ${["---", ...cols.map(() => "---")].join(" | ")} |`;
     const body = rows.map((rt, r) => {
       const vals = cols.map((_, c) =>
-        mdCell(cellText(items[r * colCount + c]!)),
+        mdEscape(cellText(items[r * colCount + c]!)),
       );
-      return `| ${mdCell(tupleLabel(rt))} | ${vals.join(" | ")} |`;
+      return `| ${mdEscape(tupleLabel(rt))} | ${vals.join(" | ")} |`;
     });
     return [...head, "", header, sep, ...body].join("\n");
   }
 
   // Flat fallback: decode each cell's coordinate from its global ordinal.
   const radices = axes.map((a) => a.tuples.length);
-  const header = `| ${[...axes.map((a) => mdCell(axisHeader(a))), "Value"].join(" | ")} |`;
+  const header = `| ${[...axes.map((a) => mdEscape(axisHeader(a))), "Value"].join(" | ")} |`;
   const sep = `| ${[...axes.map(() => "---"), "---"].join(" | ")} |`;
   const body = items.map((cell, i) => {
     let ord = offset + i;
     const coords = radices.map((n, k) => {
       const idx = ord % n;
       ord = Math.floor(ord / n);
-      return mdCell(tupleLabel(axes[k]!.tuples[idx]!));
+      return mdEscape(tupleLabel(axes[k]!.tuples[idx]!));
     });
-    return `| ${[...coords, mdCell(cellText(cell))].join(" | ")} |`;
+    return `| ${[...coords, mdEscape(cellText(cell))].join(" | ")} |`;
   });
   return [meta, "", header, sep, ...body].join("\n");
 }
