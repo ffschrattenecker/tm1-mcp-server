@@ -107,7 +107,9 @@ globalThis.fetch = async (input: unknown, init?: RequestInit) => {
   } catch {
     // Observing must never break the run it observes.
   }
-  return res;
+  // Same runtime object; only the Response types of undici and @types/node
+  // diverge (see tm1Fetch in src/tm1-client/dispatcher.ts).
+  return res as unknown as Response;
 };
 
 if (!RECORDING) {
