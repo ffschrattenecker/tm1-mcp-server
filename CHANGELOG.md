@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- On servers with `EnableSandboxDimension=true`, `tm1_get_cell_value` and `tm1_check_writable_coords`
+  (without `dimensions`) accept a coordinate that leaves out `Sandboxes` and bind it to `Base`, as
+  `tm1_write_cells` already did. Before, they refused it as one element short.
+- `tm1_sample_cells` found no cells in any cube with a `Sandboxes` dimension: TM1's `NONEMPTY()`
+  returns an empty set whenever Sandboxes is part of the row set. An unfiltered Sandboxes is now
+  pinned to `Base` in WHERE.
+
 ## [7.0.1] - 2026-09-27
 
 ### Fixed
