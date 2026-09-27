@@ -55,9 +55,12 @@ export const registerCheckWritableCoords = defineTool({
           message: `coords length ${givenCoords.length} does not match dimensions length ${dimensions.length}`,
         });
       }
-      coords = resolveCellAddress(cubeName, dims, dimensions).toCubeOrder(
-        givenCoords,
-      );
+      coords = resolveCellAddress(
+        cubeName,
+        dims,
+        dimensions,
+        "Nothing was checked.",
+      ).toCubeOrder(givenCoords);
     }
     if (coords.length !== dims.length) {
       throw new TM1Error({

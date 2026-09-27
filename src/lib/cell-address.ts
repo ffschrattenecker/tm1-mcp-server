@@ -33,6 +33,7 @@ export function resolveCellAddress(
   cubeName: string,
   cubeDimensions: readonly string[],
   given: readonly string[],
+  outcome = "Nothing was written.",
 ): ResolvedAddress {
   const byLower = new Map(cubeDimensions.map((d, i) => [d.toLowerCase(), i]));
   const positions: number[] = [];
@@ -63,7 +64,7 @@ export function resolveCellAddress(
   if (problems.length > 0) {
     throw new TM1Error({
       code: TM1ErrorCode.VALIDATION_ERROR,
-      message: `Dimensions do not match cube '${cubeName}' — ${problems.join("; ")}. Nothing was written.`,
+      message: `Dimensions do not match cube '${cubeName}' — ${problems.join("; ")}. ${outcome}`,
       hint: `Name every dimension of the cube (any order): ${cubeDimensions.join(", ")}. A dimension left out is not ignored — TM1 writes into its default member.${sandboxPos >= 0 ? ` Only ${SANDBOX_DIMENSION} may be left out; it is then bound to ${BASE_SANDBOX}.` : ""}`,
     });
   }
