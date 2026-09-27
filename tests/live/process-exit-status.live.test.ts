@@ -151,6 +151,15 @@ describe.skipIf(!LIVE_ENABLED)(
     beforeAll(async () => {
       h = await getHarness();
       // Leftovers from an interrupted run (idempotent — missing objects are fine).
+      // A leftover process would make the case's upsert an overwrite, which
+      // needs confirm and fails every case before it tests anything.
+      for (const c of EXIT_CASES) {
+        const proc = `${PREFIX}_${c.name}`;
+        await h.call("tm1_delete_process", {
+          processName: proc,
+          confirm: proc,
+        });
+      }
       await h.call("tm1_delete_cube", { cubeName: CUBE, confirm: CUBE });
       for (const d of [DIM_A, DIM_B]) {
         await h.call("tm1_delete_dimension", { dimensionName: d, confirm: d });
