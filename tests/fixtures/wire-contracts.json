@@ -1,6 +1,6 @@
 {
-  "recordedAgainst": ["11.8.02900.8"],
-  "recordedAt": "2026-08-30",
+  "recordedAgainst": ["11.8.02900.8", "11.8.03500.4"],
+  "recordedAt": "2026-09-27",
   "endpoints": {
     "DELETE /api/v1/Chores('*') !404": {
       "error": {
@@ -44,6 +44,12 @@
         "message": "string"
       }
     },
+    "DELETE /api/v1/Sandboxes('*') !404": {
+      "error": {
+        "code": "string",
+        "message": "string"
+      }
+    },
     "GET /api/v1/ActiveConfiguration": {
       "@odata.context": "string",
       "Access": {
@@ -51,7 +57,7 @@
           "IntegratedSecurityMode": "string",
           "MaximumLoginAttempts": "number",
           "SecurityPackageName": "string",
-          "ServicePrincipalName": "string"
+          "ServicePrincipalName": "null|string"
         },
         "CAM": {
           "CAMUseSSL": "boolean",
@@ -89,13 +95,14 @@
           "SkipSSLCertVerification": "boolean",
           "SkipSSLCRLVerification": "boolean",
           "UseServerAccount": "boolean",
-          "VerifyCertServerName[]": "unknown",
+          "VerifyCertServerName?": "null",
+          "VerifyCertServerName[]?": "unknown",
           "VerifyServerSSLCert": "boolean",
           "WellKnownUserName": "null"
         },
         "Network": {
           "IdleConnectionTimeOut": "string",
-          "IPAddress": "null",
+          "IPAddress": "null|string",
           "IPVersion": "string",
           "NetRecvBlockingWaitLimit": "string",
           "NetRecvMaxClientIOWaitWithinAPIs": "string",
@@ -145,7 +152,7 @@
           "ThresholdForThreadWaitingTime": "string"
         },
         "ExternalDatabase": {
-          "ODBCLibraryPath": "null",
+          "ODBCLibraryPath": "null|string",
           "ODBCTimeoutInSeconds": "number",
           "OracleErrorForceRowStatus": "null",
           "SQLFetchType": "null",
@@ -167,7 +174,7 @@
         "MaskUserNameInServerTools": "boolean",
         "PerfMonActive": "boolean",
         "PerformanceMonitorOn": "boolean",
-        "RunningInBackground": "null",
+        "RunningInBackground": "boolean|null",
         "ServerLog": {
           "Enable": "boolean",
           "LogReleaseLineCount": "number"
@@ -184,6 +191,7 @@
         },
         "UnicodeUpperLowerCase": "boolean"
       },
+      "EncryptionAtRest?": "null",
       "Modelling": {
         "DefaultMeasuresDimension": "boolean",
         "EnableNewHierarchyCreation": "boolean",
@@ -298,7 +306,10 @@
         "Name": "string",
         "StartTime": "string",
         "Tasks[]": {
-          "Parameters[]": "unknown",
+          "Parameters[]": {
+            "Name": "string",
+            "Value": "number"
+          },
           "Process": {
             "@odata.etag": "string",
             "Name": "string"
@@ -566,8 +577,25 @@
       "@odata.count?": "number",
       "value[]": {
         "@odata.etag": "string",
-        "Name": "string",
+        "@odata.id?": "string",
+        "Edges[]?": {
+          "@odata.id": "string",
+          "ComponentName": "string"
+        },
+        "Level?": "number",
+        "Name?": "string",
         "Type?": "string"
+      }
+    },
+    "GET /api/v1/Dimensions('*')/Hierarchies('*')/Elements('*')": {
+      "@odata.context": "string",
+      "@odata.etag": "string",
+      "Name": "string"
+    },
+    "GET /api/v1/Dimensions('*')/Hierarchies('*')/Elements('*') !404": {
+      "error": {
+        "code": "string",
+        "message": "string"
       }
     },
     "GET /api/v1/Dimensions('*')/Hierarchies('*')/PrivateSubsets": {
@@ -685,7 +713,7 @@
         "Name": "string",
         "Prompt": "string",
         "Type": "string",
-        "Value": "number"
+        "Value": "number|string"
       },
       "PrologProcedure?": "string",
       "UIData?": "string",
@@ -710,7 +738,13 @@
         "Name": "string",
         "Prompt": "string",
         "Type": "string",
-        "Value": "number"
+        "Value": "number|string"
+      }
+    },
+    "GET /api/v1/Processes('*')/Parameters !404": {
+      "error": {
+        "code": "string",
+        "message": "string"
       }
     },
     "GET /api/v1/Processes('*')/Variables": {
@@ -888,6 +922,48 @@
     "POST /api/v1/$batch": {
       "responses[]": {
         "body": "unknown",
+        "body?": {
+          "@odata.context?": "string",
+          "@odata.etag?": "string",
+          "@odata.id?": "string",
+          "AdminHost?": "string",
+          "AllowSeparateNandCRules?": "boolean",
+          "Attributes?": {
+            "Caption": "string"
+          },
+          "ClientCAMURIs[]?": "unknown",
+          "ClientMessagePortNumber?": "number",
+          "ClientPingCAMPassport?": "number",
+          "ComponentName?": "string",
+          "DataBaseDirectory?": "string",
+          "DisableSandboxing?": "boolean",
+          "DistributedOutputDir?": "string",
+          "error?": {
+            "code": "string",
+            "message": "string"
+          },
+          "ForceReevaluationOfFeedersForFedCellsOnDataChange?": "boolean",
+          "HTTPPortNumber?": "number",
+          "Index?": "number",
+          "IntegratedSecurityMode?": "boolean",
+          "JobQueuing?": "boolean",
+          "Level?": "number",
+          "Name?": "string",
+          "ParentName?": "string",
+          "PortNumber?": "number",
+          "PrincipalName?": "string",
+          "ProductVersion?": "string",
+          "SecurityMode?": "string",
+          "SecurityPackageName?": "string",
+          "ServerCAMURI?": "string",
+          "ServerName?": "string",
+          "Type?": "string",
+          "UnicodeUpperLowerCase?": "boolean",
+          "UniqueName?": "string",
+          "value?": "string",
+          "WebCAMURI?": "string",
+          "Weight?": "number"
+        },
         "headers?": {
           "content-type?": "string",
           "etag?": "string",
@@ -954,7 +1030,10 @@
     },
     "POST /api/v1/Cubes('*')/tm1.CheckRules": {
       "@odata.context": "string",
-      "value[]": "unknown"
+      "value[]": {
+        "LineNumber": "number",
+        "Message": "string"
+      }
     },
     "POST /api/v1/Cubes('*')/tm1.TraceCellCalculation": {
       "@odata.context": "string",
@@ -1161,6 +1240,14 @@
       "@odata.context": "string",
       "ErrorLogFile?": "null|object",
       "ProcessExecuteStatusCode": "string"
+    },
+    "POST /api/v1/Sandboxes": {
+      "@odata.context": "string",
+      "IncludeInSandboxDimension": "boolean",
+      "IsActive": "boolean",
+      "IsLoaded": "boolean",
+      "IsQueued": "boolean",
+      "Name": "string"
     },
     "POST /api/v1/Threads(*)/tm1.CancelOperation !404": {
       "error": {

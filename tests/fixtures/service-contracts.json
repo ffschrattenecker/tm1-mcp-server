@@ -1,6 +1,6 @@
 {
-  "recordedAgainst": ["11.8.02900.8"],
-  "recordedAt": "2026-08-30",
+  "recordedAgainst": ["11.8.02900.8", "11.8.03500.4"],
+  "recordedAt": "2026-09-27",
   "methods": {
     "batch.execute": {
       "[]": {
@@ -80,13 +80,19 @@
         "name": "string",
         "processes[]": {
           "name": "string",
-          "parameters": {}
+          "parameters": {
+            "pLogOutput?": "number",
+            "pStrictErrorHandling?": "number"
+          }
         },
         "startTime": "string"
       }
     },
     "cubes.checkRule": {
-      "[]": "unknown"
+      "[]": {
+        "lineNumber": "number",
+        "message": "string"
+      }
     },
     "cubes.exists": "boolean",
     "cubes.getAllRules": {
@@ -148,6 +154,17 @@
         "to": "string"
       }
     },
+    "elements.deleteMany": {
+      "[]": {
+        "deleted": "boolean",
+        "elementName": "string",
+        "error?": {
+          "code": "string",
+          "message": "string"
+        }
+      }
+    },
+    "elements.exists": "boolean",
     "elements.getAttributeValues": {
       "[]": {
         "attributeName": "string",
@@ -155,11 +172,30 @@
         "value": "null|number|string"
       }
     },
+    "elements.getAttributeValuesPage": {
+      "items[]": {
+        "elementName": "string",
+        "values": {
+          "Caption?": "string",
+          "Weight": "null|number"
+        }
+      },
+      "total": "number"
+    },
     "elements.listAttributes": {
       "[]": {
         "name": "string",
         "type": "string"
       }
+    },
+    "elements.planBulkUpsert": {
+      "creates[]": "string",
+      "removals[]": {
+        "children[]": "string",
+        "parent": "string"
+      },
+      "typeChanges[]": "unknown",
+      "updates[]": "string"
     },
     "elements.scanElementNames": {
       "names[]": "string",
@@ -202,6 +238,19 @@
       "paths[]": {
         "[]": "string"
       }
+    },
+    "hierarchies.getCounts": {
+      "byLevel": {
+        "0": "number",
+        "1?": "number"
+      },
+      "byType": {
+        "Consolidated": "number",
+        "Numeric": "number",
+        "String": "number"
+      },
+      "maxLevel": "number",
+      "total": "number"
     },
     "hierarchies.getDescendants": {
       "descendants[]": {
@@ -326,9 +375,9 @@
     },
     "processes.getParameters": {
       "[]": {
-        "defaultValue": "number",
+        "defaultValue": "number|string",
         "name": "string",
-        "prompt": "string",
+        "prompt?": "string",
         "type": "string"
       }
     },
@@ -409,6 +458,7 @@
         "user": "string"
       }
     },
+    "server.getErrorLogContent": "string",
     "server.getInfo": {
       "adminHost": "string",
       "dataDirectory": "string",
@@ -418,7 +468,7 @@
             "IntegratedSecurityMode": "string",
             "MaximumLoginAttempts": "number",
             "SecurityPackageName": "string",
-            "ServicePrincipalName": "string"
+            "ServicePrincipalName": "null|string"
           },
           "CAM": {
             "CAMUseSSL": "boolean",
@@ -456,13 +506,14 @@
             "SkipSSLCertVerification": "boolean",
             "SkipSSLCRLVerification": "boolean",
             "UseServerAccount": "boolean",
-            "VerifyCertServerName[]": "unknown",
+            "VerifyCertServerName?": "null",
+            "VerifyCertServerName[]?": "unknown",
             "VerifyServerSSLCert": "boolean",
             "WellKnownUserName": "null"
           },
           "Network": {
             "IdleConnectionTimeOut": "string",
-            "IPAddress": "null",
+            "IPAddress": "null|string",
             "IPVersion": "string",
             "NetRecvBlockingWaitLimit": "string",
             "NetRecvMaxClientIOWaitWithinAPIs": "string",
@@ -513,7 +564,7 @@
             "ThresholdForThreadWaitingTime": "string"
           },
           "ExternalDatabase": {
-            "ODBCLibraryPath": "null",
+            "ODBCLibraryPath": "null|string",
             "ODBCTimeoutInSeconds": "number",
             "OracleErrorForceRowStatus": "null",
             "SQLFetchType": "null",
@@ -535,7 +586,7 @@
           "MaskUserNameInServerTools": "boolean",
           "PerfMonActive": "boolean",
           "PerformanceMonitorOn": "boolean",
-          "RunningInBackground": "null",
+          "RunningInBackground": "boolean|null",
           "ServerLog": {
             "Enable": "boolean",
             "LogReleaseLineCount": "number"
@@ -559,6 +610,7 @@
         "DataBaseDirectory": "string",
         "DisableSandboxing": "boolean",
         "DistributedOutputDir": "string",
+        "EncryptionAtRest?": "null",
         "ForceReevaluationOfFeedersForFedCellsOnDataChange": "boolean",
         "HTTPPortNumber": "number",
         "IntegratedSecurityMode": "boolean",

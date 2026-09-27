@@ -112,6 +112,21 @@
       "endpoint": "GET /api/v1/Dimensions('*')/Hierarchies('*')/Elements",
       "path": "$.value[].Edges",
       "reason": "Not a recording gap but a projection: ElementService.planBulkUpsert (tm1_bulk_upsert_elements dryRun / removal guard) expands Edges($select=ComponentName) on a Name-filtered Elements read to learn each consolidation's current children. The other Elements reads never expand it, so the recording never saw the key."
+    },
+    {
+      "endpoint": "GET /api/v1/Dimensions('*')/Hierarchies('*')/Elements('*')",
+      "path": "$.Type",
+      "reason": "Not a recording gap but a projection: ElementService.bulkUpsert reads an existing element's type with $select=Type to detect type changes. The recorded single-element reads were ElementService.exists, which selects Name only."
+    },
+    {
+      "endpoint": "hierarchies.getCounts",
+      "path": "$.byLevel.2",
+      "reason": "byLevel is keyed by element level, so its keys are as deep as the hierarchy. The recorded sandbox hierarchies went no deeper than level 1; a level-2 key is equally real."
+    },
+    {
+      "endpoint": "GET /api/v1/Chores",
+      "path": "$.value[].Tasks[].Parameters[].Value",
+      "reason": "A chore task parameter's value is numeric or string depending on the parameter's type. Only numeric values were recorded; see the Processes('*')/Parameters entry."
     }
   ]
 }
