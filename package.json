@@ -16,6 +16,7 @@
     "dist",
     "!dist/**/*.map",
     "NOTICE",
+    "npm-shrinkwrap.json",
     "CHANGELOG.md"
   ],
   "prettier": {
@@ -70,7 +71,7 @@
   ],
   "license": "MIT",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.19.0"
   },
   "overrides": {
     "fast-uri": "^4.2.1",

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
+- **Node.js 22.19 or newer is required.** Node 20 reached end of life in April 2026. CI
+  now tests Node 22 and 24. *Action:* upgrade Node before updating.
+
 - **Exported files hold the process code unmasked; only the inline copy is masked.**
   `tm1_export_process_to_git` and `tm1_export_process_to_pro` wrote `'***'` over
   credential literals into the files too, so a re-import deployed
@@ -101,6 +104,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   element `A:B` in the default hierarchy.
 
 ### Fixed
+
+- **Installs get the dependency tree CI tested.** The package now ships
+  `npm-shrinkwrap.json`. Before, the lockfile was never published and `npx` resolved
+  dependencies fresh on every install, so lockfile security fixes (and the `fast-uri`
+  override) never reached users. `npm run smoke:tarball` fails if the file is missing.
+  Found by the ffschrattenecker fork.
 
 - **A TM1 request can wait longer than five minutes.** undici, the HTTP client underneath,
   ends every request that has not answered after 300 s with `UND_ERR_HEADERS_TIMEOUT`, no
@@ -307,7 +316,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`tm1_delete_hierarchy` no longer claims the default hierarchy is undeletable.** The
   hierarchy that carries the dimension's own name can be deleted. It is an unusual thing to
   do, but the server allows it, and the sentence sent callers to `tm1_delete_dimension` for
-  something this tool does.
+  something this tool does. TM1 then makes another hierarchy the default (measured on v11
+  and v12). The description now says that this server's tools still default an omitted
+  `hierarchyName` to the dimension name, so it has to be passed on every call afterwards.
 - **Two tools described a consolidated cell write wrongly, and disagreed with each other.**
   `tm1_write_cells` said such writes "are rejected by TM1"; `tm1_check_writable_coords` said
   they "silent-fail". Neither is the rule: whether the server accepts one depends on the
