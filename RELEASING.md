@@ -63,8 +63,10 @@ tag publishes.
    (Actions → Publish to npm → Run workflow, **ref = the tag**) — never move or
    re-push the tag. A manual `npm publish` from a machine is the last resort:
    it has no provenance and needs an interactive 2FA login.
-9. **GitHub release:** create a release for the `vX.Y.Z` tag with the changelog
-   section as the body (title style: `vX.Y.Z — <short theme>`).
+9. **GitHub release (optional):** the tag push already published to npm, and
+   nothing depends on a GitHub release. If you want release notes on GitHub,
+   create a release for the `vX.Y.Z` tag with the changelog section as the body
+   (title style: `vX.Y.Z — <short theme>`).
 
 ## Guardrails already wired
 
