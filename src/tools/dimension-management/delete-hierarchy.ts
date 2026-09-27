@@ -5,9 +5,7 @@ import { DESTRUCTIVE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
-
-// TM1 names ignore case and spaces.
-const norm = (s: string) => s.toLowerCase().replace(/ /g, "");
+import { tm1NameEquals } from "../../lib/tm1-name.js";
 
 export const registerDeleteHierarchy = defineTool({
   name: "tm1_delete_hierarchy",
@@ -24,7 +22,7 @@ export const registerDeleteHierarchy = defineTool({
     requireConfirm(confirm, hierarchyName, "hierarchy");
     // TM1 does NOT refuse this itself: 11.8 answers 204 and leaves a dimension
     // listed with no hierarchies at all (verified live). Refuse it here.
-    if (norm(hierarchyName) === norm(dimensionName)) {
+    if (tm1NameEquals(hierarchyName, dimensionName)) {
       throw new TM1Error({
         code: TM1ErrorCode.VALIDATION_ERROR,
         message: `'${hierarchyName}' is the default hierarchy of '${dimensionName}' and cannot be deleted on its own.`,

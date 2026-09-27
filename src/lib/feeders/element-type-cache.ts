@@ -21,6 +21,7 @@
  * lookup paths so positional/qualified mixing in feeders resolves correctly.
  */
 import type { HierarchyElement } from "../../types.js";
+import { tm1NameKey } from "../tm1-name.js";
 
 export type ElementType = "Numeric" | "Consolidated" | "String";
 
@@ -50,10 +51,6 @@ const VALID_TYPES = new Set<ElementType>(["Numeric", "Consolidated", "String"]);
  */
 const MAX_CONSECUTIVE_LOAD_FAILURES = 3;
 
-function normalize(s: string): string {
-  return s.toLowerCase();
-}
-
 export class ElementTypeCache {
   private readonly hierarchy: HierarchyLike;
   private readonly slots = new Map<string, Map<string, ElementType> | null>();
@@ -73,13 +70,13 @@ export class ElementTypeCache {
     hier: string,
     elem: string,
   ): Promise<ElementType | null> {
-    const slotKey = `${normalize(dim)}|${normalize(hier)}`;
+    const slotKey = `${tm1NameKey(dim)}|${tm1NameKey(hier)}`;
     let slot = this.slots.get(slotKey);
     if (slot === undefined) {
       slot = await this.load(slotKey, dim, hier);
     }
     if (slot === null) return null;
-    return slot.get(normalize(elem)) ?? null;
+    return slot.get(tm1NameKey(elem)) ?? null;
   }
 
   private async load(
@@ -105,7 +102,7 @@ export class ElementTypeCache {
         const m = new Map<string, ElementType>();
         for (const e of elements) {
           if (VALID_TYPES.has(e.type)) {
-            m.set(normalize(e.name), e.type);
+            m.set(tm1NameKey(e.name), e.type);
           }
         }
         this.slots.set(slotKey, m);
