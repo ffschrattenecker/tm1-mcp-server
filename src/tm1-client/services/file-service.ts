@@ -65,7 +65,9 @@ export class FileService {
    */
   private async appsChildren(url: string): Promise<AppsEntry[]> {
     const entries: AppsEntry[] = [];
-    let next: string | undefined = `${url}/Contents`;
+    // v12 leaves `ID` out of this listing unless it is selected (v11 always
+    // sends it); without it every entry resolved to Contents('undefined').
+    let next: string | undefined = `${url}/Contents?$select=ID,Name`;
     while (next) {
       const r: {
         value: Array<{ ID: string; Name: string; "@odata.type": string }>;

@@ -29,7 +29,15 @@ function makeService() {
   const http = {
     request: vi.fn(async (method: string, path: string, body?: unknown) => {
       calls.push({ method, path, body });
-      const hit = listings[path];
+      // v12 drops `ID` from a listing unless it is selected, so every listing
+      // GET must carry the $select; the fake answers only when it does.
+      const SEL = "?$select=ID,Name";
+      const hit =
+        method === "GET"
+          ? path.endsWith(SEL)
+            ? listings[path.slice(0, -SEL.length)]
+            : undefined
+          : listings[path];
       if (hit && method === "GET") return { value: hit };
       if (method === "POST") {
         // Mirror the server: a posted Document surfaces as a DocumentReference
@@ -155,7 +163,7 @@ describe("FileService, applications container", () => {
     const http = {
       request: vi.fn(async (_method: string, path: string) => {
         calls.push(path);
-        if (path === `${ROOT}/Contents`) {
+        if (path === `${ROOT}/Contents?$select=ID,Name`) {
           return {
             value: [entry("DocumentReference", "a.csv.blob", "a.csv")],
             "@odata.nextLink": `https://tm1.invalid${page2}`,
@@ -172,6 +180,6 @@ describe("FileService, applications container", () => {
 
     const names = await new FileService(http).list(undefined, "applications");
     expect(names).toEqual(["a.csv", "b.csv"]);
-    expect(calls).toEqual([`${ROOT}/Contents`, page2]);
+    expect(calls).toEqual([`${ROOT}/Contents?$select=ID,Name`, page2]);
   });
 });
