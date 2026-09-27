@@ -48,14 +48,17 @@ contract built from element 0 alone would call element 1 a violation.
 ```bash
 npm run contracts:record                 # tm1-test, full live suite
 node scripts/record-wire-contracts.mjs tm1-prod --read-only --merge
+node scripts/record-wire-contracts.mjs --connection=tm1-plapp-franz --merge
 ```
 
 The recorder rides along with the live suite instead of probing a separate list
 of endpoints — the live suite already drives ~35 tools including writes and
 deliberate error paths, so what gets recorded is what the code actually sends.
 
-The server is named from `.mcp.json`, never from `.env`: `.env` points at a
-production instance and the full suite creates and deletes sandbox objects.
+The server is named explicitly — an `.mcp.json` entry, or with `--connection=<name>`
+a connection folder `~/.tm1/mcp-servers/<name>/.env` — never taken from the repo's
+`.env`: that may point at a production instance, and the full suite creates and
+deletes sandbox objects.
 `--read-only` restricts the run to the read sweep, which is safe anywhere.
 
 `--merge` folds a run into what is already on disk. That is how a sandbox

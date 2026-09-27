@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 // Records wire contracts by running the live suite against a named server
-// from .mcp.json, with RECORD_CONTRACTS=1.
+// with RECORD_CONTRACTS=1.
 //
-// The server is taken from .mcp.json, never from .env: .env points at a
-// production instance, and the live suite creates and deletes sandbox objects.
-// Refusing to guess is the whole point of this wrapper.
+// The server is named explicitly — an .mcp.json entry or a connection folder —
+// never taken from the repo's .env: .env may point at a production instance,
+// and the live suite creates and deletes sandbox objects. Refusing to guess is
+// the whole point of this wrapper.
 //
 //   node scripts/record-wire-contracts.mjs [serverName] [--merge] [--read-only]
+//   node scripts/record-wire-contracts.mjs --connection=<name> [--merge] ...
 //
-//   --merge      fold this run into the existing contracts instead of
+//   --connection=<name>  take the server from ~/.tm1/mcp-servers/<name>/.env
+//                (or TM1_CONNECTIONS_DIR) instead of an .mcp.json entry
+//   --merge     fold this run into the existing contracts instead of
 //                replacing them
 //   --read-only  run only the read-only sweep, so the target server is never
 //                written to. Required in practice for anything but a test
@@ -17,23 +21,43 @@
 //                longer matches the contracts on disk.
 //
 // Default server: tm1-test.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse } from "dotenv";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const args = process.argv.slice(2);
 const flags = new Set(args.filter((a) => a.startsWith("--")));
-const name = args.find((a) => !a.startsWith("--")) ?? "tm1-test";
+const connection = args
+  .find((a) => a.startsWith("--connection="))
+  ?.slice("--connection=".length);
+const name = connection ?? args.find((a) => !a.startsWith("--")) ?? "tm1-test";
 const readOnly = flags.has("--read-only");
 
-const cfg = JSON.parse(readFileSync(join(root, ".mcp.json"), "utf8"));
-const entry = cfg.mcpServers?.[name];
+function fromConnectionFolder(conn) {
+  const dir =
+    process.env.TM1_CONNECTIONS_DIR ?? join(homedir(), ".tm1", "mcp-servers");
+  const file = join(dir, conn, ".env");
+  if (!existsSync(file)) return undefined;
+  return { env: parse(readFileSync(file, "utf8")) };
+}
+
+function fromMcpJson(server) {
+  const file = join(root, ".mcp.json");
+  if (!existsSync(file)) return undefined;
+  return JSON.parse(readFileSync(file, "utf8")).mcpServers?.[server];
+}
+
+const entry = connection ? fromConnectionFolder(connection) : fromMcpJson(name);
 if (!entry?.env?.TM1_BASE_URL) {
   console.error(
-    `record-wire-contracts: no server "${name}" with TM1_BASE_URL in .mcp.json`,
+    connection
+      ? `record-wire-contracts: no connection "${name}" with TM1_BASE_URL under ~/.tm1/mcp-servers (or TM1_CONNECTIONS_DIR)`
+      : `record-wire-contracts: no server "${name}" with TM1_BASE_URL in .mcp.json`,
   );
   process.exit(1);
 }
