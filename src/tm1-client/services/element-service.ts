@@ -13,6 +13,7 @@ import type {
   ElementAttributeValue,
   ElementCreate,
   ElementUpdate,
+  HierarchyElement,
 } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
 import { BatchUnsupportedError } from "./batch-service.js";
@@ -169,6 +170,30 @@ export class ElementService {
     } catch (e) {
       if (e instanceof TM1Error && e.code === TM1ErrorCode.NOT_FOUND)
         return false;
+      throw e;
+    }
+  }
+
+  /**
+   * Stored name and type of one element, resolved like exists() — by TM1's
+   * own key lookup — or null when it does not resolve. One keyed GET instead
+   * of fetching the whole hierarchy to find a single element.
+   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements('{e}')?$select=Name,Type
+   */
+  async getType(
+    dimensionName: string,
+    hierarchyName: string,
+    elementName: string,
+  ): Promise<{ name: string; type: HierarchyElement["type"] } | null> {
+    try {
+      const el = await this.http.request<{ Name: string; Type: string }>(
+        "GET",
+        `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(elementName)}')?$select=Name,Type`,
+      );
+      return { name: el.Name, type: el.Type as HierarchyElement["type"] };
+    } catch (e) {
+      if (e instanceof TM1Error && e.code === TM1ErrorCode.NOT_FOUND)
+        return null;
       throw e;
     }
   }

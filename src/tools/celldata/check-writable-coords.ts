@@ -39,17 +39,20 @@ export const registerCheckWritableCoords = defineTool({
       ),
   },
   handler: async ({ cubeName, coords: given, dimensions }, tm1Client) => {
-    const cubes = await tm1Client.cubes.list();
-    const cubeMeta = cubes.find(
-      (c) => c.name.toLowerCase() === cubeName.toLowerCase(),
-    );
-    if (!cubeMeta) {
-      throw new TM1Error({
-        code: TM1ErrorCode.NOT_FOUND,
-        message: `Cube '${cubeName}' not found`,
-      });
+    // Dimension order only — cached per connection — instead of listing
+    // every cube with its dimensions to find this one.
+    let dims: string[];
+    try {
+      dims = await tm1Client.cubes.getDimensionNames(cubeName);
+    } catch (e) {
+      if (e instanceof TM1Error && e.code === TM1ErrorCode.NOT_FOUND) {
+        throw new TM1Error({
+          code: TM1ErrorCode.NOT_FOUND,
+          message: `Cube '${cubeName}' not found`,
+        });
+      }
+      throw e;
     }
-    const dims = cubeMeta.dimensions;
     let coords = given;
     let sandboxDefaulted: string | undefined;
     if (dimensions !== undefined) {
@@ -74,10 +77,9 @@ export const registerCheckWritableCoords = defineTool({
         // coords.length === dims.length is guarded above
         const element = coords[idx]!;
         try {
-          const hier = await tm1Client.hierarchies.get(dim, dim);
-          const el = hier.elements.find(
-            (e) => e.name.toLowerCase() === element.toLowerCase(),
-          );
+          // One keyed GET per dimension, resolved by TM1 itself (case, spaces,
+          // aliases) — not the whole hierarchy to find one element.
+          const el = await tm1Client.elements.getType(dim, dim, element);
           if (!el) {
             return {
               dimension: dim,
