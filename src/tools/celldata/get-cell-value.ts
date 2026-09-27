@@ -18,7 +18,9 @@ export const registerGetCellValue = defineTool({
     cubeName: z.string().describe("Name of the TM1 cube"),
     elements: z
       .array(z.string())
-      .describe("Element names for each dimension of the cube"),
+      .describe(
+        "One element per cube dimension, in cube order. Sandboxes may be left out (bound to Base).",
+      ),
   },
   handler: async ({ cubeName, elements }, tm1Client) => {
     const value = await tm1Client.cells.getValue(cubeName, elements);

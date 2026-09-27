@@ -221,6 +221,60 @@ describe("TM1Client – Cell Data Methods", () => {
         client.cells.getValue("SalesCube", ["Jan", "Germany"]),
       ).rejects.toThrow(/3 dimensions but 2 element\(s\)/);
     });
+
+    // EnableSandboxDimension=true puts Sandboxes in front of every cube;
+    // leaving it out binds Base, as tm1_write_cells does.
+    const sandboxedMeta = {
+      Name: "SalesCube",
+      Dimensions: [{ Name: "Sandboxes" }, { Name: "Time" }, { Name: "Region" }],
+    };
+
+    it("binds a left-out Sandboxes to Base", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(mockResponse(sandboxedMeta))
+        .mockResolvedValueOnce(
+          mockResponse({
+            ID: "cellset-sb",
+            Cells: [{ Value: 7, FormattedValue: "7" }],
+          }),
+        );
+
+      expect(await client.cells.getValue("SalesCube", ["Jan", "Germany"])).toBe(
+        7,
+      );
+      const body = JSON.parse(fetchSpy.mock.calls[1][1].body);
+      expect(body.MDX).toBe(
+        "SELECT {[Sandboxes].[Base]} ON COLUMNS FROM [SalesCube] WHERE ([Time].[Jan],[Region].[Germany])",
+      );
+    });
+
+    it("still takes an explicit Sandboxes element", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(mockResponse(sandboxedMeta))
+        .mockResolvedValueOnce(
+          mockResponse({
+            ID: "cellset-sb2",
+            Cells: [{ Value: 7, FormattedValue: "7" }],
+          }),
+        );
+
+      await client.cells.getValue("SalesCube", ["MySandbox", "Jan", "Germany"]);
+      const body = JSON.parse(fetchSpy.mock.calls[1][1].body);
+      expect(body.MDX).toContain("{[Sandboxes].[MySandbox]}");
+    });
+
+    it("refuses a sandboxed coordinate two short, naming Sandboxes as optional", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse(sandboxedMeta));
+
+      await expect(
+        client.cells.getValue("SalesCube", ["Jan"]),
+      ).rejects.toMatchObject({
+        message: expect.stringMatching(/3 dimensions but 1 element\(s\)/),
+        hintOverride: expect.stringContaining(
+          "Only Sandboxes may be left out; it is then bound to Base.",
+        ),
+      });
+    });
   });
 
   // ── executeMdx() ───────────────────────────────────────────────────────────

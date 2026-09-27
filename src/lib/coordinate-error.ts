@@ -9,6 +9,11 @@
 // cube's dimension order, names the uncovered positions, and `details` pairs
 // every dimension with the element that landed on it.
 import { TM1Error, TM1ErrorCode } from "../types.js";
+import {
+  BASE_SANDBOX,
+  SANDBOX_DIMENSION,
+  sandboxPosition,
+} from "./cell-address.js";
 
 export function dimensionCountMismatch(
   cubeName: string,
@@ -26,7 +31,11 @@ export function dimensionCountMismatch(
     message:
       `Cube '${cubeName}' has ${dimensions.length} dimensions but ${elements.length} element(s) were given.` +
       gap,
-    hint: `Pass exactly one element per dimension, in this order: ${dimensions.join(", ")}. A forgotten dimension anywhere in the list shifts every later element onto the wrong one — check the pairing in details.`,
+    hint:
+      `Pass exactly one element per dimension, in this order: ${dimensions.join(", ")}. A forgotten dimension anywhere in the list shifts every later element onto the wrong one — check the pairing in details.` +
+      (sandboxPosition(dimensions) >= 0
+        ? ` Only ${SANDBOX_DIMENSION} may be left out; it is then bound to ${BASE_SANDBOX}.`
+        : ""),
     details: JSON.stringify(
       dimensions.map((dimension, i) => ({
         dimension,

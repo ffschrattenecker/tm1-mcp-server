@@ -5,7 +5,10 @@ import { READ_ONLY } from "../annotations.js";
 import { WritableCoordsResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
-import { resolveCellAddress } from "../../lib/cell-address.js";
+import {
+  bindLeftOutSandbox,
+  resolveCellAddress,
+} from "../../lib/cell-address.js";
 
 interface CoordCheck {
   dimension: string;
@@ -26,7 +29,7 @@ export const registerCheckWritableCoords = defineTool({
     coords: z
       .array(z.string())
       .describe(
-        "Element name per dimension: in cube dimension order, or in the order of dimensions when given.",
+        "Element name per dimension: in cube dimension order, or in the order of dimensions when given. Sandboxes may be left out (bound to Base).",
       ),
     dimensions: z
       .array(z.string())
@@ -56,8 +59,14 @@ export const registerCheckWritableCoords = defineTool({
       const address = resolveCellAddress(cubeName, dims, dimensions);
       coords = address.toCubeOrder(given);
       sandboxDefaulted = address.sandboxDefaulted;
-    } else if (coords.length !== dims.length) {
-      throw dimensionCountMismatch(cubeName, dims, coords);
+    } else {
+      const bound = bindLeftOutSandbox(dims, coords);
+      if (bound) {
+        coords = bound;
+        sandboxDefaulted = "Base";
+      } else if (coords.length !== dims.length) {
+        throw dimensionCountMismatch(cubeName, dims, coords);
+      }
     }
 
     const checks: CoordCheck[] = await Promise.all(

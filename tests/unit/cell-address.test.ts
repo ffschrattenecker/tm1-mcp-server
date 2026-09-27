@@ -4,12 +4,37 @@
 // explicitly instead of being left to TM1's default member.
 import { describe, it, expect } from "vitest";
 import { z, type ZodRawShape } from "zod";
-import { resolveCellAddress } from "../../src/lib/cell-address.js";
+import {
+  bindLeftOutSandbox,
+  resolveCellAddress,
+} from "../../src/lib/cell-address.js";
 import { registerWriteCells } from "../../src/tools/celldata/write-cells.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 
 const PLAIN = ["Version", "Row", "Measure"];
 const SANDBOXED = ["Sandboxes", "Row", "Measure"];
+
+describe("bindLeftOutSandbox", () => {
+  it("puts Base at the Sandboxes position of a coordinate one short", () => {
+    expect(bindLeftOutSandbox(SANDBOXED, ["R1", "Amount"])).toEqual([
+      "Base",
+      "R1",
+      "Amount",
+    ]);
+    expect(bindLeftOutSandbox(["Row", "sandboxes"], ["R1"])).toEqual([
+      "R1",
+      "Base",
+    ]);
+  });
+
+  it("leaves every other length to the caller's count check", () => {
+    expect(bindLeftOutSandbox(SANDBOXED, ["Base", "R1", "Amount"])).toBe(
+      undefined,
+    );
+    expect(bindLeftOutSandbox(SANDBOXED, ["R1"])).toBeUndefined();
+    expect(bindLeftOutSandbox(PLAIN, ["R1", "Amount"])).toBeUndefined();
+  });
+});
 
 describe("resolveCellAddress", () => {
   it("maps a caller's dimension order onto cube order", () => {

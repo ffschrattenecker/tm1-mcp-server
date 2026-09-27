@@ -22,6 +22,30 @@ import { TM1Error, TM1ErrorCode } from "../types.js";
 export const SANDBOX_DIMENSION = "Sandboxes";
 export const BASE_SANDBOX = "Base";
 
+/** Index of the cube's `Sandboxes` dimension, or -1. */
+export function sandboxPosition(cubeDimensions: readonly string[]): number {
+  return cubeDimensions.findIndex(
+    (d) => d.toLowerCase() === SANDBOX_DIMENSION.toLowerCase(),
+  );
+}
+
+/**
+ * Positional counterpart of resolveCellAddress, for tools that take one
+ * element per cube dimension (get_cell_value, check_writable_coords without
+ * `dimensions`). A coordinate exactly one short on a cube with `Sandboxes`
+ * is read as "Sandboxes left out" and gets `Base` at its position; anything
+ * else returns undefined and the caller's count check refuses it as before.
+ */
+export function bindLeftOutSandbox(
+  cubeDimensions: readonly string[],
+  elements: readonly string[],
+): string[] | undefined {
+  if (elements.length !== cubeDimensions.length - 1) return undefined;
+  const pos = sandboxPosition(cubeDimensions);
+  if (pos < 0) return undefined;
+  return [...elements.slice(0, pos), BASE_SANDBOX, ...elements.slice(pos)];
+}
+
 export interface ResolvedAddress {
   /** The cube's dimensions, in cube order. */
   dimensions: string[];
@@ -49,9 +73,7 @@ export function resolveCellAddress(
     positions.push(pos ?? -1);
   }
   const missing = cubeDimensions.filter((_, i) => !seen.has(i));
-  const sandboxPos = cubeDimensions.findIndex(
-    (d) => d.toLowerCase() === SANDBOX_DIMENSION.toLowerCase(),
-  );
+  const sandboxPos = sandboxPosition(cubeDimensions);
   const onlySandboxMissing =
     missing.length === 1 && sandboxPos >= 0 && !seen.has(sandboxPos);
 

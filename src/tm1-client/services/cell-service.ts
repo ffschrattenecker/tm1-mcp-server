@@ -15,6 +15,7 @@ import type {
 import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { escapeMdxName } from "../../lib/mdx.js";
 import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
+import { bindLeftOutSandbox } from "../../lib/cell-address.js";
 import { freeCellset, transformCellsetResponse } from "./cellset-transform.js";
 
 // OData key encoder: double ' per OData literal rules, then percent-encode.
@@ -57,6 +58,8 @@ export class CellService {
       Dimensions: Array<{ Name: string }>;
     }>("GET", cubePath);
     const dims = cubeMeta.Dimensions.map((d) => d.Name);
+    // Sandboxes left out → Base, as tm1_write_cells does.
+    elements = bindLeftOutSandbox(dims, elements) ?? elements;
     if (elements.length !== dims.length) {
       throw dimensionCountMismatch(cubeName, dims, elements);
     }
