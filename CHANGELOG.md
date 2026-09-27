@@ -105,6 +105,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Applications file tools work on v12.** v12 leaves `ID` out of an Applications listing
+  unless it is selected, so every upload, read, delete and subfolder listing went to
+  `Contents('undefined')` and failed with NOT_FOUND; a failed upload also left its entry
+  behind. The listing now selects `ID` explicitly.
+
 - **Installs get the dependency tree CI tested.** The package now ships
   `npm-shrinkwrap.json`. Before, the lockfile was never published and `npx` resolved
   dependencies fresh on every install, so lockfile security fixes (and the `fast-uri`
@@ -316,8 +321,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`tm1_delete_hierarchy` no longer claims the default hierarchy is undeletable.** The
   hierarchy that carries the dimension's own name can be deleted. It is an unusual thing to
   do, but the server allows it, and the sentence sent callers to `tm1_delete_dimension` for
-  something this tool does. TM1 then makes another hierarchy the default (measured on v11
-  and v12). The description now says that this server's tools still default an omitted
+  something this tool does. The description now says that this server's tools still default an omitted
   `hierarchyName` to the dimension name, so it has to be passed on every call afterwards.
 - **Two tools described a consolidated cell write wrongly, and disagreed with each other.**
   `tm1_write_cells` said such writes "are rejected by TM1"; `tm1_check_writable_coords` said
