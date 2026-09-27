@@ -74,9 +74,17 @@ const target = readOnly
   ? ["tests/live/read-broad.live.test.ts", "tests/live/read-smoke.live.test.ts"]
   : [];
 
+// vitest's own entry through this node, not `npx`: on Windows npx is
+// npx.cmd, which spawnSync cannot start without a shell.
 const res = spawnSync(
-  "npx",
-  ["vitest", "run", "--config", "vitest.live.config.ts", ...target],
+  process.execPath,
+  [
+    join(root, "node_modules", "vitest", "vitest.mjs"),
+    "run",
+    "--config",
+    "vitest.live.config.ts",
+    ...target,
+  ],
   {
     cwd: root,
     stdio: "inherit",
@@ -88,6 +96,12 @@ const res = spawnSync(
     },
   },
 );
+if (res.error) {
+  console.error(
+    `record-wire-contracts: could not start vitest: ${res.error.message}`,
+  );
+  process.exit(1);
+}
 // The live suite has known per-version failures; a failing assertion still
 // produced real responses, so a non-zero exit does not invalidate the
 // recording. Surface the code without treating it as fatal.
