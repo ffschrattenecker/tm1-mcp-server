@@ -61,6 +61,32 @@ describe("ConnectionRegistry.fromEnvironment", () => {
     expect(reg.anyReadwrite).toBe(false);
   });
 
+  it("applies TM1_ENVIRONMENT=prod per connection folder", () => {
+    writeConn(root, "prod", [
+      "TM1_BASE_URL=http://p:1",
+      ...CREDS,
+      "TM1_MODE=readwrite",
+      "TM1_ENVIRONMENT=prod",
+    ]);
+    writeConn(root, "test", [
+      "TM1_BASE_URL=http://t:1",
+      ...CREDS,
+      "TM1_MODE=readwrite",
+      "TM1_ENVIRONMENT=test",
+    ]);
+
+    const reg = ConnectionRegistry.fromEnvironment(
+      { TM1_CONNECTIONS_DIR: root, TM1_ALLOW_PROD_WRITES: "true" },
+      logger,
+    );
+
+    expect(reg.info("prod")?.mode).toBe("readonly");
+    expect(reg.info("prod")?.environment).toBe("prod");
+    expect(reg.info("prod")?.modeReason).toMatch(/prod forces readonly/);
+    expect(reg.info("test")?.mode).toBe("readwrite");
+    expect(reg.info("test")?.modeReason).toBeUndefined();
+  });
+
   it("narrows discovery with TM1_CONNECTIONS", () => {
     writeConn(root, "a", ["TM1_BASE_URL=http://a:1", ...CREDS]);
     writeConn(root, "b", ["TM1_BASE_URL=http://b:1", ...CREDS]);
