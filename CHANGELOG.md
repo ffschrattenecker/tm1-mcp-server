@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [7.0.1] - 2026-09-27
+
 ### Fixed
 
 - `tm1_list_connections` returns each connection's `environment` and, for a prod connection forced
@@ -1304,7 +1306,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v7.0.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v7.0.1...HEAD
+[7.0.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v7.0.0...v7.0.1
 [7.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.1.1...v7.0.0
 [6.1.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.1.0...v6.1.1
 [6.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.0.1...v6.1.0
