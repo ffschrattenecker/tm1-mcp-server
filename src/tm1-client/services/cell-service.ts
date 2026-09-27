@@ -1,7 +1,7 @@
 // Cell domain service. Owns single-cell reads, MDX cellset execution, and
 // cell writes via the cellset PATCH path. Cube-shape lookups (resolving
-// dimension order for getValue) go through the request layer directly rather
-// than CubeService to avoid a CubeService → CellService cycle later.
+// dimension order for getValue) go through the shared DimensionOrderCache
+// rather than CubeService to avoid a CubeService → CellService cycle later.
 //
 // See docs/ARCHITECTURE.md for the layering.
 import { TM1Error, TM1ErrorCode } from "../../types.js";
@@ -19,6 +19,7 @@ import { bindLeftOutSandbox } from "../../lib/cell-address.js";
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
 import { freeCellset, transformCellsetResponse } from "./cellset-transform.js";
 import { odataKey as enc } from "./odata-page.js";
+import { DimensionOrderCache } from "./dimension-order.js";
 
 // In-flight cap for the per-cell re-walk after a refused bulk write.
 const FALLBACK_CONCURRENCY = 8;
@@ -38,7 +39,12 @@ function qualifyWriteMember(dim: string, element: string): string {
 }
 
 export class CellService {
-  constructor(private readonly http: TM1HttpClient) {}
+  constructor(
+    private readonly http: TM1HttpClient,
+    private readonly dimOrder: DimensionOrderCache = new DimensionOrderCache(
+      http,
+    ),
+  ) {}
 
   /**
    * Get a single cell value via a 1-tuple MDX query.
@@ -53,12 +59,7 @@ export class CellService {
       return null;
     }
 
-    const cubePath = `/api/v1/Cubes('${enc(cubeName)}')?$expand=Dimensions($select=Name)`;
-    const cubeMeta = await this.http.request<{
-      Name: string;
-      Dimensions: Array<{ Name: string }>;
-    }>("GET", cubePath);
-    const dims = cubeMeta.Dimensions.map((d) => d.Name);
+    const dims = await this.dimOrder.get(cubeName);
     // Sandboxes left out → Base, as tm1_write_cells does.
     elements = bindLeftOutSandbox(dims, elements) ?? elements;
     if (elements.length !== dims.length) {
@@ -332,13 +333,7 @@ export class CellService {
     cubeName: string,
     elements: string[],
   ): Promise<string[]> {
-    const cubeMeta = await this.http.request<{
-      Dimensions: Array<{ Name: string }>;
-    }>(
-      "GET",
-      `/api/v1/Cubes('${enc(cubeName)}')?$expand=Dimensions($select=Name)`,
-    );
-    const dims = cubeMeta.Dimensions.map((d) => d.Name);
+    const dims = await this.dimOrder.get(cubeName);
     if (elements.length !== dims.length) {
       throw new TM1Error({
         code: TM1ErrorCode.VALIDATION_ERROR,

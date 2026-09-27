@@ -12,6 +12,7 @@ import { DimensionService } from "./tm1-client/services/dimension-service.js";
 import { HierarchyService } from "./tm1-client/services/hierarchy-service.js";
 import { ElementService } from "./tm1-client/services/element-service.js";
 import { CellService } from "./tm1-client/services/cell-service.js";
+import { DimensionOrderCache } from "./tm1-client/services/dimension-order.js";
 import { ViewService } from "./tm1-client/services/view-service.js";
 import { SubsetService } from "./tm1-client/services/subset-service.js";
 import { ProcessService } from "./tm1-client/services/process-service.js";
@@ -67,10 +68,12 @@ export class TM1Client {
     // http.ts — now the coupling is a visible, idempotent call at construction.
     registerCallgraphCacheInvalidation();
     this.batch = new BatchService(this.http);
-    this.cubes = new CubeService(this.http);
+    // One dimension-order cache per connection, shared by cubes and cells.
+    const dimOrder = new DimensionOrderCache(this.http);
+    this.cubes = new CubeService(this.http, dimOrder);
     this.dimensions = new DimensionService(this.http);
     this.hierarchies = new HierarchyService(this.http);
-    this.cells = new CellService(this.http);
+    this.cells = new CellService(this.http, dimOrder);
     this.views = new ViewService(this.http);
     this.subsets = new SubsetService(this.http);
     // ElementService depends on CellService and BatchService — both MUST be

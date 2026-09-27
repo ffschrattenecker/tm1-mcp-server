@@ -18,6 +18,7 @@ import {
   odataKey as enc,
 } from "./odata-page.js";
 import { classifyExecution } from "./process-status.js";
+import { DimensionOrderCache } from "./dimension-order.js";
 
 export interface AllRulesOpts {
   /** Include control cubes (`}`-prefixed). Default false. */
@@ -33,7 +34,12 @@ export interface CubeListOpts extends NameFilterOpts {
 }
 
 export class CubeService {
-  constructor(private readonly http: TM1HttpClient) {}
+  constructor(
+    private readonly http: TM1HttpClient,
+    private readonly dimOrder: DimensionOrderCache = new DimensionOrderCache(
+      http,
+    ),
+  ) {}
 
   /**
    * List all cubes with their dimension names.
@@ -88,16 +94,12 @@ export class CubeService {
   }
 
   /**
-   * Return ordered dimension-name list of a cube.
+   * Return ordered dimension-name list of a cube. Cached per connection —
+   * see dimension-order.ts.
    * GET /api/v1/Cubes('{name}')?$expand=Dimensions($select=Name)
    */
   async getDimensionNames(cubeName: string): Promise<string[]> {
-    const path = `/api/v1/Cubes('${enc(cubeName)}')?$expand=Dimensions($select=Name)`;
-    const response = await this.http.request<{
-      Name: string;
-      Dimensions: Array<{ Name: string }>;
-    }>("GET", path);
-    return response.Dimensions.map((d) => d.Name);
+    return this.dimOrder.get(cubeName);
   }
 
   /**

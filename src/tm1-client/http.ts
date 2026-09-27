@@ -10,7 +10,7 @@ import {
 import { TM1Error, TM1ErrorCode } from "../types.js";
 import { PRODUCT, VERSION } from "../version.js";
 import { getTm1Dispatcher, tm1Fetch } from "./dispatcher.js";
-import { tm1Events } from "../lib/tm1-events.js";
+import { tm1Events, type Tm1MutationEvent } from "../lib/tm1-events.js";
 import { maskSecretValues } from "../lib/mask-secrets.js";
 
 const MAX_NETWORK_RETRIES = 3;
@@ -81,6 +81,25 @@ export class TM1HttpClient {
     this.sessionManager = sessionManager;
     this.logger = logger;
     this.profile = createConnectionProfile(config);
+  }
+
+  private readonly mutationListeners: Array<(e: Tm1MutationEvent) => void> = [];
+
+  /**
+   * @internal — subscribe to THIS connection's successful mutations. Unlike
+   * the process-global `tm1Events` bus, listeners die with the client, so a
+   * per-connection cache needs no unsubscribe and never sees another
+   * connection's writes.
+   */
+  public onMutation(listener: (e: Tm1MutationEvent) => void): void {
+    this.mutationListeners.push(listener);
+  }
+
+  private emitMutation(method: string, path: string): void {
+    if (isSafeHttpMethod(method)) return;
+    const e = { method, path, connectionId: connectionIdOf(this.config) };
+    tm1Events.emit("mutation", e);
+    for (const listener of this.mutationListeners) listener(e);
   }
 
   /**
@@ -174,24 +193,12 @@ export class TM1HttpClient {
           }
 
           const retryResult = await this.handleResponse<T>(retryResponse, path);
-          if (!isSafeMethod) {
-            tm1Events.emit("mutation", {
-              method,
-              path,
-              connectionId: connectionIdOf(this.config),
-            });
-          }
+          this.emitMutation(method, path);
           return retryResult;
         }
 
         const result = await this.handleResponse<T>(response, path);
-        if (!isSafeMethod) {
-          tm1Events.emit("mutation", {
-            method,
-            path,
-            connectionId: connectionIdOf(this.config),
-          });
-        }
+        this.emitMutation(method, path);
         return result;
       } catch (error) {
         if (error instanceof TM1Error) {
@@ -290,13 +297,7 @@ export class TM1HttpClient {
       throw this.classifyHttpError(response.status, path, body || undefined);
     }
     const text = await response.text();
-    if (!isSafeHttpMethod(method)) {
-      tm1Events.emit("mutation", {
-        method,
-        path,
-        connectionId: connectionIdOf(this.config),
-      });
-    }
+    this.emitMutation(method, path);
     return text;
   }
 
@@ -349,13 +350,7 @@ export class TM1HttpClient {
       }
       throw this.classifyHttpError(response.status, path, errBody || undefined);
     }
-    if (!isSafeHttpMethod(method)) {
-      tm1Events.emit("mutation", {
-        method,
-        path,
-        connectionId: connectionIdOf(this.config),
-      });
-    }
+    this.emitMutation(method, path);
   }
 
   /**
