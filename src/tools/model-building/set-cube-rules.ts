@@ -86,7 +86,9 @@ export const registerSetCubeRules = defineTool({
     }
     const lineCount = text.split("\n").length;
     // Rule changes shift call edges (DB(), feeders) — drop callgraph TTL early.
-    const { cleared: callgraphEntriesCleared } = invalidateCallgraphCache();
+    const { cleared: callgraphEntriesCleared } = invalidateCallgraphCache(
+      tm1Client.connectionId,
+    );
     return actionResponse({
       success: true,
       cubeName,

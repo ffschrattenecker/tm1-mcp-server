@@ -171,3 +171,91 @@ describe("the callgraph cache is scoped per connection", () => {
     ]);
   });
 });
+
+describe("invalidation is scoped to the mutating connection", () => {
+  const clientFor = (connectionId: string) =>
+    ({
+      connectionId,
+      processes: { fetchForCallgraph: async () => [] },
+      cubes: { getAllRules: async () => [] },
+      chores: { list: async () => [] },
+    }) as unknown as TM1Client;
+
+  beforeEach(() => {
+    invalidateCallgraphCache();
+    registerCallgraphCacheInvalidation();
+  });
+
+  it("a mutation on one connection keeps the other's index", async () => {
+    await buildIndexFromTM1(clientFor("host-a_1"));
+    await buildIndexFromTM1(clientFor("host-b_1"));
+
+    tm1Events.emit("mutation", {
+      method: "PATCH",
+      path: "/api/v1/Processes('p')",
+      connectionId: "host-a_1",
+    });
+
+    expect(getCallgraphCacheStats().map((s) => s.key)).toEqual([
+      "host-b_1|inc=false",
+    ]);
+  });
+
+  it("an in-flight build on another connection still publishes", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    const slow = {
+      ...clientFor("host-b_1"),
+      processes: {
+        fetchForCallgraph: async () => {
+          await gate;
+          return [];
+        },
+      },
+    } as unknown as TM1Client;
+
+    const pending = buildIndexFromTM1(slow);
+    invalidateCallgraphCache("host-a_1");
+    release();
+    await pending;
+
+    expect(getCallgraphCacheStats().map((s) => s.key)).toEqual([
+      "host-b_1|inc=false",
+    ]);
+  });
+
+  it.each([
+    "/api/v1/Cubes('c')/Views('v')/tm1.Execute?$expand=Cells",
+    "/api/v1/Cubes('c')/tm1.CheckRules",
+    "/api/v1/Cubes('c')/tm1.CheckFeeders",
+    "/api/v1/Cubes('c')/tm1.TraceFeeders",
+    "/api/v1/Cubes('c')/tm1.TraceCellCalculation?$expand=Components",
+    "/api/v1/Processes('p')/tm1.Compile",
+    "/api/v1/CompileProcess",
+  ])("read-only action %s does NOT invalidate", async (path) => {
+    await buildIndexFromTM1(clientFor("host-a_1"));
+    tm1Events.emit("mutation", {
+      method: "POST",
+      path,
+      connectionId: "host-a_1",
+    });
+    expect(getCallgraphCacheStats()).toHaveLength(1);
+  });
+
+  it.each([
+    "/api/v1/Processes('p')/tm1.ExecuteWithReturn",
+    "/api/v1/Processes('p')/tm1.Execute",
+    "/api/v1/Chores('c')/tm1.Execute",
+    "/api/v1/ExecuteProcessWithReturn",
+  ])("running TI via %s still invalidates", async (path) => {
+    await buildIndexFromTM1(clientFor("host-a_1"));
+    tm1Events.emit("mutation", {
+      method: "POST",
+      path,
+      connectionId: "host-a_1",
+    });
+    expect(getCallgraphCacheStats()).toHaveLength(0);
+  });
+});

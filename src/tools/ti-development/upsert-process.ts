@@ -271,7 +271,9 @@ export const registerUpsertProcess = defineTool({
 
     // Process body/parameters/datasource may have changed call sites — drop the
     // 60s callgraph TTL so the next analysis sees fresh references instead of stale graph.
-    const { cleared: callgraphEntriesCleared } = invalidateCallgraphCache();
+    const { cleared: callgraphEntriesCleared } = invalidateCallgraphCache(
+      tm1Client.connectionId,
+    );
 
     // Read the code back: TM1 stores what REST sent, so a mismatch means the
     // write did not land as sent. Saves the caller a get_process turn.

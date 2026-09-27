@@ -26,7 +26,18 @@ import { rethrowIfSystemic } from "../../tm1-client/services/fallback.js";
 // Deliberately an allowlist of known-inert paths, not a denylist of
 // code-relevant ones: anything unrecognised keeps invalidating, so a new
 // mutating endpoint is stale-safe by default.
-const INERT_PATHS = [/\/ExecuteMDX/i, /\/Cellsets/i, /tm1\.Update/i];
+//
+// The read-only POST actions are listed too: executing a view, checking rules
+// or feeders, tracing, compiling. Running a PROCESS or CHORE is not — TI can
+// rewrite rules (RuleLoadFromFile) — so tm1.Execute is inert only on Views.
+const INERT_PATHS = [
+  /\/ExecuteMDX/i,
+  /\/Cellsets/i,
+  /tm1\.Update/i,
+  /\/Views\([^/]*\)\/tm1\.Execute\b/i,
+  /tm1\.(?:CheckRules|CheckFeeders|TraceFeeders|TraceCellCalculation|Compile)\b/i,
+  /\/CompileProcess\b/i,
+];
 
 function affectsReferenceGraph(path: string): boolean {
   return !INERT_PATHS.some((re) => re.test(path));
@@ -34,7 +45,8 @@ function affectsReferenceGraph(path: string): boolean {
 
 const invalidateOnMutation = (e: Tm1MutationEvent): void => {
   if (!affectsReferenceGraph(e.path)) return;
-  invalidateCallgraphCache();
+  // Scoped: a write on one connection says nothing about another's code.
+  invalidateCallgraphCache(e.connectionId);
 };
 
 /**
@@ -77,12 +89,35 @@ const inflight = new Map<string, Promise<ReferenceIndex>>();
 // read that started before the mutation, so that result is merely old, not
 // wrong. What must not happen is that snapshot becoming the answer for everyone
 // else for the next 60 seconds.
-let generation = 0;
+//
+// Kept per connection (plus a global one for clear-all), so invalidating one
+// connection does not discard a build in flight for another.
+let globalGeneration = 0;
+const generations = new Map<string, number>();
+const generationOf = (connectionId: string): string =>
+  `${globalGeneration}:${generations.get(connectionId) ?? 0}`;
 
-export function invalidateCallgraphCache(): { cleared: number } {
-  const n = cache.size;
-  cache.clear();
-  generation++;
+/**
+ * Drop cached indexes for one connection, or for all of them when
+ * `connectionId` is omitted (the explicit tm1_invalidate_callgraph_cache tool).
+ */
+export function invalidateCallgraphCache(connectionId?: string): {
+  cleared: number;
+} {
+  if (connectionId === undefined) {
+    const n = cache.size;
+    cache.clear();
+    globalGeneration++;
+    return { cleared: n };
+  }
+  let n = 0;
+  for (const key of [...cache.keys()]) {
+    if (key.startsWith(`${connectionId}|`)) {
+      cache.delete(key);
+      n++;
+    }
+  }
+  generations.set(connectionId, (generations.get(connectionId) ?? 0) + 1);
   return { cleared: n };
 }
 
@@ -124,10 +159,10 @@ export async function buildIndexFromTM1(
 
   const promise = (async (): Promise<ReferenceIndex> => {
     const start = Date.now();
-    const startGeneration = generation;
+    const startGeneration = generationOf(tm1Client.connectionId);
     const idx = await buildIndexInternal(tm1Client, includeControl);
     // Only publish if no invalidation happened while we were building.
-    if (generation === startGeneration) {
+    if (generationOf(tm1Client.connectionId) === startGeneration) {
       cache.set(key, {
         index: idx,
         ts: Date.now(),
