@@ -9,338 +9,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking
 
-- **Node.js 22.19 or newer is required.** Node 20 reached end of life in April 2026. CI
-  now tests Node 22 and 24. *Action:* upgrade Node before updating.
-
-- **Exported files hold the process code unmasked; only the inline copy is masked.**
-  `tm1_export_process_to_git` and `tm1_export_process_to_pro` wrote `'***'` over
-  credential literals into the files too, so a re-import deployed
-  `ODBCOpen(..., '***')` and similar broken code, although both tools promised a
-  round-trip. Files written via `writeToDir`/`writeToFile` now carry the code exactly as it
-  is on the server, and re-import intact (verified on 11.8 and 12.5). `maskSecrets` now
-  governs only the inline response the model sees. **A written file contains any password
-  literal the process code has** — keep such files out of version control or remove the
-  literals from the code. The data-source password rules (`includeDataSourcePassword`) are
-  unchanged.
-- **An unknown `TM1_MCP_TRANSPORT` or `TM1_LOG_LEVEL` stops the server at startup.** A
-  typo used to fall back silently: `TM1_MCP_TRANSPORT=htttp` started on stdio and the
-  expected `/mcp` port never bound, an unknown log level became `info`. Both now throw
-  like `TM1_MODE` and the numeric variables already did, and both are case-insensitive.
-  A configuration carrying such a typo no longer starts until it is corrected.
-- **`tm1_move_element` is removed.** TM1 has no move: it is always an add plus a delete,
-  either of an edge (element under a parent) or of the element itself, and deleting the
-  element from the dimension also deletes all its values. The tool did only the add: it
-  attached the element to `newParent` and left it under its old parent, so it rolled up
-  twice. Use `tm1_update_element` to set a consolidation's components (attach under the new
-  parent, drop from the old one). `tm1_delete_element` only when the element should leave the
-  dimension together with its data.
-- **`tm1_write_cells` refuses a consolidated coordinate.** Every coordinate is resolved
-  before anything is sent; if one names a C element the call aborts with
-  `VALIDATION_ERROR` and nothing is written. Whether the server would accept such a write
-  depends on the account's rights, but it is not how TM1 data is loaded — an aggregate
-  comes from the leaves below it. *Action:* write the leaves, or run a TI process via
-  `tm1_execute_process`. `tm1_check_writable_coords` reports the level of every
-  coordinate. The check costs one filtered request per distinct hierarchy in the write,
-  and it also removes a partial-loss trap: TM1 refuses a chunk holding one non-writable
-  cell as a whole, so a single consolidated coordinate used to take every writable cell
-  travelling with it down too.
-
-- **`tm1_write_cells` refuses a `dimensions` list that does not cover the cube.** A
-  dimension left out used to land on its default member without an error: measured on
-  v11 and v12, a write that left out the measure dimension overwrote the value at its
-  first element. Unknown and duplicated names are refused too, and nothing is written in
-  any of these cases. The one dimension that may be left out is `Sandboxes`; it is bound
-  to `Base` explicitly and the result says so as `sandboxDefaulted: "Base"`. In exchange,
-  `dimensions` may now come in any order, and each cell's elements follow it.
-  `tm1_check_writable_coords` takes the same optional `dimensions` list, so the pre-write
-  check addresses the same cell. *Action:* name every cube dimension. Ported from the
-  ffschrattenecker fork.
-
-- **`tm1_set_cube_rules` refuses rules with syntax errors.** The text is checked with
-  `tm1.CheckRules` before the write. TM1's own Rules PATCH stores broken text without an
-  error (measured on v11 and v12), and the broken statements then compute nothing: the cell
-  keeps its old value and nothing reports why. Any error now fails the call with
-  `VALIDATION_ERROR`, the errors with their line numbers, and nothing written.
-  *Action:* none for valid rules; `preflight: false` writes the text as is. Found by the
-  ffschrattenecker fork.
-
-- **`tm1_clear_cube` takes only `cubeName` and `confirm`.** The `dimensions` and
-  `tuples` inputs are gone. They advertised a region clear the server cannot do: no
-  build declares a `tm1.Clear` action, and the only route that works is an ephemeral TI
-  with `CubeClearData()`, which takes a cube name and nothing else. Every call carrying
-  element names was already refused with `UNSUPPORTED_OPERATION`. *Action:* drop the two
-  arguments; the tool now states plainly that it empties the whole cube. To empty part of
-  a cube, run a TI process via `tm1_execute_process`.
+- **Node.js 22.19 or newer is required.** Node 20 is end of life; CI tests Node 22 and 24.
+- **`tm1_write_cells` refuses a `dimensions` list that does not cover the cube.** A left-out
+  dimension used to land on its default member and overwrite that cell. Unknown and duplicate
+  names are refused too. `dimensions` may now come in any order; only `Sandboxes` may be left
+  out and is bound to `Base` (`sandboxDefaulted`). *Action:* name every cube dimension.
+- **`tm1_write_cells` refuses a consolidated coordinate.** Nothing is sent; write the leaves or
+  run a TI process.
+- **`tm1_set_cube_rules` refuses rules with syntax errors.** TM1 stores broken rules without an
+  error and they compute nothing; the text is now checked with `tm1.CheckRules` first.
+  *Action:* `preflight: false` writes the text as is.
+- **`tm1_clear_cube` takes only `cubeName` and `confirm`.** TM1 cannot clear a region; a call
+  still carrying `dimensions`/`tuples` is refused. *Action:* use a TI process for a partial clear.
+- **`tm1_move_element` is removed.** It attached the element to the new parent but left it under
+  the old one. *Action:* use `tm1_update_element` on both parents' `components`.
+- **Exported files hold the process code unmasked.** `'***'` in written files broke the
+  round-trip; `maskSecrets` now affects only the inline response. Keep such files out of version
+  control if the code contains password literals.
+- **An unknown `TM1_MCP_TRANSPORT` or `TM1_LOG_LEVEL` stops the server at startup** instead of
+  falling back silently.
 
 ### Added
 
-- **`tm1_create_subset`, `tm1_update_subset` and `tm1_delete_subset` take `isPrivate`.**
-  Private subsets belong to the signed-in user and stay invisible to everyone else, so a
-  working subset no longer has to land in the public list. The same name can exist once
-  public and once private. Reading and listing private subsets worked already.
-
-- **The five file tools reach the Applications tree.** `tm1_list_files`,
-  `tm1_search_files`, `tm1_get_file_content`, `tm1_upload_file` and `tm1_delete_file` take
-  `container`, which stays `files` by default — the data directory TI processes read from.
-  `container: "applications"` addresses the tree users see under Applications in Architect
-  and PAW, which nests on both versions. Measured against 11.8: entries there are keyed by
-  ID rather than by Name, a document surfaces as a `DocumentReference` whose bytes sit
-  behind a derived-type cast (`/ibm.tm1.api.v1.DocumentReference/Document/Content`; plain
-  `/Content` is a 404 and `$value` answers 501 everywhere in the tree), and creating one is
-  a POST *without* `Content` followed by a PUT of the bytes. Names are resolved by listing
-  each level rather than by deriving the ID, so the naming rule changing on a later build
-  cannot mis-address an entry. Asking a folder or a view reference for content is refused
-  by name with `UNSUPPORTED_OPERATION` instead of returning nothing.
-- **`tm1_get_file_content` can return bytes untouched.** `encoding: "base64"` hands back the
-  raw content; the default stays `text`. The Applications tree holds spreadsheets, and the
-  previous read decoded everything as UTF-8, which destroys a binary silently. The response
-  now carries an `encoding` field in both modes.
-
-- **`tm1_check_feeders`, `tm1_trace_feeders` and `tm1_trace_cell_calculation` address
-  alternate hierarchies.** An entry in `elements` written `Hierarchy:Element` leaves the
-  dimension's default hierarchy; a bare name still means the default one. The split takes
-  the first colon and the default hierarchy can be named explicitly, so an element whose
-  own name contains a colon stays reachable — in dimension `Region`, `Region:A:B` is
-  element `A:B` in the default hierarchy.
+- **The five file tools reach the Applications tree** via `container: "applications"`.
+- **`tm1_get_file_content` takes `encoding: "base64"`** for binary files.
+- **Subset tools take `isPrivate`.**
+- **`tm1_check_writable_coords` takes an optional `dimensions` list**, like `tm1_write_cells`.
+- **`tm1_upsert_process` takes `variablesUIData`** and warns when the kept column layout no
+  longer fits the variables.
+- **`tm1_clear_cube` takes `timeoutMs`** (1 s to 1 h).
+- **Feeder and cell-trace tools address alternate hierarchies** with `Hierarchy:Element`.
 
 ### Fixed
 
-- **The Applications file tools work on v12.** v12 leaves `ID` out of an Applications listing
-  unless it is selected, so every upload, read, delete and subfolder listing went to
-  `Contents('undefined')` and failed with NOT_FOUND; a failed upload also left its entry
-  behind. The listing now selects `ID` explicitly.
+Security and robustness:
 
-- **Installs get the dependency tree CI tested.** The package now ships
-  `npm-shrinkwrap.json`. Before, the lockfile was never published and `npx` resolved
-  dependencies fresh on every install, so lockfile security fixes (and the `fast-uri`
-  override) never reached users. `npm run smoke:tarball` fails if the file is missing.
-  Found by the ffschrattenecker fork.
+- **The package ships `npm-shrinkwrap.json`**, so `npx` installs get the dependency tree CI
+  tested, including its security fixes.
+- **A rejected login is never retried**, so wrong credentials no longer lock the account.
+- **MCP SDK 1.30.1**, which reads HTTP request bodies with a size limit; other dependencies
+  updated within their ranges.
+- **`fast-uri` moved out of the vulnerable range**; `npm run verify` runs `npm audit` first.
+- **The ReDoS guard rejects repeated alternations** such as `^(\w|\w)*!$`.
+- **The HTTP transport caps a request body at 64 MB** (413) and accepts `Host: localhost:<port>`
+  and `[::1]:<port>`.
+- **A v12 connection no longer demands `TM1_PASSWORD`** for auth modes that never send one.
+- **A TM1 request can wait longer than five minutes**; `timeoutMs` is the only limit.
 
-- **A TM1 request can wait longer than five minutes.** undici, the HTTP client underneath,
-  ends every request that has not answered after 300 s with `UND_ERR_HEADERS_TIMEOUT`, no
-  matter what `timeoutMs` allowed — measured at 300.8 s against a 400 s budget, on both
-  fetch paths. A TI process runs as long as it runs and TM1 has no timeout for it, so
-  `tm1_execute_process` with a long `timeoutMs` failed after five minutes as
-  `CONNECTION_FAILED` ("server unreachable") while the process kept running. undici's
-  timeouts are now off; `timeoutMs` is the only limit. Verified: a 320 s answer arrives.
-- **Process analysis reads variable names with `.`, `$`, `%` and backtick.** TM1 compiles
-  them (measured on 11.8 and 12.5), but the parser and the analyzers accepted only
-  letters, digits and `_`. A line like `v.Col = 1;` failed the parse, and the whole tab
-  dropped out of complexity scoring and the antipattern lint without a word.
-- **The ReDoS guard on user regexes rejects repeated alternations.** Patterns such as
-  `^(\w|\w)*!$` passed `safe-regex`, which measures only nested quantifiers, and took
-  23.5 s on a 30-character input, blocking the whole server. Any unbounded repetition over
-  a group containing `|` is now refused; a character class (`[ab]*`) does the same job.
-- **The attribute value tools check the attribute before touching the attribute cube.** A
-  dimension without attributes has no `}ElementAttributes_` cube, and an unknown attribute
-  name is not a member of it; both came back as a raw MDX syntax error.
-  `tm1_get_element_attribute_values` now returns an empty list when the dimension has no
-  attributes, and `tm1_update_element_attribute_value` answers NOT_FOUND saying the
-  dimension has none, or naming the attributes that exist. Names match ignoring case and
-  spaces, as in TM1.
-- **`tm1_check_cube_rule` returns a rule with syntax errors as a normal result.** It flagged
-  that answer as a tool error, and the error envelope carries no `structuredContent`, so a
-  client reading only structured output got nothing. It now returns `ok: false` with the
-  errors; `isError` is left for calls that actually failed.
-- **`tm1_list_clients` and `tm1_list_groups` show names in markdown.** The Groups and Clients
-  columns printed `[object Object]` for every entry.
-- **`;;` inside a TI string literal is no longer a parse error.** TM1 compiles
-  `sQ = 'a;;b';`, but the TI parser refused it, so `tm1_audit_complexity` scored the whole
-  tab as unparseable with every metric at 0.
-- **`tm1_check_v12_readiness` gives the right reason for `SetODBCUnicodeInterface`.** It said
-  ODBC data sources were removed in v12. They are not: `ODBCOpen`, `ODBCOutput` and
-  `ODBCClose` compile on 12.5; only `SetODBCUnicodeInterface` does not exist there.
-- **`tm1_get_element_attribute_values` and `tm1_update_element_attribute_value` reach
-  alternate hierarchies.** Both take an optional `hierarchyName` and always name the hierarchy
-  in the MDX. Before, an element that exists only in an alternate hierarchy could be neither
-  read nor set. On 12.5 even a default-hierarchy read failed with "Member name A is
-  ambiguous" once another hierarchy held an element of the same name. Attribute definitions
-  belong to the dimension. Values of a leaf are shared by every hierarchy, but a
-  consolidation has its own values in each hierarchy, so reading one needs the right
-  `hierarchyName`. The
-  `tm1_create_element_attribute` and `tm1_list_element_attributes` descriptions now say the
-  list is dimension-wide.
-- **A `.pro` round trip keeps trailing blank lines and spaces.** The parser trimmed the end of
-  every code tab, but TM1 stores and returns that whitespace, so exporting a process and
-  importing the file changed its code. Measured on 11.8 and 12.5: all four tabs now come back
-  byte for byte. Only sections without a line count, which run into the next header, are still
-  trimmed.
-- **`tm1_update_subset` can change the element list.** Passing `elements` always failed
-  with 400 "both a list of Elements and an Expression", on 11.8 and 12.5 alike, and
-  binding elements without that expression appends instead of replacing. The tool now
-  drops the old list first, then binds the new one in the order given; an MDX subset
-  becomes static, and `[]` empties it. The two steps are not atomic, so a list naming an
-  unknown element gets the old definition written back. Passing `expression` and `elements`
-  together, or nothing at all, used to report success while dropping or changing nothing;
-  both are now refused.
-- **`tm1_diff_processes` and `tm1_diff_process_with_file` compare the delimiter type and
-  the ODBC unicode flag.** Two ASCII processes that differed only in delimited against
-  fixed-width columns came back `identical: true`. Both tools now share one data-source
-  comparison. A missing value counts as its default, so a v12 source that never reports
-  `usesUnicode` does not differ from one that says `false`.
-- **`tm1_write_cells` sends at most 8 cells at a time when a batch is refused.** A refused
-  batch is re-walked cell by cell to find the offender, and that walk ran every cell of the
-  chunk at once: up to 500 cells at three requests each, all landing on TM1 together.
-- **`tm1_list_error_logs` reads v12 log names.** v12 names its logs
-  `ProcessLog_<ts>_<id>_<process>.jsonl`. `groupBy: "process"` put every one of them under
-  `(unparsed)`, and `processName` matched none. Both now read the v12 name.
-- **`tm1_get_descendants` and `tm1_get_ancestors` fetch only the part of the hierarchy
-  they answer about.** Both loaded the whole hierarchy with every element's parents and
-  edges on each call. They now expand from the element itself, up to 20 levels, and fall
-  back to the full load only for deeper trees. On an 11,111-element test dimension: 14 KB
-  instead of 3 MB for a mid-level subtree, 1 KB instead of 3 MB for a leaf's ancestors.
-  Results were compared live against the full load on both versions: no difference.
-  A missing element reports the element path, not the nested expand query behind it.
-- **`tm1_check_writable_coords` looks up each coordinate by key and understands
-  `[Dimension].[Hierarchy].[Element]`.** It loaded every hierarchy of the cube in full to
-  find one name per dimension (19 MB for an 8-dimension cube in a test), and it only
-  searched the default hierarchy, so a qualified coordinate that `tm1_write_cells` accepts
-  came back as missing. It now reads coordinates exactly like `tm1_write_cells`.
-- **`fetchAll` and `limit: 0` on `tm1_execute_mdx` and `tm1_get_view` stop at 5000 cells,
-  as documented.** Both returned the whole cellset regardless (20,000 cells were 2 MB of
-  JSON in a test). The first 5000 cells are now requested from TM1, and
-  `has_more`/`next_offset` say where to continue.
-- **Process deploys now remove what the source no longer has.** `tm1_import_process_from_git`
-  and `tm1_import_pro_file` skipped the parameter, variable and data-source step whenever
-  the file had an empty list or a `None` source, so a parameter removed in Git, or a source
-  switched to None, stayed on the server while the import reported success. TM1 applies
-  all three (measured on 11.8 and 12.5), and the imports now always send them.
-  `tm1_upsert_process` did the same with `variables: []`, which was a silent no-op while
-  `parameters: []` cleared; it now clears too.
-- **`tm1_upsert_process` can set the column layout and warns when it goes stale.** A
-  variables update alone keeps the server's `VariablesUIData` (measured on both versions),
-  so after a change in column count the ignore markers point at the wrong columns. The new
-  `variablesUIData` input is sent verbatim, taken from `tm1_get_process_variables` or an
-  export; without it, the result carries a `warning` when the kept layout no longer fits
-  the new variables. No layout is ever constructed.
-- **`tm1_clear_cube` tells the truth when it times out.** A clear that outlasted the 30 s
-  request timeout failed with a plain `LOCK_TIMEOUT`, so the model concluded the cube still
-  held its data. Measured on the test servers: the clear keeps running after the client
-  gives up, and on 12.5 the clean-up `DELETE` of the temporary process cancelled a clear
-  still waiting on a lock. On a timeout the temporary process is now left to finish and
-  the error says the cube will end up empty, not to retry, and which process to delete
-  afterwards. New `timeoutMs` input (1 s to 1 h) for large cubes.
-- **`tm1_list_error_logs` with `groupBy: "process"` works on schema-checking clients.** The
-  audit branch returns `groupBy`, `processName`, `since`, `totalFiles` and `groupCount`
-  around the page, but the published output schema declared only the page, so every
-  client that validates `structuredContent` rejected the call with `-32602`. The five
-  fields are declared now.
-- **`tm1_list_clients` with `fields` that leave out `name` no longer fails.** Every such
-  projection (`["type"]`, `["enabled"]`, ...) dropped `Name`, which the item schema
-  requires, and the call ended in an output-schema error. `Name` is always included now.
-- **The HTTP transport accepts `Host: localhost:<port>` and `[::1]:<port>`.** The SDK
-  compares the Host header as one string including the port, so the bare `localhost` and
-  `127.0.0.1` entries in the DNS-rebinding allow-list never matched and a client using
-  `http://localhost:3000/mcp` got 403. All loopback names now carry the port.
-- **`tm1_update_element` says what it replaces and reports type conversions.** `components`
-  replaces the element's whole child list (`[]` removes every child), which the
-  description never said; it now does, and explains that moving an element means updating
-  both parents. A `type` change is converted in place, and Numeric to Consolidated/String
-  discards the element's leaf values: the result now carries `typeChange` plus a `warning`,
-  as `tm1_bulk_upsert_elements` already did. The annotation changes from
-  `IDEMPOTENT_WRITE` to `IDEMPOTENT_DESTRUCTIVE` (`destructiveHint: true`), so clients that
-  confirm destructive calls now ask before it runs.
-- **`fast-uri` override moved out of the vulnerable range.** The override pinned `^3.1.5`,
-  but the advisories cover `>=3.0.0 <=3.1.5` (high, among them SSRF via IPv6
-  normalization), so `npm audit --omit=dev --audit-level=high` failed in CI. It is now
-  `^4.2.1`; `ajv` only uses it to resolve `$ref`. The remaining moderate advisories in
-  production dependencies (`hono`, `@hono/node-server`, `body-parser`, `qs`) are fixed
-  in-range through the lockfile. `npm run verify` now runs the same audit first, so it
-  fails locally instead of only in CI.
-- **A rejected login is never retried, so wrong credentials cannot lock the account.**
-  After a 401/403 on login the server kept trying: every request re-authenticated, fan-out
-  tools did so once per concurrency batch (about 50 attempts for a 400-element
-  `tm1_bulk_upsert_elements`), and the keep-alive timer added one attempt a minute
-  indefinitely. With `MaximumLoginAttempts=3` that locks the account within one tool call.
-  The first rejection is now remembered: every later call fails at once with
-  `AUTH_FAILED` without contacting TM1, and the keep-alive timer stops. Fix the
-  credentials and restart the MCP server.
-- **`tm1_clear_cube` refuses a call that still carries `dimensions`/`tuples`.** Removing
-  the two inputs left them undeclared, and the SDK strips what a schema does not mention:
-  a stored call meaning "clear this region" arrived as a bare `cubeName` and emptied the
-  whole cube, where v4.0.0 had refused it with `UNSUPPORTED_OPERATION`. Both fields are
-  declared again for the sole purpose of being rejected — the call fails with
-  `VALIDATION_ERROR` and nothing is cleared.
+Cells and rules:
 
-- **`tm1_delete_file` no longer deletes an Applications folder.** In the Applications
-  tree a `DELETE` on a folder takes everything inside it with it, and the resolved entry
-  type was not checked before the request went out, so the single-file tool could empty a
-  whole branch. A folder or a view reference is now refused before anything is sent;
-  documents delete as before.
+- **`tm1_write_cells` no longer writes when its own pre-check failed**, and sends at most 8
+  cells at a time when a batch is refused.
+- **`tm1_check_writable_coords` looks up each coordinate by key** and understands
+  `[Dimension].[Hierarchy].[Element]`.
+- **`fetchAll` and `limit: 0` on `tm1_execute_mdx` and `tm1_get_view` stop at 5000 cells.**
+- **`tm1_check_cube_rule` returns syntax errors as a normal result**, not as a tool error.
+- **`tm1_clear_cube` tells the truth on a timeout**: the clear finishes on the server.
 
-- **`tm1_write_cells` no longer writes when its own pre-check failed.** A failed
-  consolidation probe was swallowed and read as "no consolidations found", so a write
-  the tool promises to check went through unchecked. Any error from the probe now aborts
-  the call with nothing sent. The guard also reads the two reference forms it previously
-  missed — `[Dimension].[Element]` and any name carrying an escaped `]]` — which the
-  writer accepts and would otherwise have written past the check.
+Dimensions, elements and attributes:
 
-- **The HTTP transport caps a request body at 64 MB.** `/mcp` buffered the whole request
-  and copied it again before any tool-level limit applied, so a single large POST could
-  exhaust memory. An oversized body is answered with `413` instead, on the declared
-  `Content-Length` and on the bytes actually received.
+- **`tm1_update_subset` can change the element list** (replaces, in order).
+- **The attribute value tools reach alternate hierarchies** and check the attribute exists first.
+- **`tm1_get_descendants` and `tm1_get_ancestors` load only what they need**, and `leavesOnly`
+  no longer returns empty consolidations.
+- **`tm1_update_element` reports type conversions** and is marked destructive.
 
-- **A failed upload no longer leaves an empty file behind.** Creating an entry and
-  writing its bytes are two requests; if the write failed, the call reported an error
-  while the name existed with no content. The entry is removed again when the upload
-  that created it could not be filled.
+Processes and files:
 
-- **Applications listings follow `@odata.nextLink`.** Only the first page was read. A
-  paged listing did not merely shorten a file list: name resolution walks it, so an entry
-  on a later page answered `NOT_FOUND`.
+- **Process imports remove what the source no longer has** (parameters, variables, data source).
+- **A `.pro` round trip keeps trailing whitespace.**
+- **Process analysis reads variable names with `.`, `$`, `%` and backtick, and `;;` inside a
+  string literal.**
+- **Both diff tools compare the delimiter type and the ODBC unicode flag.**
+- **`tm1_list_error_logs` reads v12 log names**, and `groupBy: "process"` passes schema checks.
+- **The Applications file tools work on v12**, follow paged listings, never delete a folder, and
+  remove an entry whose upload failed.
 
-- **A v12 connection no longer demands `TM1_PASSWORD`.** Startup required a password
-  before it looked at `TM1_AUTH_MODE`, so a `s2s`, `access_token`, `oidc` or `iam`
-  connection — none of which ever send one — died with `Missing or empty required
-  environment variables: TM1_PASSWORD`. That is the configuration `docs/CONFIGURATION.md`
-  prescribes for s2s, so the documented v12 setup could not start. The password is now
-  required only for the modes that use it (v11, CAM namespace, and v12 `basic`), which
-  each still fail loudly without one. The bug survived because every local run reads the
-  repository's `.env`, which supplies a password to the test suites and the live suites
-  alike; it showed up only once the packed tarball ran in a directory without one.
+Other:
 
-- **Seven tools no longer claim to be v11-only.** `tm1_check_feeders`,
-  `tm1_trace_feeders`, `tm1_trace_cell_calculation`, `tm1_export_process_to_pro`,
-  `tm1_import_pro_file`, `tm1_install_pro_bundle` and `tm1_diff_process_with_file` carried
-  `requiresVersion: "v11"`, and the first three said "v11 only." in their description and
-  "On v12 this action is unavailable." in their error hint. All seven were measured
-  working against 12.5.9. The claim steered callers off a working tool.
-  `tm1_check_v12_readiness` loses the same tag: it runs on either generation, and the
-  field states where a tool runs, not what it is for.
-- **The three cell diagnostics no longer claim alternate hierarchies are unsupported.**
-  Measured on 11.8: `Hier:Elem` resolves and both halves are validated — a wrong
-  hierarchy fails exactly like a wrong element.
-- **`tm1_unload_cube` no longer advertises itself as consequence-free.** It said "Safe to
-  call: data is preserved (read from .cub on next access)", which hid the part that
-  matters: TM1 writes the cube to disk before it unloads. Whatever sits in memory becomes
-  the saved state, so a caller reading "data is preserved" could reach for the tool
-  expecting the on-disk copy to survive untouched. The description now states the save.
-- **`tm1_clear_cube` states that the clear is final.** It called itself irreversible while
-  naming only the read behaviour afterwards. There is no dependable way back: a following
-  `SaveDataAll` or `CubeSaveData` writes the empty cube to disk.
-- **`tm1_delete_hierarchy` no longer claims the default hierarchy is undeletable.** The
-  hierarchy that carries the dimension's own name can be deleted. It is an unusual thing to
-  do, but the server allows it, and the sentence sent callers to `tm1_delete_dimension` for
-  something this tool does. The description now says that this server's tools still default an omitted
-  `hierarchyName` to the dimension name, so it has to be passed on every call afterwards.
-- **Two tools described a consolidated cell write wrongly, and disagreed with each other.**
-  `tm1_write_cells` said such writes "are rejected by TM1"; `tm1_check_writable_coords` said
-  they "silent-fail". Neither is the rule: whether the server accepts one depends on the
-  account's rights. Both now say so, and `tm1_write_cells` refuses one itself.
-- **`tm1_get_cube_stats` no longer ties missing `}Stats*` cubes to v12 alone.** v11 keeps
-  them only while statistics collection is switched on, so `statsUnavailable` is a normal
-  answer there too.
-- **`tm1_get_transaction_log` no longer promises that it "never triggers a full scan".** The
-  expanding-window ladder bounds the lookback at one year; it does not make the call cheap.
-  A sparse log walks all nine windows first.
-- **`tm1_unload_cube` names both reasons to call it.** Reloading after feeder corrections
-  was documented; releasing the cube's memory was not.
-- **`tm1_get_descendants` with `leavesOnly` no longer returns empty consolidations.** The
-  filter tested shape alone — an element with no children — so a consolidation nobody put
-  components under came back as a leaf, with `type: "Consolidated"` in the payload, while
-  the tool promised "only N-elements (no consolidations)". It now tests the type as well.
-- **`tm1_check_v12_readiness` no longer claims a fixed two REST calls.** It issues one bulk
-  request per scope, so narrowing `scope` to processes or to cube rules makes it one.
+- **`tm1_list_clients` and `tm1_list_groups` show names in markdown**; `tm1_list_clients` accepts
+  `fields` without `name`.
+- **`tm1_check_v12_readiness` gives the right reason for `SetODBCUnicodeInterface`.**
+- **Seven tools no longer claim to be v11-only.**
+- **Corrected descriptions**: `tm1_unload_cube` (saves before it unloads), `tm1_clear_cube`
+  (final), `tm1_delete_hierarchy` (the default hierarchy can be deleted; pass `hierarchyName`
+  afterwards), `tm1_get_cube_stats`, `tm1_get_transaction_log`, and the consolidated-write text
+  of `tm1_write_cells`/`tm1_check_writable_coords`.
 
 ## [4.0.0] - 2026-08-30
 
