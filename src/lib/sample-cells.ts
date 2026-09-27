@@ -4,6 +4,7 @@
 import type { MdxResult, CellValue } from "../types.js";
 import { TM1Error, TM1ErrorCode } from "../types.js";
 import { escapeMdxName } from "./mdx.js";
+import { BASE_SANDBOX, SANDBOX_DIMENSION } from "./cell-address.js";
 
 export type SampleCellFilter = string | string[];
 
@@ -37,6 +38,8 @@ export interface SampleCellsBuildResult {
   rowDims: string[];
   /** Dimension placed on COLUMNS. */
   columnDim: string;
+  /** Set when an unfiltered `Sandboxes` was pinned to `Base` in WHERE. */
+  sandboxPin?: { dimension: string; element: typeof BASE_SANDBOX };
 }
 
 export interface SampleCell {
@@ -93,9 +96,22 @@ export function buildSampleCellsMdx(
   const rowDims: string[] = [];
   const rowSets: string[] = [];
 
+  // An unfiltered Sandboxes is pinned to Base instead of crossjoined: TM1's
+  // NONEMPTY() returns an empty set whenever Sandboxes is part of the row set,
+  // even as {[Sandboxes].[Base]} alone, so every sample of a sandboxed cube
+  // came back empty. Measured on plapp-franz (EnableSandboxDimension=true).
+  // Base is also what every other read through this server sees.
+  let sandboxPin: SampleCellsBuildResult["sandboxPin"];
   for (const dim of dimensions) {
     if (dim === columnDim) continue;
-    const f = filters[dim];
+    let f = filters[dim];
+    if (
+      f === undefined &&
+      dim.toLowerCase() === SANDBOX_DIMENSION.toLowerCase()
+    ) {
+      f = BASE_SANDBOX;
+      sandboxPin = { dimension: dim, element: BASE_SANDBOX };
+    }
     if (typeof f === "string") {
       whereDims.push(dim);
       whereParts.push(memberRef(dim, f));
@@ -163,7 +179,13 @@ export function buildSampleCellsMdx(
     whereParts.length > 0 ? ` WHERE (${whereParts.join(",")})` : "";
   const mdx = `SELECT ${columnSet} ON COLUMNS, ${rowAxisExpr} ON ROWS FROM [${escapeMdxName(cubeName)}]${whereClause}`;
 
-  return { mdx, whereDims, rowDims, columnDim };
+  return {
+    mdx,
+    whereDims,
+    rowDims,
+    columnDim,
+    ...(sandboxPin ? { sandboxPin } : {}),
+  };
 }
 
 export interface TransformArgs {
