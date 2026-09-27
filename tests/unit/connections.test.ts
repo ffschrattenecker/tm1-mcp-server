@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pino from "pino";
-import { ConnectionRegistry } from "../../src/connections.js";
+import { ConnectionRegistry, connectionEnv } from "../../src/connections.js";
 
 const logger = pino({ level: "silent" });
 
@@ -169,5 +169,49 @@ describe("ConnectionRegistry with no usable folder", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("connectionEnv — the one .env reader", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "tm1-connenv-"));
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("parses values the way dotenv does: quotes stripped, inline comments dropped", () => {
+    writeConn(root, "c", [
+      "TM1_USER='quoted user'",
+      'TM1_PASSWORD="p#ss word"',
+      "TM1_BASE_URL=http://h:1 # the test box",
+      "TM1X_DESCRIPTION=plapp environment (franz instance)",
+    ]);
+    const env = connectionEnv(join(root, "c"), {});
+    expect(env.TM1_USER).toBe("quoted user");
+    expect(env.TM1_PASSWORD).toBe("p#ss word");
+    expect(env.TM1_BASE_URL).toBe("http://h:1");
+  });
+
+  it("drops connection-level TM1_* from the shell but keeps server-level and non-TM1 keys", () => {
+    writeConn(root, "c", ["TM1_BASE_URL=http://h:1", ...CREDS]);
+    const env = connectionEnv(join(root, "c"), {
+      TM1_INSTANCE: "leaked",
+      TM1_LOG_LEVEL: "debug",
+      PATH: "/bin",
+    });
+    expect(env.TM1_INSTANCE).toBeUndefined();
+    expect(env.TM1_LOG_LEVEL).toBe("debug");
+    expect(env.PATH).toBe("/bin");
+  });
+
+  it("does not let a folder override server-level settings", () => {
+    writeConn(root, "c", ["TM1_LOG_LEVEL=trace", "TM1_MCP_TRANSPORT=http"]);
+    const env = connectionEnv(join(root, "c"), { TM1_LOG_LEVEL: "info" });
+    expect(env.TM1_LOG_LEVEL).toBe("info");
+    expect(env.TM1_MCP_TRANSPORT).toBeUndefined();
   });
 });

@@ -42,6 +42,37 @@ function isServerLevelKey(key: string): boolean {
   return SERVER_LEVEL_KEYS.has(key) || key.startsWith("TM1_MCP_");
 }
 
+/** Folder holding one `<name>/.env` per connection. */
+export function connectionsDir(env: NodeJS.ProcessEnv): string {
+  return env.TM1_CONNECTIONS_DIR || join(homedir(), ".tm1", "mcp-servers");
+}
+
+/**
+ * The environment one connection folder resolves to — the only way a
+ * connection's `.env` is read, by the server and by scripts/run-live-for.ts
+ * alike, so a script can never log in with a differently parsed password.
+ *
+ * Server-level settings and non-TM1 variables (PATH, proxies) carry over from
+ * `env`; connection-level TM1_* keys come from the folder only, so a stray
+ * TM1_INSTANCE in the shell cannot reroute a v11 connection. The folder may
+ * not override server-level settings: one folder's TM1_MCP_TRANSPORT must not
+ * reconfigure the whole process.
+ */
+export function connectionEnv(
+  folder: string,
+  env: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  const connEnv: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (!key.startsWith("TM1_") || isServerLevelKey(key)) connEnv[key] = value;
+  }
+  const fileEnv = parseDotenv(readFileSync(join(folder, ".env")));
+  for (const [key, value] of Object.entries(fileEnv)) {
+    if (!isServerLevelKey(key)) connEnv[key] = value;
+  }
+  return connEnv;
+}
+
 export interface ConnectionInfo {
   name: string;
   /** Folder the `.env` came from; undefined for the legacy single connection. */
@@ -88,7 +119,7 @@ export class ConnectionRegistry {
       registry.addConfig("default", loadConfig(env));
       return registry;
     }
-    const dir = explicitDir || join(homedir(), ".tm1", "mcp-servers");
+    const dir = connectionsDir(env);
     registry.discover(dir, env);
     if (registry.entries.size === 0) {
       throw new Error(
@@ -172,13 +203,6 @@ export class ConnectionRegistry {
         )
       : undefined;
 
-    // Server-level settings and non-TM1 variables (PATH, proxies) carry over;
-    // connection-level TM1_* keys come from the folder only.
-    const base: NodeJS.ProcessEnv = {};
-    for (const [key, value] of Object.entries(env)) {
-      if (!key.startsWith("TM1_") || isServerLevelKey(key)) base[key] = value;
-    }
-
     const names = readdirSync(dir, { withFileTypes: true })
       .filter((d) => d.isDirectory() && existsSync(join(dir, d.name, ".env")))
       .map((d) => d.name)
@@ -188,14 +212,7 @@ export class ConnectionRegistry {
     for (const name of names) {
       const folder = join(dir, name);
       try {
-        const fileEnv = parseDotenv(readFileSync(join(folder, ".env")));
-        const connEnv: NodeJS.ProcessEnv = { ...base };
-        for (const [key, value] of Object.entries(fileEnv)) {
-          // The folder may not override server-level settings: one folder's
-          // TM1_MCP_TRANSPORT must not reconfigure the whole process.
-          if (!isServerLevelKey(key)) connEnv[key] = value;
-        }
-        this.addConfig(name, loadConfig(connEnv), folder);
+        this.addConfig(name, loadConfig(connectionEnv(folder, env)), folder);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger.warn(

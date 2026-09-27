@@ -23,6 +23,26 @@ Without `TM1_BASE_URL` + `TM1_USER` in the environment, every suite skips itself
 CI — it just reports skipped. Credentials come from the environment / `.env`
 (git-ignored) and are never committed.
 
+## Against one connection folder — `npm run test:live:for`
+
+To run against a connection from `~/.tm1/mcp-servers/<name>/.env` (or
+`TM1_CONNECTIONS_DIR`), use the helper instead of loading the `.env` by hand:
+
+```bash
+npm run test:live:for -- tm1-plapp-franz tests/live/cube.live.test.ts
+npm run test:live:for -- tm1-plapp-franz --retry-login   # after fixing a refused login
+```
+
+- The `.env` goes through `connectionEnv()` in `src/connections.ts`, the same
+  dotenv parse and `TM1_*` isolation the MCP server uses. A hand-rolled parser
+  once kept the quotes around a password, and every login failed.
+- One login probe runs before vitest. Every live file logs in by itself, so
+  without the probe a bad password costs one failed login **per file**, and
+  that locks the account fast (see Troubleshooting below).
+- A refused probe (401/403) writes `.live-reports/<name>.auth-failed.log` and
+  blocks further runs for that connection until `--retry-login` is passed. An
+  unreachable server leaves no marker, since it never saw the credentials.
+
 ## There is no CI live coverage — and none is planned
 
 **Read this before you assume the tool surface is continuously verified against
