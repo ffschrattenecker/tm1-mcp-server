@@ -6,6 +6,7 @@ import { DESTRUCTIVE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { memberRef } from "./member-ref.js";
+import { resolveCellAddress } from "../../lib/cell-address.js";
 
 export const registerWriteCells = defineTool({
   name: "tm1_write_cells",
@@ -13,6 +14,7 @@ export const registerWriteCells = defineTool({
     "Write one or more cell values directly to a TM1 cube via REST.",
     "IMPORTANT: TI processes are the standard path for data loads — use this tool only for ad-hoc writes or when explicitly requested.",
     "Leaf (N-level) coordinates only. Every coordinate is checked before anything is sent and a consolidated one aborts the whole call: writing to a C element is not how TM1 data is loaded, and whether the server would even accept it depends on the account's rights. Aggregate values come from the consolidation, not from a write.",
+    "Name every cube dimension, in any order: a dimension left out would land on its default member, so the call is refused. Only Sandboxes may be left out; it is then bound to Base and reported as sandboxDefaulted.",
     "Before: tm1_check_writable_coords to validate that target coordinates are leaf-level and addressable.",
     "Related: tm1_clear_cube for bulk wipe, tm1_get_cell_value to read back, tm1_execute_process for production data loads.",
   ],
@@ -24,7 +26,7 @@ export const registerWriteCells = defineTool({
       .array(z.string())
       .min(2)
       .describe(
-        "Cube dimension names in exact cube order (required because the element tuples use @odata.bind references)",
+        "Cube dimension names, any order; each cell's elements follow this order. Must cover every cube dimension except Sandboxes.",
       ),
     cells: z
       .array(
@@ -32,7 +34,7 @@ export const registerWriteCells = defineTool({
           elements: z
             .array(z.string())
             .describe(
-              "Element names, one per dimension, in the cube's dimension order",
+              "Element names, one per entry in dimensions, in that order",
             ),
           value: z
             .union([z.number(), z.string()])
@@ -45,19 +47,34 @@ export const registerWriteCells = defineTool({
       .describe("Cells to write"),
     ...CONFIRM_SCHEMA,
   },
-  handler: async ({ cubeName, dimensions, cells, confirm }, tm1Client) => {
+  handler: async (
+    { cubeName, dimensions: given, cells: givenCells, confirm },
+    tm1Client,
+  ) => {
     // Overwrites prior cell values with no undo. Guards against an
     // auto-approve client firing this without intent — NOT a security
     // control: anything that can call the tool can also supply `confirm`.
     requireConfirm(confirm, cubeName, "cube");
-    for (const c of cells) {
-      if (c.elements.length !== dimensions.length) {
+    for (const c of givenCells) {
+      if (c.elements.length !== given.length) {
         throw new TM1Error({
           code: "VALIDATION_ERROR",
-          message: `Cell element count (${c.elements.length}) does not match dimension count (${dimensions.length})`,
+          message: `Cell element count (${c.elements.length}) does not match dimension count (${given.length})`,
         });
       }
     }
+    // Everything below works in cube order over the cube's full dimension
+    // list, so a dimension the caller forgot can never reach the MDX tuple.
+    const address = resolveCellAddress(
+      cubeName,
+      await tm1Client.cubes.getDimensionNames(cubeName),
+      given,
+    );
+    const dimensions = address.dimensions;
+    const cells = givenCells.map((c) => ({
+      ...c,
+      elements: address.toCubeOrder(c.elements),
+    }));
 
     // One probe per distinct hierarchy, not per cell: a write typically
     // reuses the same handful of elements across many coordinates.
@@ -116,6 +133,12 @@ export const registerWriteCells = defineTool({
     // propagate to the index.ts Proxy unwrapped — wrapping it here would
     // clobber that hint with a generic one.
     await tm1Client.cells.writeCells(cubeName, dimensions, cells);
-    return actionResponse({ success: true, cellsWritten: cells.length });
+    return actionResponse({
+      success: true,
+      cellsWritten: cells.length,
+      ...(address.sandboxDefaulted
+        ? { sandboxDefaulted: address.sandboxDefaulted }
+        : {}),
+    });
   },
 });

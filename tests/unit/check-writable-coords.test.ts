@@ -19,7 +19,7 @@ const ELEMENTS: Record<string, { name: string; type: string }> = {
   "Month/Month/jan": { name: "Jan", type: "Numeric" },
 };
 
-function run(coords: string[]) {
+function run(coords: string[], dimensions?: string[]) {
   const lookups: string[] = [];
   const tm1 = {
     cubes: {
@@ -47,7 +47,7 @@ function run(coords: string[]) {
     } as unknown as McpServer,
     tm1 as unknown as TM1Client,
   );
-  return cb!({ cubeName: "Sales", coords }, {}).then((r) => ({
+  return cb!({ cubeName: "Sales", coords, dimensions }, {}).then((r) => ({
     out: JSON.parse(r.content[0].text) as {
       writable: boolean;
       coords: Array<{ element: string; exists: boolean; type: string }>;
@@ -74,5 +74,21 @@ describe("tm1_check_writable_coords", () => {
   it("reports a missing element as missing", async () => {
     const { out } = await run(["DE", "Jan"]);
     expect(out.coords[0]).toMatchObject({ exists: false, type: "(missing)" });
+  });
+
+  it("reorders coords given in the write's dimension order", async () => {
+    const { out } = await run(
+      ["Jan", "[Region].[AltHier].[DE]"],
+      ["Month", "Region"],
+    );
+    expect(out.writable).toBe(true);
+    expect(out.coords.map((c) => c.element)).toEqual([
+      "[Region].[AltHier].[DE]",
+      "Jan",
+    ]);
+  });
+
+  it("refuses a dimension list that misses a cube dimension", async () => {
+    await expect(run(["Jan"], ["Month"])).rejects.toThrow(/missing: Region/);
   });
 });

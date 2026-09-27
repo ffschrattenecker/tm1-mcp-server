@@ -5,6 +5,7 @@ import { READ_ONLY } from "../annotations.js";
 import { WritableCoordsResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { memberRef } from "./member-ref.js";
+import { resolveCellAddress } from "../../lib/cell-address.js";
 
 interface CoordCheck {
   dimension: string;
@@ -25,10 +26,16 @@ export const registerCheckWritableCoords = defineTool({
     coords: z
       .array(z.string())
       .describe(
-        "Element per dimension, in cube dimension order. Length must match cube.dimensions.length. Accepts the same forms as tm1_write_cells: a bare name (default hierarchy) or [Dimension].[Hierarchy].[Element].",
+        "Element per dimension, in cube dimension order — or in the order of `dimensions` when given. Accepts the same forms as tm1_write_cells: a bare name (default hierarchy) or [Dimension].[Hierarchy].[Element].",
+      ),
+    dimensions: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "Optional: the same dimension list tm1_write_cells takes (any order, Sandboxes may be left out and is then bound to Base), so this checks exactly the cell the write will address.",
       ),
   },
-  handler: async ({ cubeName, coords }, tm1Client) => {
+  handler: async ({ cubeName, coords: givenCoords, dimensions }, tm1Client) => {
     const cubes = await tm1Client.cubes.list();
     const cubeMeta = cubes.find(
       (c) => c.name.toLowerCase() === cubeName.toLowerCase(),
@@ -40,6 +47,18 @@ export const registerCheckWritableCoords = defineTool({
       });
     }
     const dims = cubeMeta.dimensions;
+    let coords = givenCoords;
+    if (dimensions) {
+      if (givenCoords.length !== dimensions.length) {
+        throw new TM1Error({
+          code: TM1ErrorCode.VALIDATION_ERROR,
+          message: `coords length ${givenCoords.length} does not match dimensions length ${dimensions.length}`,
+        });
+      }
+      coords = resolveCellAddress(cubeName, dims, dimensions).toCubeOrder(
+        givenCoords,
+      );
+    }
     if (coords.length !== dims.length) {
       throw new TM1Error({
         code: TM1ErrorCode.VALIDATION_ERROR,

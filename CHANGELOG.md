@@ -42,6 +42,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cell as a whole, so a single consolidated coordinate used to take every writable cell
   travelling with it down too.
 
+- **`tm1_write_cells` refuses a `dimensions` list that does not cover the cube.** A
+  dimension left out used to land on its default member without an error: measured on
+  v11 and v12, a write that left out the measure dimension overwrote the value at its
+  first element. Unknown and duplicated names are refused too, and nothing is written in
+  any of these cases. The one dimension that may be left out is `Sandboxes`; it is bound
+  to `Base` explicitly and the result says so as `sandboxDefaulted: "Base"`. In exchange,
+  `dimensions` may now come in any order, and each cell's elements follow it.
+  `tm1_check_writable_coords` takes the same optional `dimensions` list, so the pre-write
+  check addresses the same cell. *Action:* name every cube dimension. Ported from the
+  ffschrattenecker fork.
+
 - **`tm1_clear_cube` takes only `cubeName` and `confirm`.** The `dimensions` and
   `tuples` inputs are gone. They advertised a region clear the server cannot do: no
   build declares a `tm1.Clear` action, and the only route that works is an ephemeral TI

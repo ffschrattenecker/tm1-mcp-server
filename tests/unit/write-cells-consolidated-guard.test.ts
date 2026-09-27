@@ -46,7 +46,10 @@ const ELEMENTS_RE =
 /**
  * @param consolidated element names that answer `Type eq 3`, per "Dim/Hier".
  */
-function makeClient(consolidated: Record<string, string[]>) {
+function makeClient(
+  consolidated: Record<string, string[]>,
+  cubeDims: string[] = ["Region", "Month"],
+) {
   const probed: string[] = [];
   const request = async (_method: string, path: string) => {
     const m = ELEMENTS_RE.exec(path);
@@ -74,7 +77,11 @@ function makeClient(consolidated: Record<string, string[]>) {
   return {
     probed,
     writeCells,
-    client: { elements, cells: { writeCells } } as unknown as TM1Client,
+    client: {
+      elements,
+      cells: { writeCells },
+      cubes: { getDimensionNames: async () => cubeDims },
+    } as unknown as TM1Client,
   };
 }
 
@@ -164,7 +171,11 @@ describe("tm1_write_cells consolidated guard", () => {
         });
       },
     };
-    const client = { elements, cells: { writeCells } } as unknown as TM1Client;
+    const client = {
+      elements,
+      cells: { writeCells },
+      cubes: { getDimensionNames: async () => ["Region", "Month"] },
+    } as unknown as TM1Client;
     await expect(
       handlerFor(client)({
         cubeName: "Sales",
@@ -174,5 +185,67 @@ describe("tm1_write_cells consolidated guard", () => {
       }),
     ).rejects.toThrow(/Nothing was sent/);
     expect(writeCells).not.toHaveBeenCalled();
+  });
+});
+
+// TM1 fills a dimension missing from the MDX tuple with its default member
+// and writes there without an error, so the address is resolved against the
+// cube's own dimension list before anything is sent.
+describe("tm1_write_cells address resolution", () => {
+  const CUBE = ["Region", "Month", "Measure"];
+
+  it("refuses a dimension list that leaves out a cube dimension", async () => {
+    const { client, writeCells } = makeClient({}, CUBE);
+    await expect(
+      handlerFor(client)({
+        cubeName: "Sales",
+        dimensions: ["Region", "Month"],
+        cells: [CELL(["Berlin", "Jan"])],
+        confirm: "Sales",
+      }),
+    ).rejects.toThrow(/missing: Measure/);
+    expect(writeCells).not.toHaveBeenCalled();
+  });
+
+  it("refuses unknown and duplicated dimension names", async () => {
+    const { client, writeCells } = makeClient({}, CUBE);
+    await expect(
+      handlerFor(client)({
+        cubeName: "Sales",
+        dimensions: ["Region", "region", "Version"],
+        cells: [CELL(["Berlin", "Berlin", "Actual"])],
+        confirm: "Sales",
+      }),
+    ).rejects.toThrow(/not in the cube: Version; listed twice: region/);
+    expect(writeCells).not.toHaveBeenCalled();
+  });
+
+  it("accepts any order and sends the elements in cube order", async () => {
+    const { client, writeCells } = makeClient({}, CUBE);
+    await handlerFor(client)({
+      cubeName: "Sales",
+      dimensions: ["Measure", "Region", "Month"],
+      cells: [CELL(["Amount", "Berlin", "Jan"])],
+      confirm: "Sales",
+    });
+    expect(writeCells).toHaveBeenCalledWith("Sales", CUBE, [
+      { elements: ["Berlin", "Jan", "Amount"], value: 42 },
+    ]);
+  });
+
+  it("binds a left-out Sandboxes dimension to Base and says so", async () => {
+    const { client, writeCells } = makeClient({}, [...CUBE, "Sandboxes"]);
+    const res = (await handlerFor(client)({
+      cubeName: "Sales",
+      dimensions: CUBE,
+      cells: [CELL(["Berlin", "Jan", "Amount"])],
+      confirm: "Sales",
+    })) as { structuredContent?: Record<string, unknown> };
+    expect(writeCells).toHaveBeenCalledWith(
+      "Sales",
+      [...CUBE, "Sandboxes"],
+      [{ elements: ["Berlin", "Jan", "Amount", "Base"], value: 42 }],
+    );
+    expect(JSON.stringify(res)).toContain('"sandboxDefaulted":"Base"');
   });
 });
