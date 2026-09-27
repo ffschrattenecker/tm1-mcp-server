@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tm1_sample_cells` found no cells in any cube with a `Sandboxes` dimension: TM1's `NONEMPTY()`
   returns an empty set whenever Sandboxes is part of the row set. An unfiltered Sandboxes is now
   pinned to `Base` in WHERE.
+- Markdown tables (`format: "markdown"`) now escape backslashes, so a value ending in `\` no
+  longer breaks the table at the next `|`. In `tm1_execute_mdx`, raw cell values are no longer
+  escaped twice.
+
+### Changed
+
+- Dependencies: undici 8, dotenv 18, zod 4.6, and minor/patch bumps. Dev: vitest 5.
 
 ## [7.0.1] - 2026-09-27
 
