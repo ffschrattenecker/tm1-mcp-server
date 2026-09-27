@@ -58,7 +58,7 @@ export function columnsOf<T>(specs: readonly ColumnSpec<T>[]): Column<T>[] {
   );
 }
 
-function mdEscape(v: unknown): string {
+export function mdEscape(v: unknown): string {
   if (v === null || v === undefined) return "";
   const s =
     typeof v === "string"
@@ -68,7 +68,12 @@ function mdEscape(v: unknown): string {
         : typeof v === "object"
           ? JSON.stringify(v)
           : String(v);
-  return s.replace(/\|/g, "\\|").replace(/\n/g, " ").replace(/\r/g, "");
+  // Backslashes first, so an escaped pipe can't be undone by a preceding `\`.
+  return s
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/\n/g, " ")
+    .replace(/\r/g, "");
 }
 
 // Render an object as a 2-column key/value Markdown table.
