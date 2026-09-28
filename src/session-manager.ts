@@ -391,12 +391,8 @@ export class SessionManager {
    * TM1SessionId_<db> — every cookie the login set (see gatewayCookies).
    */
   private extractSessionCookie(response: Response): string | null {
-    const headers = response.headers;
-    const setCookies =
-      typeof headers.getSetCookie === "function"
-        ? headers.getSetCookie()
-        : (headers.get("set-cookie")?.split(/,(?=\s*[^;,=\s]+=)/) ?? []);
-    const pairs = setCookies
+    const pairs = response.headers
+      .getSetCookie()
       .map((c) => c.split(";")[0]?.trim() ?? "")
       .filter((p) => p.includes("="));
     const direct = pairs.find((p) => p.startsWith("TM1SessionId="));
