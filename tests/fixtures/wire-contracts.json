@@ -986,48 +986,6 @@
     "POST /api/v1/$batch": {
       "responses[]": {
         "body": "unknown",
-        "body?": {
-          "@odata.context?": "string",
-          "@odata.etag?": "string",
-          "@odata.id?": "string",
-          "AdminHost?": "string",
-          "AllowSeparateNandCRules?": "boolean",
-          "Attributes?": {
-            "Caption": "string"
-          },
-          "ClientCAMURIs[]?": "unknown",
-          "ClientMessagePortNumber?": "number",
-          "ClientPingCAMPassport?": "number",
-          "ComponentName?": "string",
-          "DataBaseDirectory?": "string",
-          "DisableSandboxing?": "boolean",
-          "DistributedOutputDir?": "string",
-          "error?": {
-            "code": "string",
-            "message": "string"
-          },
-          "ForceReevaluationOfFeedersForFedCellsOnDataChange?": "boolean",
-          "HTTPPortNumber?": "number",
-          "Index?": "number",
-          "IntegratedSecurityMode?": "boolean",
-          "JobQueuing?": "boolean",
-          "Level?": "number",
-          "Name?": "string",
-          "ParentName?": "string",
-          "PortNumber?": "number",
-          "PrincipalName?": "string",
-          "ProductVersion?": "string",
-          "SecurityMode?": "string",
-          "SecurityPackageName?": "string",
-          "ServerCAMURI?": "string",
-          "ServerName?": "string",
-          "Type?": "string",
-          "UnicodeUpperLowerCase?": "boolean",
-          "UniqueName?": "string",
-          "value?": "string",
-          "WebCAMURI?": "string",
-          "Weight?": "number"
-        },
         "headers?": {
           "content-type?": "string",
           "etag?": "string",
