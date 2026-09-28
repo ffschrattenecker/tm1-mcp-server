@@ -5,7 +5,10 @@ import { READ_ONLY } from "../annotations.js";
 import { WritableCoordsResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { memberRef } from "./member-ref.js";
-import { resolveCellAddress } from "../../lib/cell-address.js";
+import {
+  bindLeftOutSandbox,
+  resolveCellAddress,
+} from "../../lib/cell-address.js";
 
 interface CoordCheck {
   dimension: string;
@@ -26,7 +29,7 @@ export const registerCheckWritableCoords = defineTool({
     coords: z
       .array(z.string())
       .describe(
-        "Element per dimension, in cube dimension order — or in the order of `dimensions` when given. Accepts the same forms as tm1_write_cells: a bare name (default hierarchy) or [Dimension].[Hierarchy].[Element].",
+        "Element per dimension, in cube dimension order — or in the order of `dimensions` when given. Sandboxes may be left out (bound to Base). Accepts the same forms as tm1_write_cells: a bare name (default hierarchy) or [Dimension].[Hierarchy].[Element].",
       ),
     dimensions: z
       .array(z.string())
@@ -61,6 +64,8 @@ export const registerCheckWritableCoords = defineTool({
         dimensions,
         "Nothing was checked.",
       ).toCubeOrder(givenCoords);
+    } else {
+      coords = bindLeftOutSandbox(dims, coords) ?? coords;
     }
     if (coords.length !== dims.length) {
       throw new TM1Error({
