@@ -1,11 +1,11 @@
 {
   "$comment": [
-    "Coverage ratchet \u2014 single source of truth. Read by vitest.config.ts (which",
+    "Coverage ratchet — single source of truth. Read by vitest.config.ts (which",
     "enforces `floors` as hard vitest thresholds) and by scripts/check-coverage-ratchet.mjs",
     "(which additionally fails when actual coverage has climbed more than `slack`",
     "points above a floor, forcing the floor to be ratcheted up).",
     "",
-    "Never lower a floor to make a red build green \u2014 add tests instead. Raising a",
+    "Never lower a floor to make a red build green — add tests instead. Raising a",
     "floor is the normal, expected edit: the ratchet gate prints the exact numbers.",
     "",
     "headroomPoints = how far below actual a freshly ratcheted floor sits. Small",
@@ -15,15 +15,16 @@
     "2026-08-19: the defineTool migration deleted 105 one-line `export function",
     "registerX(...)` wrappers (all covered) and columnsOf() deleted ~83 one-line",
     "column getters (mostly uncovered). Both changed the DENOMINATOR without",
-    "changing which code is exercised \u2014 functions dipped 60 -> 57 on the first,",
+    "changing which code is exercised — functions dipped 60 -> 57 on the first,",
     "then climbed to 63 on the second, which is why the floor lands at 61.",
-    "2026-09-26: deleting the unused rule linter (687 lines, ~12% covered) lifted every metric past the slack; floors raised to the ratchet's numbers."
+    "2026-09-26: deleting the unused rule linter (687 lines, ~12% covered) lifted every metric past the slack; floors raised to the ratchet's numbers.",
+    "2026-09-28: the upstream 5.0.0 merge (rule linter removal plus new tests) lifted lines/statements/branches past the slack; floors raised to the ratchet numbers."
   ],
   "floors": {
-    "lines": 72,
-    "statements": 71,
-    "functions": 69,
-    "branches": 62
+    "lines": 76,
+    "statements": 75,
+    "functions": 71,
+    "branches": 66
   },
   "slack": 5,
   "headroomPoints": 2,
