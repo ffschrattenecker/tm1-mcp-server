@@ -67,6 +67,15 @@ if (!entry?.env?.TM1_BASE_URL) {
   );
   process.exit(1);
 }
+// This script hands the folder's env to vitest as-is; it cannot read the OS
+// keychain. Fail here rather than let every live file miss TM1_PASSWORD.
+if (entry.env.TM1_SECRETS) {
+  console.error(
+    `record-wire-contracts: "${name}" keeps its secrets in the OS keychain (TM1_SECRETS), ` +
+      `which this script does not read. Use: npm run test:live:for -- ${name}`,
+  );
+  process.exit(1);
+}
 
 console.log(
   `${flags.has("--verify") ? "Checking" : "Recording"} wire contracts against "${name}" (${entry.env.TM1_BASE_URL})` +
