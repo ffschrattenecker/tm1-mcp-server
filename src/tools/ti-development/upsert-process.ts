@@ -15,7 +15,8 @@ import {
   runPreflight,
   type PreflightPayload,
 } from "./preflight.js";
-import { diffDs, diffParams, diffVars, tabCodeDiff } from "./diff-processes.js";
+import { diffDs, diffParams, diffVars } from "./diff-processes.js";
+import { tabCodeDiff } from "../../lib/line-diff.js";
 import type { DataSource } from "../../types.js";
 import { maskCode } from "../../lib/mask-secrets.js";
 import { backupProcess } from "./process-backup.js";
