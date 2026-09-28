@@ -40,7 +40,8 @@ response-size guard, the per-connection caches) are unchanged.
 ### Added
 
 - **The five file tools reach the Applications tree** via `container: "applications"`.
-- **`tm1_get_file_content` takes `encoding: "base64"`** for binary files.
+- **`tm1_get_file_content` takes `encoding: "base64"`** for binary files. Its `maxBytes` default
+  is 48 KB there (64 KB for text), so a default read fits the 80k response limit.
 - **Subset tools take `isPrivate`.**
 - **`tm1_upsert_process` takes `variablesUIData`** and warns when the kept column layout no
   longer fits the variables.
