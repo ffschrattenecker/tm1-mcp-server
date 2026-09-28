@@ -177,8 +177,7 @@ function compare(a: Entry[], b: Entry[], limit: number) {
 export const registerCompareEnvironments = defineTool({
   name: "tm1_compare_environments",
   description: [
-    "Drift overview between two connections (connection vs connectionB, e.g. PROD vs DEV): per object type, which objects exist on one side only and which differ, and in what (cube dimensions/rules, process code/parameters, chore active/schedule/steps, dimension hierarchies/element count; deep=true adds a full structure fingerprint).",
-    "Drill into a difference with the tool named in drillDown.",
+    "Drift overview of connection vs connectionB (e.g. PROD vs DEV): per object type, objects on one side only and objects that differ, with the differing aspects. Drill in with the tool named in drillDown.",
   ],
   annotations: READ_ONLY,
   peer: true,
@@ -202,7 +201,7 @@ export const registerCompareEnvironments = defineTool({
       .optional()
       .default(false)
       .describe(
-        "Fingerprint every dimension's elements and edges (reads each hierarchy in full; slow on large models).",
+        "Also fingerprint every hierarchy's elements and edges (slow on large models).",
       ),
     limit: z
       .number()

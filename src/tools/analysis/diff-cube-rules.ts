@@ -10,8 +10,7 @@ const FEEDERS = /^\s*FEEDERS\s*;/im;
 export const registerDiffCubeRules = defineTool({
   name: "tm1_diff_cube_rules",
   description: [
-    "Diff a cube's rule text between two connections (connectionB, e.g. DEV vs PROD) or against another cube (cubeB). Returns unified hunks computed server-side, so long rule files never have to be read in full to compare them.",
-    "Also reports whether the dimension lists match and whether SKIPCHECK/FEEDERS are present on each side. Edit with tm1_set_cube_rules.",
+    "Diff a cube's rules across connections (connectionB) or against cubeB, as unified hunks; also compares the dimension lists and SKIPCHECK/FEEDERS presence.",
   ],
   annotations: READ_ONLY,
   peer: true,
@@ -39,9 +38,7 @@ export const registerDiffCubeRules = defineTool({
       .max(500)
       .optional()
       .default(50)
-      .describe(
-        "Most hunks to return (default 50); the rest are counted in hunksOmitted.",
-      ),
+      .describe("Most hunks to return (default 50)."),
   },
   handler: async (
     { cube, cubeB: cubeBArg, contextLines, maxHunks },

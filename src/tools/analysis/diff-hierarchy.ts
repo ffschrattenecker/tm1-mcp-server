@@ -39,8 +39,7 @@ async function readAttributeValues(
 export const registerDiffHierarchy = defineTool({
   name: "tm1_diff_hierarchy",
   description: [
-    "Diff a hierarchy between two connections (connectionB, e.g. DEV vs PROD) or against another dimension (dimensionB): elements added/removed/retyped, edges added/removed, weight changes, reparented children, and attribute definitions. Computed server-side; returns counts plus lists capped at limit.",
-    "'added' = only in B, 'removed' = only in A. Names compare case- and space-insensitively, as in TM1.",
+    "Diff a hierarchy across connections (connectionB) or against dimensionB: elements, edges, weights, reparented children, attributes. Counts plus lists capped at limit; 'added' = only in B.",
   ],
   annotations: READ_ONLY,
   peer: true,
@@ -61,9 +60,7 @@ export const registerDiffHierarchy = defineTool({
       .boolean()
       .optional()
       .default(false)
-      .describe(
-        "Also compare attribute values of elements on both sides (default false; one MDX per 5000 elements per side). Default hierarchy only.",
-      ),
+      .describe("Also compare attribute values (default hierarchy only)."),
     limit: z
       .number()
       .int()
