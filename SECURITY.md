@@ -13,6 +13,11 @@ Only the latest `6.x` release line receives security fixes.
 
 **Do not open a public issue for security problems.**
 
+This is a personal testing fork. If the issue is also in the original project,
+report it to
+[flameY3T1/tm1-mcp-server](https://github.com/flameY3T1/tm1-mcp-server/security)
+first. Report it here only if it is specific to this fork.
+
 Report privately via GitHub's
 [**Report a vulnerability**](https://github.com/ffschrattenecker/tm1-mcp-server/security/advisories/new)
 (Security → Advisories → _Report a vulnerability_). This opens a confidential
