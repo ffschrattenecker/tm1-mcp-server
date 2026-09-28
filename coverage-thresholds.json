@@ -29,9 +29,9 @@
   "slack": 5,
   "headroomPoints": 2,
   "target": {
-    "lines": 75,
+    "lines": 76,
     "statements": 75,
-    "functions": 70,
-    "branches": 62
+    "functions": 71,
+    "branches": 66
   }
 }
