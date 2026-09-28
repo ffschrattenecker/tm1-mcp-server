@@ -255,9 +255,23 @@ export function loadServerSettings(
   };
 }
 
+export interface LoadConfigOptions {
+  /**
+   * The secrets are not in `env` yet: they are read from the OS keychain when
+   * the connection is first used (see ./secrets.ts), and loadConfig runs again
+   * then, with them. Until then a missing secret is not an error, and neither
+   * is a missing TM1_USER — the keychain may hold a TM1_CAM_PASSPORT.
+   */
+  deferSecrets?: boolean;
+}
+
 // `env` defaults to the process environment. The multi-connection registry
 // passes one record per connection folder instead (see ./connections.ts).
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
+export function loadConfig(
+  env: NodeJS.ProcessEnv = process.env,
+  options: LoadConfigOptions = {},
+): TM1Config {
+  const deferred = options.deferSecrets === true;
   const baseUrl = env.TM1_BASE_URL;
   const user = env.TM1_USER;
   const password = env.TM1_PASSWORD;
@@ -297,7 +311,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
   // don't block, letting the real 401 (if any) surface with context.
   const missing: string[] = [];
   if (!baseUrl) missing.push("TM1_BASE_URL");
-  if (!camPassport) {
+  if (!camPassport && !deferred) {
     if (!user) missing.push("TM1_USER");
     if (password === undefined && !passwordlessV12) {
       missing.push("TM1_PASSWORD");
@@ -311,7 +325,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
     );
   }
 
-  if (!camPassport && !passwordlessV12 && password === "") {
+  if (!camPassport && !passwordlessV12 && !deferred && password === "") {
     process.stderr.write(
       "[tm1-mcp-server] WARNING: TM1_PASSWORD is empty. " +
         "If TM1 rejects with 401, check whether the account actually allows blank passwords.\n",
@@ -422,11 +436,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): TM1Config {
     if (!user) missingV12.push("TM1_USER");
     if (authMode === "s2s") {
       if (!clientId) missingV12.push("TM1_CLIENT_ID");
-      if (!clientSecret) missingV12.push("TM1_CLIENT_SECRET");
+      if (!clientSecret && !deferred) missingV12.push("TM1_CLIENT_SECRET");
     } else if (authMode === "access_token" || authMode === "oidc") {
-      if (!accessToken) missingV12.push("TM1_ACCESS_TOKEN");
+      if (!accessToken && !deferred) missingV12.push("TM1_ACCESS_TOKEN");
     } else if (authMode === "iam") {
-      if (!apiKey) missingV12.push("TM1_API_KEY");
+      if (!apiKey && !deferred) missingV12.push("TM1_API_KEY");
       if (!iamUrl) missingV12.push("TM1_IAM_URL");
     }
     if (missingV12.length > 0) {

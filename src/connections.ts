@@ -18,12 +18,23 @@
 // defaults to readonly: a connection-level key (TM1_MODE, TM1_BASE_URL, …) in
 // the server's own environment is NOT inherited, so a TM1_MODE=readwrite in
 // the launching shell cannot silently arm every connection.
+//
+// A folder with TM1_SECRETS=keychain keeps its secrets in the OS keychain
+// (see ./secrets.ts). Discovery validates it without them; get() reads them
+// and builds the real config on first use.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse as parseDotenv } from "dotenv";
 import pino from "pino";
 import { connectionIdOf, loadConfig, type TM1Config } from "./config.js";
+import {
+  keychainHint,
+  plaintextSecretKeys,
+  usesKeychain,
+  withKeychainSecrets,
+  type SecretStore,
+} from "./secrets.js";
 import { SessionManager } from "./session-manager.js";
 import { TM1Client } from "./tm1-client.js";
 import { TM1Error, TM1ErrorCode } from "./types.js";
@@ -88,11 +99,16 @@ export interface ConnectionInfo {
   connectionId?: string | undefined;
   /** Set when the folder's `.env` could not be turned into a config. */
   configError?: string | undefined;
+  /** "keychain" when the secrets are read from the OS keychain on first use. */
+  secrets?: "keychain" | undefined;
 }
 
 interface Entry {
   info: ConnectionInfo;
   config?: TM1Config;
+  /** Keychain connections: the env to fill with secrets on first use. */
+  env?: NodeJS.ProcessEnv;
+  resolving?: Promise<TM1Config> | undefined;
   client?: TM1Client;
   connecting?: Promise<void> | undefined;
   lastError?: string | undefined;
@@ -106,17 +122,22 @@ export interface ConnectionStatus extends ConnectionInfo {
 export class ConnectionRegistry {
   private readonly entries = new Map<string, Entry>();
 
-  private constructor(private readonly logger: pino.Logger) {}
+  private constructor(
+    private readonly logger: pino.Logger,
+    /** Defaults to the OS keychain; tests inject a fake. */
+    private readonly secretStore?: SecretStore,
+  ) {}
 
   /** Discover connections from the environment (see the header comment). */
   static fromEnvironment(
     env: NodeJS.ProcessEnv,
     logger: pino.Logger,
+    options: { secretStore?: SecretStore } = {},
   ): ConnectionRegistry {
-    const registry = new ConnectionRegistry(logger);
+    const registry = new ConnectionRegistry(logger, options.secretStore);
     const explicitDir = env.TM1_CONNECTIONS_DIR;
     if (!explicitDir && env.TM1_BASE_URL) {
-      registry.addConfig("default", loadConfig(env));
+      registry.addEnv("default", env);
       return registry;
     }
     const dir = connectionsDir(env);
@@ -176,6 +197,18 @@ export class ConnectionRegistry {
     return registry;
   }
 
+  /** Validate one connection's env; keychain secrets are read later. */
+  private addEnv(name: string, env: NodeJS.ProcessEnv, dir?: string): void {
+    const keychain = usesKeychain(env);
+    const config = loadConfig(env, { deferSecrets: keychain });
+    this.addConfig(name, config, dir);
+    if (keychain) {
+      const entry = this.entries.get(name)!;
+      entry.env = env;
+      entry.info.secrets = "keychain";
+    }
+  }
+
   private addConfig(name: string, config: TM1Config, dir?: string): void {
     this.entries.set(name, {
       info: {
@@ -209,10 +242,18 @@ export class ConnectionRegistry {
       .filter((name) => !only || only.has(name))
       .sort((a, b) => a.localeCompare(b));
 
+    const plaintext: string[] = [];
     for (const name of names) {
       const folder = join(dir, name);
       try {
-        this.addConfig(name, loadConfig(connectionEnv(folder, env)), folder);
+        const connEnv = connectionEnv(folder, env);
+        this.addEnv(name, connEnv, folder);
+        if (
+          !this.entries.get(name)!.env &&
+          plaintextSecretKeys(connEnv).length
+        ) {
+          plaintext.push(name);
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.logger.warn(
@@ -223,6 +264,13 @@ export class ConnectionRegistry {
           info: { name, dir: folder, configError: message },
         });
       }
+    }
+    if (plaintext.length > 0) {
+      this.logger.warn(
+        { connections: plaintext },
+        "plaintext secrets in .env — move them to the OS keychain with " +
+          "`npx tm1-mcp-server secrets migrate <connection>`",
+      );
     }
   }
 
@@ -305,6 +353,19 @@ export class ConnectionRegistry {
    */
   async get(name: string | undefined): Promise<TM1Client> {
     const entry = this.entryFor(name);
+    if (!entry.client && entry.env) {
+      // Concurrent first calls share one keychain read. A failure is not
+      // cached: the next call reads again, after the user stored the entry.
+      entry.resolving ??= this.resolveSecrets(entry)
+        .catch((err: unknown) => {
+          entry.lastError = err instanceof Error ? err.message : String(err);
+          throw err;
+        })
+        .finally(() => {
+          entry.resolving = undefined;
+        });
+      entry.config = await entry.resolving;
+    }
     if (!entry.client) {
       const config = entry.config!;
       const logger = this.logger.child({ connection: entry.info.name });
@@ -328,6 +389,22 @@ export class ConnectionRegistry {
     }
     if (entry.connecting) await entry.connecting;
     return entry.client;
+  }
+
+  /** The full config of a keychain connection, secrets included. */
+  private async resolveSecrets(entry: Entry): Promise<TM1Config> {
+    const { name } = entry.info;
+    const env = await withKeychainSecrets(name, entry.env!, this.secretStore);
+    try {
+      return loadConfig(env);
+    } catch (err) {
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message: `Connection "${name}": ${
+          err instanceof Error ? err.message : String(err)
+        }${keychainHint(name)}`,
+      });
+    }
   }
 
   /** Connection metadata for a resolved call (mode/version gates). */
