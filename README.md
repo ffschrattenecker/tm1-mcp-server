@@ -31,7 +31,7 @@ Everything below describes this fork's state. For the real project, read the
 
 ## Features
 
-111 tools across 12 categories — every one listed in
+114 tools across 12 categories — every one listed in
 [docs/TOOLS.md](docs/TOOLS.md), with working JSON payloads in
 [docs/EXAMPLES.md](docs/EXAMPLES.md). Past plain CRUD over the REST API:
 
@@ -239,13 +239,13 @@ security notes and the `autoApprove` allowlist:
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (111)
+## Tools (114)
 
 Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 
 | Category | Tools |
 |---|---|
-| analysis | 10 |
+| analysis | 13 |
 | celldata | 10 |
 | dimension-management | 13 |
 | fileops | 5 |
@@ -257,7 +257,7 @@ Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 | subsets | 5 |
 | ti-development | 17 |
 | views | 4 |
-| **Total** | **111** |
+| **Total** | **114** |
 
 <!-- TOOLS-AUTOGEN:END -->
 

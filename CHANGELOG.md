@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Compare two environments (DEV vs PROD) without reading either side into the model.** When
+  more than one connection is configured, the comparison tools take a `connectionB` next to
+  `connection` (default: the same connection, so they also compare two objects on one server):
+  - `tm1_compare_environments` — drift overview per object type (cubes, dimensions, processes,
+    chores): what exists on one side only, what differs and in which aspect, and which tool to
+    drill into it with. `deep=true` also fingerprints every hierarchy's elements and edges.
+  - `tm1_diff_cube_rules` — rule text as unified hunks, plus dimension list and
+    SKIPCHECK/FEEDERS presence.
+  - `tm1_diff_hierarchy` — elements, edges, weights, reparented children and attribute
+    definitions; attribute values on request.
+  - `tm1_diff_processes` now diffs a process across connections; `processB` defaults to
+    `processA`.
+
+### Changed
+
+- **Text diffs skip the common head and tail before diffing**, so a one-line edit in a long rule
+  file or process costs a table the size of the edit. A changed region too large to diff
+  (over 16M LCS cells) reports line counts with `tooLarge: true` instead of hunks.
+
 ## [8.2.0] - 2026-09-28
 
 ### Fixed

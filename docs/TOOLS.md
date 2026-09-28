@@ -21,6 +21,10 @@ Two things the raw list does not show:
   `tm1_execute_chore`, `tm1_write_cells`, `tm1_set_cube_rules` and
   `tm1_upload_file`. It is misuse protection against a mis-fired call, not
   access control.
+- **With several connections, every tool takes `connection`**, and the comparison
+  tools (`tm1_compare_environments`, `tm1_diff_cube_rules`, `tm1_diff_hierarchy`,
+  `tm1_diff_processes`) also take an optional `connectionB` to compare against.
+  Only read-only tools accept a second connection.
 
 ## Categories
 
@@ -48,9 +52,9 @@ datasource (562-589).
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (111)
+## Tools (114)
 
-### analysis (10)
+### analysis (13)
 
 - `tm1_analyze_callgraph` — Build a process call graph (ExecuteProcess/RunProcess) for a TI process
 - `tm1_analyze_chore_graph` — Build downstream call graphs for every task of a TM1 chore
@@ -59,6 +63,9 @@ datasource (562-589).
 - `tm1_audit_feeders` — Static heuristics (S1–S5) scan cube rules for overfeeding: wildcard brackets, feeders into consolidated
 - `tm1_audit_naming` — Bulk-scan TM1 objects against IBM PA 2.0/3.1 naming conventions; reports hard violations only
 - `tm1_check_v12_readiness` — Static gap-analysis against the TM1 / Planning Analytics v12 (Cloud Native) deprecation list
+- `tm1_compare_environments` — Drift overview of connection vs connectionB (e.g
+- `tm1_diff_cube_rules` — Diff a cube's rules across connections (connectionB) or against cubeB, as unified hunks; also compares the dimension lists and SKIPCHECK/FEEDERS presence.
+- `tm1_diff_hierarchy` — Diff a hierarchy across connections (connectionB) or against dimensionB: elements, edges, weights, reparented children, attributes
 - `tm1_find_orphan_dimensions` — Identify dimensions not referenced by any cube — a model-hygiene check
 - `tm1_invalidate_callgraph_cache` — Drop the in-memory ReferenceIndex cache used by tm1_analyze_callgraph / tm1_analyze_object_usage / tm1_analyze_chore_graph
 - `tm1_trace_data_flow` — Trace data flow into and out of a cube in one call, instead of analyze_object_usage + N× get_process
@@ -177,7 +184,7 @@ datasource (562-589).
 - `tm1_copy_process` — Copy a TI process to a new name
 - `tm1_delete_process` — Delete a TurboIntegrator process from the TM1 server
 - `tm1_diff_process_with_file` — Compare an installed TI process on the server against a local .pro file
-- `tm1_diff_processes` — Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog)
+- `tm1_diff_processes` — Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog), on one connection or across two (connectionB, e.g
 - `tm1_execute_process` — Execute a TurboIntegrator process on the TM1 server with optional parameters
 - `tm1_export_process_to_git` — Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' (parameters, variables, ignored datasource columns, datasource) plus a '{name}.ti' (Prol
 - `tm1_export_process_to_pro` — Reverse of tm1_import_pro_file: serialize a TM1 process back to a .pro file body
