@@ -83,6 +83,7 @@ interface ToolSpecBase<I extends ZodRawShape> {
 /** A tool that acts on one TM1 connection — every tool but a handful. */
 interface ConnectionToolSpec<I extends ZodRawShape> extends ToolSpecBase<I> {
   connectionless?: false;
+  peer?: false;
   /**
    * Handler. Receives the parsed args, the client of the connection the call
    * targets, and the SDK's per-call extra (abort signal, request metadata).
@@ -103,6 +104,7 @@ interface ConnectionlessToolSpec<
   I extends ZodRawShape,
 > extends ToolSpecBase<I> {
   connectionless: true;
+  peer?: false;
   handler: (
     args: Parameters<ToolCallback<I>>[0],
     registry: ConnectionRegistry,
@@ -110,8 +112,31 @@ interface ConnectionlessToolSpec<
   ) => ReturnType<ToolCallback<I>>;
 }
 
+/** One side of a two-connection comparison. */
+export interface PeerSide {
+  /** Resolved connection name (the only one when the server has just one). */
+  name: string;
+  client: TM1Client;
+}
+
+/**
+ * A read-only tool that compares two connections (DEV vs PROD). Besides
+ * `connection` it takes an optional `connectionB` — present only when more
+ * than one connection exists — that defaults to `connection`, so every such
+ * tool also works on a single server (comparing two objects on it).
+ */
+interface PeerToolSpec<I extends ZodRawShape> extends ToolSpecBase<I> {
+  connectionless?: false;
+  peer: true;
+  handler: (
+    args: Parameters<ToolCallback<I>>[0],
+    sides: { a: PeerSide; b: PeerSide },
+    extra: Parameters<ToolCallback<I>>[1],
+  ) => ReturnType<ToolCallback<I>>;
+}
+
 export type ToolSpec<I extends ZodRawShape> =
-  ConnectionToolSpec<I> | ConnectionlessToolSpec<I>;
+  ConnectionToolSpec<I> | ConnectionlessToolSpec<I> | PeerToolSpec<I>;
 
 /** What ./with-annotations.ts needs at registration time. */
 export interface ResolvedSpec {
@@ -157,6 +182,14 @@ export function defineTool<I extends ZodRawShape>(
     ? spec.description.join(" ")
     : (spec.description as string);
 
+  if ("peer" in spec && spec.peer && !spec.annotations.readOnlyHint) {
+    // connectionB escapes the per-call readonly gate below, so only tools that
+    // never write may take it.
+    throw new Error(
+      `defineTool: "${spec.name}" takes a peer connection and must be READ_ONLY.`,
+    );
+  }
+
   const existing = SPECS.get(spec.name);
   if (existing) {
     throw new Error(
@@ -184,28 +217,29 @@ export function defineTool<I extends ZodRawShape>(
       server.tool(spec.name, description, spec.input, cb);
       return;
     }
-    const handler = spec.handler;
     if (spec.version !== undefined && !registry.hasVersion(spec.version)) {
       return;
     }
     // One connection: the input shape is exactly what the tool declares. More
     // than one: every tool takes a `connection` naming the target.
+    const names = registry.usableNames as [string, ...string[]];
     const input = registry.isSingle
       ? spec.input
       : {
           ...spec.input,
-          connection: z
-            .enum(registry.usableNames as [string, ...string[]])
-            .describe("Target TM1 connection."),
+          connection: z.enum(names).describe("Target TM1 connection."),
+          ...(spec.peer
+            ? {
+                connectionB: z
+                  .enum(names)
+                  .optional()
+                  .describe(
+                    "Second connection to compare against (e.g. PROD vs DEV). Default: the same as connection.",
+                  ),
+              }
+            : {}),
         };
-    // ToolCallback<I> is a conditional type over an unresolved generic, so TS
-    // cannot check the lambda against it — the cast asserts what the
-    // ToolSpec.handler signature already pins down (same args, same return).
-    const cb = (async (
-      args: Parameters<ToolCallback<I>>[0] & { connection?: string },
-      extra: Parameters<ToolCallback<I>>[1],
-    ) => {
-      const { connection, ...rest } = args;
+    const gate = (connection: string | undefined) => {
       const info = registry.resolveInfo(connection);
       if (!spec.annotations.readOnlyHint && info.mode === "readonly") {
         throw new TM1Error({
@@ -223,6 +257,46 @@ export function defineTool<I extends ZodRawShape>(
           hint: `Pick a v${spec.version} connection, or use the v${info.version} equivalent.`,
         });
       }
+      return info;
+    };
+    if (spec.peer) {
+      const handler = spec.handler;
+      const cb = (async (
+        args: Parameters<ToolCallback<I>>[0] & {
+          connection?: string;
+          connectionB?: string;
+        },
+        extra: Parameters<ToolCallback<I>>[1],
+      ) => {
+        const { connection, connectionB, ...rest } = args;
+        const infoA = gate(connection);
+        const infoB = gate(connectionB ?? connection);
+        const [clientA, clientB] = await Promise.all([
+          registry.get(infoA.name),
+          registry.get(infoB.name),
+        ]);
+        return handler(
+          rest,
+          {
+            a: { name: infoA.name, client: clientA },
+            b: { name: infoB.name, client: clientB },
+          },
+          extra,
+        );
+      }) as unknown as ToolCallback<I>;
+      server.tool(spec.name, description, input, cb);
+      return;
+    }
+    const handler = spec.handler;
+    // ToolCallback<I> is a conditional type over an unresolved generic, so TS
+    // cannot check the lambda against it — the cast asserts what the
+    // ToolSpec.handler signature already pins down (same args, same return).
+    const cb = (async (
+      args: Parameters<ToolCallback<I>>[0] & { connection?: string },
+      extra: Parameters<ToolCallback<I>>[1],
+    ) => {
+      const { connection, ...rest } = args;
+      gate(connection);
       const tm1Client = await registry.get(connection);
       return handler(rest, tm1Client, extra);
     }) as unknown as ToolCallback<I>;

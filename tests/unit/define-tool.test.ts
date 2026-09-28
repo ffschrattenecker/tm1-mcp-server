@@ -309,6 +309,105 @@ describe("defineTool with several connections", () => {
 
     expect(tools.has("tm1_spec_single_v12_only")).toBe(false);
   });
+
+  it("peer tools take an optional connectionB and get both clients", async () => {
+    const { wrapped, tools } = capture();
+    let sides:
+      | {
+          a: { name: string; client: TM1Client };
+          b: { name: string; client: TM1Client };
+        }
+      | undefined;
+    let seenArgs: unknown;
+    defineTool({
+      name: "tm1_spec_peer",
+      description: "fixture",
+      annotations: READ_ONLY,
+      peer: true,
+      input: { cubeName: z.string() },
+      handler: (args, s) => {
+        seenArgs = args;
+        sides = s;
+        return ok();
+      },
+    })(wrapped, registry);
+
+    const tool = tools.get("tm1_spec_peer")!;
+    const input = tool.config.inputSchema as z.ZodRawShape;
+    expect(Object.keys(input)).toEqual([
+      "cubeName",
+      "connection",
+      "connectionB",
+    ]);
+
+    await tool.cb({ cubeName: "C", connection: "dev", connectionB: "prod" });
+    expect(sides?.a).toEqual({ name: "dev", client: v11 });
+    expect(sides?.b).toEqual({ name: "prod", client: v12 });
+    expect(seenArgs).toEqual({ cubeName: "C" });
+
+    // connectionB defaults to connection.
+    await tool.cb({ cubeName: "C", connection: "prod" });
+    expect(sides?.a.client).toBe(v12);
+    expect(sides?.b.client).toBe(v12);
+  });
+
+  it("applies the version gate to the peer side too", async () => {
+    const { wrapped, tools } = capture();
+    const handler = vi.fn(ok);
+    defineTool({
+      name: "tm1_spec_peer_v11",
+      description: "fixture",
+      annotations: READ_ONLY,
+      version: 11,
+      peer: true,
+      input: {},
+      handler,
+    })(wrapped, registry);
+
+    const result = await tools
+      .get("tm1_spec_peer_v11")!
+      .cb({ connection: "dev", connectionB: "prod" });
+    expect(errorText(result)).toMatch(/needs TM1 v11/);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("a single connection exposes no connectionB and compares it with itself", async () => {
+    const { wrapped, tools } = capture();
+    let sides:
+      { a: { client: TM1Client }; b: { client: TM1Client } } | undefined;
+    defineTool({
+      name: "tm1_spec_peer_single",
+      description: "fixture",
+      annotations: READ_ONLY,
+      peer: true,
+      input: {},
+      handler: (_args, s) => {
+        sides = s;
+        return ok();
+      },
+    })(wrapped, ConnectionRegistry.single(v11));
+
+    const tool = tools.get("tm1_spec_peer_single")!;
+    expect(Object.keys(tool.config.inputSchema as object)).toEqual([]);
+    await tool.cb({});
+    expect(sides?.a.client).toBe(v11);
+    expect(sides?.b.client).toBe(v11);
+  });
+});
+
+describe("peer spec validation", () => {
+  it("refuses a peer tool that is not read-only", () => {
+    expect(() =>
+      defineTool({
+        name: "tm1_spec_peer_write",
+        description: "fixture",
+        annotations: DESTRUCTIVE,
+        peer: true,
+        input: {},
+        handler: ok,
+      }),
+    ).toThrow(/must be READ_ONLY/);
+  });
 });
 
 describe("connectionless tools", () => {
