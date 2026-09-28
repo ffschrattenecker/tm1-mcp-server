@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   about connections that still keep plaintext secrets. See
   [docs/CONFIGURATION.md](docs/CONFIGURATION.md#secrets-in-the-os-keychain--tm1_secretskeychain).
 
+### Changed
+
+- **`tm1_clear_cube` no longer declares `dimensions`/`tuples`.** They are dropped like any
+  unknown input, so an old call that still sends them empties the whole cube once `confirm`
+  matches. *Action:* remove them from stored calls; a partial clear is a TI process.
+
 ## [8.0.0] - 2026-09-28
 
 Merged upstream tm1-mcp-server 5.0.0 (flameY3T1, 2026-09-27). Where both lines had
