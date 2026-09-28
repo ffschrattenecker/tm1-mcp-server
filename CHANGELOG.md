@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Connections through a PAW gateway (`…/api/v0/tm1/<db>`) log in.** The gateway names the
+  session cookie `TM1SessionId_<db>` and authenticates later requests by its `paSession`
+  cookie, so the login failed with "no TM1SessionId cookie found". The server now keeps every
+  cookie such a login sets and sends them back; direct TM1 connections are unchanged.
+- On servers with `EnableSandboxDimension=true`, `tm1_get_cell_value` and
+  `tm1_check_writable_coords` (without `dimensions`) accept a coordinate that leaves out
+  `Sandboxes` and bind it to `Base`, as `tm1_write_cells` already did. Before, they refused
+  the coordinate as one element short.
+- `tm1_sample_cells` found no cells in any cube with a `Sandboxes` dimension: TM1's
+  `NONEMPTY()` returns an empty set whenever Sandboxes is part of the row set. An unfiltered
+  Sandboxes is now pinned to `Base` in the WHERE clause and reported as `sandboxPin`.
+- Markdown tables (`format: "markdown"`) escape backslashes, so a value ending in `\` no
+  longer breaks the table at the next `|`. In `tm1_execute_mdx`, raw cell values are no
+  longer escaped twice.
+
+All four ported from the [ffschrattenecker fork](https://github.com/ffschrattenecker/tm1-mcp-server)
+(7.0.2 and 8.2.0).
+
 ## [5.0.0] - 2026-09-27
 
 ### Breaking
