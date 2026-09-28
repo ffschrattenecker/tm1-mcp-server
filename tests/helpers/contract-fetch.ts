@@ -68,7 +68,15 @@ export function stubContractCheckedFetch(spy: FnSpy): void {
     try {
       const href = String(url);
       const path = href.startsWith("http") ? new URL(href).pathname : href;
+      // A finished async poll carries its real status in the asyncresult
+      // header — keyed the same way contract-recorder.ts records it.
+      const asyncStatus = Number.parseInt(
+        (res as { headers?: Headers } | null)?.headers?.get?.("asyncresult") ??
+          "",
+        10,
+      );
       const status =
+        (Number.isInteger(asyncStatus) ? asyncStatus : undefined) ??
         (res as { status?: number } | null)?.status ??
         ((res as { ok?: boolean } | null)?.ok === false ? 400 : 200);
       const base = endpointKey(init?.method ?? "GET", path);

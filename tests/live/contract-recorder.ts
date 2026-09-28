@@ -102,8 +102,13 @@ globalThis.fetch = async (input: unknown, init?: RequestInit) => {
   );
   try {
     const text = await res.clone().text();
-    if (RECORDING) record(init?.method ?? "GET", href, res.status, text);
-    else checkDrift(init?.method ?? "GET", href, res.status, text);
+    // A finished async poll (/_async('id')) is always HTTP 200; the real
+    // status rides in the asyncresult header. Key by that one, so a cancelled
+    // run's error envelope never merges into the result shape.
+    const status =
+      Number.parseInt(res.headers.get("asyncresult") ?? "", 10) || res.status;
+    if (RECORDING) record(init?.method ?? "GET", href, status, text);
+    else checkDrift(init?.method ?? "GET", href, status, text);
   } catch {
     // Observing must never break the run it observes.
   }
