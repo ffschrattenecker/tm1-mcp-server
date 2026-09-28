@@ -188,7 +188,7 @@ describe("connectionEnv — the one .env reader", () => {
       "TM1_USER='quoted user'",
       'TM1_PASSWORD="p#ss word"',
       "TM1_BASE_URL=http://h:1 # the test box",
-      "TM1X_DESCRIPTION=plapp environment (franz instance)",
+      "TM1X_DESCRIPTION=dev environment (test instance)",
     ]);
     const env = connectionEnv(join(root, "c"), {});
     expect(env.TM1_USER).toBe("quoted user");

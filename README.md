@@ -171,7 +171,10 @@ its report, just redacted.
 Copy `mcp.json.example` to `.mcp.json` (project-local) or merge it into
 `~/.claude/settings.json`. **Do not put `TM1_PASSWORD` in either file** — those
 are routinely shared or committed; keep it in a gitignored `.env`
-([where the server looks for one](docs/CONFIGURATION.md#where-credentials-are-read-from)).
+([where the server looks for one](docs/CONFIGURATION.md#where-credentials-are-read-from)),
+or out of files altogether in the OS keychain with
+`npx tm1-mcp-server secrets migrate <connection>`
+([details](docs/CONFIGURATION.md#secrets-in-the-os-keychain--tm1_secretskeychain)).
 
 For the `npx` install:
 

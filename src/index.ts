@@ -125,6 +125,13 @@ function buildMcpServer(
 }
 
 async function main(): Promise<void> {
+  // `tm1-mcp-server secrets …` manages keychain entries and exits; it never
+  // starts the server.
+  if (process.argv[2] === "secrets") {
+    const { runSecretsCli } = await import("./secrets-cli.js");
+    process.exit(await runSecretsCli(process.argv.slice(3), process.env));
+  }
+
   const settings = loadServerSettings();
   const logger = createLogger(settings);
 

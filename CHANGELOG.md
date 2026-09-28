@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Connection secrets can live in the OS keychain instead of the `.env`: set `TM1_SECRETS=keychain`
+  in a connection folder and store the secrets with `npx tm1-mcp-server secrets set|list|delete`,
+  or move an existing `.env` over with `secrets migrate <connection>`. The keychain is read the
+  first time a connection is used, never when connections are listed. At startup the server warns
+  about connections that still keep plaintext secrets. See
+  [docs/CONFIGURATION.md](docs/CONFIGURATION.md#secrets-in-the-os-keychain--tm1_secretskeychain).
+
 ## [8.0.0] - 2026-09-28
 
 Merged upstream tm1-mcp-server 5.0.0 (flameY3T1, 2026-09-27). Where both lines had
@@ -86,7 +95,7 @@ response-size guard, the per-connection caches) are unchanged.
 - **Corrected descriptions** of `tm1_unload_cube`, `tm1_clear_cube`, `tm1_delete_hierarchy`,
   `tm1_get_cube_stats` and `tm1_get_transaction_log`.
 - **The wire contracts were re-recorded against 11.8** upstream and merged with the fork's
-  plapp-franz recordings; the recorder now merges by default (`--replace` starts over).
+  own recordings; the recorder now merges by default (`--replace` starts over).
 
 ## [7.0.2] - 2026-09-27
 

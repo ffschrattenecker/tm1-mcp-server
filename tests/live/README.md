@@ -29,8 +29,8 @@ To run against a connection from `~/.tm1/mcp-servers/<name>/.env` (or
 `TM1_CONNECTIONS_DIR`), use the helper instead of loading the `.env` by hand:
 
 ```bash
-npm run test:live:for -- tm1-plapp-franz tests/live/cube.live.test.ts
-npm run test:live:for -- tm1-plapp-franz --retry-login   # after fixing a refused login
+npm run test:live:for -- my-dev tests/live/cube.live.test.ts
+npm run test:live:for -- my-dev --retry-login   # after fixing a refused login
 ```
 
 - The `.env` goes through `connectionEnv()` in `src/connections.ts`, the same

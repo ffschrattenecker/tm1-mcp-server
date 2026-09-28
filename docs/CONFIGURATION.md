@@ -19,7 +19,62 @@ For the recommended `npx` install, put a `.env` in the project directory you
 start your MCP client from, or point `DOTENV_CONFIG_PATH` at one via the MCP
 config's `env` block. **Do not put `TM1_PASSWORD` in `.mcp.json` or
 `settings.json`** — those files are routinely shared or committed. Keep secrets
-in a `.env` that stays out of version control.
+in a `.env` that stays out of version control, or better, in the OS keychain.
+
+## Secrets in the OS keychain — `TM1_SECRETS=keychain`
+
+A connection's `.env` does not have to hold its password. With
+`TM1_SECRETS=keychain` the server reads the secrets from the operating
+system's credential store instead: Windows Credential Manager, macOS
+Keychain, or the Secret Service (GNOME Keyring, KWallet) on Linux.
+
+The fastest way to switch an existing connection is to move its plaintext
+secrets out of the file:
+
+```sh
+npx tm1-mcp-server secrets migrate my-dev
+```
+
+This stores every secret of `~/.tm1/mcp-servers/my-dev/.env` in the
+keychain, reads each one back, and only then removes those lines and adds
+`TM1_SECRETS=keychain`. No plaintext backup is kept. Restart the MCP client
+afterwards.
+
+To set one by hand, you are prompted without echo, or it is read from stdin:
+
+```sh
+npx tm1-mcp-server secrets set my-dev                 # TM1_PASSWORD
+npx tm1-mcp-server secrets set my-dev TM1_CLIENT_SECRET
+npx tm1-mcp-server secrets list my-dev                # which keys are stored, never values
+npx tm1-mcp-server secrets delete my-dev [KEY]
+```
+
+The keys that can live in the keychain are `TM1_PASSWORD`,
+`TM1_CLIENT_SECRET`, `TM1_ACCESS_TOKEN`, `TM1_API_KEY` and
+`TM1_CAM_PASSPORT`. Everything else stays in the `.env`.
+
+Entries are stored under service `tm1-mcp-server` and account
+`<connection>/<KEY>`. On Windows the Credential Manager target name is
+`<connection>/<KEY>.tm1-mcp-server`, and the value is stored as UTF-16LE.
+Other tools that read the same connection folders (such as the tm1-api
+skill) look secrets up by these names.
+
+Behaviour:
+
+- Listing connections never reads the keychain. The secrets are read the
+  first time a connection is used, so a missing entry fails only that
+  connection, and the error names the `secrets set` command that fixes it.
+- A `.env` that sets `TM1_SECRETS=keychain` **and** a non-empty plaintext
+  secret is rejected as misconfigured. The server does not guess which one is
+  current, because a stale password is a failed login that counts toward
+  TM1's lockout. A blank `TM1_PASSWORD=` for a blank-password account is fine.
+- At startup the server logs one warning listing the connections that still
+  keep plaintext secrets in their `.env`.
+
+What this protects: the secret is no longer in a file that gets synced,
+backed up, committed, pasted into a chat or read into an AI agent's context.
+What it does not protect against: any program running as your OS user can
+read the keychain too, without a prompt on Windows.
 
 ## Several TM1 connections
 

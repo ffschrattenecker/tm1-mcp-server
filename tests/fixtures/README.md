@@ -48,7 +48,7 @@ contract built from element 0 alone would call element 1 a violation.
 ```bash
 npm run contracts:record                 # tm1-test, full live suite
 node scripts/record-wire-contracts.mjs tm1-prod --read-only
-node scripts/record-wire-contracts.mjs --connection=tm1-plapp-franz
+node scripts/record-wire-contracts.mjs --connection=my-dev
 ```
 
 The recorder rides along with the live suite instead of probing a separate list
