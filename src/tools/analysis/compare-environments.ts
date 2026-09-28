@@ -27,6 +27,12 @@ interface Entry {
 interface ReadOpts {
   includeControl: boolean;
   deep: boolean;
+  /**
+   * Name filter. The handler also applies it to every reader's result; a
+   * reader that fetches per object (deep dimensions) must apply it before the
+   * fan-out, or a narrow compare still reads the whole model.
+   */
+  regex: RegExp | undefined;
 }
 
 const DRILL_DOWN: Record<ObjectType, string | undefined> = {
@@ -79,7 +85,9 @@ async function readChores(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
 
 async function readDimensions(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
   const dims = (await c.dimensions.list({ includeElementCount: true })).filter(
-    (d) => o.includeControl || !d.name.startsWith("}"),
+    (d) =>
+      (o.includeControl || !d.name.startsWith("}")) &&
+      (!o.regex || o.regex.test(d.name)),
   );
   const entries: Entry[] = dims.map((d) => ({
     name: d.name,
@@ -224,7 +232,7 @@ export const registerCompareEnvironments = defineTool({
         : compileUserRegex(nameRegex, "i", "nameRegex");
     const keep = (entries: Entry[]) =>
       regex ? entries.filter((e) => regex.test(e.name)) : entries;
-    const opts = { includeControl, deep };
+    const opts = { includeControl, deep, regex };
 
     const results: Record<string, unknown> = {};
     let identical = true;

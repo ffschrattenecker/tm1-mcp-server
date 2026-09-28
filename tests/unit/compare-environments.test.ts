@@ -178,6 +178,43 @@ describe("tm1_compare_environments", () => {
     expect(r).not.toHaveProperty("cubes");
   });
 
+  it("deep mode reads only the hierarchies nameRegex selects", async () => {
+    const reads: string[] = [];
+    const counting = (m: Model): TM1Client => {
+      const c = client(m);
+      const getStructure = c.hierarchies.getStructure.bind(c.hierarchies);
+      return {
+        ...c,
+        dimensions: c.dimensions,
+        hierarchies: {
+          getStructure: (dim: string, hier: string) => {
+            reads.push(dim);
+            return getStructure(dim, hier);
+          },
+        },
+      } as unknown as TM1Client;
+    };
+    const model: Model = {
+      ...prod,
+      dims: {
+        Region: { hierarchies: ["Region"], count: 1 },
+        Product: { hierarchies: ["Product"], count: 1 },
+      },
+    };
+    const runCounting = peerRunner(registerCompareEnvironments, {
+      dev: counting(model),
+      prod: counting(model),
+    });
+    await runCounting({
+      connection: "prod",
+      connectionB: "dev",
+      objectTypes: ["dimensions"],
+      nameRegex: "^region$",
+      deep: true,
+    });
+    expect(reads).toEqual(["Region", "Region"]);
+  });
+
   it("filters by nameRegex and caps lists", async () => {
     const r = await run<Result>({
       connection: "prod",
