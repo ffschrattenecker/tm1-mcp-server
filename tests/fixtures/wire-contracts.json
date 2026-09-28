@@ -1,8 +1,5 @@
 {
-  "recordedAgainst": [
-    "11.8.02900.8",
-    "11.8.03500.4"
-  ],
+  "recordedAgainst": ["11.8.02900.8", "11.8.03500.4"],
   "recordedAt": "2026-09-28",
   "endpoints": {
     "DELETE /api/v1/Chores('*') !404": {

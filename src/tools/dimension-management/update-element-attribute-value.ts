@@ -32,9 +32,7 @@ export const registerUpdateElementAttributeValue = defineTool({
     hierarchyName: z
       .string()
       .optional()
-      .describe(
-        "Hierarchy of the element(s) (default: the same-named one).",
-      ),
+      .describe("Hierarchy of the element(s) (default: the same-named one)."),
     attributeName: z
       .string()
       .optional()
