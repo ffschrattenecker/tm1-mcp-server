@@ -7,6 +7,9 @@ import { CONTAINER_SCHEMA } from "./container.js";
 // Below the server's 80k-character response limit (TM1_MAX_RESPONSE_CHARS)
 // once JSON escaping is added; the old 256 KB default could never be returned.
 const DEFAULT_MAX_BYTES = 64 * 1024;
+// base64 grows the body by 4/3: 48 KB comes out at 64k characters, where the
+// text default would come out at ~87k and be refused by the size guard.
+const DEFAULT_BASE64_MAX_BYTES = 48 * 1024;
 const HARD_MAX_BYTES = 4 * 1024 * 1024;
 
 export const registerGetFileContent = defineTool({
@@ -16,7 +19,7 @@ export const registerGetFileContent = defineTool({
     "Use to inspect CSV, TXT, or other text files before building import processes.",
     "Auto-falls back from v12 (Files) to v11 (Blobs) container. Set container='applications' to read a document out of the Applications tree; a folder or a view reference there carries no content and is refused by name.",
     "encoding='base64' returns the bytes untouched — use it for spreadsheets and other binaries, which a text read would corrupt.",
-    "Response is truncated to maxBytes (default 64 KB) to keep MCP messages small.",
+    "Response is truncated to maxBytes (default 64 KB, 48 KB for base64) to keep MCP messages small.",
   ],
   annotations: READ_ONLY,
   output: FileContentResultSchema,
@@ -32,9 +35,8 @@ export const registerGetFileContent = defineTool({
       .positive()
       .max(HARD_MAX_BYTES)
       .optional()
-      .default(DEFAULT_MAX_BYTES)
       .describe(
-        `Truncate response after N bytes (default ${DEFAULT_MAX_BYTES}, hard max ${HARD_MAX_BYTES}).`,
+        `Truncate response after N bytes (default ${DEFAULT_MAX_BYTES}, ${DEFAULT_BASE64_MAX_BYTES} for base64; hard max ${HARD_MAX_BYTES}).`,
       ),
     ...CONTAINER_SCHEMA,
     encoding: z
@@ -55,9 +57,12 @@ export const registerGetFileContent = defineTool({
       ),
   },
   handler: async (
-    { fileName, maxBytes, headLines, container, encoding },
+    { fileName, maxBytes: requestedMaxBytes, headLines, container, encoding },
     tm1Client,
   ) => {
+    const maxBytes =
+      requestedMaxBytes ??
+      (encoding === "base64" ? DEFAULT_BASE64_MAX_BYTES : DEFAULT_MAX_BYTES);
     const bytes = await tm1Client.files.getContentBytes(fileName, container);
     const totalBytes = bytes.byteLength;
 

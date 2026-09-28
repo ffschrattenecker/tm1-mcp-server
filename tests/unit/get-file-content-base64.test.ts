@@ -73,6 +73,18 @@ describe("tm1_get_file_content, base64 encoding", () => {
     expect(out.truncationReason).toBe("maxBytes=4");
   });
 
+  it("defaults to a slice whose base64 fits the 80k response limit", async () => {
+    const big = Buffer.alloc(64 * 1024, 0xff);
+    const res = await handlerFor(big)({
+      fileName: "book.xlsx",
+      encoding: "base64",
+    });
+    const out = FileContentResultSchema.parse(JSON.parse(res.content[0].text));
+    expect(out.returnedBytes).toBe(48 * 1024);
+    expect(out.truncated).toBe(true);
+    expect(res.content[0].text.length).toBeLessThan(80_000);
+  });
+
   it("shows what a text read costs on the same bytes", async () => {
     const out = await payload({ fileName: "book.xlsx" });
     expect(out.content).toContain("�");
