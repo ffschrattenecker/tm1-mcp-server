@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Connections through a PAW gateway (`…/api/v0/tm1/<db>`) log in.** The gateway names the
+  session cookie `TM1SessionId_<db>` and authenticates later requests by its `paSession`
+  cookie, so the login failed with "no TM1SessionId cookie found". The server now keeps every
+  cookie such a login sets and sends them back; direct TM1 connections are unchanged.
+
 ### Changed
 
 - **`tm1_execute_process`, `tm1_execute_chore` and `tm1_save_data` run as TM1 async

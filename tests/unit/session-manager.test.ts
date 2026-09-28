@@ -223,6 +223,47 @@ describe("SessionManager", () => {
       );
     });
 
+    it("keeps every cookie behind a PAW gateway (TM1SessionId_<db> + paSession)", async () => {
+      const gatewayLogin = mockFetchResponse({ ok: true });
+      gatewayLogin.headers.append(
+        "set-cookie",
+        "TM1SessionId_Sales=tm1sess; Path=/; Secure; HttpOnly",
+      );
+      gatewayLogin.headers.append(
+        "set-cookie",
+        "paSession=pasess; Path=/; Secure; HttpOnly",
+      );
+      fetchSpy.mockResolvedValueOnce(gatewayLogin);
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ ok: true }));
+
+      const sm = new SessionManager(makeConfig(), mockLogger);
+      const cookie = await sm.authenticate();
+      expect(sm.cookieHeader(cookie)).toBe(
+        "TM1SessionId_Sales=tm1sess; paSession=pasess",
+      );
+
+      await sm.logout();
+      const [, logoutOpts] = fetchSpy.mock.calls[1] as [
+        string,
+        { headers: Record<string, string> },
+      ];
+      expect(logoutOpts.headers.Cookie).toBe(
+        "TM1SessionId_Sales=tm1sess; paSession=pasess",
+      );
+    });
+
+    it("sends only TM1SessionId to a direct TM1 even if other cookies are set", async () => {
+      const login = mockFetchResponse({ ok: true });
+      login.headers.append("set-cookie", "TM1SessionId=direct; Path=/api/");
+      login.headers.append("set-cookie", "other=x; Path=/");
+      fetchSpy.mockResolvedValueOnce(login);
+
+      const sm = new SessionManager(makeConfig(), mockLogger);
+      const cookie = await sm.authenticate();
+      expect(cookie).toBe("direct");
+      expect(sm.cookieHeader(cookie)).toBe("TM1SessionId=direct");
+    });
+
     it("should throw on timeout", async () => {
       fetchSpy.mockImplementationOnce(
         (_url: string, opts: { signal: AbortSignal }) =>
