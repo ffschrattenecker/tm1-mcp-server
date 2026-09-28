@@ -50,11 +50,6 @@
         "message": "string"
       }
     },
-    "GET /api/v1/_async('*')": {
-      "@odata.context": "string",
-      "ErrorLogFile": "null|object",
-      "ProcessExecuteStatusCode": "string"
-    },
     "GET /api/v1/ActiveConfiguration": {
       "@odata.context": "string",
       "Access": {

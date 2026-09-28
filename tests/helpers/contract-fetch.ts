@@ -16,9 +16,9 @@
 // legitimate. What it may not do is invent a key or change a type.
 import { vi } from "vitest";
 import {
-  endpointKey,
   diffAgainstShape,
   loadContracts,
+  AsyncOrigins,
 } from "./wire-contract.js";
 import type { FnSpy } from "./spy-types.js";
 import { isExcused } from "./contract-exceptions.js";
@@ -62,24 +62,24 @@ async function bodyOf(res: unknown): Promise<unknown> {
  */
 export function stubContractCheckedFetch(spy: FnSpy): void {
   const { endpoints } = loadContracts();
+  const asyncOrigins = new AsyncOrigins();
 
   const guarded = async (url: unknown, init?: { method?: string }) => {
     const res: unknown = await spy(url, init);
     try {
       const href = String(url);
       const path = href.startsWith("http") ? new URL(href).pathname : href;
-      // A finished async poll carries its real status in the asyncresult
-      // header — keyed the same way contract-recorder.ts records it.
-      const asyncStatus = Number.parseInt(
-        (res as { headers?: Headers } | null)?.headers?.get?.("asyncresult") ??
-          "",
-        10,
-      );
-      const status =
-        (Number.isInteger(asyncStatus) ? asyncStatus : undefined) ??
+      const rawStatus =
         (res as { status?: number } | null)?.status ??
         ((res as { ok?: boolean } | null)?.ok === false ? 400 : 200);
-      const base = endpointKey(init?.method ?? "GET", path);
+      // An async result is checked under the request that started the run,
+      // exactly as contract-recorder.ts records it.
+      const { base, status } = asyncOrigins.classify(
+        init?.method ?? "GET",
+        path,
+        rawStatus,
+        (res as { headers?: Headers } | null)?.headers,
+      );
       const key = status >= 200 && status < 300 ? base : `${base} !${status}`;
 
       const contract = endpoints[key];

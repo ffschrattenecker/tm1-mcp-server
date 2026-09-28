@@ -213,6 +213,44 @@ export function endpointKey(method: string, path: string): string {
   return `${method.toUpperCase()} ${normalized}`;
 }
 
+const ASYNC_ID = /_async\('([^']+)'\)/;
+
+/**
+ * Attributes async results to the request that started them.
+ *
+ * An async TI run (`Prefer: respond-async`) answers its POST with an empty
+ * 202 and delivers the result on a later GET /_async('id'), with the real
+ * status in the `asyncresult` header. Keyed by its own path, every such result
+ * — a process result, a chore result, an error — would share one
+ * `GET …/_async('*')` contract, and the POST contracts would never see a body
+ * again. This remembers which request each id belongs to, and hands back that
+ * request's key and status for the final poll.
+ */
+export class AsyncOrigins {
+  private readonly byId = new Map<string, string>();
+
+  /** Endpoint key and status a response is recorded or checked under. */
+  classify(
+    method: string,
+    path: string,
+    status: number,
+    headers: { get(name: string): string | null } | undefined,
+  ): { base: string; status: number } {
+    const base = endpointKey(method, path);
+    const polled = ASYNC_ID.exec(path)?.[1];
+    if (polled === undefined) {
+      const started = ASYNC_ID.exec(headers?.get("location") ?? "")?.[1];
+      if (status === 202 && started !== undefined) this.byId.set(started, base);
+      return { base, status };
+    }
+    const origin = this.byId.get(polled);
+    if (origin === undefined || status === 202) return { base, status };
+    this.byId.delete(polled);
+    const real = Number.parseInt(headers?.get("asyncresult") ?? "", 10);
+    return { base: origin, status: Number.isInteger(real) ? real : status };
+  }
+}
+
 // ── Checking a payload against a contract ─────────────────────────────────
 
 export interface CheckOptions {
