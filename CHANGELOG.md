@@ -95,7 +95,7 @@ response-size guard, the per-connection caches) are unchanged.
 - **Corrected descriptions** of `tm1_unload_cube`, `tm1_clear_cube`, `tm1_delete_hierarchy`,
   `tm1_get_cube_stats` and `tm1_get_transaction_log`.
 - **The wire contracts were re-recorded against 11.8** upstream and merged with the fork's
-  plapp-franz recordings; the recorder now merges by default (`--replace` starts over).
+  own recordings; the recorder now merges by default (`--replace` starts over).
 
 ## [7.0.2] - 2026-09-27
 

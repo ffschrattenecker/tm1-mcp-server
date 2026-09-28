@@ -99,7 +99,7 @@ export function buildSampleCellsMdx(
   // An unfiltered Sandboxes is pinned to Base instead of crossjoined: TM1's
   // NONEMPTY() returns an empty set whenever Sandboxes is part of the row set,
   // even as {[Sandboxes].[Base]} alone, so every sample of a sandboxed cube
-  // came back empty. Measured on plapp-franz (EnableSandboxDimension=true).
+  // came back empty. Measured on a server with EnableSandboxDimension=true.
   // Base is also what every other read through this server sees.
   let sandboxPin: SampleCellsBuildResult["sandboxPin"];
   for (const dim of dimensions) {

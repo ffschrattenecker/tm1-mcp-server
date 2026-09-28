@@ -5,7 +5,7 @@
  * for that connection.
  *
  *   npm run test:live:for -- <connection> [vitest args…]
- *   npm run test:live:for -- tm1-plapp-franz tests/live/cube.live.test.ts
+ *   npm run test:live:for -- my-dev tests/live/cube.live.test.ts
  *
  * Built after a hand-rolled .env loader sent a mangled password and a
  * five-file run locked the account (TM1 MaximumLoginAttempts). Three guards:
