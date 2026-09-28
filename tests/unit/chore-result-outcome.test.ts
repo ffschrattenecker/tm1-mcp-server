@@ -261,4 +261,26 @@ describe("ChoreService.execute — reporting status where the server has it", ()
 
     await expect(client.chores.execute("Nope")).rejects.toThrow();
   });
+  // Async runs are polled. A 404 from the POLL (expired id, or a re-auth into
+  // a session the id does not belong to) must not look like the missing-action
+  // 404 above: the chore is already running, and the fallback would start it
+  // a second time.
+  it("never re-runs the chore when the polling 404s", async () => {
+    fetchSpy
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 202,
+          headers: { location: "../_async('abc')" },
+        }),
+      )
+      .mockResolvedValueOnce(mock404("gone"));
+
+    await expect(client.chores.execute("Nightly")).rejects.toMatchObject({
+      code: "CONNECTION_FAILED",
+    });
+    const posts = fetchSpy.mock.calls.filter(
+      (c) => (c[1] as RequestInit).method === "POST",
+    );
+    expect(posts).toHaveLength(1);
+  });
 });

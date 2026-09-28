@@ -74,12 +74,16 @@ export class ChoreService {
 
   /**
    * Execute a chore immediately (bypass its schedule), and report how it ended.
-   * opts.timeoutMs overrides the 30s default for chores that run long TI chains.
    *
-   * Both actions here are SYNCHRONOUS — the POST returns when the chore is
-   * done, which is why the tool exposes a timeout ceiling of an hour. Using
-   * `tm1.ExecuteWithReturn` therefore costs no extra waiting; it only stops us
-   * throwing the status away.
+   * Both actions run as TM1 async operations: the POST is accepted at once
+   * and polled until the chore is done. opts.timeoutMs caps the wait (default
+   * an hour); an aborted opts.signal cancels the run on the server. Using
+   * `tm1.ExecuteWithReturn` costs no extra waiting; it only stops us throwing
+   * the status away.
+   *
+   * A 404 from the POLLING never reaches the fallback below: http.ts reports
+   * any polling failure as CONNECTION_FAILED, which rethrowIfSystemic passes
+   * on — a chore that is already running must not be started a second time.
    *
    * POST /api/v1/Chores('{name}')/tm1.ExecuteWithReturn?$expand=ErrorLogFile
    *   — v12 12.5.0 and up. `$expand` is REQUIRED: ErrorLogFile is a navigation
@@ -103,7 +107,7 @@ export class ChoreService {
       const response = await this.http.request<{
         ChoreExecuteStatusCode?: string;
         ErrorLogFile?: { Filename?: string } | null;
-      }>("POST", withReturn, {}, opts);
+      }>("POST", withReturn, {}, { ...opts, async: true });
       this.withReturnSupported = true;
       return classifyChoreExecution(
         response?.ChoreExecuteStatusCode,
@@ -147,7 +151,7 @@ export class ChoreService {
     path: string,
     opts?: RequestOptions,
   ): Promise<ChoreResult> {
-    await this.http.request<void>("POST", path, {}, opts);
+    await this.http.request<void>("POST", path, {}, { ...opts, async: true });
     return {
       success: false,
       outcome: "indeterminate",

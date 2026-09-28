@@ -220,8 +220,10 @@ export class ProcessService {
   }
 
   /**
-   * Execute a TI process with optional parameters. opts.timeoutMs overrides
-   * the 30s default for long-running TI runs.
+   * Execute a TI process with optional parameters. Runs as a TM1 async
+   * operation, so a long run is polled rather than held on one request;
+   * opts.timeoutMs caps the wait (default an hour), and an aborted
+   * opts.signal cancels the run on the server.
    * POST /api/v1/Processes('{name}')/tm1.ExecuteWithReturn?$expand=ErrorLogFile
    */
   async execute(
@@ -254,7 +256,7 @@ export class ProcessService {
       const response = await this.http.request<{
         ProcessExecuteStatusCode?: string;
         ErrorLogFile?: { Filename?: string } | null;
-      }>("POST", path, body, opts);
+      }>("POST", path, body, { ...opts, async: true });
       return classifyExecution(
         response?.ProcessExecuteStatusCode,
         response?.ErrorLogFile?.Filename,
@@ -320,7 +322,8 @@ export class ProcessService {
         // never serialized, on either version.
         "/api/v1/ExecuteProcessWithReturn?$expand=ErrorLogFile",
         body,
-        opts,
+        // SaveDataAll on a large model takes minutes — see execute().
+        { ...opts, async: true },
       );
       return classifyExecution(
         response?.ProcessExecuteStatusCode,
