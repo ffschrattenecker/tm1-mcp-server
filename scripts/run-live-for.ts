@@ -19,6 +19,10 @@
  *      which blocks further runs for that connection until --retry-login is
  *      passed. Nothing retries a login by itself.
  *
+ * A TM1_SECRETS=keychain folder gets its secrets from the OS keychain, as in
+ * the server; vitest inherits them through its environment, since every live
+ * file builds its config from process.env.
+ *
  * Exit codes: vitest's own; 2 usage / unknown connection; 3 login refused or
  * blocked by an earlier refusal.
  */
@@ -28,6 +32,7 @@ import { join } from "node:path";
 import pino from "pino";
 import { loadConfig } from "../src/config.js";
 import { connectionEnv, connectionsDir } from "../src/connections.js";
+import { usesKeychain, withKeychainSecrets } from "../src/secrets.js";
 import { SessionManager } from "../src/session-manager.js";
 
 const REPORT_DIR = ".live-reports";
@@ -63,7 +68,8 @@ async function main(): Promise<void> {
     process.exit(3);
   }
 
-  const env = connectionEnv(folder, process.env);
+  let env = connectionEnv(folder, process.env);
+  if (usesKeychain(env)) env = await withKeychainSecrets(name, env);
   const config = loadConfig(env);
   console.log(
     `connection: ${name}  ${config.baseUrl}  v${config.version}  user=${env.TM1_USER ?? "?"}`,
