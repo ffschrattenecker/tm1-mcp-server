@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.0.0] - 2026-09-28
+
 Merged upstream tm1-mcp-server 5.0.0 (flameY3T1, 2026-09-27). Where both lines had
 built the same thing, upstream's behaviour was taken; fork-only features (connection
 registry, `tm1_delete_elements`, rules patch mode, batch attribute writes, the
@@ -1403,7 +1405,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v7.0.2...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.0.0...HEAD
+[8.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v7.0.2...v8.0.0
 [7.0.2]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v7.0.1...v7.0.2
 [7.0.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v7.0.0...v7.0.1
 [7.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v6.1.1...v7.0.0
