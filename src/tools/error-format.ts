@@ -138,12 +138,20 @@ export function normalizeErrorResult(result: McpToolResult): McpToolResult {
 //     tm1Client.cubes.setRules(cube, rules),
 //     "Validate first with tm1_check_cube_rule before tm1_set_cube_rules.",
 //   );
-export async function withToolHint<T>(p: Promise<T>, hint: string): Promise<T> {
+//
+// `keep` lists codes whose own hint is more precise than the tool's and must
+// survive — e.g. an async TI run that timed out or was lost track of says
+// "still running, do not re-run", which a generic "re-run it" would reverse.
+export async function withToolHint<T>(
+  p: Promise<T>,
+  hint: string,
+  keep: readonly TM1ErrorCode[] = [],
+): Promise<T> {
   try {
     return await p;
   } catch (err) {
     if (err instanceof TM1Error) {
-      err.hintOverride = hint;
+      if (!keep.includes(err.code)) err.hintOverride = hint;
       throw err;
     }
     throw new TM1Error({

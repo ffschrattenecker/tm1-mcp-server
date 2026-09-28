@@ -580,7 +580,13 @@
       "@odata.count?": "number",
       "value[]": {
         "@odata.etag": "string",
-        "Name": "string",
+        "@odata.id?": "string",
+        "Edges[]?": {
+          "@odata.id": "string",
+          "ComponentName": "string"
+        },
+        "Level?": "number",
+        "Name?": "string",
         "Type?": "string"
       }
     },
@@ -951,7 +957,7 @@
         "Name": "string",
         "Prompt": "string",
         "Type": "string",
-        "Value": "number"
+        "Value": "number|string"
       },
       "PrologProcedure": "string",
       "Variables[]": {
@@ -1052,7 +1058,10 @@
     },
     "POST /api/v1/Cubes('*')/tm1.CheckRules": {
       "@odata.context": "string",
-      "value[]": "unknown"
+      "value[]": {
+        "LineNumber": "number",
+        "Message": "string"
+      }
     },
     "POST /api/v1/Cubes('*')/tm1.TraceCellCalculation": {
       "@odata.context": "string",

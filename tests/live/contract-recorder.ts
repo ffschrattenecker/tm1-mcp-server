@@ -34,24 +34,20 @@ import "../../src/tm1-client/dispatcher.js";
 import { afterAll } from "vitest";
 import {
   shapeOf,
-  endpointKey,
   diffAgainstShape,
   loadContracts,
+  AsyncOrigins,
 } from "../helpers/wire-contract.js";
 import { isExcused } from "../helpers/contract-exceptions.js";
 import { RECORDING, SPOOL } from "./contract-mode.js";
 
-function record(method: string, href: string, status: number, body: string) {
+function record(base: string, status: number, body: string) {
   const trimmed = body.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return;
-  const path = new URL(href).pathname;
   // A failed response is a contract too: the 400 envelope TM1 returns for
   // "element already exists" is exactly the kind of shape a hand-written fake
   // gets wrong. Status-qualify the key so success and failure never merge.
-  const key =
-    status >= 200 && status < 300
-      ? endpointKey(method, path)
-      : `${endpointKey(method, path)} !${status}`;
+  const key = status >= 200 && status < 300 ? base : `${base} !${status}`;
   appendFileSync(
     SPOOL,
     JSON.stringify({ key, shape: shapeOf(JSON.parse(trimmed)) }) + "\n",
@@ -70,15 +66,9 @@ function record(method: string, href: string, status: number, body: string) {
 // shape, so a required key going missing is drift, not a narrower $select.
 const drift: string[] = [];
 
-function checkDrift(
-  method: string,
-  href: string,
-  status: number,
-  body: string,
-) {
+function checkDrift(base: string, status: number, body: string) {
   const trimmed = body.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return;
-  const base = endpointKey(method, new URL(href).pathname);
   const key = status >= 200 && status < 300 ? base : `${base} !${status}`;
   const contract = loadContracts().endpoints[key];
   // No contract simply means the recording never covered this endpoint.
@@ -88,6 +78,8 @@ function checkDrift(
   }).filter((p) => !isExcused(key, p));
   if (problems.length > 0) drift.push(`${key}\n    ${problems.join("\n    ")}`);
 }
+
+const asyncOrigins = new AsyncOrigins();
 
 globalThis.fetch = async (input: unknown, init?: RequestInit) => {
   const href =
@@ -102,8 +94,16 @@ globalThis.fetch = async (input: unknown, init?: RequestInit) => {
   );
   try {
     const text = await res.clone().text();
-    if (RECORDING) record(init?.method ?? "GET", href, res.status, text);
-    else checkDrift(init?.method ?? "GET", href, res.status, text);
+    // An async run's result arrives on a later /_async('id') poll; it is
+    // recorded under the request that started the run (see AsyncOrigins).
+    const { base, status } = asyncOrigins.classify(
+      init?.method ?? "GET",
+      new URL(href).pathname,
+      res.status,
+      res.headers,
+    );
+    if (RECORDING) record(base, status, text);
+    else checkDrift(base, status, text);
   } catch {
     // Observing must never break the run it observes.
   }

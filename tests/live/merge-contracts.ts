@@ -57,9 +57,12 @@ export function mergeSpooledContracts(version: string): void {
   if (batch && typeof batch !== "string") {
     const responses = batch["responses[]"];
     if (responses && typeof responses !== "string") {
+      // A sub-response without a body (a 204) makes the merge mark it
+      // `body?` — drop that too, or the pin leaves both keys behind.
+      const { "body?": _optionalBody, ...envelope } = responses;
       merged.set("POST /api/v1/$batch", {
         ...batch,
-        "responses[]": { ...responses, body: "unknown" },
+        "responses[]": { ...envelope, body: "unknown" },
       });
     }
   }

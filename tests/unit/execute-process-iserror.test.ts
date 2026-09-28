@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { contractCheckedClient } from "../helpers/service-contract.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../src/tm1-client.js";
-import { TM1Error } from "../../src/types.js";
+import { TM1Error, TM1ErrorCode } from "../../src/types.js";
 import { registerExecuteProcess } from "../../src/tools/ti-development/execute-process.js";
 
 // Capture the handler the tool registers, then invoke it directly with a
@@ -210,5 +210,40 @@ describe("tm1_execute_process abort handling (M2)", () => {
 
     expect(caught).toBeInstanceOf(TM1Error);
     expect((caught as TM1Error).hint).toContain("tm1_diagnose_process_error");
+  });
+});
+
+describe("tm1_execute_process transport hints", () => {
+  // An async run that timed out is still running. The tool's own hint says to
+  // diagnose and re-run — replacing the transport's hint with it would invite
+  // a duplicate execution.
+  it("keeps the still-running hint of a LOCK_TIMEOUT", async () => {
+    const cb = captureHandler(() =>
+      Promise.reject(
+        new TM1Error({
+          code: TM1ErrorCode.LOCK_TIMEOUT,
+          message: "still running",
+          hint: "Only the waiting stopped, not the run.",
+        }),
+      ),
+    );
+    const err = await cb({ processName: "P", confirm: "P" }, {}).catch(
+      (e: unknown) => e,
+    );
+    expect((err as TM1Error).hint).toBe(
+      "Only the waiting stopped, not the run.",
+    );
+  });
+
+  it("still attaches the tool hint to other errors", async () => {
+    const cb = captureHandler(() =>
+      Promise.reject(
+        new TM1Error({ code: TM1ErrorCode.TM1_ERROR, message: "boom" }),
+      ),
+    );
+    const err = await cb({ processName: "P", confirm: "P" }, {}).catch(
+      (e: unknown) => e,
+    );
+    expect((err as TM1Error).hint).toContain("tm1_diagnose_process_error");
   });
 });

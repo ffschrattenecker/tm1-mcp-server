@@ -17,6 +17,18 @@ const MAX_NETWORK_RETRIES = 3;
 const BACKOFF_BASE_MS = 1000;
 const USER_AGENT = `${PRODUCT}/${VERSION}`;
 
+// Async operations (RequestOptions.async). Polling backs off from 0.1s to 1s.
+// Without a caller timeoutMs the wait is capped at an hour — the tools'
+// timeoutMs ceiling — not at the 30s single-request default, which a long TI
+// run would otherwise hit while it is still running.
+const ASYNC_POLL_MIN_MS = 100;
+const ASYNC_POLL_MAX_MS = 1000;
+const ASYNC_DEFAULT_BUDGET_MS = 3_600_000;
+// Consecutive failed polls (network blip, per-poll timeout) tolerated before
+// the run is reported as lost track of.
+const ASYNC_MAX_POLL_FAILURES = 3;
+const ASYNC_CANCEL_TIMEOUT_MS = 5000;
+
 // R2-22: any successful mutating HTTP call invalidates the callgraph
 // reference-index cache. Cheap (Map.clear()) and rebuild is lazy on next
 // read — over-invalidation on non-graph-affecting calls (write_cells,
@@ -38,6 +50,14 @@ export interface RequestOptions {
   // timeout means "too much data", not a transient blip — retrying just
   // multiplies the wait. Default: retries enabled for safe methods.
   retry?: boolean;
+  // Run as a TM1 async operation (`Prefer: respond-async`). TM1 answers 202
+  // and the result is polled from /_async('id'), so a long TI run never holds
+  // one HTTP request open. timeoutMs then caps the whole wait (default: an
+  // hour); running out stops the polling but leaves the run going. An aborted
+  // signal DELETEs the operation, which cancels the run on the server —
+  // measured on 11.8: the TI thread is gone and the result reads
+  // "TM1UserException: Cancel".
+  async?: boolean;
 }
 
 // Link an external AbortSignal (e.g. from RequestHandlerExtra.signal) to a
@@ -142,6 +162,32 @@ export class TM1HttpClient {
     const isSafeMethod = isSafeHttpMethod(method);
     const allowRetry = opts?.retry !== false;
     const maxAttempts = isSafeMethod && allowRetry ? MAX_NETWORK_RETRIES : 0;
+    const isAsync = opts?.async === true;
+    // Async: the POST itself returns at once, and a server that ignores the
+    // preference answers synchronously — so the budget covers either.
+    const timeoutMs = isAsync
+      ? (opts?.timeoutMs ?? ASYNC_DEFAULT_BUDGET_MS)
+      : opts?.timeoutMs;
+    const budgetMs = timeoutMs ?? this.config.requestTimeoutMs;
+    const deadline = Date.now() + budgetMs;
+    const extraHeaders: Record<string, string> | undefined = isAsync
+      ? { Prefer: "respond-async" }
+      : undefined;
+    const settle = async (response: Response): Promise<T> => {
+      const final =
+        isAsync && response.status === 202
+          ? await this.awaitAsync(
+              response,
+              path,
+              deadline,
+              budgetMs,
+              opts?.signal,
+            )
+          : response;
+      const result = await this.handleResponse<T>(final, path);
+      this.emitMutation(method, path);
+      return result;
+    };
     let lastError: unknown;
 
     for (let attempt = 0; attempt <= maxAttempts; attempt++) {
@@ -161,8 +207,9 @@ export class TM1HttpClient {
           method,
           cookie,
           body,
-          opts?.timeoutMs,
+          timeoutMs,
           opts?.signal,
+          extraHeaders,
         );
 
         if (response.status === 401) {
@@ -179,8 +226,9 @@ export class TM1HttpClient {
             method,
             newCookie,
             body,
-            opts?.timeoutMs,
+            timeoutMs,
             opts?.signal,
+            extraHeaders,
           );
 
           if (retryResponse.status === 401) {
@@ -192,21 +240,17 @@ export class TM1HttpClient {
             });
           }
 
-          const retryResult = await this.handleResponse<T>(retryResponse, path);
-          this.emitMutation(method, path);
-          return retryResult;
+          return await settle(retryResponse);
         }
 
-        const result = await this.handleResponse<T>(response, path);
-        this.emitMutation(method, path);
-        return result;
+        return await settle(response);
       } catch (error) {
         if (error instanceof TM1Error) {
           throw error;
         }
 
         if (isTimeoutError(error)) {
-          const ms = opts?.timeoutMs ?? this.config.requestTimeoutMs;
+          const ms = budgetMs;
           throw new TM1Error({
             code: TM1ErrorCode.LOCK_TIMEOUT,
             message: `Request to ${path} timed out after ${ms}ms`,
@@ -461,6 +505,7 @@ export class TM1HttpClient {
     body?: unknown,
     timeoutMs?: number,
     externalSignal?: AbortSignal,
+    extraHeaders?: Record<string, string>,
   ): Promise<Response> {
     const headers: Record<string, string> = {
       Cookie: `TM1SessionId=${cookie}`,
@@ -469,6 +514,7 @@ export class TM1HttpClient {
       "User-Agent": USER_AGENT,
       "TM1-SessionContext": USER_AGENT,
       "TM1-Session-Context": USER_AGENT,
+      ...extraHeaders,
     };
 
     const isWriteMethod =
@@ -492,6 +538,136 @@ export class TM1HttpClient {
       timeoutMs ?? this.config.requestTimeoutMs,
       externalSignal,
     );
+  }
+
+  /**
+   * Poll an accepted (202) async operation until TM1 has the result, and hand
+   * that result back as the Response the synchronous call would have given.
+   *
+   * Measured on 11.8: the Location is relative and not consistently so —
+   * `../_async('id')` from a bound action, `_async('id')` from an unbound one
+   * — so only the id is taken from it and the path is rebuilt through the
+   * profile (v12 reroots it under the database). A poll answers 202 while the
+   * run lasts, then 200 carrying the real status in the `asyncresult` header
+   * ("201 Created", "204 No Content", "500 Internal Server Error") and the real
+   * body as its own.
+   *
+   * Anything that goes wrong with the polling itself is CONNECTION_FAILED —
+   * systemic, never NOT_FOUND. A poll 404 (an expired id, or a re-auth into a
+   * new session the id does not belong to) says nothing about the resource,
+   * and ChoreService re-runs the chore on a NOT_FOUND.
+   */
+  private async awaitAsync(
+    accepted: Response,
+    path: string,
+    deadline: number,
+    budgetMs: number,
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    const id = /_async\('([^']+)'\)/.exec(
+      accepted.headers.get("location") ?? "",
+    )?.[1];
+    if (id === undefined) {
+      throw lostTrack(
+        path,
+        "TM1 accepted the request (202) but named no _async operation",
+      );
+    }
+    const url = `${this.config.baseUrl}${this.profile.resolveApiPath(`/api/v1/_async('${id}')`)}`;
+    let delay = ASYNC_POLL_MIN_MS;
+    let failures = 0;
+    try {
+      for (;;) {
+        await abortableSleep(delay, signal);
+        delay = Math.min(delay * 2, ASYNC_POLL_MAX_MS);
+        let res: Response;
+        try {
+          res = await this.pollAsync(url, signal);
+        } catch (e) {
+          if (signal?.aborted) throw e;
+          if (!isTimeoutError(e) && !this.isNetworkError(e)) throw e;
+          if (++failures >= ASYNC_MAX_POLL_FAILURES) {
+            throw lostTrack(path, e instanceof Error ? e.message : String(e));
+          }
+          continue;
+        }
+        failures = 0;
+        if (res.status === 200) return await asyncResult(res);
+        if (res.status !== 202) {
+          throw lostTrack(path, `polling answered HTTP ${res.status}`);
+        }
+        if (Date.now() >= deadline) {
+          throw new TM1Error({
+            code: TM1ErrorCode.LOCK_TIMEOUT,
+            message: `${path} was still running on the TM1 server when the ${budgetMs}ms wait ran out. It was NOT cancelled.`,
+            endpoint: path,
+            hint: "Only the waiting stopped, not the run. Watch it with tm1_list_threads (v11) or tm1_list_jobs (v12) and do not re-run it meanwhile; pass a larger timeoutMs next time.",
+          });
+        }
+      }
+    } catch (e) {
+      if (signal?.aborted) await this.cancelAsync(url, path);
+      throw e;
+    }
+  }
+
+  /** One poll of an async operation, re-authenticating once on a 401. */
+  private async pollAsync(
+    url: string,
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    const cookie = await this.sessionManager.ensureSession();
+    const res = await this.executeRequest(
+      url,
+      "GET",
+      cookie,
+      undefined,
+      undefined,
+      signal,
+    );
+    if (res.status !== 401) return res;
+    const newCookie = await this.sessionManager.authenticate(cookie);
+    return this.executeRequest(
+      url,
+      "GET",
+      newCookie,
+      undefined,
+      undefined,
+      signal,
+    );
+  }
+
+  /**
+   * DELETE an async operation, best-effort: this cancels the run it stands
+   * for. Deliberately without the caller's signal — that one is already
+   * aborted, which is why we are here.
+   */
+  private async cancelAsync(url: string, path: string): Promise<void> {
+    try {
+      const cookie = await this.sessionManager.ensureSession();
+      const res = await this.sendOnce(
+        url,
+        "DELETE",
+        {
+          Cookie: `TM1SessionId=${cookie}`,
+          Accept: "application/json",
+          "User-Agent": USER_AGENT,
+          "TM1-SessionContext": USER_AGENT,
+          "TM1-Session-Context": USER_AGENT,
+        },
+        undefined,
+        ASYNC_CANCEL_TIMEOUT_MS,
+      );
+      this.logger.warn(
+        { endpoint: path, status: res.status },
+        "Cancelled async TM1 operation",
+      );
+    } catch (err) {
+      this.logger.error(
+        { err, endpoint: path },
+        "Could not cancel async TM1 operation",
+      );
+    }
   }
 
   private async handleResponse<T>(
@@ -757,6 +933,47 @@ function odataErrorText(parsed: unknown): string | undefined {
 
 function isTimeoutError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "TimeoutError";
+}
+
+/** The polling lost the run: its outcome is unknown, never "not found". */
+function lostTrack(path: string, why: string): TM1Error {
+  return new TM1Error({
+    code: TM1ErrorCode.CONNECTION_FAILED,
+    message: `Lost track of the async run of ${path}: ${why}. It may still be running, or may have finished.`,
+    endpoint: path,
+    hint: "The outcome is unknown. Check tm1_list_threads (v11) or tm1_list_jobs (v12) and the message log before running it again — a re-run risks a duplicate execution.",
+  });
+}
+
+/**
+ * The final poll of an async operation, as the response the synchronous call
+ * would have given: status from the `asyncresult` header, body as sent. With
+ * no header the poll's own status stands.
+ */
+async function asyncResult(res: Response): Promise<Response> {
+  const status = Number.parseInt(res.headers.get("asyncresult") ?? "", 10);
+  if (!Number.isInteger(status) || status === res.status) return res;
+  const text = await res.text();
+  return new Response(status === 204 || !text ? null : text, { status });
+}
+
+function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
+  const reason = (): Error =>
+    signal?.reason instanceof Error
+      ? signal.reason
+      : new DOMException("This operation was aborted", "AbortError");
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(reason());
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(reason());
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function sleep(ms: number): Promise<void> {

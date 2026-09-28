@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`tm1_execute_process`, `tm1_execute_chore` and `tm1_save_data` run as TM1 async
+  operations** (`Prefer: respond-async`, polled from `/_async('id')`). A long run no longer
+  hits the 30s request timeout, and `timeoutMs` now caps the whole wait (default one hour)
+  instead of a single request. Running out of it stops the waiting, not the run: the
+  `LOCK_TIMEOUT` says it is still running.
+- **Cancelling one of these calls now cancels the run on the server.** Before, the TI process
+  kept running after a client-side cancel. Measured on 11.8: the thread is gone and the run's
+  writes are rolled back, the same as `tm1_cancel_thread`. A chore under `MultipleCommit` keeps
+  the steps it had already committed. v12 is not measured yet. This includes a client that
+  cancels the call when its own timeout fires; all three tools now send progress heartbeats
+  every 5s, so clients that reset their timeout on progress keep waiting.
+
 ## [8.1.0] - 2026-09-28
 
 ### Added
