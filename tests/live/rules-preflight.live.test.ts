@@ -70,7 +70,11 @@ describe.skipIf(!LIVE_ENABLED)("live: set_cube_rules preflight", () => {
       edits: [{ find: "* 2;", replace: "* 2 +;" }],
     });
     expect(r.isError).toBe(true);
-    expect(r.json).toMatchObject({ stage: "preflight", check: "syntax" });
+    expect(r.json).toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(JSON.parse(String(r.json.details))).toMatchObject({
+      stage: "preflight",
+      errors: [{ lineNumber: 2 }],
+    });
     const back = await h.ok("tm1_get_cube_rules", { cubeName: CUBE });
     expect(String(back.json.rulesText).replace(/\r\n/g, "\n")).toBe(GOOD);
   });
@@ -80,7 +84,8 @@ describe.skipIf(!LIVE_ENABLED)("live: set_cube_rules preflight", () => {
       cubeName: CUBE,
       edits: [{ find: "* 2;", replace: "* 2 +;" }],
     });
-    expect(r.isError).toBe(true);
+    // A rule with errors is the answer, not a failed call.
+    expect(r.isError).toBeFalsy();
     expect(r.json).toMatchObject({ ok: false, errors: [{ lineNumber: 2 }] });
   });
 

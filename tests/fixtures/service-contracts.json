@@ -1,6 +1,9 @@
 {
-  "recordedAgainst": ["11.8.02900.8", "11.8.03500.4"],
-  "recordedAt": "2026-09-27",
+  "recordedAgainst": [
+    "11.8.02900.8",
+    "11.8.03500.4"
+  ],
+  "recordedAt": "2026-09-28",
   "methods": {
     "batch.execute": {
       "[]": {
@@ -80,7 +83,10 @@
         "name": "string",
         "processes[]": {
           "name": "string",
-          "parameters": {}
+          "parameters": {
+            "pLogOutput?": "number",
+            "pStrictErrorHandling?": "number"
+          }
         },
         "startTime": "string"
       }
@@ -482,7 +488,7 @@
             "IntegratedSecurityMode": "string",
             "MaximumLoginAttempts": "number",
             "SecurityPackageName": "string",
-            "ServicePrincipalName": "string"
+            "ServicePrincipalName": "null|string"
           },
           "CAM": {
             "CAMUseSSL": "boolean",
@@ -520,13 +526,14 @@
             "SkipSSLCertVerification": "boolean",
             "SkipSSLCRLVerification": "boolean",
             "UseServerAccount": "boolean",
-            "VerifyCertServerName[]": "unknown",
+            "VerifyCertServerName?": "null",
+            "VerifyCertServerName[]?": "unknown",
             "VerifyServerSSLCert": "boolean",
             "WellKnownUserName": "null"
           },
           "Network": {
             "IdleConnectionTimeOut": "string",
-            "IPAddress": "null",
+            "IPAddress": "null|string",
             "IPVersion": "string",
             "NetRecvBlockingWaitLimit": "string",
             "NetRecvMaxClientIOWaitWithinAPIs": "string",
@@ -577,7 +584,7 @@
             "ThresholdForThreadWaitingTime": "string"
           },
           "ExternalDatabase": {
-            "ODBCLibraryPath": "null",
+            "ODBCLibraryPath": "null|string",
             "ODBCTimeoutInSeconds": "number",
             "OracleErrorForceRowStatus": "null",
             "SQLFetchType": "null",
@@ -599,7 +606,7 @@
           "MaskUserNameInServerTools": "boolean",
           "PerfMonActive": "boolean",
           "PerformanceMonitorOn": "boolean",
-          "RunningInBackground": "null",
+          "RunningInBackground": "boolean|null",
           "ServerLog": {
             "Enable": "boolean",
             "LogReleaseLineCount": "number"
@@ -623,6 +630,7 @@
         "DataBaseDirectory": "string",
         "DisableSandboxing": "boolean",
         "DistributedOutputDir": "string",
+        "EncryptionAtRest?": "null",
         "ForceReevaluationOfFeedersForFedCellsOnDataChange": "boolean",
         "HTTPPortNumber": "number",
         "IntegratedSecurityMode": "boolean",
