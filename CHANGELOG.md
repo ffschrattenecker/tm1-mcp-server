@@ -16,6 +16,11 @@ response-size guard, the per-connection caches) are unchanged.
 
 - **`tm1_move_element` is removed.** It attached the element to the new parent but left it
   under the old one. *Action:* use `tm1_update_element` on both parents' `components`.
+- **`tm1_clear_cube` takes only `cubeName` and `confirm`** (plus `timeoutMs`). The
+  `dimensions` and `tuples` inputs advertised a region clear the server cannot do: the only
+  route that works is a TI with `CubeClearData`, which empties the whole cube. A call that
+  still carries them is refused and nothing is cleared. *Action:* use a TI process for a
+  partial clear.
 - **`tm1_write_cells` refuses a consolidated coordinate.** Every coordinate is checked before
   anything is sent; write the leaves or run a TI process.
 - **`tm1_set_cube_rules` fails with `VALIDATION_ERROR` when the preflight finds syntax

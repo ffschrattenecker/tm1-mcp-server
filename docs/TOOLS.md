@@ -48,7 +48,7 @@ datasource (562-589).
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (112)
+## Tools (111)
 
 ### analysis (10)
 
@@ -76,7 +76,7 @@ datasource (562-589).
 - `tm1_trace_feeders` — Trace the feeders of a cell: returns the cells this cell feeds plus the feeder statements involved — answers 'which feeder statement fires from this cell, and w
 - `tm1_write_cells` — Write one or more cell values directly to a TM1 cube via REST
 
-### dimension-management (14)
+### dimension-management (13)
 
 - `tm1_bulk_upsert_elements` — Create or update multiple elements in a TM1 hierarchy in bulk (two-pass: leafs first, then consolidations)
 - `tm1_create_dimension` — Create a new TM1 dimension with a default hierarchy of the same name
@@ -88,8 +88,7 @@ datasource (562-589).
 - `tm1_delete_elements` — Delete many elements from one TM1 dimension hierarchy in a single call ($batch where the server supports it)
 - `tm1_delete_hierarchy` — Delete a hierarchy from a dimension
 - `tm1_get_element_attribute_values` — Read attribute values (Numeric/String/Alias) via MDX on the }ElementAttributes_{Dim} control cube
-- `tm1_list_element_attributes` — List element attribute definitions of a TM1 hierarchy with their types (Numeric/String/Alias)
-- `tm1_move_element` — Move an element to a new parent within a TM1 dimension hierarchy
+- `tm1_list_element_attributes` — List element attribute definitions of a TM1 dimension with their types (Numeric/String/Alias); every hierarchy returns the same dimension-wide list
 - `tm1_update_element` — Update an existing element in a TM1 dimension hierarchy (name, type, or components)
 - `tm1_update_element_attribute_value` — Set attribute values on elements by writing to the }ElementAttributes_{Dim} control cube
 
