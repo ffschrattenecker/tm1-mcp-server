@@ -14,7 +14,7 @@ describe("tabCodeDiff", () => {
     const r = tabCodeDiff(base.join("\n"), changed.join("\n"), 1);
     expect(r.identical).toBe(false);
     expect(r.hunks).toHaveLength(1);
-    const h = r.hunks[0]!;
+    const h = r.hunks[0];
     expect(h.startA).toBe(2500);
     expect(h.startB).toBe(2500);
     expect(h.lines).toEqual([

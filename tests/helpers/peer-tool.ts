@@ -37,6 +37,6 @@ export function peerRunner(
     input: Record<string, unknown>,
   ): Promise<T> => {
     const res = await h(z.object(s).parse(input), {});
-    return JSON.parse(res.content[0]!.text) as T;
+    return JSON.parse(res.content[0].text) as T;
   };
 }

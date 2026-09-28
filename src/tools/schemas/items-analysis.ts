@@ -470,3 +470,21 @@ export const V12ReadinessResultSchema = z.object({
   findings: z.array(V12FindingSchema),
   rulesetSource: z.string(),
 });
+
+export const DiffCubeRulesResultSchema = z
+  .object({
+    cubeA: z.string(),
+    cubeB: z.string(),
+    connectionA: z.string(),
+    connectionB: z.string(),
+    identical: z.boolean(),
+    dimensions: z.object({
+      identical: z.boolean(),
+      a: z.array(z.string()),
+      b: z.array(z.string()),
+    }),
+    skipCheck: z.object({ a: z.boolean(), b: z.boolean() }),
+    feeders: z.object({ a: z.boolean(), b: z.boolean() }),
+    rules: z.unknown(),
+  })
+  .passthrough();
