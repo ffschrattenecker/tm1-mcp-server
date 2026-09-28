@@ -74,6 +74,12 @@ export async function runSecretsCli(
         io.err("Empty value — nothing stored.");
         return 1;
       }
+      // Pasted or piped junk becomes a wrong password, and wrong passwords
+      // lock TM1 accounts.
+      if (/[\r\n]/.test(value)) {
+        io.err("The value spans several lines — nothing stored.");
+        return 1;
+      }
       keychain.set(connection, key, value);
       io.out(`Stored ${keychainAccount(connection, key)}.`);
       const marker = parseDotenv(readFileSync(envFile)).TM1_SECRETS;
@@ -203,13 +209,24 @@ const processIo: CliIo = {
     process.stdin.isTTY ? promptHidden(prompt) : readPipedStdin(),
 };
 
-/** `echo secret | tm1-mcp-server secrets set …` — one trailing newline dropped. */
+/**
+ * `echo secret | tm1-mcp-server secrets set …` — a leading BOM (PowerShell
+ * pipes) and one trailing newline dropped. Git Bash's mintty is no TTY to
+ * Node either, so typed input lands here too, echoed: say so.
+ */
 async function readPipedStdin(): Promise<string> {
+  process.stderr.write(
+    "Reading the secret from stdin until EOF. In a terminal that is no TTY to " +
+      "Node (Git Bash/mintty) the input is echoed; pipe the value or use " +
+      "PowerShell/cmd instead.\n",
+  );
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-  return Buffer.concat(chunks)
-    .toString("utf8")
-    .replace(/\r?\n$/, "");
+  return stripPipedInput(Buffer.concat(chunks).toString("utf8"));
+}
+
+export function stripPipedInput(raw: string): string {
+  return raw.replace(/^\uFEFF/, "").replace(/\r?\n$/, "");
 }
 
 function promptHidden(prompt: string): Promise<string> {

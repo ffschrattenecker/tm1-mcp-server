@@ -10,7 +10,11 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse as parseDotenv } from "dotenv";
-import { runSecretsCli, type CliIo } from "../../src/secrets-cli.js";
+import {
+  runSecretsCli,
+  stripPipedInput,
+  type CliIo,
+} from "../../src/secrets-cli.js";
 import type { SecretKey, SecretStore } from "../../src/secrets.js";
 import { MemorySecretStore } from "../helpers/memory-secret-store.js";
 
@@ -87,6 +91,18 @@ describe("tm1-mcp-server secrets", () => {
       typed = "";
       expect(await run("set", "c")).toBe(1);
       expect(store.entries.size).toBe(0);
+    });
+
+    it("refuses a multi-line value", async () => {
+      typed = "pw\r\nextra";
+      expect(await run("set", "c")).toBe(1);
+      expect(err.pop()).toMatch(/several lines/);
+      expect(store.entries.size).toBe(0);
+    });
+
+    it("strips a BOM and one trailing newline from piped input", () => {
+      expect(stripPipedInput("\uFEFFpw\r\n")).toBe("pw");
+      expect(stripPipedInput("pw\n\n")).toBe("pw\n");
     });
 
     it("warns when the .env lacks the keychain marker", async () => {
