@@ -8,7 +8,7 @@ interface Model {
   cubes: Record<string, { dims: string[]; rules: string }>;
   processes: Record<
     string,
-    { prolog: string; params?: Record<string, string> }
+    { prolog: string; params?: Record<string, string>; view?: string }
   >;
   chores: Record<string, { active: boolean; process: string }>;
   dims: Record<
@@ -39,6 +39,12 @@ function client(m: Model): TM1Client {
           parameters: Object.keys(p.params ?? {}),
           parameterDefaults: new Map(Object.entries(p.params ?? {})),
         })),
+      listDataSources: async () =>
+        Object.entries(m.processes).map(([name, p]) =>
+          p.view
+            ? { name, type: "TM1CubeView", sourceName: "Sales", view: p.view }
+            : { name, type: "None" },
+        ),
     },
     chores: {
       list: async () =>
@@ -79,6 +85,7 @@ const prod: Model = {
   processes: {
     "Load.Sales": { prolog: "nX = 1;", params: { pYear: "2026" } },
     Same: { prolog: "x = 1;" },
+    ViewLoad: { prolog: "", view: "Actuals" },
   },
   chores: { Nightly: { active: true, process: "Load.Sales" } },
   dims: {
@@ -99,6 +106,8 @@ const dev: Model = {
   processes: {
     "load.sales": { prolog: "nX = 2;", params: { pYear: "2027" } },
     Same: { prolog: "x = 1;" },
+    // Same code, different source view: only the datasource aspect differs.
+    ViewLoad: { prolog: "", view: "Budget" },
   },
   chores: { Nightly: { active: false, process: "Load.Sales" } },
   dims: {
@@ -151,7 +160,10 @@ describe("tm1_compare_environments", () => {
     });
     expect(r.processes).toMatchObject({
       identical: 1,
-      differs: [{ name: "Load.Sales", aspects: ["code", "parameters"] }],
+      differs: [
+        { name: "Load.Sales", aspects: ["code", "parameters"] },
+        { name: "ViewLoad", aspects: ["dataSource"] },
+      ],
       drillDown: "tm1_diff_processes",
     });
     expect(r.chores.differs).toEqual([

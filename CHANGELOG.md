@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `tm1_compare_environments` — drift overview per object type (cubes, dimensions, processes,
     chores): what exists on one side only, what differs and in which aspect, and which tool to
     drill into it with. `deep=true` also fingerprints every hierarchy's elements and edges.
+    Processes compare on code, parameters and datasource type/source/view/subset. A changed
+    ODBC query or variable list shows only in `tm1_diff_processes`. Chore `schedule` includes the
+    start time, so independently built environments usually differ there.
   - `tm1_diff_cube_rules` — rule text as unified hunks, plus dimension list and
     SKIPCHECK/FEEDERS presence.
   - `tm1_diff_hierarchy` — elements, edges, weights, reparented children and attribute

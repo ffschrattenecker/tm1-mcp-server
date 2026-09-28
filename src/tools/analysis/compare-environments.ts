@@ -57,10 +57,22 @@ async function readCubes(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
 }
 
 async function readProcesses(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
-  const processes = await c.processes.fetchForCallgraph(o.includeControl);
+  // Datasource: type and source object only (listDataSources never selects
+  // credentials or the ODBC query), so a changed query is not detected here.
+  const [processes, sources] = await Promise.all([
+    c.processes.fetchForCallgraph(o.includeControl),
+    c.processes.listDataSources(o.includeControl),
+  ]);
+  const sourceOf = new Map(
+    sources.map((d) => [
+      tm1NameKey(d.name),
+      [d.type, d.sourceName ?? "", d.view ?? "", d.subset ?? ""].join("|"),
+    ]),
+  );
   return processes.map((p) => ({
     name: p.name,
     aspects: {
+      dataSource: sourceOf.get(tm1NameKey(p.name)) ?? "",
       code: fingerprint(p.prolog, p.metadata, p.data, p.epilog),
       parameters: fingerprint(
         ...p.parameters.map((n) => `${n}=${p.parameterDefaults.get(n) ?? ""}`),
