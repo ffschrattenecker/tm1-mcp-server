@@ -171,7 +171,7 @@ export class TM1HttpClient {
     const budgetMs = timeoutMs ?? this.config.requestTimeoutMs;
     const deadline = Date.now() + budgetMs;
     const extraHeaders: Record<string, string> | undefined = isAsync
-      ? { Prefer: "respond-async,wait=55" }
+      ? { Prefer: "respond-async" }
       : undefined;
     const settle = async (response: Response): Promise<T> => {
       const final =

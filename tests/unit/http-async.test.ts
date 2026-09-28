@@ -76,7 +76,7 @@ describe("TM1HttpClient async operations", () => {
     expect(out).toEqual(result);
     expect(fetchSpy).toHaveBeenCalledTimes(3);
     const headers = initOf(fetchSpy, 0).headers as Record<string, string>;
-    expect(headers.Prefer).toBe("respond-async,wait=55");
+    expect(headers.Prefer).toBe("respond-async");
     // Only the id is taken from the relative Location; the path is rebuilt.
     expect(urlOf(fetchSpy, 1)).toBe(
       "https://tm1server:8010/api/v1/_async('abc')",
