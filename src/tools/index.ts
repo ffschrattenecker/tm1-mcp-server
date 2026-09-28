@@ -120,6 +120,7 @@ import { registerAnalyzeChoreGraph } from "./analysis/analyze-chore-graph.js";
 import { registerInvalidateCallgraphCache } from "./analysis/invalidate-callgraph-cache.js";
 import { registerFindOrphanDimensions } from "./analysis/find-orphan-dimensions.js";
 import { registerDiffCubeRules } from "./analysis/diff-cube-rules.js";
+import { registerDiffHierarchy } from "./analysis/diff-hierarchy.js";
 import { registerCheckV12Readiness } from "./analysis/check-v12-readiness.js";
 import { registerAuditNaming } from "./analysis/audit-naming.js";
 import { registerAuditComplexity } from "./analysis/audit-complexity.js";
@@ -261,6 +262,7 @@ const REGISTRARS: ToolRegistrar[] = [
   registerInvalidateCallgraphCache,
   registerFindOrphanDimensions,
   registerDiffCubeRules,
+  registerDiffHierarchy,
   registerCheckV12Readiness,
   registerAuditNaming,
   registerAuditComplexity,

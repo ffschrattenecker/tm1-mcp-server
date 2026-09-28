@@ -488,3 +488,24 @@ export const DiffCubeRulesResultSchema = z
     rules: z.unknown(),
   })
   .passthrough();
+
+export const DiffHierarchyResultSchema = z
+  .object({
+    a: z.object({
+      connection: z.string(),
+      dimension: z.string(),
+      hierarchy: z.string(),
+      elements: z.number().int(),
+      edges: z.number().int(),
+    }),
+    b: z.object({
+      connection: z.string(),
+      dimension: z.string(),
+      hierarchy: z.string(),
+      elements: z.number().int(),
+      edges: z.number().int(),
+    }),
+    identical: z.boolean(),
+    counts: z.record(z.string(), z.number().int()),
+  })
+  .passthrough();

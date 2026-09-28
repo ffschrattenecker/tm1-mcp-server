@@ -45,6 +45,19 @@ interface DescendantsResult {
  */
 export type HierarchyPage = Hierarchy & { totalElements: number };
 
+/**
+ * A hierarchy as a flat element list plus every parent→child edge with its
+ * weight — the shape a structural comparison needs, without the per-element
+ * parents/children arrays {@link HierarchyService.get} builds.
+ */
+export interface HierarchyStructure {
+  elements: Array<{ name: string; type: HierarchyElement["type"] }>;
+  edges: Array<{ parent: string; child: string; weight: number }>;
+}
+
+/** Elements per request in {@link HierarchyService.getStructure}. */
+export const STRUCTURE_PAGE_SIZE = 50_000;
+
 /** Element filters shared by {@link HierarchyService.get} and {@link HierarchyService.getCounts}. */
 export interface ElementFilterOpts {
   level?: number;
@@ -252,6 +265,52 @@ export class HierarchyService {
       elements,
       totalElements,
     };
+  }
+
+  /**
+   * Every element (name, type) and every edge (parent, child, weight) of a
+   * hierarchy. Edges are read from each element's OUTGOING `Edges`
+   * navigation, so an edge always arrives with its parent's row and paging by
+   * element can neither split nor duplicate one — unlike `get()`, whose
+   * children are rebuilt from `Parents` and only within one page.
+   *
+   * Paged by name (`$orderby=Name`, see `get()` for why the order is
+   * required) in windows of {@link STRUCTURE_PAGE_SIZE}.
+   *
+   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Name,Type&$expand=Edges($select=ComponentName,Weight)
+   */
+  async getStructure(
+    dimensionName: string,
+    hierarchyName: string,
+  ): Promise<HierarchyStructure> {
+    const base =
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')` +
+      `/Elements?$select=Name,Type&$expand=Edges($select=ComponentName,Weight)`;
+    const out: HierarchyStructure = { elements: [], edges: [] };
+    for (let skip = 0; ; skip += STRUCTURE_PAGE_SIZE) {
+      const clauses = pageClauseList({ top: STRUCTURE_PAGE_SIZE, skip });
+      const response = await this.http.request<{
+        value?: Array<{
+          Name: string;
+          Type: string;
+          Edges?: Array<{ ComponentName: string; Weight: number }>;
+        }>;
+      }>("GET", `${base}&${clauses.join("&")}`);
+      const rows = response.value ?? [];
+      for (const e of rows) {
+        out.elements.push({
+          name: e.Name,
+          type: e.Type as HierarchyElement["type"],
+        });
+        for (const edge of e.Edges ?? [])
+          out.edges.push({
+            parent: e.Name,
+            child: edge.ComponentName,
+            weight: edge.Weight,
+          });
+      }
+      if (rows.length < STRUCTURE_PAGE_SIZE) return out;
+    }
   }
 
   /**
