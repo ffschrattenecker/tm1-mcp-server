@@ -206,6 +206,8 @@ export const DiffProcessesResultSchema = z
   .object({
     processA: z.string(),
     processB: z.string(),
+    connectionA: z.string(),
+    connectionB: z.string(),
     identical: z.boolean(),
     tabs: z.unknown(),
     parameters: z.unknown(),

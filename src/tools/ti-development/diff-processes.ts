@@ -159,16 +159,22 @@ type Tab = (typeof ALL_TABS)[number];
 export const registerDiffProcesses = defineTool({
   name: "tm1_diff_processes",
   description: [
-    "Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog).",
+    "Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog), on one connection or across two (connectionB, e.g. DEV vs PROD).",
     "Returns per-tab identical flag, line counts, and unified diff hunks for changed tabs.",
     "Also diffs parameters, variables, and datasource.",
     "Analogue of tm1_diff_process_with_file but server-side — no .pro file needed.",
   ],
   annotations: READ_ONLY,
+  peer: true,
   output: DiffProcessesResultSchema,
   input: {
     processA: z.string().describe("First process name (case-sensitive)"),
-    processB: z.string().describe("Second process name (case-sensitive)"),
+    processB: z
+      .string()
+      .optional()
+      .describe(
+        "Second process name (case-sensitive), read from connectionB. Default: processA, i.e. the same process on the other connection.",
+      ),
     tabs: z
       .array(z.enum(["prolog", "metadata", "data", "epilog"]))
       .optional()
@@ -194,22 +200,23 @@ export const registerDiffProcesses = defineTool({
       ),
   },
   handler: async (
-    { processA, processB, tabs, contextLines, maskSecrets },
-    tm1Client,
+    { processA, processB: processBArg, tabs, contextLines, maskSecrets },
+    { a, b },
   ) => {
+    const processB = processBArg ?? processA;
     const diffTabs: readonly Tab[] = tabs && tabs.length > 0 ? tabs : ALL_TABS;
     const mask = resolveMaskSecrets(maskSecrets) ? maskCode : (s: string) => s;
 
     const [codeA, codeB, paramsA, paramsB, varsA, varsB, dsA, dsB] =
       await Promise.all([
-        tm1Client.processes.getCode(processA),
-        tm1Client.processes.getCode(processB),
-        tm1Client.processes.getParameters(processA),
-        tm1Client.processes.getParameters(processB),
-        tm1Client.processes.getVariableLayout(processA),
-        tm1Client.processes.getVariableLayout(processB),
-        tm1Client.processes.getDataSource(processA),
-        tm1Client.processes.getDataSource(processB),
+        a.client.processes.getCode(processA),
+        b.client.processes.getCode(processB),
+        a.client.processes.getParameters(processA),
+        b.client.processes.getParameters(processB),
+        a.client.processes.getVariableLayout(processA),
+        b.client.processes.getVariableLayout(processB),
+        a.client.processes.getDataSource(processA),
+        b.client.processes.getDataSource(processB),
       ]);
 
     const tabResults: Record<string, ReturnType<typeof tabCodeDiff>> = {};
@@ -244,6 +251,8 @@ export const registerDiffProcesses = defineTool({
             {
               processA,
               processB,
+              connectionA: a.name,
+              connectionB: b.name,
               identical,
               tabs: tabResults,
               parameters,
