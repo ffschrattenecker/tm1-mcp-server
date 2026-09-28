@@ -1,7 +1,9 @@
 # Contributing
 
-Thanks for your interest in `tm1-mcp-server`. This is a community project; PRs
-and issues are welcome.
+This repository is a personal testing fork. Issues and pull requests for
+tm1-mcp-server belong in the original project,
+[flameY3T1/tm1-mcp-server](https://github.com/flameY3T1/tm1-mcp-server).
+The notes below describe how I work on this fork.
 
 ## Prerequisites
 

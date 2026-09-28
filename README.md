@@ -1,5 +1,18 @@
 # tm1-mcp-server
 
+> [!IMPORTANT]
+> **This is a personal testing fork, not the project.** The author of
+> tm1-mcp-server is **flameY3T1**. The project to use, cite, link to and report
+> issues against is **[flameY3T1/tm1-mcp-server](https://github.com/flameY3T1/tm1-mcp-server)**,
+> published on npm as [`tm1-mcp-server`](https://www.npmjs.com/package/tm1-mcp-server).
+>
+> I (ffschrattenecker) use this fork only to try out changes for myself. It
+> comes with no support and no stability promise, and it may change, break
+> or disappear at any time. The scoped package
+> `@ffschrattenecker/tm1-mcp-server` exists only so my own machines can
+> `npx` it. Its version numbers are counted separately and **do not** mean it
+> is newer than the original. Anything worth keeping is offered upstream.
+
 Model Context Protocol (MCP) server for IBM Planning Analytics / TM1.
 Exposes the full TM1 model lifecycle — metadata, dimensions, cubes, cell I/O,
 TI processes, chores, security, code-graph analysis — to any MCP-compatible
@@ -8,8 +21,8 @@ LLM client (Claude Code, Claude Desktop, etc.).
 Tested against TM1 11.8 (REST, Basic/CAM auth) and TM1 12.5 / Planning Analytics
 Engine (rerooted REST, `s2s` auth live-validated).
 
-A fork of [flameY3T1/tm1-mcp-server](https://github.com/flameY3T1/tm1-mcp-server),
-published as `@ffschrattenecker/tm1-mcp-server`. The command is still `tm1-mcp-server`.
+Everything below describes this fork's state. For the real project, read the
+[upstream README](https://github.com/flameY3T1/tm1-mcp-server#readme).
 
 > **Companion — TM1 IDE for VS Code.** Pair this server with the
 > [**flameY3T1.vscode-tm1-ide**](https://marketplace.visualstudio.com/items?itemName=flameY3T1.vscode-tm1-ide)
@@ -51,7 +64,12 @@ published as `@ffschrattenecker/tm1-mcp-server`. The command is still `tm1-mcp-s
 
 ## Install
 
-**Option A — npm (recommended).** No clone, no build: `npx -y @ffschrattenecker/tm1-mcp-server`
+**To install tm1-mcp-server, follow the
+[upstream instructions](https://github.com/flameY3T1/tm1-mcp-server#install)**
+(`npx -y tm1-mcp-server`). The steps below install this personal fork. They are
+here only for my own setup.
+
+**Option A — npm.** No clone, no build: `npx -y @ffschrattenecker/tm1-mcp-server`
 always pulls the latest published version. Or install the CLI globally:
 
 ```bash
