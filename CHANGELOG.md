@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.1.0] - 2026-09-28
+
 ### Added
 
 - Connection secrets can live in the OS keychain instead of the `.env`: set `TM1_SECRETS=keychain`
@@ -1420,7 +1422,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.0.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.1.0...HEAD
+[8.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.0.0...v8.1.0
 [8.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v7.0.2...v8.0.0
 [7.0.2]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v7.0.1...v7.0.2
 [7.0.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v7.0.0...v7.0.1
