@@ -274,7 +274,7 @@ export class TM1HttpClient {
     const cookie = await this.sessionManager.ensureSession();
 
     const headers: Record<string, string> = {
-      Cookie: `TM1SessionId=${cookie}`,
+      Cookie: this.sessionManager.cookieHeader(cookie),
       Accept: "*/*",
       "User-Agent": USER_AGENT,
       "TM1-SessionContext": USER_AGENT,
@@ -283,7 +283,10 @@ export class TM1HttpClient {
 
     const response = await this.withReauth(
       (c) => {
-        const hdrs = { ...headers, Cookie: `TM1SessionId=${c}` };
+        const hdrs = {
+          ...headers,
+          Cookie: this.sessionManager.cookieHeader(c),
+        };
         return this.sendOnce(
           url,
           method,
@@ -337,7 +340,7 @@ export class TM1HttpClient {
           url,
           method,
           {
-            Cookie: `TM1SessionId=${c}`,
+            Cookie: this.sessionManager.cookieHeader(c),
             Accept: "application/json,*/*",
             "Content-Type": contentType,
             "User-Agent": USER_AGENT,
@@ -452,7 +455,7 @@ export class TM1HttpClient {
     externalSignal?: AbortSignal,
   ): Promise<Response> {
     const headers: Record<string, string> = {
-      Cookie: `TM1SessionId=${cookie}`,
+      Cookie: this.sessionManager.cookieHeader(cookie),
       Accept: "application/json",
       "Accept-Encoding": "gzip, deflate",
       "User-Agent": USER_AGENT,

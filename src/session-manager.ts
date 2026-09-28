@@ -41,6 +41,11 @@ async function withTimeout<T>(
 
 export class SessionManager {
   private sessionCookie: string | null = null;
+  // A PAW gateway (…/api/v0/tm1/<db>) names the session TM1SessionId_<db>
+  // and authenticates later requests by its own paSession cookie. Then the
+  // session token is the whole "name=value; …" list the login set, sent back
+  // verbatim; a direct TM1 keeps the bare TM1SessionId value.
+  private gatewayCookies = false;
   private authInFlight: Promise<string> | null = null;
   private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
   // Set once TM1 rejects the configured credentials (401/403 on login).
@@ -216,7 +221,7 @@ export class SessionManager {
           tm1Fetch(url, {
             method: "GET",
             headers: {
-              Cookie: `TM1SessionId=${usedCookie}`,
+              Cookie: this.cookieHeader(usedCookie),
               "User-Agent": USER_AGENT,
               "TM1-SessionContext": USER_AGENT,
               "TM1-Session-Context": USER_AGENT,
@@ -326,7 +331,8 @@ export class SessionManager {
    * DELETE /api/v1/ActiveSession
    */
   async logout(): Promise<void> {
-    if (!this.sessionCookie) {
+    const cookie = this.sessionCookie;
+    if (!cookie) {
       return;
     }
 
@@ -344,7 +350,7 @@ export class SessionManager {
           tm1Fetch(url, {
             method: "DELETE",
             headers: {
-              Cookie: `TM1SessionId=${this.sessionCookie}`,
+              Cookie: this.cookieHeader(cookie),
               "User-Agent": USER_AGENT,
               "TM1-SessionContext": USER_AGENT,
               "TM1-Session-Context": USER_AGENT,
@@ -374,14 +380,34 @@ export class SessionManager {
     return "Basic";
   }
 
+  /** The Cookie request header for a session token from ensureSession/authenticate. */
+  cookieHeader(cookie: string): string {
+    return this.gatewayCookies ? cookie : `TM1SessionId=${cookie}`;
+  }
+
   /**
-   * Extract TM1SessionId Set-Cookie response headers.
+   * Extract the session from the login's Set-Cookie headers: the bare
+   * TM1SessionId value, or — behind a PAW gateway, which sets
+   * TM1SessionId_<db> — every cookie the login set (see gatewayCookies).
    */
   private extractSessionCookie(response: Response): string | null {
-    const setCookie = response.headers.get("set-cookie");
-    if (!setCookie) return null;
-
-    const match = setCookie.match(/TM1SessionId=([^;]+)/);
-    return match ? (match[1] ?? null) : null;
+    const headers = response.headers;
+    const setCookies =
+      typeof headers.getSetCookie === "function"
+        ? headers.getSetCookie()
+        : (headers.get("set-cookie")?.split(/,(?=\s*[^;,=\s]+=)/) ?? []);
+    const pairs = setCookies
+      .map((c) => c.split(";")[0]?.trim() ?? "")
+      .filter((p) => p.includes("="));
+    const direct = pairs.find((p) => p.startsWith("TM1SessionId="));
+    if (direct) {
+      this.gatewayCookies = false;
+      return direct.slice("TM1SessionId=".length) || null;
+    }
+    if (pairs.some((p) => p.startsWith("TM1SessionId_"))) {
+      this.gatewayCookies = true;
+      return pairs.join("; ");
+    }
+    return null;
   }
 }
