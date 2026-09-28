@@ -121,6 +121,7 @@ import { registerInvalidateCallgraphCache } from "./analysis/invalidate-callgrap
 import { registerFindOrphanDimensions } from "./analysis/find-orphan-dimensions.js";
 import { registerDiffCubeRules } from "./analysis/diff-cube-rules.js";
 import { registerDiffHierarchy } from "./analysis/diff-hierarchy.js";
+import { registerCompareEnvironments } from "./analysis/compare-environments.js";
 import { registerCheckV12Readiness } from "./analysis/check-v12-readiness.js";
 import { registerAuditNaming } from "./analysis/audit-naming.js";
 import { registerAuditComplexity } from "./analysis/audit-complexity.js";
@@ -263,6 +264,7 @@ const REGISTRARS: ToolRegistrar[] = [
   registerFindOrphanDimensions,
   registerDiffCubeRules,
   registerDiffHierarchy,
+  registerCompareEnvironments,
   registerCheckV12Readiness,
   registerAuditNaming,
   registerAuditComplexity,

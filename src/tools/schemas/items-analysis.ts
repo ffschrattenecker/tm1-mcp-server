@@ -509,3 +509,11 @@ export const DiffHierarchyResultSchema = z
     counts: z.record(z.string(), z.number().int()),
   })
   .passthrough();
+
+export const CompareEnvironmentsResultSchema = z
+  .object({
+    connectionA: z.string(),
+    connectionB: z.string(),
+    identical: z.boolean(),
+  })
+  .passthrough();

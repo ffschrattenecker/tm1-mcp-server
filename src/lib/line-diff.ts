@@ -132,7 +132,9 @@ function buildHunks(ops: EditOp[], contextLines: number): DiffHunk[] {
   });
 }
 
-const NORM = (s: string): string => s.replace(/\r\n/g, "\n").trimEnd();
+/** The text a diff compares: LF line ends, no trailing whitespace at the end. */
+export const normalizeText = (s: string): string =>
+  s.replace(/\r\n/g, "\n").trimEnd();
 
 /**
  * Largest LCS table (cells) the diff will build: the table is a Uint32Array of
@@ -155,8 +157,8 @@ export function tabCodeDiff(
   codeB: string,
   contextLines: number,
 ): TextDiff {
-  const na = NORM(codeA);
-  const nb = NORM(codeB);
+  const na = normalizeText(codeA);
+  const nb = normalizeText(codeB);
   if (na === nb) {
     const lc = na ? na.split("\n").length : 0;
     return { identical: true, linesA: lc, linesB: lc, hunks: [] };
