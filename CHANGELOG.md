@@ -17,7 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cancelling one of these calls now cancels the run on the server.** Before, the TI process
   kept running after a client-side cancel. Measured on 11.8: the thread is gone and the run's
   writes are rolled back, the same as `tm1_cancel_thread`. A chore under `MultipleCommit` keeps
-  the steps it had already committed. v12 is not measured yet.
+  the steps it had already committed. v12 is not measured yet. This includes a client that
+  cancels the call when its own timeout fires; all three tools now send progress heartbeats
+  every 5s, so clients that reset their timeout on progress keep waiting.
 
 ## [8.1.0] - 2026-09-28
 

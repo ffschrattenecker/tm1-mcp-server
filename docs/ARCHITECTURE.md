@@ -163,6 +163,7 @@ Key conventions:
 | Constructor        | `constructor(private readonly http: TM1HttpClient)`             |
 | Method names       | Domain-scoped — `list()`, not `listCubes()`. Prefix is implicit |
 | Long-running calls | Accept `opts?: { timeoutMs?: number }` and pass to `request()`  |
+| TI runs            | Pass `{ ...opts, async: true }` — polled, cancellable on abort  |
 | Logging            | Use `this.http.logger` for warnings only — keep services quiet  |
 | Version branches   | `if (this.http.version === 11)` — numeric major, not string     |
 | Helpers            | Private methods on the service (e.g. `clearViaTI`)              |

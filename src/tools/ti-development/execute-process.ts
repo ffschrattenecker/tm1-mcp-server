@@ -21,7 +21,11 @@ import type { TM1Client } from "../../tm1-client.js";
 export function abortHint(version: 11 | 12): string {
   const monitor = version === 12 ? "tm1_list_jobs" : "tm1_list_threads";
   const cancel = version === 12 ? "tm1_cancel_job" : "tm1_cancel_thread";
-  return `Request aborted by the client — TM1 was told to cancel the run, which stops it and rolls back its writes like ${cancel}. Confirm with ${monitor} that it is gone before running it again; if it still shows, stop it with ${cancel}.`;
+  const effect =
+    version === 12
+      ? "TM1 was asked to cancel the run."
+      : `TM1 was told to cancel the run, which stops it and rolls back its writes like ${cancel}.`;
+  return `Request aborted by the client — ${effect} Confirm with ${monitor} that it is gone before running it again; if it still shows, stop it with ${cancel}.`;
 }
 
 // Codes that only reach the tool from the transport, never from the run
