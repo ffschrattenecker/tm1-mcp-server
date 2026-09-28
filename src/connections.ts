@@ -298,7 +298,10 @@ export class ConnectionRegistry {
   /**
    * The client for a connection, built and logged in on first use. A failed
    * login does not poison the entry: the client's own request path retries
-   * authentication, so the next call gets a fresh attempt.
+   * authentication, so the next call gets a fresh attempt — except when TM1
+   * rejected the credentials (401/403). The client is kept, so its
+   * SessionManager's latch answers every later call without another login
+   * until the server restarts.
    */
   async get(name: string | undefined): Promise<TM1Client> {
     const entry = this.entryFor(name);

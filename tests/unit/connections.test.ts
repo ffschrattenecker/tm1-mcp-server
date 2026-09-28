@@ -215,3 +215,50 @@ describe("connectionEnv — the one .env reader", () => {
     expect(env.TM1_MCP_TRANSPORT).toBeUndefined();
   });
 });
+
+// The login latch lives on the SessionManager. The registry keeps the client
+// after a failed first connect, so every later call on that connection meets
+// the latch instead of opening a new login — one rejected password must stay
+// one failed login, whatever the model does next.
+describe("ConnectionRegistry — rejected login", () => {
+  let root: string;
+  let calls: string[];
+  const realFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "tm1-conns-auth-"));
+    calls = [];
+    globalThis.fetch = (async (url: string | URL) => {
+      calls.push(String(url));
+      return new Response("", { status: 401, statusText: "Unauthorized" });
+    }) as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("logs in once, however many calls follow", async () => {
+    writeConn(root, "dev", ["TM1_BASE_URL=http://dev:1", ...CREDS]);
+    const reg = ConnectionRegistry.fromEnvironment(
+      { TM1_CONNECTIONS_DIR: root },
+      logger,
+    );
+
+    const first = await reg.get("dev");
+    const second = await reg.get("dev");
+    expect(second).toBe(first);
+    await expect(first.cubes.list()).rejects.toMatchObject({
+      code: "AUTH_FAILED",
+    });
+    await expect(second.cubes.list()).rejects.toMatchObject({
+      code: "AUTH_FAILED",
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(reg.status().find((c) => c.name === "dev")?.lastError).toMatch(
+      /Authentication failed with status 401/,
+    );
+  });
+});
