@@ -89,7 +89,10 @@
       }
     },
     "cubes.checkRule": {
-      "[]": "unknown"
+      "[]": {
+        "lineNumber": "number",
+        "message": "string"
+      }
     },
     "cubes.exists": "boolean",
     "cubes.getAllRules": {
@@ -388,7 +391,7 @@
       "[]": {
         "defaultValue": "number|string",
         "name": "string",
-        "prompt": "string",
+        "prompt?": "string",
         "type": "string"
       }
     },
