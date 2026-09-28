@@ -239,3 +239,58 @@ describe("tm1_get_view axes clipping", () => {
     expect(env.axes_clipped).toBeUndefined();
   });
 });
+
+// D4 — fetchAll / limit:0 promised "Capped 5000" but pulled and shipped the
+// whole cellset (20 000 cells measured as 2 MB of JSON).
+describe("fetchAll honours the 5000-cell cap", () => {
+  const N = 12_000;
+  function bigHttp(paths: string[]) {
+    return {
+      request: async (_m: string, path: string) => {
+        paths.push(path);
+        const top = path.match(/\$top=(\d+)/);
+        const skip = path.match(/\$skip=(\d+)/);
+        const start = skip ? Number(skip[1]) : 0;
+        const end = top ? start + Number(top[1]) : N;
+        return {
+          ID: "cs",
+          "Cells@odata.count": N,
+          Cells: Array.from({ length: Math.min(end, N) - start }, (_, i) => ({
+            Value: start + i,
+          })),
+          Axes: [
+            {
+              Tuples: [
+                { Members: [{ Name: "C", Hierarchy: { Name: "Cols" } }] },
+              ],
+            },
+            {
+              Tuples: Array.from({ length: N }, (_, i) => ({
+                Members: [{ Name: `R${i}`, Hierarchy: { Name: "Rows" } }],
+              })),
+            },
+          ],
+        };
+      },
+    } as unknown as ConstructorParameters<typeof CellService>[0];
+  }
+
+  it.each([{ fetchAll: true }, { limit: 0 }])("%o", async (args) => {
+    const paths: string[] = [];
+    const { server, run } = fakeServer();
+    registerExecuteMdx(
+      server,
+      contractCheckedClient({
+        cells: new CellService(bigHttp(paths)),
+      } as unknown as TM1Client),
+    );
+    const env = JSON.parse(
+      (await run({ mdx: "SELECT ...", ...args })).content[0].text,
+    );
+    expect(paths[0]).toContain("$top=5000");
+    expect(env.count).toBe(5000);
+    expect(env.has_more).toBe(true);
+    expect(env.next_offset).toBe(5000);
+    expect(env.axes[1].tuples).toHaveLength(5000);
+  });
+});

@@ -45,7 +45,7 @@ published as `@ffschrattenecker/tm1-mcp-server`. The command is still `tm1-mcp-s
   in chat, plus five starting-point prompts.
 
 > **Token tip:** every registered tool's name + input schema costs context on
-> *each* turn, so exposing all 114 is wasteful when a session needs a slice.
+> *each* turn, so exposing all 113 is wasteful when a session needs a slice.
 > Narrow the surface with your client's tool filter; `TM1_MODE=readonly` already
 > trims it to read-only tools.
 

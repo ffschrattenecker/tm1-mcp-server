@@ -32,17 +32,14 @@ describe("R2-21: requiresVersion annotation extension", () => {
   });
 
   describe("requiresVersion tags", () => {
+    // Only tools the server actually withholds on v12 carry the tag. The
+    // .pro tools and the cell diagnostics used to be tagged too and were
+    // measured working on 12.5.9 — see the "not tagged" case below.
     const v11OnlyTools = [
-      "tm1_check_v12_readiness",
-      "tm1_diff_process_with_file",
-      "tm1_export_process_to_pro",
-      "tm1_import_pro_file",
-      "tm1_install_pro_bundle",
       "tm1_save_data",
-      "tm1_check_feeders",
-      "tm1_trace_feeders",
-      "tm1_trace_cell_calculation",
       "tm1_get_audit_log",
+      "tm1_get_message_log",
+      "tm1_get_transaction_log",
     ];
 
     it.each(v11OnlyTools)("%s is tagged requiresVersion='v11'", (tool) => {
@@ -63,8 +60,29 @@ describe("R2-21: requiresVersion annotation extension", () => {
       }
     });
 
+    // These carried requiresVersion:"v11" and three of them said "v11 only."
+    // in their description. Measured against 12.5.9: the .pro round-trip and
+    // all three cell-bound trace actions answer normally, so the tag claimed a
+    // limit the server does not have and steered callers off a working tool.
+    it("tools that were wrongly tagged v11 carry no version claim", () => {
+      const measuredOnV12 = [
+        "tm1_check_feeders",
+        "tm1_trace_feeders",
+        "tm1_trace_cell_calculation",
+        "tm1_export_process_to_pro",
+        "tm1_import_pro_file",
+        "tm1_install_pro_bundle",
+        "tm1_diff_process_with_file",
+        "tm1_check_v12_readiness",
+      ];
+      for (const tool of measuredOnV12) {
+        expect(specFor(tool), `${tool} declares no spec`).toBeDefined();
+        expect(specFor(tool)?.annotations.requiresVersion).toBeUndefined();
+      }
+    });
+
     it("requiresVersion field is JSON-serializable (survives wire transport)", () => {
-      const annot = specFor("tm1_install_pro_bundle")?.annotations;
+      const annot = specFor("tm1_save_data")?.annotations;
       const roundTrip = JSON.parse(JSON.stringify(annot));
       expect(roundTrip.requiresVersion).toBe("v11");
       expect(roundTrip.idempotentHint).toBe(true);

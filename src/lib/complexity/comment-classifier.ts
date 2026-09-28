@@ -17,13 +17,15 @@
  * disabled statement from prose with certainty.
  */
 
+import { TI_VAR } from "../ti-identifier.js";
+
 const CODE_SIGNALS: ReadonlyArray<RegExp> = [
   // Statement terminator at end of line — the strongest TM1 signal.
   /;\s*$/,
   // Rule-area assignment: `['Sales'] = ...`
   /^\[[^\]]*\]\s*=/,
   // Variable / cube-cell assignment: `vX = ...` or `nResult=...` (not `==`).
-  /^[A-Za-z_]\w*\s*=(?!=)/,
+  new RegExp(`^${TI_VAR}\\s*=(?!=)`),
   // Known TM1 function call: `Name(` (case-insensitive — TM1 is).
   /\b(?:CellPutN|CellPutS|CellGetN|CellGetS|CellIsUpdateable|DB|DBRW|DBRA|DBSW|DBSS|AttrPutN|AttrPutS|AttrN|AttrS|ElementName|ElementIndex|DimensionElementInsert|DimensionElementComponentAdd|HierarchyElementInsert|ExecuteProcess|ExecuteCommand|RunProcess|ProcessQuit|ProcessBreak|ItemSkip|ItemReject|ViewZeroOut|CubeClearData|CubeSetLogChanges|ASCIIOutput|TextOutput|SubsetCreate|NumberToString|StringToNumber)\s*\(/i,
   // Control-flow keyword immediately followed by a paren: `IF(`, `WHILE (`.

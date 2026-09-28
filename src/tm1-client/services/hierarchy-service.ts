@@ -8,10 +8,32 @@ import type { Hierarchy, HierarchyElement } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
 import {
   escapeOdataLiteral,
-  odataKey as enc,
+  odataKey,
   pageClauseList,
   readNestedCount,
 } from "./odata-page.js";
+
+// How many levels one nested $expand reaches. TM1 answered 20 on 11.8 and
+// 12.5; a hierarchy deeper than that falls back to the full load.
+const NEST_LEVELS = 20;
+
+interface NestedElement {
+  Name: string;
+  Type?: string;
+  Level: number;
+  Components?: NestedElement[];
+  Parents?: NestedElement[];
+}
+
+interface DescendantsResult {
+  element: string;
+  descendants: Array<{
+    name: string;
+    type: HierarchyElement["type"];
+    level: number;
+    depth: number;
+  }>;
+}
 
 /**
  * A hierarchy plus the size of the element set the request selected, so
@@ -137,7 +159,7 @@ export class HierarchyService {
     const pushDown = topN !== undefined && !needsClientPostFilter;
     if (pushDown) elementClauses.push(...pageClauseList({ top: topN, skip }));
 
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')?$expand=Elements(${elementClauses.join(";")})`;
+    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')?$expand=Elements(${elementClauses.join(";")})`;
     const rawResponse = await this.http.request<{
       Name: string;
       "Elements@odata.count"?: number;
@@ -250,7 +272,7 @@ export class HierarchyService {
     const clauses = [regex ? "$select=Name,Type,Level" : "$select=Type,Level"];
     if (filters.length > 0) clauses.push(`$filter=${filters.join(" and ")}`);
     const path =
-      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')` +
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')` +
       `/Elements?${clauses.join("&")}`;
     const response = await this.http.request<{
       value?: Array<{ Name?: string; Type: string; Level: number }>;
@@ -293,7 +315,7 @@ export class HierarchyService {
     hierarchyName: string,
   ): Promise<Array<{ name: string; type: HierarchyElement["type"] }>> {
     const path =
-      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')` +
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')` +
       `/Elements?$select=Name,Type`;
     const response = await this.http.request<{
       value?: Array<{ Name: string; Type: string }>;
@@ -311,6 +333,70 @@ export class HierarchyService {
    * focused subtree, not the whole dimension.
    */
   async getDescendants(
+    dimensionName: string,
+    hierarchyName: string,
+    element: string,
+    opts?: { depth?: number; leavesOnly?: boolean },
+  ): Promise<DescendantsResult> {
+    // Fetch only the subtree: Components expanded level by level from the
+    // start element. Measured on a 11,111-element, 5-level dimension (11.8):
+    // 14 KB for a mid-level subtree and 1.4 MB from the top, against 3 MB for
+    // the whole hierarchy with Parents+Edges on every call. TM1 served 20
+    // nested levels on 11.8 and 12.5. Deeper hierarchies fall back below.
+    if ((opts?.depth ?? 0) > NEST_LEVELS) {
+      return this.getDescendantsFromFull(
+        dimensionName,
+        hierarchyName,
+        element,
+        opts,
+      );
+    }
+    const levels = opts?.depth ?? NEST_LEVELS;
+    const root = await this.getNested(
+      dimensionName,
+      hierarchyName,
+      element,
+      "Components",
+      "Name,Type,Level",
+      levels,
+    );
+    const out: DescendantsResult["descendants"] = [];
+    const seen = new Set<string>([element]);
+    let frontier: NestedElement[] = [root];
+    for (let depth = 1; depth <= levels && frontier.length > 0; depth++) {
+      const next: NestedElement[] = [];
+      for (const node of frontier) {
+        for (const child of node.Components ?? []) {
+          if (seen.has(child.Name)) continue;
+          seen.add(child.Name);
+          const type = child.Type as HierarchyElement["type"];
+          // Only a consolidation has children, so type alone decides; an
+          // empty consolidation is not a leaf either (nothing can be written).
+          if (!opts?.leavesOnly || type !== "Consolidated") {
+            out.push({ name: child.Name, type, level: child.Level, depth });
+          }
+          next.push(child);
+        }
+      }
+      frontier = next;
+    }
+    // The last expanded level carries no Components. A consolidation there
+    // means the tree goes deeper than the request reached.
+    if (
+      opts?.depth === undefined &&
+      frontier.some((n) => n.Type === "Consolidated")
+    ) {
+      return this.getDescendantsFromFull(
+        dimensionName,
+        hierarchyName,
+        element,
+        opts,
+      );
+    }
+    return { element, descendants: out };
+  }
+
+  private async getDescendantsFromFull(
     dimensionName: string,
     hierarchyName: string,
     element: string,
@@ -354,7 +440,11 @@ export class HierarchyService {
         seen.add(child.name);
         const childNode = byName.get(child.name);
         if (!childNode) continue;
-        const isLeaf = childNode.children.length === 0;
+        // Type, not just shape: an empty consolidation has no children but is
+        // not a leaf in the sense callers ask for — nothing can be written to
+        // it and it carries no value of its own.
+        const isLeaf =
+          childNode.children.length === 0 && childNode.type !== "Consolidated";
         if (!opts?.leavesOnly || isLeaf) {
           out.push({
             name: childNode.name,
@@ -375,6 +465,92 @@ export class HierarchyService {
    * root-to-element path so consumers can see consolidation alternatives.
    */
   async getAncestors(
+    dimensionName: string,
+    hierarchyName: string,
+    element: string,
+  ): Promise<{
+    element: string;
+    ancestors: Array<{ name: string; level: number }>;
+    paths: string[][];
+  }> {
+    // Parents expanded upward from the element: 1 KB on the 11,111-element
+    // test dimension where the full load was 3 MB. A path that reaches the
+    // nesting limit without ending at a root falls back to the full load.
+    const root = await this.getNested(
+      dimensionName,
+      hierarchyName,
+      element,
+      "Parents",
+      "Name,Level",
+      NEST_LEVELS,
+    );
+    const ancestorMap = new Map<string, number>();
+    const paths: string[][] = [];
+    let truncated = false;
+    const walk = (node: NestedElement, path: string[]) => {
+      const parents = node.Parents;
+      if (parents === undefined) {
+        truncated = true;
+        return;
+      }
+      if (parents.length === 0) {
+        paths.push(path);
+        return;
+      }
+      for (const p of parents) {
+        if (path.includes(p.Name)) continue;
+        ancestorMap.set(p.Name, p.Level);
+        walk(p, [...path, p.Name]);
+      }
+    };
+    walk(root, [element]);
+    if (truncated) {
+      return this.getAncestorsFromFull(dimensionName, hierarchyName, element);
+    }
+    const ancestors = [...ancestorMap.entries()]
+      .map(([name, level]) => ({ name, level }))
+      .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
+    return { element, ancestors, paths };
+  }
+
+  /**
+   * One element with a navigation property expanded `levels` deep. Nodes on
+   * the last level come back without that property, which is how callers see
+   * where the request stopped.
+   */
+  private async getNested(
+    dimensionName: string,
+    hierarchyName: string,
+    element: string,
+    nav: "Components" | "Parents",
+    select: string,
+    levels: number,
+  ): Promise<NestedElement> {
+    let expand = `${nav}($select=${select})`;
+    for (let i = 1; i < levels; i++) {
+      expand = `${nav}($select=${select};$expand=${expand})`;
+    }
+    const path =
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')` +
+      `/Elements('${odataKey(element)}')?$select=${select}` +
+      (levels > 0 ? `&$expand=${expand}` : "");
+    try {
+      return await this.http.request<NestedElement>("GET", path);
+    } catch (e) {
+      if (e instanceof TM1Error && e.code === TM1ErrorCode.NOT_FOUND) {
+        throw new TM1Error({
+          code: TM1ErrorCode.NOT_FOUND,
+          message: `Element '${element}' not found in ${dimensionName}.${hierarchyName}`,
+          httpStatus: e.httpStatus,
+          // The nested $expand runs to kilobytes; the path alone locates it.
+          endpoint: e.endpoint?.split("?")[0],
+        });
+      }
+      throw e;
+    }
+  }
+
+  private async getAncestorsFromFull(
     dimensionName: string,
     hierarchyName: string,
     element: string,
@@ -430,7 +606,7 @@ export class HierarchyService {
   async create(dimensionName: string, hierarchyName: string): Promise<void> {
     await this.http.request<void>(
       "POST",
-      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies`,
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies`,
       { Name: hierarchyName },
     );
   }
@@ -442,7 +618,7 @@ export class HierarchyService {
   async delete(dimensionName: string, hierarchyName: string): Promise<void> {
     await this.http.request<void>(
       "DELETE",
-      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')`,
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')`,
     );
   }
 }

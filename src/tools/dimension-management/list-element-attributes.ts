@@ -10,7 +10,7 @@ import { pageShapeFor } from "../schemas/common.js";
 export const registerListElementAttributes = defineTool({
   name: "tm1_list_element_attributes",
   description:
-    "List element attribute definitions of a TM1 hierarchy with their types (Numeric/String/Alias). Useful to verify attribute schema before writing values or referencing them in rules (ATTRN/ATTRS).",
+    "List element attribute definitions of a TM1 dimension with their types (Numeric/String/Alias); every hierarchy returns the same dimension-wide list. Useful to verify attribute schema before writing values or referencing them in rules (ATTRN/ATTRS).",
   annotations: READ_ONLY,
   output: pageShapeFor(ElementAttributeDefinitionSchema),
   input: {

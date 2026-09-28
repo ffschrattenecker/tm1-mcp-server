@@ -798,9 +798,9 @@ describe("TM1Client – Cell Data Methods", () => {
 
     // Measured on 12.5: POST Cubes('x')/tm1.Clear answers "'tm1.Clear'
     // resource can not be resolved on type 'Cube'", and $metadata declares no
-    // clear action at all. A full clear therefore takes the same TI route as
-    // v11 rather than an endpoint this build does not have.
-    it("12.x full clear: deploys ephemeral TI, not tm1.Clear", async () => {
+    // clear action at all. The clear therefore takes the same TI route as v11
+    // rather than an endpoint this build does not have.
+    it("12.x clear: deploys ephemeral TI, not tm1.Clear", async () => {
       const c = newClient("12.0");
       fetchSpy
         .mockResolvedValueOnce(mock204()) // create process
@@ -809,7 +809,7 @@ describe("TM1Client – Cell Data Methods", () => {
         ) // execute
         .mockResolvedValueOnce(mock204()); // delete
 
-      await c.cubes.clear("Sales", ["Time", "Region"], [[], []]);
+      await c.cubes.clear("Sales");
 
       const [createUrl, createOpts] = fetchSpy.mock.calls[0];
       expect(createUrl).toContain("/Processes");
@@ -820,23 +820,7 @@ describe("TM1Client – Cell Data Methods", () => {
       ).toBe(false);
     });
 
-    // Neither 11.8 nor 12.5 resolves tm1.Clear on an existing cube, so a
-    // tuple-selective clear is refused before any request goes out — on both
-    // versions, with the bedrock pointer the caller can act on.
-    it.each([
-      ["11.8", 11],
-      ["12.0", 12],
-    ])("%s partial clear: refused without a request", async (ver) => {
-      const c = newClient(ver);
-      await expect(
-        c.cubes.clear("Sales", ["Time", "Region"], [["Jan"], []]),
-      ).rejects.toMatchObject({
-        code: TM1ErrorCode.UNSUPPORTED_OPERATION,
-      });
-      expect(fetchSpy).not.toHaveBeenCalled();
-    });
-
-    it("11.x full clear: deploys ephemeral TI, executes, deletes", async () => {
+    it("11.x clear: deploys ephemeral TI, executes, deletes", async () => {
       const c = newClient("11.8");
       fetchSpy
         .mockResolvedValueOnce(mock204()) // create process
@@ -848,7 +832,7 @@ describe("TM1Client – Cell Data Methods", () => {
         ) // execute
         .mockResolvedValueOnce(mock204()); // delete
 
-      await c.cubes.clear("Sales", ["Time", "Region"], [[], []]);
+      await c.cubes.clear("Sales");
 
       const [createUrl, createOpts] = fetchSpy.mock.calls[0];
       expect(createUrl).toContain("/api/v1/Processes");
@@ -865,7 +849,32 @@ describe("TM1Client – Cell Data Methods", () => {
       expect(delUrl).toContain("/api/v1/Processes('");
     });
 
-    it("11.x full clear: an execute with no status code is not a confirmed clear (T-4)", async () => {
+    it("clear timeout leaves the temp TI running and says the cube will end up empty", async () => {
+      const c = newClient("11.8");
+      fetchSpy
+        .mockResolvedValueOnce(mock204()) // create process
+        .mockImplementationOnce(
+          (_u: string, opts: { signal: AbortSignal }) =>
+            new Promise((_res, rej) => {
+              opts.signal.addEventListener("abort", () =>
+                rej(opts.signal.reason as DOMException),
+              );
+            }),
+        ); // execute never answers
+
+      const err = await c.cubes
+        .clear("Sales", { timeoutMs: 50 })
+        .catch((e: unknown) => e);
+      expect(err).toMatchObject({ code: "LOCK_TIMEOUT" });
+      expect((err as Error).message).toMatch(/keeps running on the server/);
+      expect((err as Error).message).toMatch(/Do not retry/);
+      // Deleting a TI that still waits on a lock cancels it (12.5), so the
+      // temp process must survive a timeout.
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect((err as Error).message).toMatch(/}TempClear_Sales_\d+/);
+    });
+
+    it("11.x clear: an execute with no status code is not a confirmed clear (T-4)", async () => {
       // `?? "CompletedSuccessfully"` used to report an unverified clear as a
       // successful one. For a destructive operation the unknown has to surface.
       const c = newClient("11.8");
@@ -874,16 +883,16 @@ describe("TM1Client – Cell Data Methods", () => {
         .mockResolvedValueOnce(mock204()) // execute — no status code
         .mockResolvedValueOnce(mock204()); // delete (cleanup still runs)
 
-      await expect(
-        c.cubes.clear("Sales", ["Time", "Region"], [[], []]),
-      ).rejects.toThrow(/no ProcessExecuteStatusCode/);
+      await expect(c.cubes.clear("Sales")).rejects.toThrow(
+        /no ProcessExecuteStatusCode/,
+      );
 
       // The ephemeral process is still cleaned up.
       const [, delOpts] = fetchSpy.mock.calls[2];
       expect(delOpts.method).toBe("DELETE");
     });
 
-    it("11.x full clear: a rolled-back clear says the cube is unchanged", async () => {
+    it("11.x clear: a rolled-back clear says the cube is unchanged", async () => {
       // Distinct from the unconfirmed case above: here TM1 told us the writes
       // were discarded, so the caller can be told the cube still holds its
       // data instead of being left to guess.
@@ -895,12 +904,12 @@ describe("TM1Client – Cell Data Methods", () => {
         ) // execute
         .mockResolvedValueOnce(mock204()); // delete
 
-      await expect(
-        c.cubes.clear("Sales", ["Time", "Region"], [[], []]),
-      ).rejects.toThrow(/rolled back.*Aborted.*unchanged/s);
+      await expect(c.cubes.clear("Sales")).rejects.toThrow(
+        /rolled back.*Aborted.*unchanged/s,
+      );
     });
 
-    it("11.x full clear: a committed-with-messages clear stands", async () => {
+    it("11.x clear: a committed-with-messages clear stands", async () => {
       // The measured commit semantics say the CubeClearData DID commit. Raising
       // here would tell the model the cube still holds its data when it does
       // not — the inverse of the T-4 fail-open, and just as wrong.
@@ -912,21 +921,7 @@ describe("TM1Client – Cell Data Methods", () => {
         ) // execute
         .mockResolvedValueOnce(mock204()); // delete
 
-      await expect(
-        c.cubes.clear("Sales", ["Time", "Region"], [[], []]),
-      ).resolves.toBeUndefined();
-    });
-
-    it("11.x partial clear: throws UNSUPPORTED_OPERATION", async () => {
-      const c = newClient("11.8");
-
-      await expect(
-        c.cubes.clear("Sales", ["Time", "Region"], [["Jan"], []]),
-      ).rejects.toMatchObject({
-        code: "UNSUPPORTED_OPERATION",
-        message: expect.stringContaining("Partial clearCube"),
-      });
-      expect(fetchSpy).not.toHaveBeenCalled();
+      await expect(c.cubes.clear("Sales")).resolves.toBeUndefined();
     });
   });
 
@@ -1020,6 +1015,64 @@ describe("TM1Client – Cell Data Methods", () => {
         ).rejects.toThrow(/2 dimension\(s\)/);
         expect(fetchSpy).toHaveBeenCalledTimes(1);
       });
+
+      // A bare name means the default hierarchy, which carries the dimension's
+      // own name; `Hier:Elem` leaves it. Both forms mix inside one coordinate.
+      it("addresses an alternate hierarchy from a Hier:Elem entry", async () => {
+        fetchSpy
+          .mockResolvedValueOnce(mockResponse(cubeMeta))
+          .mockResolvedValueOnce(mockResponse({ value: [] }));
+
+        await client.cells.checkFeeders("SalesCube", [
+          "2024",
+          "Territory:North",
+        ]);
+
+        const [, opts] = fetchSpy.mock.calls[1];
+        expect(JSON.parse(opts.body)["Tuple@odata.bind"]).toEqual([
+          "Dimensions('Time')/Hierarchies('Time')/Elements('2024')",
+          "Dimensions('Region')/Hierarchies('Territory')/Elements('North')",
+        ]);
+      });
+
+      // The split takes the FIRST colon, so naming the default hierarchy
+      // explicitly reaches an element whose own name contains one. Without
+      // this, `A:B` would be unaddressable.
+      it("reaches a colon-bearing element via its explicit hierarchy", async () => {
+        fetchSpy
+          .mockResolvedValueOnce(mockResponse(cubeMeta))
+          .mockResolvedValueOnce(mockResponse({ value: [] }));
+
+        await client.cells.checkFeeders("SalesCube", [
+          "2024",
+          "Region:North:West",
+        ]);
+
+        const [, opts] = fetchSpy.mock.calls[1];
+        expect(JSON.parse(opts.body)["Tuple@odata.bind"]).toEqual([
+          "Dimensions('Time')/Hierarchies('Time')/Elements('2024')",
+          "Dimensions('Region')/Hierarchies('Region')/Elements('North%3AWest')",
+        ]);
+      });
+
+      // A colon that cannot separate two names is part of the element.
+      it.each([":North", "North:"])(
+        "treats %s as a plain element name",
+        async (entry) => {
+          fetchSpy
+            .mockResolvedValueOnce(mockResponse(cubeMeta))
+            .mockResolvedValueOnce(mockResponse({ value: [] }));
+
+          await client.cells.checkFeeders("SalesCube", ["2024", entry]);
+
+          const [, opts] = fetchSpy.mock.calls[1];
+          const binds = JSON.parse(opts.body)["Tuple@odata.bind"] as string[];
+          expect(binds[1]).toContain("Hierarchies('Region')");
+          expect(binds[1]).toContain(
+            `Elements('${encodeURIComponent(entry)}')`,
+          );
+        },
+      );
     });
 
     describe("traceFeeders()", () => {

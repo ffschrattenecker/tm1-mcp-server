@@ -57,7 +57,18 @@ export const registerUpsertProcess = defineTool({
     data: z.string().optional(),
     epilog: z.string().optional(),
     parameters: z.array(parameterSchema).optional(),
-    variables: z.array(variableSchema).optional(),
+    variables: z
+      .array(variableSchema)
+      .optional()
+      .describe(
+        "Replaces the complete variable list; [] removes every variable.",
+      ),
+    variablesUIData: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "Raw per-column layout (VariablesUIData), one entry per source column including ignored ones, sent verbatim. Take it from tm1_get_process_variables or an export; do not construct entries. Omitted: the server keeps its current layout.",
+      ),
     dataSource: dataSourceSchema.optional(),
     hasSecurityAccess: z
       .boolean()
@@ -98,6 +109,7 @@ export const registerUpsertProcess = defineTool({
       epilog,
       parameters,
       variables,
+      variablesUIData,
       dataSource,
       hasSecurityAccess,
       mode,
@@ -253,8 +265,25 @@ export const registerUpsertProcess = defineTool({
       await tm1Client.processes.updateParameters(processName, parameters);
       trail.push("updateProcessParameters");
     }
-    if (variables !== undefined && variables.length > 0) {
-      await tm1Client.processes.updateVariables(processName, variables);
+    let warning: string | undefined;
+    if (variables !== undefined || variablesUIData !== undefined) {
+      // A Variables PATCH alone leaves the server's VariablesUIData in place
+      // (measured on 11.8 and 12.5). When the new variable count no longer
+      // matches the kept layout's non-ignored columns, the ignore markers
+      // point at the wrong columns — say so rather than guess a layout.
+      if (exists && variables !== undefined && variablesUIData === undefined) {
+        const layout = await tm1Client.processes.getVariableLayout(processName);
+        const kept = layout.variablesUIData?.length ?? 0;
+        const used = kept - layout.ignoredColumns.length;
+        if (kept > 0 && used !== variables.length) {
+          warning = `VariablesUIData left as on the server: it describes ${used} used and ${layout.ignoredColumns.length} ignored column(s), but ${variables.length} variable(s) were written. Pass variablesUIData to replace the column layout.`;
+        }
+      }
+      await tm1Client.processes.updateVariables(
+        processName,
+        variables,
+        variablesUIData,
+      );
       trail.push("updateProcessVariables");
     }
     if (dataSource !== undefined) {
@@ -316,6 +345,7 @@ export const registerUpsertProcess = defineTool({
               ...(backup ? { backup } : {}),
               ...(verified !== undefined ? { verified } : {}),
               ...(compile !== undefined ? { compile } : {}),
+              ...(warning !== undefined ? { warning } : {}),
             },
             null,
             2,

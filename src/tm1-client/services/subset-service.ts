@@ -8,10 +8,25 @@ import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type { Subset, SubsetCreate } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
 import { rethrowIfSystemic } from "./fallback.js";
-import { odataKey as enc } from "./odata-page.js";
+import { odataKey } from "./odata-page.js";
 
 export class SubsetService {
   constructor(private readonly http: TM1HttpClient) {}
+
+  private base(dimensionName: string, hierarchyName: string): string {
+    return `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')`;
+  }
+
+  private bind(
+    dimensionName: string,
+    hierarchyName: string,
+    elements: string[],
+  ): string[] {
+    return elements.map(
+      (e) =>
+        `Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(e)}')`,
+    );
+  }
 
   /**
    * List public + private subsets of a hierarchy.
@@ -24,7 +39,7 @@ export class SubsetService {
       isPrivate: boolean,
     ) => {
       try {
-        const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/${segment}?$select=Name,Expression,Alias`;
+        const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/${segment}?$select=Name,Expression,Alias`;
         const response = await this.http.request<{
           value: Array<{ Name: string; Expression?: string; Alias?: string }>;
         }>("GET", path);
@@ -60,7 +75,7 @@ export class SubsetService {
     isPrivate = false,
   ): Promise<Subset> {
     const segment = isPrivate ? "PrivateSubsets" : "Subsets";
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/${segment}('${enc(subsetName)}')?$expand=Elements($select=Name)&$select=Name,Expression,Alias`;
+    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/${segment}('${odataKey(subsetName)}')?$expand=Elements($select=Name)&$select=Name,Expression,Alias`;
     const response = await this.http.request<{
       Name: string;
       Expression?: string;
@@ -79,16 +94,18 @@ export class SubsetService {
   }
 
   /**
-   * Create a public subset. Either MDX-based (expression) or static
-   * (elements). Mixed/empty inputs throw VALIDATION_ERROR.
-   * POST /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Subsets
+   * Create a subset, public or private (owned by the signed-in user). Either
+   * MDX-based (expression) or static (elements). Mixed/empty inputs throw
+   * VALIDATION_ERROR.
+   * POST /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Subsets|PrivateSubsets
    */
   async create(
     dimensionName: string,
     hierarchyName: string,
     subset: SubsetCreate,
+    isPrivate = false,
   ): Promise<void> {
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Subsets`;
+    const path = `${this.base(dimensionName, hierarchyName)}/${isPrivate ? "PrivateSubsets" : "Subsets"}`;
 
     if (subset.expression && subset.elements && subset.elements.length > 0) {
       throw new TM1Error({
@@ -113,17 +130,28 @@ export class SubsetService {
     if (subset.expression) {
       body.Expression = subset.expression;
     } else {
-      body["Elements@odata.bind"] = subset.elements!.map(
-        (e) =>
-          `Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(e)}')`,
+      body["Elements@odata.bind"] = this.bind(
+        dimensionName,
+        hierarchyName,
+        subset.elements!,
       );
     }
     await this.http.request<void>("POST", path, body);
   }
 
   /**
-   * Update an existing public subset.
-   * PATCH /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Subsets('{s}')
+   * Update an existing subset: its MDX, its static element list, or its alias.
+   *
+   * Measured on 11.8 and 12.5: a PATCH that binds Elements APPENDS to the
+   * list (and freezes an MDX subset's result first), and one that also sends
+   * `Expression: ""` is refused as "both a list of Elements and an
+   * Expression". Replacing the list takes two calls: drop every element
+   * reference, then bind the new ones. That pair is not atomic, and a bind
+   * naming an unknown element fails with 404 after the list is already gone,
+   * so on failure the old definition is written back.
+   *
+   * PATCH /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Subsets|PrivateSubsets('{s}')
+   * DELETE …/Subsets('{s}')/Elements/$ref
    */
   async update(
     dimensionName: string,
@@ -134,34 +162,89 @@ export class SubsetService {
       elements?: string[] | undefined;
       alias?: string | undefined;
     },
+    isPrivate = false,
   ): Promise<void> {
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Subsets('${enc(subsetName)}')`;
-    const body: Record<string, unknown> = {};
-    if (update.alias !== undefined) body.Alias = update.alias;
-    if (update.expression !== undefined) {
-      body.Expression = update.expression;
-    } else if (update.elements !== undefined) {
-      body.Expression = "";
-      body["Elements@odata.bind"] = update.elements.map(
-        (e) =>
-          `Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(e)}')`,
-      );
+    const { expression, elements, alias } = update;
+    if (expression !== undefined && elements !== undefined) {
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message:
+          "Pass either expression (MDX) or elements (static list), not both.",
+      });
     }
-    await this.http.request<void>("PATCH", path, body);
+    if (
+      expression === undefined &&
+      elements === undefined &&
+      alias === undefined
+    ) {
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message: "Nothing to update: pass expression, elements or alias.",
+      });
+    }
+
+    const path = `${this.base(dimensionName, hierarchyName)}/${isPrivate ? "PrivateSubsets" : "Subsets"}('${odataKey(subsetName)}')`;
+    const body: Record<string, unknown> = {};
+    if (alias !== undefined) body.Alias = alias;
+    if (elements === undefined) {
+      if (expression !== undefined) body.Expression = expression;
+      await this.http.request<void>("PATCH", path, body);
+      return;
+    }
+
+    const before = await this.get(
+      dimensionName,
+      hierarchyName,
+      subsetName,
+      isPrivate,
+    );
+    await this.http.request<void>("DELETE", `${path}/Elements/$ref`);
+    if (elements.length > 0)
+      body["Elements@odata.bind"] = this.bind(
+        dimensionName,
+        hierarchyName,
+        elements,
+      );
+    if (Object.keys(body).length === 0) return;
+    try {
+      await this.http.request<void>("PATCH", path, body);
+    } catch (e) {
+      const restore: Record<string, unknown> = before.expression
+        ? { Expression: before.expression }
+        : {
+            "Elements@odata.bind": this.bind(
+              dimensionName,
+              hierarchyName,
+              before.elements,
+            ),
+          };
+      try {
+        await this.http.request<void>("PATCH", path, restore);
+      } catch {
+        throw new TM1Error({
+          code: TM1ErrorCode.TM1_ERROR,
+          message:
+            `Subset '${subsetName}' was emptied and could not be restored after the update failed: ` +
+            (e instanceof Error ? e.message : String(e)),
+        });
+      }
+      throw e;
+    }
   }
 
   /**
-   * Delete a public subset.
-   * DELETE /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Subsets('{s}')
+   * Delete a subset, public or private.
+   * DELETE /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Subsets|PrivateSubsets('{s}')
    */
   async delete(
     dimensionName: string,
     hierarchyName: string,
     subsetName: string,
+    isPrivate = false,
   ): Promise<void> {
     await this.http.request<void>(
       "DELETE",
-      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Subsets('${enc(subsetName)}')`,
+      `${this.base(dimensionName, hierarchyName)}/${isPrivate ? "PrivateSubsets" : "Subsets"}('${odataKey(subsetName)}')`,
     );
   }
 }

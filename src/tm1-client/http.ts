@@ -258,6 +258,32 @@ export class TM1HttpClient {
     path: string,
     opts?: RequestOptions,
   ): Promise<string> {
+    return (await this.fetchRaw(method, path, opts)).text();
+  }
+
+  /**
+   * Same request as requestRaw, but hands back the bytes instead of a string.
+   *
+   * requestRaw decodes the body as UTF-8, which silently destroys anything
+   * that is not text — a spreadsheet read that way comes back as replacement
+   * characters. Callers that may face binary content use this and decide how
+   * to present it.
+   */
+  /** @internal — for Service-layer use; not part of the public consumer API. */
+  public async requestRawBytes(
+    method: string,
+    path: string,
+    opts?: RequestOptions,
+  ): Promise<Buffer> {
+    const res = await this.fetchRaw(method, path, opts);
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  private async fetchRaw(
+    method: string,
+    path: string,
+    opts?: RequestOptions,
+  ): Promise<Response> {
     const url = `${this.config.baseUrl}${this.profile.resolveApiPath(path)}`;
     const effectiveTimeout = opts?.timeoutMs ?? this.config.requestTimeoutMs;
     const cookie = await this.sessionManager.ensureSession();
@@ -296,9 +322,8 @@ export class TM1HttpClient {
       }
       throw this.classifyHttpError(response.status, path, body || undefined);
     }
-    const text = await response.text();
     this.emitMutation(method, path);
-    return text;
+    return response;
   }
 
   /**

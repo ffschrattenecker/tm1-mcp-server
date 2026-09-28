@@ -7,7 +7,7 @@ import { defineTool } from "../define-tool.js";
 export const registerUnloadCube = defineTool({
   name: "tm1_unload_cube",
   description:
-    "Unload a cube from memory. TM1 discards the in-memory fed-cell index and reloads from disk on next access. Required after feeder corrections, since the fed-cell index is cumulative — changes to existing feeders only take effect after an unload. Safe to call: data is preserved (read from .cub on next access). TM1 v11 only.",
+    "Unload a cube from memory. TM1 saves the cube to disk first, then discards the in-memory fed-cell index and reloads from .cub on next access. Two reasons to call it: after feeder corrections, since the fed-cell index is cumulative and changes to existing feeders only take effect once the cube reloads; and to give the memory the cube occupies back to the server. TM1 v11 only.",
   annotations: DESTRUCTIVE,
   // v11 only. v12 answers tm1.Unload with "Demand load, loading and unloading
   // of cubes is no longer supported." — the feature is gone, with no successor

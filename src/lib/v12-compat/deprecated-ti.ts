@@ -256,8 +256,9 @@ export const V12_DEPRECATED_TI: ReadonlyMap<string, DeprecatedTiEntry> =
       {
         name: "SetOdbcUnicodeInterface",
         severity: "error",
-        issue: "ODBC data sources removed in v12 — external connector required",
-        suggestion: "Connect data via PA cloud connector / Files API",
+        issue:
+          "SetODBCUnicodeInterface does not exist in v12 (compile fails); ODBCOpen/ODBCOutput/ODBCClose still compile",
+        suggestion: "Remove the call",
       },
       {
         name: "SwapAliasWithPrincipalName",

@@ -81,7 +81,7 @@ datasource (562-589).
 - `tm1_bulk_upsert_elements` — Create or update multiple elements in a TM1 hierarchy in bulk (two-pass: leafs first, then consolidations)
 - `tm1_create_dimension` — Create a new TM1 dimension with a default hierarchy of the same name
 - `tm1_create_element` — Create a new element in a TM1 dimension hierarchy
-- `tm1_create_element_attribute` — Create an element attribute definition (schema) on a TM1 hierarchy
+- `tm1_create_element_attribute` — Create an element attribute definition (schema) on a TM1 dimension
 - `tm1_create_hierarchy` — Create a new (alternate) hierarchy inside an existing dimension
 - `tm1_delete_dimension` — Delete a TM1 dimension and all its hierarchies
 - `tm1_delete_element` — Delete an element from a TM1 dimension hierarchy
@@ -116,7 +116,7 @@ datasource (562-589).
 ### model-building (9)
 
 - `tm1_check_cube_rule` — Validate the syntax of a TM1 cube rule WITHOUT applying it
-- `tm1_clear_cube` — Clear a subset of cells from a cube
+- `tm1_clear_cube` — Wipe every cell in a cube
 - `tm1_create_cube` — Create a new TM1 cube with the specified dimensions
 - `tm1_delete_cube` — Delete a TM1 cube and all its data
 - `tm1_get_all_cube_rules` — Bulk-load rules text for every cube in one call
@@ -165,11 +165,11 @@ datasource (562-589).
 
 ### subsets (5)
 
-- `tm1_create_subset` — Create a public TM1 subset
-- `tm1_delete_subset` — Delete a public TM1 subset
+- `tm1_create_subset` — Create a TM1 subset, public by default or private with isPrivate=true (private subsets belong to the signed-in user and are invisible to others; the same name m
+- `tm1_delete_subset` — Delete a TM1 subset, public by default or private with isPrivate=true
 - `tm1_get_subset` — Get a single TM1 subset with its MDX expression (if any) and resolved element list
 - `tm1_list_subsets` — List public + private subsets of a TM1 hierarchy
-- `tm1_update_subset` — Update a public TM1 subset (partial)
+- `tm1_update_subset` — Update an existing TM1 subset in place, public by default or private with isPrivate=true
 
 ### ti-development (17)
 

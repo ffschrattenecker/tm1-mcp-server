@@ -63,9 +63,9 @@ describe("ElementService.updateAttributeValues", () => {
     expect(written[0].cube).toBe("}ElementAttributes_Region");
     expect(written[0].dims).toEqual(["Region", "}ElementAttributes_Region"]);
     expect(written[0].cells).toEqual([
-      { elements: ["AT", "Weight"], value: 12.5 },
-      { elements: ["AT", "Caption"], value: "Austria" },
-      { elements: ["DE", "Code"], value: "49" },
+      { elements: ["[Region].[Region].[AT]", "Weight"], value: 12.5 },
+      { elements: ["[Region].[Region].[AT]", "Caption"], value: "Austria" },
+      { elements: ["[Region].[Region].[DE]", "Code"], value: "49" },
     ]);
   });
 
@@ -85,8 +85,9 @@ describe("ElementService.updateAttributeValues", () => {
     const err = await makeService([])
       .updateAttributeValue("Region", "AT", "Colour", "red")
       .catch((e: unknown) => e);
+    expect((err as TM1Error).code).toBe("NOT_FOUND");
     expect((err as TM1Error).message).toContain("'Colour' does not exist");
-    expect((err as TM1Error).hint).toContain("Weight, Caption, Code");
+    expect((err as TM1Error).message).toContain("Weight, Caption, Code");
   });
 });
 
@@ -102,7 +103,7 @@ describe("tm1_update_element_attribute_value", () => {
       attributeName: "Weight",
       value: 3,
     });
-    expect(seen).toEqual([["Region", "AT", "Weight", "3"]]);
+    expect(seen).toEqual([["Region", "AT", "Weight", "3", undefined]]);
   });
 
   it("routes updates[] to the batch write", async () => {

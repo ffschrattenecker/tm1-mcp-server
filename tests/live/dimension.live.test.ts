@@ -23,7 +23,7 @@ const NONEXISTENT = `${SANDBOX}_DIM_DOES_NOT_EXIST`;
 const TOP = "Total"; // consolidated root
 const SUB = "Region_North"; // intermediate consolidation
 const LEAF1 = "City_A"; // leaf under SUB
-const LEAF2 = "City_B"; // leaf created standalone, then moved under SUB
+const LEAF2 = "City_B"; // leaf created standalone, then attached under SUB
 const LEAF3 = "City_C"; // leaf for attribute values
 const TC = "TypeChangeLeaf"; // standalone leaf for the upsert idempotency / type-change test
 
@@ -256,18 +256,18 @@ describe.skipIf(!LIVE_ENABLED)(
       expect(names).toContain(TOP);
     });
 
-    it("moves a standalone leaf under SUB", async () => {
-      const r = await h.ok("tm1_move_element", {
+    it("attaches a standalone leaf under SUB", async () => {
+      await h.ok("tm1_update_element", {
         dimensionName: DIM,
         hierarchyName: HIER,
-        elementName: LEAF2,
-        newParent: SUB,
-        weight: 1,
-      });
-      expect(r.json).toMatchObject({
-        success: true,
-        elementName: LEAF2,
-        newParent: SUB,
+        elementName: SUB,
+        update: {
+          type: "Consolidated",
+          components: [
+            { name: LEAF1, weight: -1 },
+            { name: LEAF2, weight: 1 },
+          ],
+        },
       });
     });
 
@@ -281,7 +281,7 @@ describe.skipIf(!LIVE_ENABLED)(
         (d: { name: string }) => d.name,
       );
       expect(names).toContain(LEAF1);
-      expect(names).toContain(LEAF2); // the moved element now rolls up under SUB
+      expect(names).toContain(LEAF2); // the attached element now rolls up under SUB
     });
 
     it("get_descendants leavesOnly drops consolidations", async () => {

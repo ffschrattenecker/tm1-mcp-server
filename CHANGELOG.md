@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Merged upstream tm1-mcp-server 5.0.0 (flameY3T1, 2026-09-27). Where both lines had
+built the same thing, upstream's behaviour was taken; fork-only features (connection
+registry, `tm1_delete_elements`, rules patch mode, batch attribute writes, the
+response-size guard, the per-connection caches) are unchanged.
+
+### Breaking
+
+- **`tm1_move_element` is removed.** It attached the element to the new parent but left it
+  under the old one. *Action:* use `tm1_update_element` on both parents' `components`.
+- **`tm1_write_cells` refuses a consolidated coordinate.** Every coordinate is checked before
+  anything is sent; write the leaves or run a TI process.
+- **`tm1_set_cube_rules` fails with `VALIDATION_ERROR` when the preflight finds syntax
+  errors** (the errors are in `details`), instead of returning an `isError` payload. The check
+  still runs on the full resulting text, so an `edits` patch is checked as installed.
+  *Action:* `preflight: false` writes the text as is.
+- **Exported files hold the process code unmasked.** `'***'` in written files broke the
+  round-trip; `maskSecrets` now affects only the inline response of
+  `tm1_export_process_to_git`. Keep such files out of version control if the code contains
+  password literals.
+- **An unknown `TM1_MCP_TRANSPORT` or `TM1_LOG_LEVEL` stops the server at startup** instead of
+  falling back silently. Both are server-wide; a bad value in one connection's `.env` cannot
+  occur because folders may not set them.
+- **Unknown attributes are `NOT_FOUND`** in `tm1_update_element_attribute_value` (was
+  `VALIDATION_ERROR`), and attribute names match ignoring case and spaces, as TM1 does.
+
+### Added
+
+- **The five file tools reach the Applications tree** via `container: "applications"`.
+- **`tm1_get_file_content` takes `encoding: "base64"`** for binary files.
+- **Subset tools take `isPrivate`.**
+- **`tm1_upsert_process` takes `variablesUIData`** and warns when the kept column layout no
+  longer fits the variables.
+- **`tm1_clear_cube` takes `timeoutMs`** (1 s to 1 h).
+- **Feeder and cell-trace tools address alternate hierarchies** with `Hierarchy:Element`.
+- **The attribute value tools take `hierarchyName`** for alternate hierarchies (single element
+  and `updates[]`).
+
+### Fixed
+
+- **A rejected login is never retried.** A 401/403 on login latches for that connection, so
+  wrong credentials no longer lock the account; fix the `.env` and restart.
+- **MCP SDK 1.30.1**; `fast-uri` out of the vulnerable range; `npm run verify` runs
+  `npm audit` first.
+- **The ReDoS guard rejects repeated alternations** such as `^(\w|\w)*!$`.
+- **The HTTP transport caps a request body at 64 MB** (413) and accepts `Host: localhost:<port>`
+  and `[::1]:<port>`.
+- **A v12 connection no longer demands `TM1_PASSWORD`** for auth modes that never send one.
+- **A TM1 request can wait longer than five minutes**; `timeoutMs` is the only limit.
+- **`tm1_write_cells` no longer writes when its own pre-check failed.**
+- **`tm1_check_writable_coords` understands `[Dimension].[Hierarchy].[Element]`** and looks in
+  the hierarchy the write would hit.
+- **`fetchAll` and `limit: 0` on `tm1_execute_mdx` and `tm1_get_view` stop at 5000 cells.**
+- **`tm1_check_cube_rule` returns syntax errors as a normal result**, not as a tool error.
+- **`tm1_clear_cube` tells the truth on a timeout**: the clear finishes on the server.
+- **`tm1_update_subset` can change the element list** (replaces, in order).
+- **`tm1_get_descendants` and `tm1_get_ancestors` load only the subtree**, and `leavesOnly`
+  no longer returns empty consolidations.
+- **`tm1_update_element` reports type conversions.**
+- **Process imports remove what the source no longer has** (parameters, variables, data
+  source); a `.pro` round trip keeps trailing whitespace.
+- **Process analysis reads variable names with `.`, `$`, `%` and backtick, and `;;` inside a
+  string literal.**
+- **Both diff tools compare the delimiter type and the ODBC unicode flag.**
+- **`tm1_list_error_logs` reads v12 log names**, and `groupBy: "process"` passes schema checks.
+- **`tm1_list_clients` and `tm1_list_groups` show names in markdown.**
+- **`tm1_check_v12_readiness` gives the right reason for `SetODBCUnicodeInterface`.**
+- **Seven tools no longer claim to be v11-only**, among them `tm1_import_pro_file` and
+  `tm1_install_pro_bundle`.
+- **Corrected descriptions** of `tm1_unload_cube`, `tm1_clear_cube`, `tm1_delete_hierarchy`,
+  `tm1_get_cube_stats` and `tm1_get_transaction_log`.
+- **The wire contracts were re-recorded against 11.8** upstream and merged with the fork's
+  plapp-franz recordings; the recorder now merges by default (`--replace` starts over).
+
 ## [7.0.2] - 2026-09-27
 
 ### Fixed

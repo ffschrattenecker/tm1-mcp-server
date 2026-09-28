@@ -52,6 +52,22 @@ describe("pro-serializer round-trip", () => {
     expect(parsed.epilog).toBe(input.epilog);
   });
 
+  it("trailing blank lines and spaces survive, as TM1 keeps them", () => {
+    // TM1 11.8 and 12.5 store and return both (it only turns LF into CRLF).
+    const parsed = parseProFile(
+      serializeToPro(
+        fixture({ prolog: "nX = 1;   \n\n\n", epilog: "nY = 2;\t" }),
+      ),
+    );
+    expect(parsed.prolog).toBe("nX = 1;   \n\n\n");
+    expect(parsed.epilog).toBe("nY = 2;\t");
+  });
+
+  it("still trims a countless section, whose tail runs into the next header", () => {
+    const parsed = parseProFile('602,"P"\n572,\nnX = 1;\n\n573,\n');
+    expect(parsed.prolog).toBe("nX = 1;");
+  });
+
   it("parameters survive (names, types, defaults, prompts)", () => {
     const input = fixture();
     const parsed = parseProFile(serializeToPro(input));

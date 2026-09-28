@@ -18,6 +18,7 @@ export const registerUpdateElementAttributeValue = defineTool({
   description: [
     "Set attribute values on elements by writing to the }ElementAttributes_{Dim} control cube.",
     "One value (elementName + attributeName + value) or many in a single write (updates[]). Values are strings, coerced server-side for Numeric attributes.",
+    "Pass hierarchyName for an element of an alternate hierarchy. A leaf's value is shared by every hierarchy of the dimension; a consolidation's value is set for that hierarchy only.",
     "For reproducible deployments prefer a TI process (AttrPutS / AttrPutN); this REST-direct tool is for ad-hoc / debugging scenarios.",
   ],
   annotations: IDEMPOTENT_WRITE,
@@ -28,6 +29,12 @@ export const registerUpdateElementAttributeValue = defineTool({
       .string()
       .optional()
       .describe("Element whose attribute value should be set"),
+    hierarchyName: z
+      .string()
+      .optional()
+      .describe(
+        "Hierarchy the element belongs to (default: the same-named default hierarchy). Needed for elements of an alternate hierarchy.",
+      ),
     attributeName: z
       .string()
       .optional()
@@ -53,7 +60,14 @@ export const registerUpdateElementAttributeValue = defineTool({
       ),
   },
   handler: async (
-    { dimensionName, elementName, attributeName, value, updates },
+    {
+      dimensionName,
+      elementName,
+      hierarchyName,
+      attributeName,
+      value,
+      updates,
+    },
     tm1Client,
   ) => {
     const single =
@@ -68,7 +82,11 @@ export const registerUpdateElementAttributeValue = defineTool({
       });
     }
     if (updates !== undefined) {
-      await tm1Client.elements.updateAttributeValues(dimensionName, updates);
+      await tm1Client.elements.updateAttributeValues(
+        dimensionName,
+        updates,
+        hierarchyName,
+      );
       return actionResponse({
         success: true,
         dimensionName,
@@ -91,6 +109,7 @@ export const registerUpdateElementAttributeValue = defineTool({
       elementName,
       attributeName,
       value,
+      hierarchyName,
     );
     return actionResponse({
       success: true,

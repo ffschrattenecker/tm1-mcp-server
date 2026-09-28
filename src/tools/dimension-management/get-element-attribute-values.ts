@@ -31,6 +31,7 @@ export const registerGetElementAttributeValues = defineTool({
   description: [
     "Read attribute values (Numeric/String/Alias) via MDX on the }ElementAttributes_{Dim} control cube. Use this to verify alias values, attribute lookups, or to debug rules referencing ATTRN/ATTRS.",
     "With elementName: that element's attributes. Without: every element of the dimension, name-sorted and paged (items[{elementName, values}]); narrow the columns with attributeNames.",
+    "Attribute definitions are dimension-wide. A leaf (N) element has one set of values across all hierarchies, but a consolidated (C) element has its own values per hierarchy, so pass hierarchyName for a consolidation or any element of an alternate hierarchy.",
   ],
   annotations: READ_ONLY,
   output: {
@@ -52,6 +53,12 @@ export const registerGetElementAttributeValues = defineTool({
       .describe(
         "Element whose attribute values should be read. Omit to page through all elements.",
       ),
+    hierarchyName: z
+      .string()
+      .optional()
+      .describe(
+        "Hierarchy the element belongs to (default: the same-named default hierarchy). Needed for elements of an alternate hierarchy. Single-element mode only.",
+      ),
     attributeNames: z
       .array(z.string())
       .optional()
@@ -63,6 +70,7 @@ export const registerGetElementAttributeValues = defineTool({
     {
       dimensionName,
       elementName,
+      hierarchyName,
       attributeNames,
       limit,
       offset,
@@ -103,6 +111,7 @@ export const registerGetElementAttributeValues = defineTool({
     const values = await tm1Client.elements.getAttributeValues(
       dimensionName,
       elementName,
+      hierarchyName,
     );
     const payload = { dimensionName, elementName, attributes: values };
     type Row = (typeof values)[number];

@@ -185,19 +185,19 @@ describe("tm1_set_cube_rules sources", () => {
 
   it("preflight checks the full patched text and a failure writes nothing", async () => {
     checkErrors = [{ lineNumber: 2, message: "Syntax error" }];
-    const res = await call({
+    const err = await call({
       cubeName: "Sales",
       confirm: "Sales",
       edits: [{ find: "['Fcst'] - ['Plan'];", replace: "['Fcst'] - ;" }],
-    });
+    }).catch((e: unknown) => e);
     expect(checked).toEqual([
       STORED.replace("['Fcst'] - ['Plan'];", "['Fcst'] - ;"),
     ]);
     expect(written).toEqual([]);
-    expect(res.isError).toBe(true);
-    expect(JSON.parse(res.content[0].text)).toMatchObject({
+    expect(err).toBeInstanceOf(TM1Error);
+    expect((err as TM1Error).code).toBe("VALIDATION_ERROR");
+    expect(JSON.parse((err as TM1Error).details!)).toMatchObject({
       stage: "preflight",
-      check: "syntax",
       errors: [{ lineNumber: 2 }],
     });
   });

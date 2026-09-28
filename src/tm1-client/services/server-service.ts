@@ -16,7 +16,7 @@ import type {
 } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
 import { rethrowIfSystemicOrDenied } from "./fallback.js";
-import { escapeOdataLiteral, odataKey as encKey } from "./odata-page.js";
+import { escapeOdataLiteral, odataKey } from "./odata-page.js";
 
 // TM1 references the per-run TI error file inside the free-text message, either
 // wrapped in angle brackets (e.g. German `Fehlerdatei: <…log>`) or bare
@@ -584,6 +584,7 @@ export class ServerService {
       const proc = opts.processName.toLowerCase();
       // TM1 v11+ pattern with session hash: TM1ProcessError_<ts>_<id>_<proc>_<hash>.log
       // TM1 pattern without hash:           TM1ProcessError_<ts>_<id>_<proc>.log
+      // TM1 v12 pattern:                    ProcessLog_<ts>_<id>_<proc>.jsonl
       // Legacy/manual pattern:              <proc>_<ts>.log
       entries = entries.filter((e) => {
         const f = e.filename.toLowerCase();
@@ -591,6 +592,7 @@ export class ServerService {
           f === proc ||
           f.startsWith(`${proc}_`) ||
           f.endsWith(`_${proc}.log`) ||
+          f.endsWith(`_${proc}.jsonl`) ||
           f.includes(`_${proc}_`)
         );
       });
@@ -617,7 +619,7 @@ export class ServerService {
    * GET /api/v1/ErrorLogFiles('<filename>')/Content
    */
   async getErrorLogContent(filename: string): Promise<string> {
-    const path = `/api/v1/ErrorLogFiles('${encKey(filename)}')/Content`;
+    const path = `/api/v1/ErrorLogFiles('${odataKey(filename)}')/Content`;
     return await this.http.requestRaw("GET", path);
   }
 }

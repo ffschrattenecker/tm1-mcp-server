@@ -31,7 +31,7 @@ import {
   type NameFilterOpts,
   type Paged,
   type PageOpts,
-  odataKey as enc,
+  odataKey,
 } from "./odata-page.js";
 
 interface RawProcessVariable {
@@ -235,7 +235,7 @@ export class ProcessService {
     // on 11.8.02900.8 and 12.5.9 — both omit the key entirely without it, and both
     // return {"Filename": ...} with it (v11 `TM1ProcessError_*.log`, v12
     // `ProcessLog_*.jsonl`).
-    const path = `/api/v1/Processes('${enc(processName)}')/tm1.ExecuteWithReturn?$expand=ErrorLogFile`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')/tm1.ExecuteWithReturn?$expand=ErrorLogFile`;
     const body: {
       Parameters?: Array<{ Name: string; Value: string | number }>;
     } = {};
@@ -353,7 +353,7 @@ export class ProcessService {
    * GET /api/v1/Processes('{name}')/Parameters
    */
   async getParameters(processName: string): Promise<ProcessParameter[]> {
-    const path = `/api/v1/Processes('${enc(processName)}')/Parameters`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')/Parameters`;
     // TM1 v11 returns Type as the decoded string "Numeric" / "String"
     // (not the legacy int code 1 / 2). The old `=== 1` check silently
     // classified every Numeric parameter as String.
@@ -392,7 +392,7 @@ export class ProcessService {
     try {
       await this.http.request<{ Name: string }>(
         "GET",
-        `/api/v1/Processes('${enc(name)}')?$select=Name`,
+        `/api/v1/Processes('${odataKey(name)}')?$select=Name`,
       );
       return true;
     } catch (e) {
@@ -407,7 +407,7 @@ export class ProcessService {
    * before re-POSTing to avoid TM1 rejecting the body.
    */
   async copy(sourceName: string, targetName: string): Promise<void> {
-    const path = `/api/v1/Processes('${enc(sourceName)}')`;
+    const path = `/api/v1/Processes('${odataKey(sourceName)}')`;
     const source = await this.http.request<Record<string, unknown>>(
       "GET",
       path,
@@ -441,7 +441,7 @@ export class ProcessService {
     variablesUIData?: string[];
   }> {
     const path =
-      `/api/v1/Processes('${enc(processName)}')` +
+      `/api/v1/Processes('${odataKey(processName)}')` +
       `?$select=UIData,VariablesUIData`;
     try {
       const r = await this.http.request<{
@@ -636,7 +636,7 @@ export class ProcessService {
    * GET /api/v1/Processes('{name}')
    */
   async getCode(processName: string): Promise<ProcessCode> {
-    const path = `/api/v1/Processes('${enc(processName)}')`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')`;
     const response = await this.http.request<{
       PrologProcedure: string;
       MetadataProcedure: string;
@@ -660,7 +660,7 @@ export class ProcessService {
   async getDeployMeta(
     processName: string,
   ): Promise<{ hasSecurityAccess: boolean }> {
-    const path = `/api/v1/Processes('${enc(processName)}')?$select=HasSecurityAccess`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')?$select=HasSecurityAccess`;
     const response = await this.http.request<{
       HasSecurityAccess?: boolean;
     }>("GET", path);
@@ -675,7 +675,7 @@ export class ProcessService {
     processName: string,
     code: Partial<ProcessCode>,
   ): Promise<void> {
-    const path = `/api/v1/Processes('${enc(processName)}')`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')`;
     const body: Record<string, string> = {};
     if (code.prolog !== undefined) body.PrologProcedure = code.prolog;
     if (code.metadata !== undefined) body.MetadataProcedure = code.metadata;
@@ -691,7 +691,7 @@ export class ProcessService {
    * are omitted by the server; newlines are CRLF.
    */
   async getCodeBlob(processName: string): Promise<string> {
-    const path = `/api/v1/Processes('${enc(processName)}')/Code/$value`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')/Code/$value`;
     return this.http.requestRaw("GET", path);
   }
 
@@ -703,7 +703,7 @@ export class ProcessService {
    * only write path.
    */
   async updateCodeBlob(processName: string, blob: string): Promise<void> {
-    const path = `/api/v1/Processes('${enc(processName)}')`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')`;
     await this.http.request<void>("PATCH", path, { Code: blob });
   }
 
@@ -715,7 +715,7 @@ export class ProcessService {
     processName: string,
     hasSecurityAccess: boolean,
   ): Promise<void> {
-    const path = `/api/v1/Processes('${enc(processName)}')`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')`;
     await this.http.request<void>("PATCH", path, {
       HasSecurityAccess: hasSecurityAccess,
     });
@@ -739,7 +739,7 @@ export class ProcessService {
     processName: string,
     opts?: { includeSecrets?: boolean },
   ): Promise<DataSource> {
-    const path = `/api/v1/Processes('${enc(processName)}')`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')`;
     const response = await this.http.request<{
       DataSource: {
         Type: string;
@@ -890,7 +890,7 @@ export class ProcessService {
     processName: string,
     dataSource: DataSource,
   ): Promise<void> {
-    const path = `/api/v1/Processes('${enc(processName)}')`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')`;
     const dsBody: Record<string, unknown> = { Type: dataSource.type };
     if (dataSource.dataSourceNameForServer !== undefined)
       dsBody.dataSourceNameForServer = dataSource.dataSourceNameForServer;
@@ -950,7 +950,7 @@ export class ProcessService {
    */
   async getVariableLayout(processName: string): Promise<ProcessVariableLayout> {
     const path =
-      `/api/v1/Processes('${enc(processName)}')` +
+      `/api/v1/Processes('${odataKey(processName)}')` +
       `?$select=Variables,VariablesUIData`;
     try {
       const r = await this.http.request<{
@@ -971,7 +971,7 @@ export class ProcessService {
       // collection — variables without the ignore information beat no answer.
       const response = await this.http.request<{
         value: RawProcessVariable[];
-      }>("GET", `/api/v1/Processes('${enc(processName)}')/Variables`);
+      }>("GET", `/api/v1/Processes('${odataKey(processName)}')/Variables`);
       return {
         variables: response.value.map(decodeVariable),
         ignoredColumns: [],
@@ -1027,19 +1027,21 @@ export class ProcessService {
    */
   async updateVariables(
     processName: string,
-    vars: ProcessVariable[],
+    vars: ProcessVariable[] | undefined,
     variablesUIData?: string[],
   ): Promise<void> {
-    const path = `/api/v1/Processes('${enc(processName)}')`;
-    const body: Record<string, unknown> = {
-      Variables: vars.map((v) => ({
+    const path = `/api/v1/Processes('${odataKey(processName)}')`;
+    const body: Record<string, unknown> = {};
+    // undefined = leave the variables alone and patch only the column layout.
+    if (vars !== undefined) {
+      body.Variables = vars.map((v) => ({
         Name: v.name,
         Type: v.type,
         Position: v.position,
         StartByte: v.startByte ?? 0,
         EndByte: v.endByte ?? 0,
-      })),
-    };
+      }));
+    }
     // Patching Variables alone leaves whatever VariablesUIData the process
     // already has (measured on 12.5), which is right for an edit that keeps the
     // column layout and wrong for one that changes it — hence the explicit
@@ -1056,7 +1058,7 @@ export class ProcessService {
     processName: string,
     params: ProcessParameter[],
   ): Promise<void> {
-    const path = `/api/v1/Processes('${enc(processName)}')`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')`;
     const body = {
       Parameters: params.map(encodeParameter),
     };
@@ -1068,7 +1070,7 @@ export class ProcessService {
    * DELETE /api/v1/Processes('{name}')
    */
   async delete(processName: string): Promise<void> {
-    const path = `/api/v1/Processes('${enc(processName)}')`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')`;
     await this.http.request<void>("DELETE", path);
   }
 
@@ -1077,7 +1079,7 @@ export class ProcessService {
    * POST /api/v1/Processes('{name}')/tm1.Compile
    */
   async compile(processName: string): Promise<CompileResult> {
-    const path = `/api/v1/Processes('${enc(processName)}')/tm1.Compile`;
+    const path = `/api/v1/Processes('${odataKey(processName)}')/tm1.Compile`;
     try {
       const response = await this.http.request<{
         value?: Array<{

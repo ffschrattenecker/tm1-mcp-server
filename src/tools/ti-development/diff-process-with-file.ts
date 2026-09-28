@@ -5,14 +5,14 @@ import type {
   IgnoredColumn,
   ProcessParameter,
   ProcessVariable,
-  DataSource,
 } from "../../types.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { parseProFile } from "../../lib/pro-parser.js";
 import { ignoredColumnsOf } from "../../lib/variables-ui-data.js";
 import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
+import { diffDs } from "./diff-processes.js";
 import { DiffProcessResultSchema } from "../schemas/items.js";
-import { READ_ONLY, withVersion } from "../annotations.js";
+import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 
 interface TabDiff {
@@ -123,41 +123,11 @@ function diffIgnoredColumns(installed: IgnoredColumn[], file: IgnoredColumn[]) {
   };
 }
 
-function diffDataSource(
-  installed: DataSource,
-  file: DataSource,
-): { identical: boolean; differences: string[] } {
-  const diffs: string[] = [];
-  if (installed.type !== file.type)
-    diffs.push(`type: ${installed.type} → ${file.type}`);
-  const fields: Array<keyof DataSource> = [
-    "dataSourceNameForServer",
-    "dataSourceNameForClient",
-    "asciiDelimiterChar",
-    "asciiQuoteCharacter",
-    "asciiDecimalSeparator",
-    "asciiThousandSeparator",
-    "asciiHeaderRecords",
-    "view",
-    "subset",
-    "userName",
-    // See diff-processes.ts: the ODBC query is substance, the password is noise.
-    "query",
-  ];
-  for (const f of fields) {
-    const a = installed[f];
-    const b = file[f];
-    if ((a ?? "") !== (b ?? ""))
-      diffs.push(`${String(f)}: ${JSON.stringify(a)} → ${JSON.stringify(b)}`);
-  }
-  return { identical: diffs.length === 0, differences: diffs };
-}
-
 export const registerDiffProcessWithFile = defineTool({
   name: "tm1_diff_process_with_file",
   description:
     "Compare an installed TI process on the server against a local .pro file. Returns per-tab identical flags + line counts, parameter diff (added/removed/changed), variable diff, and datasource diff. Use before tm1_import_pro_file to preview what will change.",
-  annotations: withVersion(READ_ONLY, "v11"),
+  annotations: READ_ONLY,
   output: DiffProcessResultSchema,
   input: {
     filePath: z
@@ -226,7 +196,7 @@ export const registerDiffProcessWithFile = defineTool({
       installedLayout.ignoredColumns,
       ignoredColumnsOf(parsed.variablesUIData),
     );
-    const dataSource = diffDataSource(installedDs, parsed.dataSource);
+    const dataSource = diffDs(installedDs, parsed.dataSource);
 
     const allIdentical =
       tabs.every((t) => t.identical) &&

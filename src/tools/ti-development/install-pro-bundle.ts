@@ -5,7 +5,7 @@ import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { compileUserRegex } from "../../lib/safe-regex.js";
 import { parseProFile } from "../../lib/pro-parser.js";
 import { resolveLocalPath } from "../local-file.js";
-import { IDEMPOTENT_DESTRUCTIVE, withVersion } from "../annotations.js";
+import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { InstallProBundleResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { runPreflight, type PreflightFailure } from "./preflight.js";
@@ -27,7 +27,7 @@ export const registerInstallProBundle = defineTool({
   name: "tm1_install_pro_bundle",
   description:
     "Install all .pro files from a directory in one call. Iterates the directory (non-recursive by default), applies tm1_import_pro_file logic per file, and reports per-file outcome. Stops on first failure unless continueOnError=true. Useful for Bedrock or library deployments.",
-  annotations: withVersion(IDEMPOTENT_DESTRUCTIVE, "v11"),
+  annotations: IDEMPOTENT_DESTRUCTIVE,
   output: InstallProBundleResultSchema,
   input: {
     directory: z

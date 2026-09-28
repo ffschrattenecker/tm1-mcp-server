@@ -40,7 +40,7 @@ export const registerListGroups = defineTool({
         get: (g) =>
           "clientCount" in g
             ? `${g.clientCount} (count)`
-            : (g.Clients ?? []).join(", "),
+            : (g.Clients ?? []).map((c) => c.Name).join(", "),
       },
     ]);
     return pageResponse(projectedPage, format, { title: "Groups", columns });

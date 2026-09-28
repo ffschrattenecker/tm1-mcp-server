@@ -13,7 +13,7 @@ import {
   type NameFilterOpts,
   type Paged,
   type PageOpts,
-  odataKey as enc,
+  odataKey,
 } from "./odata-page.js";
 
 export type DefaultMemberSource =
@@ -195,7 +195,7 @@ export class DimensionService {
     try {
       await this.http.request<void>(
         "POST",
-        `/api/v1/Dimensions('${enc(name)}')/Hierarchies`,
+        `/api/v1/Dimensions('${odataKey(name)}')/Hierarchies`,
         { Name: name },
       );
     } catch (err) {
@@ -213,7 +213,7 @@ export class DimensionService {
   async delete(name: string): Promise<void> {
     await this.http.request<void>(
       "DELETE",
-      `/api/v1/Dimensions('${enc(name)}')`,
+      `/api/v1/Dimensions('${odataKey(name)}')`,
     );
   }
 
@@ -274,7 +274,7 @@ export class DimensionService {
     hierarchyName?: string,
   ): Promise<DefaultMemberResolution> {
     const hier = hierarchyName ?? dimensionName;
-    const base = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hier)}')`;
+    const base = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hier)}')`;
 
     // Tier 1: explicit DefaultMember attribute.
     try {

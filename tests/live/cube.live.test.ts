@@ -186,6 +186,18 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
     expect(r.json.errorCount).toBe(0);
   });
 
+  it("check_cube_rule answers a broken rule as a result, not a tool error", async () => {
+    const r = await h.call("tm1_check_cube_rule", {
+      cubeName: C1,
+      rules: `['${D1_PLAIN}'] = N: 1 +;`,
+    });
+    const sc = r.result.structuredContent as
+      { ok: boolean; errorCount: number } | undefined;
+    expect(r.isError).toBe(false);
+    expect(sc?.ok).toBe(false);
+    expect(sc?.errorCount).toBeGreaterThan(0);
+  });
+
   it("set_cube_rules then get_cube_rules reads the rule back", async () => {
     const rules = `SKIPCHECK;\n['${D1_PLAIN}'] = N: 1;\nFEEDERS;`;
     await h.ok("tm1_set_cube_rules", { cubeName: C1, rules, confirm: C1 });
@@ -193,6 +205,21 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
     const text = typeof r.json === "string" ? r.json : (r.json.rules ?? r.text);
     expect(String(text)).toContain("SKIPCHECK");
     expect(String(text)).toContain(D1_PLAIN);
+  });
+
+  it("set_cube_rules refuses broken rules and leaves the stored text alone", async () => {
+    // The Rules PATCH itself stores broken text with a 200; only the
+    // tm1.CheckRules preflight stops it.
+    const before = await h.ok("tm1_get_cube_rules", { cubeName: C1 });
+    const r = await h.call("tm1_set_cube_rules", {
+      cubeName: C1,
+      rules: "SKIPCHECK;\n['x'] = N: NOPE(1, ;\n",
+      confirm: C1,
+    });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("VALIDATION_ERROR");
+    const after = await h.ok("tm1_get_cube_rules", { cubeName: C1 });
+    expect(after.text).toBe(before.text);
   });
 
   it("get_all_cube_rules includes the sandbox cube (summary mode)", async () => {
@@ -217,8 +244,6 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
   it("clear_cube wipes the cube (confirm required)", async () => {
     const r = await h.call("tm1_clear_cube", {
       cubeName: C1,
-      dimensions: [D1, D2],
-      tuples: [[], []], // empty arrays = all elements → clear everything
       confirm: C1,
     });
     expect(r.isError).toBeFalsy();

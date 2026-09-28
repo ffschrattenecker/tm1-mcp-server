@@ -7,7 +7,7 @@ import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 export const registerCreateSubset = defineTool({
   name: "tm1_create_subset",
   description:
-    "Create a public TM1 subset. Provide either expression (MDX-based, dynamic) OR elements (static list) — not both. Optional alias attribute name controls the displayed alias.",
+    "Create a TM1 subset, public by default or private with isPrivate=true (private subsets belong to the signed-in user and are invisible to others; the same name may exist once public and once private). Provide either expression (MDX-based, dynamic) OR elements (static list) — not both. Optional alias attribute name controls the displayed alias.",
   annotations: WRITE,
   output: MutationResultSchema,
   input: {
@@ -30,18 +30,37 @@ export const registerCreateSubset = defineTool({
       .string()
       .optional()
       .describe("Alias attribute used as display name in the subset"),
+    isPrivate: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe(
+        "Create it in PrivateSubsets (owned by the signed-in user) instead of public Subsets",
+      ),
   },
   handler: async (
-    { dimensionName, hierarchyName, subsetName, expression, elements, alias },
-    tm1Client,
-  ) => {
-    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
-    await tm1Client.subsets.create(dimensionName, hierarchy, {
-      name: subsetName,
+    {
+      dimensionName,
+      hierarchyName,
+      subsetName,
       expression,
       elements,
       alias,
-    });
+      isPrivate,
+    },
+    tm1Client,
+  ) => {
+    await tm1Client.subsets.create(
+      dimensionName,
+      resolveHierarchy(dimensionName, hierarchyName),
+      {
+        name: subsetName,
+        expression,
+        elements,
+        alias,
+      },
+      isPrivate ?? false,
+    );
     return actionResponse({
       success: true,
       subsetName,

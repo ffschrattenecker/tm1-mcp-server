@@ -7,6 +7,7 @@ export const FileContentResultSchema = z.object({
   returnedBytes: z.number().int(),
   truncated: z.boolean(),
   truncationReason: z.string().optional(),
+  encoding: z.enum(["text", "base64"]),
   content: z.string(),
 });
 

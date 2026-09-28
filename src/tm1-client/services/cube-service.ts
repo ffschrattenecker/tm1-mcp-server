@@ -6,7 +6,7 @@
 // god-class split — see docs/ARCHITECTURE.md).
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type { Cube, CubeRules, RuleSyntaxError } from "../../types.js";
-import type { TM1HttpClient } from "../http.js";
+import type { RequestOptions, TM1HttpClient } from "../http.js";
 import {
   filterClause,
   nameFilterPredicates,
@@ -15,7 +15,7 @@ import {
   type NameFilterOpts,
   type Paged,
   type PageOpts,
-  odataKey as enc,
+  odataKey,
 } from "./odata-page.js";
 import { classifyExecution } from "./process-status.js";
 import { DimensionOrderCache } from "./dimension-order.js";
@@ -117,7 +117,7 @@ export class CubeService {
     try {
       await this.http.request<{ Name: string }>(
         "GET",
-        `/api/v1/Cubes('${enc(cubeName)}')?$select=Name`,
+        `/api/v1/Cubes('${odataKey(cubeName)}')?$select=Name`,
       );
       return true;
     } catch (e) {
@@ -135,7 +135,7 @@ export class CubeService {
     await this.http.request<void>("POST", "/api/v1/Cubes", {
       Name: name,
       Dimensions: dimensionNames.map((d) => ({
-        "@odata.id": `Dimensions('${enc(d)}')`,
+        "@odata.id": `Dimensions('${odataKey(d)}')`,
       })),
     });
   }
@@ -145,7 +145,10 @@ export class CubeService {
    * DELETE /api/v1/Cubes('{name}')
    */
   async delete(name: string): Promise<void> {
-    await this.http.request<void>("DELETE", `/api/v1/Cubes('${enc(name)}')`);
+    await this.http.request<void>(
+      "DELETE",
+      `/api/v1/Cubes('${odataKey(name)}')`,
+    );
   }
 
   /**
@@ -153,7 +156,7 @@ export class CubeService {
    * GET /api/v1/Cubes('{name}')/Rules
    */
   async getRules(cubeName: string): Promise<CubeRules> {
-    const path = `/api/v1/Cubes('${enc(cubeName)}')/Rules`;
+    const path = `/api/v1/Cubes('${odataKey(cubeName)}')/Rules`;
     // TM1 returns 404/204 both for "cube missing" and "cube has no rules";
     // an empty 200 body (response undefined) also means "no rules". For any
     // of those, probe `/Cubes('X')?$select=Name` to disambiguate so callers
@@ -162,7 +165,7 @@ export class CubeService {
       try {
         await this.http.request<{ Name: string }>(
           "GET",
-          `/api/v1/Cubes('${enc(cubeName)}')?$select=Name`,
+          `/api/v1/Cubes('${odataKey(cubeName)}')?$select=Name`,
         );
       } catch (probeErr) {
         if (probeErr instanceof TM1Error && probeErr.httpStatus === 404) {
@@ -280,7 +283,7 @@ export class CubeService {
    * text, so it travels in `rulesText` like every other statement.
    */
   async updateRules(cubeName: string, rulesText: string): Promise<void> {
-    const cubePath = `/api/v1/Cubes('${enc(cubeName)}')`;
+    const cubePath = `/api/v1/Cubes('${odataKey(cubeName)}')`;
     await this.http.request<void>("PATCH", cubePath, { Rules: rulesText });
   }
 
@@ -292,7 +295,7 @@ export class CubeService {
     cubeName: string,
     ruleText: string,
   ): Promise<RuleSyntaxError[]> {
-    const path = `/api/v1/Cubes('${enc(cubeName)}')/tm1.CheckRules`;
+    const path = `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.CheckRules`;
     const response = await this.http.request<{
       value?: Array<{ Message: string; LineNumber?: number }>;
     }>("POST", path, { Rules: ruleText });
@@ -303,39 +306,20 @@ export class CubeService {
   }
 
   /**
-   * Clear cube cells.
+   * Clear every cell in a cube.
    *
-   * A **full** clear runs an ephemeral TI with CubeClearData(). tm1.Clear is
-   * not an alternative on either build: 11.8 and 12.5 both answer
-   * "'tm1.Clear' resource can not be resolved on type 'Cube'" for a cube that
-   * exists, and neither declares a clear action anywhere in $metadata — Cube
-   * carries only Lock and Unlock. CubeClearData() is the only route measured
-   * to work.
-   *
-   * A **partial** clear would need tuple selectors, which only tm1.Clear
-   * offers, so no server reachable here can do one. Callers get
-   * UNSUPPORTED_OPERATION pointing at bedrock `}bedrock.cube.data.clear`
-   * rather than a request that is known to 404.
+   * The clear runs an ephemeral TI with CubeClearData(). tm1.Clear is not an
+   * alternative on either build: 11.8 and 12.5 both answer "'tm1.Clear'
+   * resource can not be resolved on type 'Cube'" for a cube that exists, and
+   * neither declares a clear action anywhere in $metadata — Cube carries only
+   * Lock and Unlock. CubeClearData() is the only route measured to work, and
+   * it takes a cube name and nothing else, so there is no region to scope.
    */
   async clear(
     cubeName: string,
-    dimensions: string[],
-    tuples: string[][],
+    opts?: Pick<RequestOptions, "timeoutMs">,
   ): Promise<void> {
-    const isFullClear = dimensions.every(
-      (_, i) => (tuples[i] ?? []).length === 0,
-    );
-    if (!isFullClear) throw this.partialClearUnsupported(cubeName);
-    await this.clearViaTI(cubeName);
-  }
-
-  /** Same verdict for both versions: no tuple-selective clear on this server. */
-  private partialClearUnsupported(cubeName: string): TM1Error {
-    return new TM1Error({
-      code: TM1ErrorCode.UNSUPPORTED_OPERATION,
-      message: `Partial clearCube is not supported on TM1 ${this.http.tm1Version} (no tm1.Clear endpoint). Implement a TI process with bedrock '}bedrock.cube.data.clear' or custom CellPutN loop and call via tm1_execute_process.`,
-      endpoint: `/api/v1/Cubes('${cubeName}')/tm1.Clear`,
-    });
+    await this.clearViaTI(cubeName, opts);
   }
 
   /**
@@ -348,12 +332,15 @@ export class CubeService {
   async unload(cubeName: string): Promise<void> {
     await this.http.request<void>(
       "POST",
-      `/api/v1/Cubes('${enc(cubeName)}')/tm1.Unload`,
+      `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.Unload`,
     );
   }
 
   // 11.x fallback: deploy ephemeral TI with CubeClearData(), execute, delete.
-  private async clearViaTI(cubeName: string): Promise<void> {
+  private async clearViaTI(
+    cubeName: string,
+    opts?: Pick<RequestOptions, "timeoutMs">,
+  ): Promise<void> {
     // Cap the sanitized cube name so the temp process name stays under TM1's
     // ~256-char process-name limit (prefix + timestamp suffix add ~25 chars).
     const safeName = cubeName.replace(/[^A-Za-z0-9_]/g, "_").slice(0, 200);
@@ -371,14 +358,38 @@ export class CubeService {
       DataSource: { Type: "None" },
     });
 
+    let timedOut = false;
     try {
-      const result = await this.http.request<{
-        ProcessExecuteStatusCode?: string;
-      }>(
-        "POST",
-        `/api/v1/Processes('${enc(procName)}')/tm1.ExecuteWithReturn`,
-        {},
-      );
+      const result = await this.http
+        .request<{
+          ProcessExecuteStatusCode?: string;
+        }>(
+          "POST",
+          `/api/v1/Processes('${odataKey(procName)}')/tm1.ExecuteWithReturn`,
+          {},
+          opts,
+        )
+        .catch((err: unknown) => {
+          // A client-side timeout does not stop the TI — but deleting the
+          // process does, when it is still waiting on a lock (measured on
+          // 12.5: the cube kept its data). So on a timeout the process is left
+          // in place to finish; 11.8 held the DELETE until the TI was done
+          // anyway. Reporting a bare timeout would tell the model the cube
+          // still holds its data — the one reading this must not give.
+          if (
+            err instanceof TM1Error &&
+            err.code === TM1ErrorCode.LOCK_TIMEOUT
+          ) {
+            timedOut = true;
+            throw new TM1Error({
+              code: TM1ErrorCode.LOCK_TIMEOUT,
+              message: `Cube clear for '${cubeName}' did not answer within the request timeout, but the clear keeps running on the server — expect the cube to end up empty. Do not retry; check it with tm1_get_cube_stats once the server is idle. The temporary process '${procName}' was left in place so the clear can finish; delete it afterwards with tm1_delete_process.`,
+              endpoint: err.endpoint,
+              hint: "Pass a larger timeoutMs for big cubes or a busy server so the call waits for the clear to finish.",
+            });
+          }
+          throw err;
+        });
       // ExecuteWithReturn returns HTTP 200 even when the process aborts; the real
       // outcome is in ProcessExecuteStatusCode. Without this check an aborted
       // clear (e.g. lock, security) would be reported as a successful clear.
@@ -416,15 +427,16 @@ export class CubeService {
             verdict.outcome === "rolled_back"
               ? `Cube clear via TI was rolled back for cube '${cubeName}' (status: ${verdict.processErrorStatus}). Nothing was cleared — the cube is unchanged.`
               : `Cube clear via TI could not be confirmed for cube '${cubeName}': ${verdict.processErrorStatus} The clear may or may not have run — check the cube before retrying.`,
-          endpoint: `/api/v1/Processes('${enc(procName)}')/tm1.ExecuteWithReturn`,
+          endpoint: `/api/v1/Processes('${odataKey(procName)}')/tm1.ExecuteWithReturn`,
         });
       }
     } finally {
       try {
-        await this.http.request<void>(
-          "DELETE",
-          `/api/v1/Processes('${enc(procName)}')`,
-        );
+        if (!timedOut)
+          await this.http.request<void>(
+            "DELETE",
+            `/api/v1/Processes('${odataKey(procName)}')`,
+          );
       } catch (cleanupErr) {
         this.http.logger.warn(
           { proc: procName, err: String(cleanupErr) },

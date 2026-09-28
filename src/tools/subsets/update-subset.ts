@@ -7,7 +7,7 @@ import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 export const registerUpdateSubset = defineTool({
   name: "tm1_update_subset",
   description:
-    "Update a public TM1 subset (partial). Pass expression to replace the MDX, or elements to switch the subset to a static list (resets Expression to ''). Pass alias to change the alias attribute.",
+    "Update an existing TM1 subset in place, public by default or private with isPrivate=true. The way to change a subset a view uses, since TM1 will not delete that one. Pass expression to replace the MDX, OR elements to replace the static list (order kept; an MDX subset becomes static; [] empties it) — not both. Pass alias to change the alias attribute. If the new list names an unknown element, TM1 refuses it and the old definition is written back.",
   annotations: IDEMPOTENT_WRITE,
   output: MutationResultSchema,
   input: {
@@ -18,19 +18,37 @@ export const registerUpdateSubset = defineTool({
     elements: z
       .array(z.string())
       .optional()
-      .describe("New static element list (clears MDX)"),
+      .describe(
+        "New static element list; replaces the old one and turns an MDX subset static. Mutually exclusive with expression.",
+      ),
     alias: z.string().optional().describe("New alias attribute"),
+    isPrivate: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe(
+        "Update in PrivateSubsets (owned by the signed-in user) instead of public Subsets",
+      ),
   },
   handler: async (
-    { dimensionName, hierarchyName, subsetName, expression, elements, alias },
-    tm1Client,
-  ) => {
-    const hierarchy = resolveHierarchy(dimensionName, hierarchyName);
-    await tm1Client.subsets.update(dimensionName, hierarchy, subsetName, {
+    {
+      dimensionName,
+      hierarchyName,
+      subsetName,
       expression,
       elements,
       alias,
-    });
+      isPrivate,
+    },
+    tm1Client,
+  ) => {
+    await tm1Client.subsets.update(
+      dimensionName,
+      resolveHierarchy(dimensionName, hierarchyName),
+      subsetName,
+      { expression, elements, alias },
+      isPrivate ?? false,
+    );
     return actionResponse({ success: true, subsetName });
   },
 });

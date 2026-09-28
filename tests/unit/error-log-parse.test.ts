@@ -18,6 +18,17 @@ describe("parseLogName", () => {
     });
   });
 
+  it("parses the v12 ProcessLog pattern without stripping a hash-like tail", () => {
+    expect(
+      parseLogName(
+        "ProcessLog_20260925184908_17903621480006_Load_x1y2z3w4.jsonl",
+      ),
+    ).toEqual({
+      ts: "20260925184908",
+      process: "Load_x1y2z3w4",
+    });
+  });
+
   it("parses modern v11 pattern without hash", () => {
     expect(
       parseLogName("TM1ProcessError_20260615123045_42_LoadActuals.log"),

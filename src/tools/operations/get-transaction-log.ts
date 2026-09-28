@@ -12,7 +12,7 @@ import { defineTool } from "../define-tool.js";
 export const registerGetTransactionLog = defineTool({
   name: "tm1_get_transaction_log",
   description:
-    "Fetch recent TM1 transaction log entries (cell writes), newest first. Optional filters: cube, user, and a since/until time range. NOTE: the endpoint scans the log server-side and a full scan can take minutes-to-hours. A cheap preflight probe fails fast on unreachable/no-rights; without `since` the server walks expanding time windows backward (10min→1y) and stops once `top` rows are found, so it never triggers a full scan. Pass since/until (from-to) to bound it explicitly. (v11 only)",
+    "Fetch recent TM1 transaction log entries (cell writes), newest first. Optional filters: cube, user, and a since/until time range. NOTE: the endpoint scans the log server-side and a full scan can take minutes-to-hours. A cheap preflight probe fails fast on unreachable/no-rights; without `since` the server walks expanding time windows backward (10min→1y) and stops once `top` rows are found, so the lookback is bounded at one year rather than open-ended — a sparse log still walks all nine windows before it gives up. Pass since/until (from-to) to bound it explicitly. (v11 only)",
   annotations: withVersion(READ_ONLY, "v11"),
   // v12 deprecated TransactionLogEntry/TransactionLogEntries (and the
   // TransactionLog / TailTransactionLog functions) in 12.0.0; all of them serve

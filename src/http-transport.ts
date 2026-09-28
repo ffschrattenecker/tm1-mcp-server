@@ -24,12 +24,30 @@ import type { ServerSettings } from "./config.js";
 //
 // Per MCP best practices: bind 127.0.0.1 by default and enable DNS-rebinding
 // protection. allowedHosts/Origins narrow what the transport accepts.
+
+// Cap on a single /mcp request body. Without one the whole request is buffered
+// and then copied again by Buffer.concat().toString(), so a large enough POST
+// can take the process down before any tool-level limit applies. Sized above
+// the biggest legitimate payload: tm1_upload_file accepts 32 MB of bytes, which
+// is ~43 MB base64 plus JSON framing.
+// ponytail: fixed constant, make it configurable if a deployment needs more.
+const MAX_BODY_BYTES = 64 * 1024 * 1024;
 export async function startHttpTransport(
   buildServer: () => { server: McpServer; dispose: () => void },
   config: ServerSettings,
   logger: pino.Logger,
 ): Promise<() => Promise<void>> {
-  const allowedHost = `${config.httpHost}:${config.httpPort}`;
+  // The SDK compares the Host header as one string, port included, so every
+  // entry needs the port. Loopback names are safe to always allow: a rebinding
+  // attacker's page sends its own hostname, never one of these.
+  const allowedHosts = [
+    ...new Set([
+      `${config.httpHost}:${config.httpPort}`,
+      `127.0.0.1:${config.httpPort}`,
+      `localhost:${config.httpPort}`,
+      `[::1]:${config.httpPort}`,
+    ]),
+  ];
 
   if (!config.httpToken) {
     logger.warn(
@@ -71,14 +89,50 @@ export async function startHttpTransport(
       }
       let body: unknown;
       if (req.method === "POST") {
+        // Refuse on the declared length before a single byte is read; the
+        // counter below is the backstop for a chunked body that declares none.
+        const declared = Number(req.headers["content-length"]);
+        if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+          logger.warn(
+            { declared, limit: MAX_BODY_BYTES },
+            "Request body too large",
+          );
+          res.statusCode = 413;
+          res.setHeader("Content-Type", "application/json");
+          // Close the connection: the client is still holding a body this
+          // server will never read, and keep-alive would leave it queued.
+          res.setHeader("Connection", "close");
+          res.end(
+            JSON.stringify({
+              error: `Request body exceeds ${MAX_BODY_BYTES} bytes`,
+            }),
+          );
+          return;
+        }
         try {
           const chunks: Buffer[] = [];
+          let size = 0;
           for await (const chunk of req) {
-            chunks.push(
+            const buf =
               typeof chunk === "string"
                 ? Buffer.from(chunk)
-                : (chunk as Buffer),
-            );
+                : (chunk as Buffer);
+            size += buf.length;
+            if (size > MAX_BODY_BYTES) {
+              logger.warn({ limit: MAX_BODY_BYTES }, "Request body too large");
+              res.statusCode = 413;
+              res.setHeader("Content-Type", "application/json");
+              res.end(
+                JSON.stringify({
+                  error: `Request body exceeds ${MAX_BODY_BYTES} bytes`,
+                }),
+              );
+              // Answer first, then stop reading: the rest of the upload is
+              // dropped instead of being buffered behind an already-sent reply.
+              req.destroy();
+              return;
+            }
+            chunks.push(buf);
           }
           const raw = Buffer.concat(chunks).toString("utf8");
           body = raw ? JSON.parse(raw) : undefined;
@@ -98,7 +152,7 @@ export async function startHttpTransport(
         // sessionIdGenerator omitted → stateless mode (single-use per request)
         enableJsonResponse: true,
         enableDnsRebindingProtection: true,
-        allowedHosts: [allowedHost, "127.0.0.1", "localhost"],
+        allowedHosts,
         allowedOrigins: config.httpAllowedOrigins,
       });
       res.on("close", () => {

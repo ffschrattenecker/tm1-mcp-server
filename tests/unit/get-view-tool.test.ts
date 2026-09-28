@@ -130,7 +130,8 @@ describe("tm1_get_view tool", () => {
     });
     const md = res.content[0].text;
 
-    expect(paths[0]).not.toContain("$top=");
+    // fetchAll is the documented 5000-cell slab, pushed down to TM1.
+    expect(paths[0]).toContain("$top=5000;$skip=0");
     expect(md).toContain("| Version | Jan | Feb |");
     expect(md).toContain("| Plan | 10 | 20 |");
     expect(md).toContain("| Actual | 11 | 22 |");

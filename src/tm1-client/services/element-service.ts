@@ -13,7 +13,6 @@ import type {
   ElementAttributeValue,
   ElementCreate,
   ElementUpdate,
-  HierarchyElement,
 } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
 import { BatchUnsupportedError } from "./batch-service.js";
@@ -24,7 +23,7 @@ import type {
 } from "./batch-service.js";
 import type { CellService } from "./cell-service.js";
 import { rethrowIfSystemic } from "./fallback.js";
-import { escapeOdataLiteral, odataKey as enc } from "./odata-page.js";
+import { escapeOdataLiteral, odataKey } from "./odata-page.js";
 
 // Max in-flight per-element REST calls within a single bulkUpsert pass. Bounds
 // pressure on TM1's worker pool (mirrors the cap the feeder-audit fan-out uses)
@@ -46,6 +45,11 @@ export interface ElementDeleteResult {
   deleted: boolean;
   error?: { code: string; message: string };
 }
+
+// Names per `consolidatedAmong` request. Keeps the generated $filter well
+// inside any proxy URL limit while still costing one round-trip for the
+// element count a normal write carries.
+const CONSOLIDATED_PROBE_CHUNK = 50;
 
 // TM1 signals "element already exists" with different HTTP statuses across
 // versions: some return 409 Conflict, but v11.x (REST 11.8) returns 400 with
@@ -137,12 +141,12 @@ export class ElementService {
     parentName: string,
     components: ReadonlyArray<{ name: string; weight?: number | undefined }>,
   ): Promise<void> {
-    const base = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')`;
+    const base = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')`;
     for (const c of components) {
       if (c.weight === undefined || c.weight === 1) continue;
       await this.http.request<void>(
         "PATCH",
-        `${base}/Edges(ParentName='${enc(parentName)}',ComponentName='${enc(c.name)}')`,
+        `${base}/Edges(ParentName='${odataKey(parentName)}',ComponentName='${odataKey(c.name)}')`,
         { Weight: c.weight },
       );
     }
@@ -164,7 +168,7 @@ export class ElementService {
     try {
       await this.http.request<{ Name: string }>(
         "GET",
-        `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(elementName)}')?$select=Name`,
+        `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(elementName)}')?$select=Name`,
       );
       return true;
     } catch (e) {
@@ -174,36 +178,12 @@ export class ElementService {
     }
   }
 
-  /**
-   * Stored name and type of one element, resolved like exists() — by TM1's
-   * own key lookup — or null when it does not resolve. One keyed GET instead
-   * of fetching the whole hierarchy to find a single element.
-   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements('{e}')?$select=Name,Type
-   */
-  async getType(
-    dimensionName: string,
-    hierarchyName: string,
-    elementName: string,
-  ): Promise<{ name: string; type: HierarchyElement["type"] } | null> {
-    try {
-      const el = await this.http.request<{ Name: string; Type: string }>(
-        "GET",
-        `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(elementName)}')?$select=Name,Type`,
-      );
-      return { name: el.Name, type: el.Type as HierarchyElement["type"] };
-    } catch (e) {
-      if (e instanceof TM1Error && e.code === TM1ErrorCode.NOT_FOUND)
-        return null;
-      throw e;
-    }
-  }
-
   async create(
     dimensionName: string,
     hierarchyName: string,
     element: ElementCreate,
   ): Promise<void> {
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements`;
+    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements`;
     const body: Record<string, unknown> = {
       Name: element.name,
       Type: element.type,
@@ -214,7 +194,7 @@ export class ElementService {
       element.components.length > 0
     ) {
       body.Components = element.components.map((c) => ({
-        "@odata.id": `Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(c.name)}')`,
+        "@odata.id": `Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(c.name)}')`,
       }));
     }
     await this.http.request<void>("POST", path, body);
@@ -237,8 +217,22 @@ export class ElementService {
     hierarchyName: string,
     elementName: string,
     update: ElementUpdate,
-  ): Promise<void> {
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(elementName)}')`;
+  ): Promise<{ typeChange: { from: string; to: string } | null }> {
+    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(elementName)}')`;
+    // Read the prior type so an in-place conversion is reported: turning a
+    // Numeric element into Consolidated/String discards its leaf cell values.
+    // Same probe and outage guard as bulkUpsert; an unreadable type reports
+    // nothing rather than guessing.
+    let from: string | null = null;
+    if (update.type !== undefined) {
+      const existing = await this.http
+        .request<{ Type: number | string }>("GET", `${path}?$select=Type`)
+        .catch((e: unknown): null => {
+          rethrowIfSystemic(e);
+          return null;
+        });
+      from = existing ? normalizeElementType(existing.Type) : null;
+    }
     const body: Record<string, unknown> = {};
     if (update.newName !== undefined) {
       body.Name = update.newName;
@@ -248,7 +242,7 @@ export class ElementService {
     }
     if (update.components !== undefined) {
       body.Components = update.components.map((c) => ({
-        "@odata.id": `Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(c.name)}')`,
+        "@odata.id": `Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(c.name)}')`,
       }));
     }
     await this.http.request<void>("PATCH", path, body);
@@ -262,6 +256,12 @@ export class ElementService {
         update.components,
       );
     }
+    return {
+      typeChange:
+        from !== null && update.type !== undefined && from !== update.type
+          ? { from, to: update.type }
+          : null,
+    };
   }
 
   /**
@@ -273,7 +273,7 @@ export class ElementService {
     hierarchyName: string,
     elementName: string,
   ): Promise<void> {
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(elementName)}')`;
+    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(elementName)}')`;
     await this.http.request<void>("DELETE", path);
   }
 
@@ -296,7 +296,7 @@ export class ElementService {
     hierarchyName: string,
     elements: ElementCreate[],
   ): Promise<BulkUpsertPlan> {
-    const base = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements`;
+    const base = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements`;
     const lit = (n: string) => `'${escapeOdataLiteral(n)}'`;
     const current = new Map<string, { type: string; children: string[] }>();
     const names = [...new Set(elements.map((e) => e.name))];
@@ -368,7 +368,7 @@ export class ElementService {
     elementNames: string[],
   ): Promise<ElementDeleteResult[]> {
     const pathOf = (name: string) =>
-      `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(name)}')`;
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(name)}')`;
     const failed = (elementName: string, e: TM1Error): ElementDeleteResult => ({
       elementName,
       deleted: false,
@@ -461,7 +461,7 @@ export class ElementService {
     truncated: boolean;
   }> {
     const { pageSize, maxScan, filter, scopeTotal } = opts;
-    const hierarchyPath = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')`;
+    const hierarchyPath = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')`;
     const basePath =
       `${hierarchyPath}/Elements?$select=Name&$top=${pageSize}` +
       (filter ? `&$filter=${encodeURIComponent(filter)}` : "");
@@ -527,24 +527,62 @@ export class ElementService {
   }
 
   /**
-   * Add an element as a component of a new parent.
-   * POST /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements('{newParent}')/Components
+   * Type of one element, or null when the hierarchy has no such element.
+   * Keyed lookup, so TM1 applies its own case- and space-insensitive name
+   * matching and answers with the stored spelling.
+   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements('{name}')?$select=Name,Type
    */
-  async move(
+  async getType(
     dimensionName: string,
     hierarchyName: string,
     elementName: string,
-    newParent: string,
-    weight?: number,
-  ): Promise<void> {
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(newParent)}')/Components`;
-    const body = {
-      "@odata.id": `Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(elementName)}')`,
-    };
-    await this.http.request<void>("POST", path, body);
-    await this.applyEdgeWeights(dimensionName, hierarchyName, newParent, [
-      { name: elementName, ...(weight !== undefined ? { weight } : {}) },
-    ]);
+  ): Promise<{ name: string; type: string } | null> {
+    try {
+      const e = await this.http.request<{
+        Name: string;
+        Type: number | string;
+      }>(
+        "GET",
+        `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(elementName)}')?$select=Name,Type`,
+      );
+      return { name: e.Name, type: normalizeElementType(e.Type) };
+    } catch (err) {
+      if (err instanceof TM1Error && err.code === TM1ErrorCode.NOT_FOUND) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Which of `names` are consolidated (Type 3) in this hierarchy.
+   *
+   * One filtered request per chunk of names rather than a GET per element:
+   * the server evaluates `Type eq 3 and (Name eq ...)` and answers with the
+   * hits only, so the response is bounded by the consolidations among the
+   * names asked about, never by the size of the hierarchy.
+   *
+   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Name&$filter=...
+   */
+  async consolidatedAmong(
+    dimensionName: string,
+    hierarchyName: string,
+    names: string[],
+  ): Promise<string[]> {
+    const hits: string[] = [];
+    for (let i = 0; i < names.length; i += CONSOLIDATED_PROBE_CHUNK) {
+      const clause = names
+        .slice(i, i + CONSOLIDATED_PROBE_CHUNK)
+        .map((n) => `Name eq '${n.replace(/'/g, "''")}'`)
+        .join(" or ");
+      const filter = encodeURIComponent(`Type eq 3 and (${clause})`);
+      const page = await this.http.request<{ value: Array<{ Name: string }> }>(
+        "GET",
+        `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements?$select=Name&$filter=${filter}`,
+      );
+      for (const e of page.value) hits.push(e.Name);
+    }
+    return hits;
   }
 
   /**
@@ -621,7 +659,7 @@ export class ElementService {
     typeChanges: Array<{ name: string; from: string; to: string }>;
   }> {
     const batch = this.batch!;
-    const baseUrl = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements`;
+    const baseUrl = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements`;
     // Correlate by element INDEX, not name: names are caller-supplied and could
     // repeat, which would collapse two sub-responses onto one id.
     const idOf = (i: number): string => `e${i}`;
@@ -658,7 +696,7 @@ export class ElementService {
       existing.map((i): BatchRequest => ({
         id: idOf(i),
         method: "GET",
-        path: `${baseUrl}('${enc(elements[i]!.name)}')?$select=Type`,
+        path: `${baseUrl}('${odataKey(elements[i]!.name)}')?$select=Type`,
       })),
     );
     const typeById = new Map<number, string | null>();
@@ -689,7 +727,7 @@ export class ElementService {
       patches.push({
         id: idOf(i),
         method: "PATCH",
-        path: `${baseUrl}('${enc(el.name)}')`,
+        path: `${baseUrl}('${odataKey(el.name)}')`,
         body: { Type: el.type },
       });
       // A Numeric->Consolidated / Numeric->String conversion discards the
@@ -716,10 +754,10 @@ export class ElementService {
       components.push({
         id: idOf(i),
         method: "PATCH",
-        path: `${baseUrl}('${enc(el.name)}')`,
+        path: `${baseUrl}('${odataKey(el.name)}')`,
         body: {
           Components: el.components.map((c) => ({
-            "@odata.id": `Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(c.name)}')`,
+            "@odata.id": `Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(c.name)}')`,
             Weight: c.weight,
           })),
         },
@@ -745,7 +783,7 @@ export class ElementService {
         edges.push({
           id: `e${edgeOwner.length}`,
           method: "PATCH",
-          path: `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Edges(ParentName='${enc(el.name)}',ComponentName='${enc(c.name)}')`,
+          path: `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Edges(ParentName='${odataKey(el.name)}',ComponentName='${odataKey(c.name)}')`,
           body: { Weight: c.weight },
         });
         edgeOwner.push(i);
@@ -772,7 +810,7 @@ export class ElementService {
   ): Promise<{
     typeChanges: Array<{ name: string; from: string; to: string }>;
   }> {
-    const baseUrl = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements`;
+    const baseUrl = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements`;
 
     // Pass 1: Create/upsert all elements without components. Same-type element
     // writes are independent, so fan them out with bounded concurrency instead
@@ -800,7 +838,7 @@ export class ElementService {
             const existing = await this.http
               .request<{ Type: number | string }>(
                 "GET",
-                `${baseUrl}('${enc(el.name)}')?$select=Type`,
+                `${baseUrl}('${odataKey(el.name)}')?$select=Type`,
               )
               .catch((e: unknown): null => {
                 // A transport/auth outage here must NOT collapse into the
@@ -814,7 +852,7 @@ export class ElementService {
             if (from && from !== el.type) {
               await this.http.request<void>(
                 "PATCH",
-                `${baseUrl}('${enc(el.name)}')`,
+                `${baseUrl}('${odataKey(el.name)}')`,
                 { Type: el.type },
               );
               return { name: el.name, from, to: el.type };
@@ -823,7 +861,7 @@ export class ElementService {
               // Type unreadable — preserve prior behaviour and patch unconditionally.
               await this.http.request<void>(
                 "PATCH",
-                `${baseUrl}('${enc(el.name)}')`,
+                `${baseUrl}('${odataKey(el.name)}')`,
                 { Type: el.type },
               );
             }
@@ -862,10 +900,10 @@ export class ElementService {
       consolidated,
       BULK_UPSERT_CONCURRENCY,
       async (el): Promise<void> => {
-        const path = `${baseUrl}('${enc(el.name)}')`;
+        const path = `${baseUrl}('${odataKey(el.name)}')`;
         const body = {
           Components: el.components!.map((c) => ({
-            "@odata.id": `Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/Elements('${enc(c.name)}')`,
+            "@odata.id": `Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(c.name)}')`,
             Weight: c.weight,
           })),
         };
@@ -906,7 +944,7 @@ export class ElementService {
     dimensionName: string,
     hierarchyName: string,
   ): Promise<Array<{ name: string; type: "Numeric" | "String" | "Alias" }>> {
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/ElementAttributes`;
+    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/ElementAttributes`;
     const response = await this.http.request<{
       value: Array<{ Name: string; Type: string }>;
     }>("GET", path);
@@ -928,7 +966,7 @@ export class ElementService {
     attributeName: string,
     attributeType: "Numeric" | "String" | "Alias",
   ): Promise<void> {
-    const path = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(hierarchyName)}')/ElementAttributes`;
+    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/ElementAttributes`;
     await this.http.request<void>("POST", path, {
       Name: attributeName,
       Type: attributeType,
@@ -943,18 +981,28 @@ export class ElementService {
   async getAttributeValues(
     dimensionName: string,
     elementName: string,
+    hierarchyName: string = dimensionName,
   ): Promise<ElementAttributeValue[]> {
+    // No attribute defined means no }ElementAttributes_ cube, and the MDX
+    // below would fail with a raw syntax error. Nothing to read is the answer.
+    if ((await this.listAttributes(dimensionName, hierarchyName)).length === 0)
+      return [];
     // Escape `]` → `]]` in every bracketed identifier: an element or dimension
     // named e.g. `Foo]` would otherwise break out of its MDX identifier and
     // shift the read onto arbitrary members (MDX injection).
     const esc = (s: string): string => s.replace(/]/g, "]]");
     const dim = esc(dimensionName);
     const elem = esc(elementName);
+    const hier = esc(hierarchyName);
     const ctrlCube = `}ElementAttributes_${dim}`;
     const mdx =
       `SELECT {[}ElementAttributes_${dim}].MEMBERS} ON COLUMNS ` +
       `FROM [${ctrlCube}] ` +
-      `WHERE ([${dim}].[${elem}])`;
+      // Always name the hierarchy: the attribute cube spans every hierarchy of
+      // the dimension, and v12 refuses a bare name another hierarchy shares
+      // ("Member name A is ambiguous"), while v11 finds a bare name only in
+      // the default hierarchy.
+      `WHERE ([${dim}].[${hier}].[${elem}])`;
     const result = await this.cells.executeMdx(mdx);
     const out: ElementAttributeValue[] = [];
     const tuples = result.axes[0]?.tuples ?? [];
@@ -987,7 +1035,7 @@ export class ElementService {
     total: number;
     items: Array<{ elementName: string; values: Record<string, CellValue> }>;
   }> {
-    const countPath = `/api/v1/Dimensions('${enc(dimensionName)}')/Hierarchies('${enc(dimensionName)}')/Elements?$select=Name&$top=1&$count=true`;
+    const countPath = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(dimensionName)}')/Elements?$select=Name&$top=1&$count=true`;
     const counted = await this.http.request<{ "@odata.count"?: number }>(
       "GET",
       countPath,
@@ -1030,21 +1078,27 @@ export class ElementService {
     elementName: string,
     attributeName: string,
     value: number | string,
+    hierarchyName: string = dimensionName,
   ): Promise<void> {
-    await this.updateAttributeValues(dimensionName, [
-      { elementName, attributeName, value },
-    ]);
+    await this.updateAttributeValues(
+      dimensionName,
+      [{ elementName, attributeName, value }],
+      hierarchyName,
+    );
   }
 
   /**
    * Set attribute values by writing to the `}ElementAttributes_{Dim}` control
    * cube — every update in ONE cellset write (CellService.writeCells).
    *
-   * Values are coerced to the attribute's type, looked up once: a Numeric
+   * The attributes are looked up once. TM1 matches attribute names ignoring
+   * case and spaces, so the lookup compares the same way; an unknown attribute
+   * is NOT_FOUND, raised before anything is written — without the check TM1
+   * answers with a raw MDX syntax error (no attribute at all means no
+   * attribute cube). Values are coerced to the attribute's type: a Numeric
    * attribute takes a number or a numeric string (`"12.5"`), String and Alias
-   * attributes take the value as text. An unknown attribute or a non-numeric
-   * value for a Numeric attribute is a VALIDATION_ERROR that names it, raised
-   * before anything is written.
+   * attributes take the value as text; a non-numeric value for a Numeric
+   * attribute is a VALIDATION_ERROR that names it.
    *
    * Prefer TI processes (CellPutS / AttrPutS) for reproducible deployments;
    * this REST-direct path is for ad-hoc / debugging use.
@@ -1056,21 +1110,22 @@ export class ElementService {
       attributeName: string;
       value: number | string;
     }>,
+    hierarchyName: string = dimensionName,
   ): Promise<void> {
     if (updates.length === 0) return;
-    const types = new Map(
-      (await this.listAttributes(dimensionName, dimensionName)).map((a) => [
-        a.name,
-        a.type,
-      ]),
-    );
+    const attrs = await this.listAttributes(dimensionName, hierarchyName);
+    const key = (n: string) => n.replace(/\s/g, "").toLowerCase();
+    const types = new Map(attrs.map((a) => [key(a.name), a.type]));
+    const esc = (s: string): string => s.replace(/]/g, "]]");
     const cells = updates.map((u) => {
-      const type = types.get(u.attributeName);
+      const type = types.get(key(u.attributeName));
       if (type === undefined) {
         throw new TM1Error({
-          code: TM1ErrorCode.VALIDATION_ERROR,
-          message: `Attribute '${u.attributeName}' does not exist on dimension '${dimensionName}'.`,
-          hint: `Known attributes: ${[...types.keys()].join(", ") || "(none)"}. Create it first with tm1_create_element_attribute.`,
+          code: TM1ErrorCode.NOT_FOUND,
+          message:
+            attrs.length === 0
+              ? `Dimension '${dimensionName}' has no attributes; create '${u.attributeName}' with tm1_create_element_attribute first.`
+              : `Attribute '${u.attributeName}' does not exist on dimension '${dimensionName}'. Existing: ${attrs.map((a) => a.name).join(", ")}.`,
         });
       }
       let value: number | string = String(u.value);
@@ -1085,7 +1140,10 @@ export class ElementService {
         }
         value = n;
       }
-      return { elements: [u.elementName, u.attributeName], value };
+      // Qualified for the same reason as getAttributeValues; writeCells passes
+      // a `[Dim].[Hier].[Elem]` coordinate through unchanged.
+      const member = `[${esc(dimensionName)}].[${esc(hierarchyName)}].[${esc(u.elementName)}]`;
+      return { elements: [member, u.attributeName], value };
     });
     await this.cells.writeCells(
       `}ElementAttributes_${dimensionName}`,

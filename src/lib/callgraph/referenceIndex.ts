@@ -14,6 +14,7 @@ import {
 } from "./variableEnv.js";
 import { rethrowIfSystemic } from "../../tm1-client/services/fallback.js";
 import { extractSubsetUsage, type SubsetUsage } from "./subsetUsage.js";
+import { TI_VAR } from "../ti-identifier.js";
 
 // ─── Argument-Index Auto-Derivation ──────────────────────────────────────────
 
@@ -330,7 +331,9 @@ export function extractTiReferences(
     text.split("\n").map((l) => l.replace(/\r$/, "")),
   );
 
-  const assignRe = /^\s*([A-Za-z_]\w*)\s*=\s*(.+?)\s*;?\s*(?:#.*)?$/;
+  const assignRe = new RegExp(
+    `^\\s*(${TI_VAR})\\s*=\\s*(.+?)\\s*;?\\s*(?:#.*)?$`,
+  );
 
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const line = lines[lineIdx]!;

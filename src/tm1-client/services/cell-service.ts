@@ -18,11 +18,34 @@ import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
 import { bindLeftOutSandbox } from "../../lib/cell-address.js";
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
 import { freeCellset, transformCellsetResponse } from "./cellset-transform.js";
-import { odataKey as enc } from "./odata-page.js";
+import { odataKey } from "./odata-page.js";
 import { DimensionOrderCache } from "./dimension-order.js";
 
 // In-flight cap for the per-cell re-walk after a refused bulk write.
 const FALLBACK_CONCURRENCY = 8;
+
+/**
+ * Split one entry of a cell coordinate into (hierarchy, element).
+ *
+ * A bare name addresses the dimension's DEFAULT hierarchy, which carries the
+ * dimension's own name. `Hier:Elem` addresses an alternate hierarchy — the
+ * same `Dim:Hier` idiom TM1 rules use, one slot down.
+ *
+ * The split takes the FIRST colon, and the dimension's default hierarchy can
+ * always be named explicitly, so an element whose own name contains a colon
+ * stays reachable: in dimension `Region`, `Region:A:B` is element `A:B` in
+ * the default hierarchy. A leading or trailing colon cannot separate anything,
+ * so such an entry is taken as a plain element name.
+ */
+function splitHierarchyQualified(
+  entry: string,
+  dimension: string,
+): { hierarchy: string; element: string } {
+  const i = entry.indexOf(":");
+  if (i <= 0 || i === entry.length - 1)
+    return { hierarchy: dimension, element: entry };
+  return { hierarchy: entry.slice(0, i), element: entry.slice(i + 1) };
+}
 
 // Build a fully-qualified MDX member reference for a write coordinate.
 // A caller may pass a pre-qualified ref to target an ALTERNATE hierarchy
@@ -226,14 +249,14 @@ export class CellService {
       try {
         await this.http.request<void>(
           "PATCH",
-          `/api/v1/Cellsets('${enc(id)}')/Cells(0)`,
+          `/api/v1/Cellsets('${odataKey(id)}')/Cells(0)`,
           { Value: c.value },
         );
       } finally {
         try {
           await this.http.request<void>(
             "DELETE",
-            `/api/v1/Cellsets('${enc(id)}')`,
+            `/api/v1/Cellsets('${odataKey(id)}')`,
           );
         } catch {
           // cleanup best-effort
@@ -260,7 +283,7 @@ export class CellService {
       try {
         await this.http.request<void>(
           "PATCH",
-          `/api/v1/Cellsets('${enc(cellset.ID)}')/Cells`,
+          `/api/v1/Cellsets('${odataKey(cellset.ID)}')/Cells`,
           chunk.map((c, ordinal) => ({ Ordinal: ordinal, Value: c.value })),
         );
         written += chunk.length;
@@ -276,7 +299,7 @@ export class CellService {
         try {
           await this.http.request<void>(
             "DELETE",
-            `/api/v1/Cellsets('${enc(cellset.ID)}')`,
+            `/api/v1/Cellsets('${odataKey(cellset.ID)}')`,
           );
         } catch {
           // cleanup best-effort
@@ -325,9 +348,9 @@ export class CellService {
 
   /**
    * Resolve the cube's dimension order and build Tuple@odata.bind paths for
-   * the cell-bound trace actions. Elements address the default hierarchy
-   * (same name as the dimension) — alternate hierarchies are not supported
-   * by these diagnostics tools.
+   * the cell-bound trace actions. Each entry addresses the dimension's default
+   * hierarchy, or an alternate one when written `Hier:Elem` — see
+   * splitHierarchyQualified().
    */
   private async tupleBinds(
     cubeName: string,
@@ -340,15 +363,15 @@ export class CellService {
         message: `Cube '${cubeName}' has ${dims.length} dimension(s) (${dims.join(", ")}) but ${elements.length} element(s) were given`,
       });
     }
-    return dims.map(
-      (d, i) =>
-        `Dimensions('${enc(d)}')/Hierarchies('${enc(d)}')/Elements('${enc(elements[i]!)}')`,
-    );
+    return dims.map((d, i) => {
+      const { hierarchy, element } = splitHierarchyQualified(elements[i]!, d);
+      return `Dimensions('${odataKey(d)}')/Hierarchies('${odataKey(hierarchy)}')/Elements('${odataKey(element)}')`;
+    });
   }
 
   /**
    * Check the feeders of a cell: returns the cells fed by this cell with a
-   * Fed flag per target — Fed=false marks a broken/missing feeder. v11 only.
+   * Fed flag per target — Fed=false marks a broken/missing feeder.
    * POST /api/v1/Cubes('{cube}')/tm1.CheckFeeders
    */
   async checkFeeders(
@@ -361,7 +384,7 @@ export class CellService {
       value?: Array<RawFedCell>;
     }>(
       "POST",
-      `/api/v1/Cubes('${enc(cubeName)}')/tm1.CheckFeeders?$expand=Cube($select=Name),Tuple($select=Name)`,
+      `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.CheckFeeders?$expand=Cube($select=Name),Tuple($select=Name)`,
       { "Tuple@odata.bind": binds },
       opts,
     );
@@ -370,7 +393,7 @@ export class CellService {
 
   /**
    * Trace the feeders of a cell: returns the cells this cell feeds plus the
-   * feeder statements involved. v11 only.
+   * feeder statements involved.
    * POST /api/v1/Cubes('{cube}')/tm1.TraceFeeders
    */
   async traceFeeders(
@@ -384,7 +407,7 @@ export class CellService {
       Statements?: string[];
     }>(
       "POST",
-      `/api/v1/Cubes('${enc(cubeName)}')/tm1.TraceFeeders?$expand=FedCells/Cube($select=Name),FedCells/Tuple($select=Name)`,
+      `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.TraceFeeders?$expand=FedCells/Cube($select=Name),FedCells/Tuple($select=Name)`,
       { "Tuple@odata.bind": binds },
       opts,
     );
@@ -398,7 +421,7 @@ export class CellService {
    * Trace how a cell value is calculated: recursive component tree with
    * per-component type (consolidation/rule), status, value, and rule
    * statements. The server returns the full tree; maxDepth/maxComponents
-   * truncate client-side to keep responses bounded. v11 only.
+   * truncate client-side to keep responses bounded.
    * POST /api/v1/Cubes('{cube}')/tm1.TraceCellCalculation
    */
   async traceCellCalculation(
@@ -425,7 +448,7 @@ export class CellService {
     }
     const response = await this.http.request<RawCalcComponent>(
       "POST",
-      `/api/v1/Cubes('${enc(cubeName)}')/tm1.TraceCellCalculation?$expand=${expandParts.join(",")}`,
+      `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.TraceCellCalculation?$expand=${expandParts.join(",")}`,
       { "Tuple@odata.bind": binds },
       opts,
     );

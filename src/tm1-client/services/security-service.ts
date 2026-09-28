@@ -6,7 +6,7 @@
 // See docs/ARCHITECTURE.md for the layering.
 import type { Client, ClientCreate, ClientUpdate, Group } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
-import { odataKey as enc } from "./odata-page.js";
+import { odataKey } from "./odata-page.js";
 
 export class SecurityService {
   constructor(private readonly http: TM1HttpClient) {}
@@ -30,7 +30,7 @@ export class SecurityService {
   async getClient(name: string): Promise<Client> {
     return this.http.request<Client>(
       "GET",
-      `/api/v1/Users('${enc(name)}')?$select=Name,FriendlyName,Type,Enabled&$expand=Groups`,
+      `/api/v1/Users('${odataKey(name)}')?$select=Name,FriendlyName,Type,Enabled&$expand=Groups`,
     );
   }
 
@@ -47,7 +47,7 @@ export class SecurityService {
       body.FriendlyName = payload.friendlyName;
     if (payload.groups !== undefined) {
       body["Groups@odata.bind"] = payload.groups.map(
-        (g) => `Groups('${enc(g)}')`,
+        (g) => `Groups('${odataKey(g)}')`,
       );
     }
     await this.http.request<void>("POST", "/api/v1/Users", body);
@@ -65,7 +65,7 @@ export class SecurityService {
     if (payload.enabled !== undefined) body.Enabled = payload.enabled;
     await this.http.request<void>(
       "PATCH",
-      `/api/v1/Users('${enc(name)}')`,
+      `/api/v1/Users('${odataKey(name)}')`,
       body,
     );
   }
@@ -75,7 +75,10 @@ export class SecurityService {
    * DELETE /api/v1/Users('{name}')
    */
   async deleteClient(name: string): Promise<void> {
-    await this.http.request<void>("DELETE", `/api/v1/Users('${enc(name)}')`);
+    await this.http.request<void>(
+      "DELETE",
+      `/api/v1/Users('${odataKey(name)}')`,
+    );
   }
 
   /**
@@ -105,10 +108,10 @@ export class SecurityService {
   ): Promise<void> {
     await this.http.request<void>(
       "PATCH",
-      `/api/v1/Users('${enc(clientName)}')`,
+      `/api/v1/Users('${odataKey(clientName)}')`,
       {
         Name: clientName,
-        "Groups@odata.bind": [`Groups('${enc(groupName)}')`],
+        "Groups@odata.bind": [`Groups('${odataKey(groupName)}')`],
       },
     );
   }
@@ -123,7 +126,7 @@ export class SecurityService {
   ): Promise<void> {
     await this.http.request<void>(
       "DELETE",
-      `/api/v1/Users('${enc(clientName)}')/Groups?$id=Groups('${enc(groupName)}')`,
+      `/api/v1/Users('${odataKey(clientName)}')/Groups?$id=Groups('${odataKey(groupName)}')`,
     );
   }
 }

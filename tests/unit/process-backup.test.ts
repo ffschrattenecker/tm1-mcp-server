@@ -256,7 +256,7 @@ describe("import on an update replaces the whole definition", () => {
     });
     expect(applied).toEqual([
       "parameters 0",
-      "variables 0 ui []",
+      "variables 0 ui undefined",
       "datasource None",
     ]);
   });

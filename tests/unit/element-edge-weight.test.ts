@@ -89,16 +89,6 @@ describe("element edge weights", () => {
     expect(edgeCalls(calls)[0]?.body).toEqual({ Weight: -1 });
   });
 
-  it("applies when moving an element under a new parent", async () => {
-    const { svc, calls } = makeService();
-    await svc.move("Dim", "Dim", "L1", "C2", -1);
-    expect(calls[0]?.method).toBe("POST");
-    expect(edgeCalls(calls)[0]?.path).toContain(
-      "Edges(ParentName='C2',ComponentName='L1')",
-    );
-    expect(edgeCalls(calls)[0]?.body).toEqual({ Weight: -1 });
-  });
-
   it("escapes quotes in the edge key", async () => {
     const { svc, calls } = makeService();
     await svc.create("Dim", "Dim", {

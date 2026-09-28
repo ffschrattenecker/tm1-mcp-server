@@ -5,7 +5,7 @@
 // See docs/ARCHITECTURE.md for the layering.
 import type { Job, Session, Thread } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
-import { odataKey as encKey } from "./odata-page.js";
+import { odataKey } from "./odata-page.js";
 
 export class MonitoringService {
   constructor(private readonly http: TM1HttpClient) {}
@@ -187,7 +187,7 @@ export class MonitoringService {
   async cancelJob(jobId: string): Promise<void> {
     await this.http.request<void>(
       "POST",
-      `/api/v1/Jobs('${encKey(jobId)}')/tm1.Cancel`,
+      `/api/v1/Jobs('${odataKey(jobId)}')/tm1.Cancel`,
       {},
     );
   }

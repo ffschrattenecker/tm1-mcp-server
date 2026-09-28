@@ -5,7 +5,6 @@ import type pino from "pino";
 import type { FnSpy } from "../helpers/spy-types.js";
 import { TM1Client } from "../../src/tm1-client.js";
 import { SessionManager } from "../../src/session-manager.js";
-import { TM1ErrorCode } from "../../src/types.js";
 import type { TM1Config } from "../../src/config.js";
 
 // A3 regression: service version-gating must branch on the NUMERIC
@@ -60,19 +59,6 @@ describe("A3 — service version-gating uses numeric config.version", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
-  });
-
-  it("partial clear throws UNSUPPORTED_OPERATION on both versions", async () => {
-    // tm1.Clear resolves on neither 11.8 nor 12.5, so this is not a version
-    // branch any more — it must refuse before touching the network either way.
-    for (const version of [11, 12] as const) {
-      fetchSpy.mockClear();
-      const client = makeClient(makeConfig({ version, tm1Version: "11.8" }));
-      await expect(
-        client.cubes.clear("Sales", ["Region", "Month"], [["North"], []]),
-      ).rejects.toMatchObject({ code: TM1ErrorCode.UNSUPPORTED_OPERATION });
-      expect(fetchSpy).not.toHaveBeenCalled();
-    }
   });
 
   it("split-brain (version 12 but string '11.8'): connection profile takes the v12 reroot", () => {

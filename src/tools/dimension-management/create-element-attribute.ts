@@ -7,7 +7,7 @@ import { HIERARCHY_NAME_OPTIONAL, resolveHierarchy } from "../hierarchy.js";
 export const registerCreateElementAttribute = defineTool({
   name: "tm1_create_element_attribute",
   description:
-    "Create an element attribute definition (schema) on a TM1 hierarchy. For reproducible deployments prefer a TI process (DimensionElementInsert on the }ElementAttributes_{dim} control cube). Use this tool for ad-hoc / debugging scenarios or when explicitly requested.",
+    "Create an element attribute definition (schema) on a TM1 dimension. Attributes are dimension-wide: created through any hierarchy, the attribute exists on all of them. For reproducible deployments prefer a TI process (DimensionElementInsert on the }ElementAttributes_{dim} control cube). Use this tool for ad-hoc / debugging scenarios or when explicitly requested.",
   annotations: WRITE,
   output: MutationResultSchema,
   input: {

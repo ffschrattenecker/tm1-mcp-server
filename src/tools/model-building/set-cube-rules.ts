@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { invalidateCallgraphCache } from "../../lib/callgraph/tm1-adapter.js";
-import { TM1ErrorCode } from "../../types.js";
+import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { withToolHint } from "../error-format.js";
 import { actionResponse } from "../format.js";
 import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
@@ -15,7 +15,8 @@ export const registerSetCubeRules = defineTool({
     "Create or replace the rules for a TM1 cube.",
     "SKIPCHECK; belongs at the top and FEEDERS; before all feeder definitions — SKIPCHECK is what makes feeders take effect, so rules with feeders need it.",
     "Pass exactly one source: rules (the full text — replaces everything), edits (find/replace patch against the current text; each find must match exactly once, else nothing is written), or filePath (full text from a host file under TM1_LOCAL_FILE_ROOT).",
-    "The full resulting text is syntax-checked before anything is written (preflight). The stored text is read back after writing (verified.textMatches), so no separate tm1_get_cube_rules is needed; the callgraph cache is dropped automatically.",
+    "The full resulting text is syntax-checked with tm1.CheckRules before anything is written: TM1 itself stores broken rules without an error, and they then silently compute nothing. Any error aborts the call with VALIDATION_ERROR, the errors with their line numbers in details, and nothing is written; preflight:false skips the check.",
+    "The stored text is read back after writing (verified.textMatches), so no separate tm1_get_cube_rules is needed; the callgraph cache is dropped automatically.",
   ],
   annotations: IDEMPOTENT_DESTRUCTIVE,
   output: MutationResultSchema,
@@ -51,23 +52,15 @@ export const registerSetCubeRules = defineTool({
     if (preflight) {
       const errors = await tm1Client.cubes.checkRule(cubeName, text);
       if (errors.length > 0) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({
-                stage: "preflight",
-                check: "syntax",
-                cubeName,
-                code: TM1ErrorCode.VALIDATION_ERROR,
-                message: `Preflight rule check failed: ${errors.length} error(s). Nothing was written.`,
-                hint: "Fix the lines in errors[] (lineNumber is in the full resulting text, after edits are applied). preflight:false skips the check; TM1 would store the broken text.",
-                errors,
-              }),
-            },
-          ],
-          isError: true as const,
-        };
+        throw new TM1Error({
+          code: TM1ErrorCode.VALIDATION_ERROR,
+          message: `Rules for '${cubeName}' have ${errors.length} syntax error(s): ${errors
+            .slice(0, 5)
+            .map((e) => `line ${e.lineNumber ?? "?"}: ${e.message.trim()}`)
+            .join("; ")}. Nothing was written.`,
+          hint: "Fix the reported lines and retry (line numbers are in the full resulting text, after edits are applied). preflight:false writes the text anyway; TM1 stores it, but the broken statements compute nothing.",
+          details: JSON.stringify({ stage: "preflight", errors }),
+        });
       }
     }
     await withToolHint(

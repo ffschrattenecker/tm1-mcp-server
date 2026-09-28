@@ -174,15 +174,45 @@ describe("TM1Client – Dimension Management Methods", () => {
       expect(body).toEqual({ Name: "Deutschland" });
     });
 
-    it("should update element type", async () => {
+    it("reads the prior type and reports an in-place conversion", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse(200, { Type: "Numeric" }));
       fetchSpy.mockResolvedValueOnce(mockResponse(204));
 
-      await client.elements.update("Region", "Region", "Germany", {
+      const r = await client.elements.update("Region", "Region", "Germany", {
         type: "Consolidated",
       });
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      const [probeUrl, probe] = fetchSpy.mock.calls[0];
+      expect(probe.method).toBe("GET");
+      expect(String(probeUrl)).toContain("Elements('Germany')?$select=Type");
+      const body = JSON.parse(fetchSpy.mock.calls[1][1].body);
       expect(body).toEqual({ Type: "Consolidated" });
+      expect(r.typeChange).toEqual({ from: "Numeric", to: "Consolidated" });
+    });
+
+    it("reports no type change when the type is already the requested one", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockResponse(200, { Name: "Europe", Type: "Consolidated" }),
+      );
+      fetchSpy.mockResolvedValueOnce(mockResponse(204));
+
+      const r = await client.elements.update("Region", "Region", "Europe", {
+        type: "Consolidated",
+      });
+
+      expect(r.typeChange).toBeNull();
+    });
+
+    it("sends an empty component list: [] removes every child", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse(204));
+
+      await client.elements.update("Region", "Region", "Europe", {
+        components: [],
+      });
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      expect(body).toEqual({ Components: [] });
     });
 
     it("should update element components", async () => {
@@ -213,6 +243,7 @@ describe("TM1Client – Dimension Management Methods", () => {
     });
 
     it("should update multiple fields at once", async () => {
+      fetchSpy.mockResolvedValueOnce(mockResponse(200, { Type: "Numeric" }));
       fetchSpy.mockResolvedValueOnce(mockResponse(204));
 
       await client.elements.update("Region", "Region", "Germany", {
@@ -220,7 +251,7 @@ describe("TM1Client – Dimension Management Methods", () => {
         type: "String",
       });
 
-      const body = JSON.parse(fetchSpy.mock.calls[0][1].body);
+      const body = JSON.parse(fetchSpy.mock.calls[1][1].body);
       expect(body).toEqual({ Name: "Deutschland", Type: "String" });
     });
 
@@ -307,71 +338,6 @@ describe("TM1Client – Dimension Management Methods", () => {
 
       const [url] = fetchSpy.mock.calls[0];
       expect(url).toContain("Elements('My%20Element')");
-    });
-  });
-
-  // ── moveElement() ────────────────────────────────────────────────────────
-
-  describe("moveElement()", () => {
-    it("should move an element to a new parent with default weight", async () => {
-      fetchSpy.mockResolvedValueOnce(mockResponse(204));
-
-      await client.elements.move("Region", "Region", "Germany", "Europe");
-
-      expect(fetchSpy).toHaveBeenCalledOnce();
-      const [url, opts] = fetchSpy.mock.calls[0];
-      expect(url).toContain("Elements('Europe')/Components");
-      expect(opts.method).toBe("POST");
-      const body = JSON.parse(opts.body);
-      expect(body["@odata.id"]).toContain("Elements('Germany')");
-      // Default weight needs no follow-up: the link already yields 1.
-      expect(body.Weight).toBeUndefined();
-    });
-
-    it("should move an element with a custom weight", async () => {
-      // The weight cannot ride on the link: TM1 ignores it there and creates
-      // the edge at 1 (verified live). It goes on the Edge entity afterwards.
-      fetchSpy.mockResolvedValueOnce(mockResponse(204));
-      fetchSpy.mockResolvedValueOnce(mockResponse(204));
-
-      await client.elements.move("Region", "Region", "Germany", "Europe", 2.5);
-
-      expect(JSON.parse(fetchSpy.mock.calls[0][1].body).Weight).toBeUndefined();
-      const [url, opts] = fetchSpy.mock.calls[1];
-      expect(opts.method).toBe("PATCH");
-      expect(String(url)).toContain(
-        "Edges(ParentName='Europe',ComponentName='Germany')",
-      );
-      expect(JSON.parse(opts.body).Weight).toBe(2.5);
-    });
-
-    it("should encode special characters in element and parent names", async () => {
-      fetchSpy.mockResolvedValueOnce(mockResponse(204));
-
-      await client.elements.move(
-        "My Dim",
-        "My Hier",
-        "Child Elem",
-        "Parent Elem",
-      );
-
-      const [url, opts] = fetchSpy.mock.calls[0];
-      expect(url).toContain("Dimensions('My%20Dim')");
-      expect(url).toContain("Hierarchies('My%20Hier')");
-      expect(url).toContain("Elements('Parent%20Elem')");
-      const body = JSON.parse(opts.body);
-      expect(body["@odata.id"]).toContain("Elements('Child%20Elem')");
-    });
-
-    it("should use weight 0 when explicitly passed", async () => {
-      // 0 is a real weight and differs from the default, so it must be sent —
-      // a truthiness check here would drop it.
-      fetchSpy.mockResolvedValueOnce(mockResponse(204));
-      fetchSpy.mockResolvedValueOnce(mockResponse(204));
-
-      await client.elements.move("Region", "Region", "Germany", "Europe", 0);
-
-      expect(JSON.parse(fetchSpy.mock.calls[1][1].body).Weight).toBe(0);
     });
   });
 

@@ -236,12 +236,25 @@ describe("loadConfig", () => {
     }
   });
 
-  it("should default to 'info' for invalid log level", () => {
+  it("throws on an unknown log level instead of falling back", () => {
     setRequiredEnv();
     process.env.TM1_LOG_LEVEL = "verbose";
+    expect(() => loadConfig()).toThrow(/Invalid TM1_LOG_LEVEL/);
+  });
 
+  it("throws on an unknown transport instead of starting on stdio", () => {
+    setRequiredEnv();
+    process.env.TM1_MCP_TRANSPORT = "htttp";
+    expect(() => loadConfig()).toThrow(/Invalid TM1_MCP_TRANSPORT/);
+  });
+
+  it("accepts transport and log level case-insensitively", () => {
+    setRequiredEnv();
+    process.env.TM1_MCP_TRANSPORT = "HTTP";
+    process.env.TM1_LOG_LEVEL = "Debug";
     const config = loadConfig();
-    expect(config.logLevel).toBe("info");
+    expect(config.transport).toBe("http");
+    expect(config.logLevel).toBe("debug");
   });
 
   it("should set logFile when TM1_LOG_FILE is provided", () => {
@@ -453,6 +466,53 @@ describe("loadConfig", () => {
       const cfg = loadConfig();
       expect(cfg.version).toBe(12);
       expect(cfg.authMode).toBe("s2s");
+    });
+
+    it("loads a v12 s2s config that sets no TM1_PASSWORD at all", () => {
+      // The regression this pins: every other v12 case in this file happens to
+      // set TM1_PASSWORD, and the repo's own .env supplies one to every local
+      // run, so the required-variable check could demand a password on a path
+      // that never sends one and stay green everywhere. It failed only once the
+      // packed tarball ran in a directory with no .env — which is exactly the
+      // configuration docs/CONFIGURATION.md prescribes for s2s.
+      process.env.TM1_BASE_URL = "http://host:4444";
+      process.env.TM1_USER = "admin";
+      delete process.env.TM1_PASSWORD;
+      process.env.TM1_INSTANCE = "tm1";
+      process.env.TM1_DATABASE = "db1";
+      process.env.TM1_AUTH_MODE = "s2s";
+      process.env.TM1_CLIENT_ID = "cid";
+      process.env.TM1_CLIENT_SECRET = "csec";
+      const cfg = loadConfig();
+      expect(cfg.version).toBe(12);
+      expect(cfg.authMode).toBe("s2s");
+      expect(cfg.password).toBe("");
+    });
+
+    it("loads a v12 access_token config that sets no TM1_PASSWORD", () => {
+      process.env.TM1_BASE_URL = "http://host:4444";
+      process.env.TM1_USER = "admin";
+      delete process.env.TM1_PASSWORD;
+      process.env.TM1_INSTANCE = "tm1";
+      process.env.TM1_DATABASE = "db1";
+      process.env.TM1_AUTH_MODE = "access_token";
+      process.env.TM1_ACCESS_TOKEN = "tok";
+      const cfg = loadConfig();
+      expect(cfg.authMode).toBe("access_token");
+    });
+
+    it("still demands TM1_PASSWORD for v12 basic auth", () => {
+      // The counter-check for the case above: the exemption is keyed on the
+      // auth mode, not on "this is v12". Basic mode does send the password
+      // (profile.ts buildBasicToken), so omitting it must still fail loudly
+      // rather than surface later as a 401.
+      process.env.TM1_BASE_URL = "http://host:4444";
+      process.env.TM1_USER = "admin";
+      delete process.env.TM1_PASSWORD;
+      process.env.TM1_INSTANCE = "tm1";
+      process.env.TM1_DATABASE = "db1";
+      process.env.TM1_AUTH_MODE = "basic";
+      expect(() => loadConfig()).toThrow(/TM1_PASSWORD/);
     });
 
     it("throws on unknown auth mode", () => {

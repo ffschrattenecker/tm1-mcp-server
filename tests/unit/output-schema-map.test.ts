@@ -532,6 +532,7 @@ describe("declared output schemas", () => {
       totalBytes: 1024,
       returnedBytes: 1024,
       truncated: false,
+      encoding: "text" as const,
       content: "a,b,c\n1,2,3",
     },
     tm1_list_error_logs: {
@@ -566,7 +567,7 @@ describe("declared output schemas", () => {
     tm1_clear_cube: {
       success: true,
       cubeName: "Sales",
-      summary: "Region=*, Period=Jan",
+      summary: "all cells",
     },
     tm1_create_chore: {
       success: true,
@@ -585,7 +586,6 @@ describe("declared output schemas", () => {
     tm1_delete_element: { success: true, elementName: "DE" },
     tm1_delete_process: { success: true, processName: "Load.Sales" },
     tm1_delete_subset: { success: true, subsetName: "EU" },
-    tm1_move_element: { success: true, elementName: "DE", newParent: "EU" },
     tm1_update_element: { success: true, elementName: "DE" },
     tm1_update_element_attribute_value: {
       success: true,

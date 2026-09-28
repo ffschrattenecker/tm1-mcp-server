@@ -22,6 +22,25 @@ describe("compileUserRegex", () => {
     }
   });
 
+  // safe-regex only measures star height and passed these; ^(\w|\w)*!$ ran
+  // 23.5 s on 30 characters and blocked the event loop.
+  it.each([
+    "^(\\w|\\w)*!$",
+    "^(a|a)*$",
+    "(a|ab)+c",
+    "(?:x|y){2,}z",
+    "a/(b|c)*",
+  ])("rejects repeated alternation %s", (pattern) => {
+    expect(() => compileUserRegex(pattern)).toThrow(/ReDoS/);
+  });
+
+  it.each(["^(Load|Init)_.*$", "(a|b)?c", "(a|b){1,3}", "[ab]+", "a\\/b"])(
+    "still accepts %s",
+    (pattern) => {
+      expect(compileUserRegex(pattern, "i")).toBeInstanceOf(RegExp);
+    },
+  );
+
   it("rejects unparseable patterns as VALIDATION_ERROR", () => {
     try {
       compileUserRegex("([unbalanced", undefined, "nameRegex");

@@ -164,6 +164,54 @@ describe("SessionManager", () => {
       expect(sm.isSessionActive()).toBe(false);
     });
 
+    it("never retries a login TM1 rejected (MaximumLoginAttempts lockout)", async () => {
+      fetchSpy.mockResolvedValue(
+        mockFetchResponse({
+          ok: false,
+          status: 401,
+          statusText: "Unauthorized",
+        }),
+      );
+
+      const sm = new SessionManager(makeConfig(), mockLogger);
+      await expect(sm.authenticate()).rejects.toMatchObject({
+        code: "AUTH_FAILED",
+        httpStatus: 401,
+      });
+      await expect(sm.authenticate()).rejects.toMatchObject({
+        code: "AUTH_FAILED",
+      });
+      await expect(sm.ensureSession()).rejects.toMatchObject({
+        code: "AUTH_FAILED",
+      });
+      await expect(sm.keepAlive()).rejects.toMatchObject({
+        code: "AUTH_FAILED",
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("stops the keep-alive timer once TM1 rejects the login", async () => {
+      vi.useFakeTimers();
+      try {
+        fetchSpy.mockResolvedValue(
+          mockFetchResponse({
+            ok: false,
+            status: 403,
+            statusText: "Forbidden",
+          }),
+        );
+        const sm = new SessionManager(
+          makeConfig({ keepAliveIntervalMs: 1000 }),
+          mockLogger,
+        );
+        sm.startKeepAlive();
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it("should throw when no TM1SessionId cookie in response", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockFetchResponse({ ok: true, setCookie: null }),

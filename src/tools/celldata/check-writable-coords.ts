@@ -4,6 +4,7 @@ import { rethrowIfSystemic } from "../../tm1-client/services/fallback.js";
 import { READ_ONLY } from "../annotations.js";
 import { WritableCoordsResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { memberRef } from "./member-ref.js";
 import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
 import {
   bindLeftOutSandbox,
@@ -21,7 +22,7 @@ interface CoordCheck {
 export const registerCheckWritableCoords = defineTool({
   name: "tm1_check_writable_coords",
   description:
-    "Pre-flight check before CellPutN/CellPutS. Verifies (1) every coord element exists, (2) every element is N-Level (writes to Consolidated elements silent-fail), and (3) whether the target cube has rules that may overlap the coord. Returns per-coord status + a rule-overlap warning. Use before writing cells in a TI process or via tm1_write_cells; pass the same dimensions list as the write to check exactly the cell it will address.",
+    "Pre-flight check before CellPutN/CellPutS. Verifies (1) every coord element exists, (2) every element is N-Level (whether the server accepts a write to a Consolidated element depends on the account's rights; tm1_write_cells refuses one either way), and (3) whether the target cube has rules that may overlap the coord. Returns per-coord status + a rule-overlap warning. Use before writing cells in a TI process or via tm1_write_cells; pass the same dimensions list as the write to check exactly the cell it will address.",
   annotations: READ_ONLY,
   output: WritableCoordsResultSchema,
   input: {
@@ -29,16 +30,16 @@ export const registerCheckWritableCoords = defineTool({
     coords: z
       .array(z.string())
       .describe(
-        "Element name per dimension: in cube dimension order, or in the order of dimensions when given. Sandboxes may be left out (bound to Base).",
+        "Element per dimension, in cube dimension order — or in the order of `dimensions` when given. Accepts the same forms as tm1_write_cells: a bare name (default hierarchy) or [Dimension].[Hierarchy].[Element]. Sandboxes may be left out (bound to Base).",
       ),
     dimensions: z
       .array(z.string())
       .optional()
       .describe(
-        "Dimension names for coords, any order — as passed to tm1_write_cells. Every cube dimension except Sandboxes (bound to Base) must be named.",
+        "Optional: the same dimension list tm1_write_cells takes (any order, Sandboxes may be left out and is then bound to Base), so this checks exactly the cell the write will address.",
       ),
   },
-  handler: async ({ cubeName, coords: given, dimensions }, tm1Client) => {
+  handler: async ({ cubeName, coords: givenCoords, dimensions }, tm1Client) => {
     // Dimension order only — cached per connection — instead of listing
     // every cube with its dimensions to find this one.
     let dims: string[];
@@ -53,14 +54,19 @@ export const registerCheckWritableCoords = defineTool({
       }
       throw e;
     }
-    let coords = given;
+    let coords = givenCoords;
     let sandboxDefaulted: string | undefined;
     if (dimensions !== undefined) {
-      if (given.length !== dimensions.length) {
-        throw dimensionCountMismatch(cubeName, dimensions, given);
+      if (givenCoords.length !== dimensions.length) {
+        throw dimensionCountMismatch(cubeName, dimensions, givenCoords);
       }
-      const address = resolveCellAddress(cubeName, dims, dimensions);
-      coords = address.toCubeOrder(given);
+      const address = resolveCellAddress(
+        cubeName,
+        dims,
+        dimensions,
+        "Nothing was checked.",
+      );
+      coords = address.toCubeOrder(givenCoords);
       sandboxDefaulted = address.sandboxDefaulted;
     } else {
       const bound = bindLeftOutSandbox(dims, coords);
@@ -76,10 +82,16 @@ export const registerCheckWritableCoords = defineTool({
       dims.map(async (dim, idx) => {
         // coords.length === dims.length is guarded above
         const element = coords[idx]!;
+        // Same reading of `[Dim].[Hier].[Elem]` as tm1_write_cells, so the
+        // check probes the hierarchy the write would hit. One keyed lookup
+        // per coordinate instead of loading every hierarchy of the cube.
+        const ref = memberRef(dim, element);
         try {
-          // One keyed GET per dimension, resolved by TM1 itself (case, spaces,
-          // aliases) — not the whole hierarchy to find one element.
-          const el = await tm1Client.elements.getType(dim, dim, element);
+          const el = await tm1Client.elements.getType(
+            ref.dimension,
+            ref.hierarchy,
+            ref.element,
+          );
           if (!el) {
             return {
               dimension: dim,
@@ -89,12 +101,13 @@ export const registerCheckWritableCoords = defineTool({
               isNLevel: false,
             };
           }
+          const type = el.type as CoordCheck["type"];
           return {
             dimension: dim,
-            element: el.name,
+            element: element === ref.element ? el.name : element,
             exists: true,
-            type: el.type,
-            isNLevel: el.type !== "Consolidated",
+            type,
+            isNLevel: type !== "Consolidated",
           };
         } catch (e) {
           // A transport/auth outage must not masquerade as a missing element —

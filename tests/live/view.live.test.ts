@@ -144,11 +144,38 @@ describe.skipIf(!LIVE_ENABLED)("live: view + subset lifecycle", () => {
     expect(names).toContain(SUBSET);
   });
 
+  it("update_subset replaces the static list, in the order given", async () => {
+    await h.ok("tm1_update_subset", {
+      dimensionName: D1,
+      hierarchyName: D1,
+      subsetName: SUBSET,
+      elements: [QUOTE_EL, "E1"],
+    });
+    const r = await h.ok("tm1_get_subset", {
+      dimensionName: D1,
+      hierarchyName: D1,
+      subsetName: SUBSET,
+    });
+    expect(r.json.elements).toEqual([QUOTE_EL, "E1"]);
+  });
+
+  it("update_subset keeps the old list when the new one names an unknown element", async () => {
+    await h.call("tm1_update_subset", {
+      dimensionName: D1,
+      hierarchyName: D1,
+      subsetName: SUBSET,
+      elements: ["E2", `${SANDBOX}_NO_SUCH_ELEMENT`],
+    });
+    const r = await h.ok("tm1_get_subset", {
+      dimensionName: D1,
+      hierarchyName: D1,
+      subsetName: SUBSET,
+    });
+    expect(r.json.elements).toEqual([QUOTE_EL, "E1"]);
+  });
+
   it("update_subset switches it to an MDX expression", async () => {
-    // TM1 11.8 rejects PATCH-ing a new Elements list onto an already-static
-    // subset ("both a list of Elements and an Expression"); the reliable
-    // update path is to set an MDX expression, which also resolves the full
-    // hierarchy (all 3 elements incl. the quote element).
+    // The MDX resolves the full hierarchy (all 3 elements incl. the quote one).
     const u = await h.ok("tm1_update_subset", {
       dimensionName: D1,
       hierarchyName: D1,
@@ -167,6 +194,47 @@ describe.skipIf(!LIVE_ENABLED)("live: view + subset lifecycle", () => {
     expect(r.json.elements).toEqual(
       expect.arrayContaining(["E1", "E2", QUOTE_EL]),
     );
+  });
+
+  it("update_subset turns the MDX subset static again", async () => {
+    await h.ok("tm1_update_subset", {
+      dimensionName: D1,
+      hierarchyName: D1,
+      subsetName: SUBSET,
+      elements: ["E2"],
+    });
+    const r = await h.ok("tm1_get_subset", {
+      dimensionName: D1,
+      hierarchyName: D1,
+      subsetName: SUBSET,
+    });
+    expect(r.json.expression).toBeUndefined();
+    expect(r.json.elements).toEqual(["E2"]);
+  });
+
+  it("a private subset lives beside the public one of the same name", async () => {
+    const key = { dimensionName: D1, hierarchyName: D1, subsetName: SUBSET };
+    await h.ok("tm1_create_subset", {
+      ...key,
+      elements: ["E1"],
+      isPrivate: true,
+    });
+    await h.ok("tm1_update_subset", {
+      ...key,
+      elements: [QUOTE_EL],
+      isPrivate: true,
+    });
+    const priv = await h.ok("tm1_get_subset", { ...key, isPrivate: true });
+    const pub = await h.ok("tm1_get_subset", key);
+    expect(priv.json.elements).toEqual([QUOTE_EL]);
+    expect(pub.json.elements).toEqual(["E2"]);
+    await h.ok("tm1_delete_subset", {
+      ...key,
+      isPrivate: true,
+      confirm: SUBSET,
+    });
+    const gone = await h.call("tm1_get_subset", { ...key, isPrivate: true });
+    expect(gone.isError).toBe(true);
   });
 
   it("delete_subset removes it", async () => {

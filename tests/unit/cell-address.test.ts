@@ -103,6 +103,7 @@ describe("tm1_write_cells address resolution", () => {
     const writes: Array<{ dims: string[]; cells: unknown }> = [];
     const client = {
       cubes: { getDimensionNames: async () => cubeDims },
+      elements: { consolidatedAmong: async () => [] },
       cells: {
         writeCells: async (_c: string, dims: string[], cells: unknown) => {
           writes.push({ dims, cells });

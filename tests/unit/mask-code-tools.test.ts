@@ -203,7 +203,10 @@ describe("tm1_export_process_to_git masks inline ODBC credentials", () => {
       await fs.rm(root, { recursive: true, force: true });
     });
 
-    it("writes masked .ti content to disk by default", async () => {
+    // A5: the written file is the deployable copy. Masking it made a
+    // re-import deploy ODBCOpen(..., '***'), so the file keeps the code as is;
+    // masking applies to the inline copy that goes to the model.
+    it("writes the unmasked .ti to disk so it re-imports intact", async () => {
       await run(registerExportProcessToGit, client, {
         processName: "Load.Sales",
         writeToDir: root,
@@ -212,8 +215,8 @@ describe("tm1_export_process_to_git masks inline ODBC credentials", () => {
         path.join(root, "Load.Sales.ti"),
         "utf8",
       );
-      expect(onDisk).not.toContain("S3cr3t_Pw!");
-      expect(onDisk).toContain("***");
+      expect(onDisk).toContain("S3cr3t_Pw!");
+      expect(onDisk).not.toContain("***");
     });
 
     // When persisting to disk the caller has the files, so the full code bodies
@@ -252,7 +255,7 @@ describe("tm1_export_process_to_git masks inline ODBC credentials", () => {
         path.join(nested, "Load.Sales.ti"),
         "utf8",
       );
-      expect(onDisk).toContain("***");
+      expect(onDisk).toContain("S3cr3t_Pw!");
     });
 
     // Same ENOENT gap existed on tm1_export_process_to_pro's writeToFile.
@@ -265,7 +268,9 @@ describe("tm1_export_process_to_git masks inline ODBC credentials", () => {
       const res = JSON.parse(text) as Record<string, unknown>;
       expect(res.writtenTo).toBe(target);
       const onDisk = await fs.readFile(target, "utf8");
-      expect(onDisk).toContain("***");
+      expect(onDisk).toContain("S3cr3t_Pw!");
+      // ...while the inline copy the model sees stays masked.
+      expect(String(res.content)).not.toContain("S3cr3t_Pw!");
     });
 
     it("echoes json/ti inline when writeToDir is omitted", async () => {

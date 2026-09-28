@@ -152,6 +152,12 @@ describe("ProcessService.updateVariables", () => {
     expect(bodies[0]).not.toHaveProperty("VariablesUIData");
   });
 
+  it("patches only the layout when no variables are given", async () => {
+    const { svc, bodies } = makeService(() => undefined);
+    await svc.updateVariables("Load.Sales", undefined, [IGNORED]);
+    expect(bodies[0]).toEqual({ VariablesUIData: [IGNORED] });
+  });
+
   it("writes the supplied column layout back", async () => {
     const { svc, bodies } = makeService(() => undefined);
     await svc.updateVariables("Load.Sales", vars, [IGNORED, NORMAL_STRING]);

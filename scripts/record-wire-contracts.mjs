@@ -7,13 +7,19 @@
 // and the live suite creates and deletes sandbox objects. Refusing to guess is
 // the whole point of this wrapper.
 //
-//   node scripts/record-wire-contracts.mjs [serverName] [--merge] [--read-only]
-//   node scripts/record-wire-contracts.mjs --connection=<name> [--merge] ...
+//   node scripts/record-wire-contracts.mjs [serverName] [--replace] [--read-only]
+//   node scripts/record-wire-contracts.mjs --connection=<name> [--replace] ...
 //
 //   --connection=<name>  take the server from ~/.tm1/mcp-servers/<name>/.env
 //                (or TM1_CONNECTIONS_DIR) instead of an .mcp.json entry
-//   --merge     fold this run into the existing contracts instead of
-//                replacing them
+//   --replace    start the contracts over from this run alone, discarding
+//                what is on disk. The default is to merge, because a run only
+//                ever observes the shapes its target happens to hold: recording
+//                over the file drops every endpoint this run did not reach and
+//                narrows every union it did not re-observe, and nothing turns
+//                red afterwards. Use it only for a deliberate fresh start,
+//                such as a new server version, and read the diff. (--merge is
+//                still accepted; it is the default now.)
 //   --read-only  run only the read-only sweep, so the target server is never
 //                written to. Required in practice for anything but a test
 //                instance.
@@ -67,7 +73,12 @@ console.log(
     (flags.has("--verify") ? " — verifying, not recording" : "") +
     (readOnly
       ? " — read-only sweep"
-      : " — full live suite (creates sandbox objects)"),
+      : " — full live suite (creates sandbox objects)") +
+    (flags.has("--verify")
+      ? ""
+      : flags.has("--replace")
+        ? " — REPLACING the contracts on disk"
+        : " — merging into the contracts on disk"),
 );
 
 const target = readOnly
@@ -92,7 +103,7 @@ const res = spawnSync(
       ...process.env,
       ...entry.env,
       ...(flags.has("--verify") ? {} : { RECORD_CONTRACTS: "1" }),
-      ...(flags.has("--merge") ? { CONTRACTS_MERGE: "1" } : {}),
+      ...(flags.has("--replace") ? {} : { CONTRACTS_MERGE: "1" }),
     },
   },
 );

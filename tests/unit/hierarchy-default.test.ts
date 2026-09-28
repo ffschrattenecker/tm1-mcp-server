@@ -49,7 +49,6 @@ const DEFAULTED = [
   "tm1_create_element",
   "tm1_update_element",
   "tm1_delete_element",
-  "tm1_move_element",
   "tm1_bulk_upsert_elements",
   "tm1_list_element_attributes",
   "tm1_create_element_attribute",

@@ -10,7 +10,7 @@ import { tm1NameEquals } from "../../lib/tm1-name.js";
 export const registerDeleteHierarchy = defineTool({
   name: "tm1_delete_hierarchy",
   description:
-    "Delete a hierarchy from a dimension. The default (dimension-named) hierarchy cannot be deleted — use tm1_delete_dimension for that. Irreversible — pass confirm=<hierarchy name verbatim>.",
+    "Delete a hierarchy from a dimension. Irreversible — pass confirm=<hierarchy name verbatim>. Deleting the same-named (default) hierarchy is allowed. The tools of this server still default an omitted hierarchyName to the dimension name, so after such a delete pass hierarchyName on every call.",
   annotations: DESTRUCTIVE,
   output: MutationResultSchema,
   input: {

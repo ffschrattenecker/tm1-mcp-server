@@ -80,19 +80,13 @@
         "name": "string",
         "processes[]": {
           "name": "string",
-          "parameters": {
-            "pLogOutput?": "number",
-            "pStrictErrorHandling?": "number"
-          }
+          "parameters": {}
         },
         "startTime": "string"
       }
     },
     "cubes.checkRule": {
-      "[]": {
-        "lineNumber": "number",
-        "message": "string"
-      }
+      "[]": "unknown"
     },
     "cubes.exists": "boolean",
     "cubes.getAllRules": {
@@ -154,6 +148,9 @@
         "to": "string"
       }
     },
+    "elements.consolidatedAmong": {
+      "[]": "unknown"
+    },
     "elements.deleteMany": {
       "[]": {
         "deleted": "boolean",
@@ -182,6 +179,10 @@
       },
       "total": "number"
     },
+    "elements.getType": {
+      "name": "string",
+      "type": "string"
+    },
     "elements.listAttributes": {
       "[]": {
         "name": "string",
@@ -203,12 +204,18 @@
       "total": "number",
       "truncated": "boolean"
     },
+    "elements.update": {
+      "typeChange": "null"
+    },
     "files.getContent": "string",
+    "files.getContentBytes": {
+      "*": "number"
+    },
     "files.list": {
-      "[]": "unknown"
+      "[]": "string"
     },
     "files.search": {
-      "[]": "unknown"
+      "[]": "string"
     },
     "files.upload": {
       "created": "boolean",
@@ -368,7 +375,8 @@
       "query?": "string",
       "type": "string",
       "userName?": "string",
-      "usesUnicode?": "boolean"
+      "usesUnicode?": "boolean",
+      "view?": "string"
     },
     "processes.getDeployMeta": {
       "hasSecurityAccess": "boolean"
@@ -377,7 +385,7 @@
       "[]": {
         "defaultValue": "number|string",
         "name": "string",
-        "prompt?": "string",
+        "prompt": "string",
         "type": "string"
       }
     },
@@ -396,7 +404,13 @@
       "variablesUIData[]": "string"
     },
     "processes.getVariables": {
-      "[]": "unknown"
+      "[]": {
+        "endByte": "number",
+        "name": "string",
+        "position": "number",
+        "startByte": "number",
+        "type": "string"
+      }
     },
     "processes.list": {
       "[]?": {
@@ -468,7 +482,7 @@
             "IntegratedSecurityMode": "string",
             "MaximumLoginAttempts": "number",
             "SecurityPackageName": "string",
-            "ServicePrincipalName": "null|string"
+            "ServicePrincipalName": "string"
           },
           "CAM": {
             "CAMUseSSL": "boolean",
@@ -506,14 +520,13 @@
             "SkipSSLCertVerification": "boolean",
             "SkipSSLCRLVerification": "boolean",
             "UseServerAccount": "boolean",
-            "VerifyCertServerName?": "null",
-            "VerifyCertServerName[]?": "unknown",
+            "VerifyCertServerName[]": "unknown",
             "VerifyServerSSLCert": "boolean",
             "WellKnownUserName": "null"
           },
           "Network": {
             "IdleConnectionTimeOut": "string",
-            "IPAddress": "null|string",
+            "IPAddress": "null",
             "IPVersion": "string",
             "NetRecvBlockingWaitLimit": "string",
             "NetRecvMaxClientIOWaitWithinAPIs": "string",
@@ -564,7 +577,7 @@
             "ThresholdForThreadWaitingTime": "string"
           },
           "ExternalDatabase": {
-            "ODBCLibraryPath": "null|string",
+            "ODBCLibraryPath": "null",
             "ODBCTimeoutInSeconds": "number",
             "OracleErrorForceRowStatus": "null",
             "SQLFetchType": "null",
@@ -586,7 +599,7 @@
           "MaskUserNameInServerTools": "boolean",
           "PerfMonActive": "boolean",
           "PerformanceMonitorOn": "boolean",
-          "RunningInBackground": "boolean|null",
+          "RunningInBackground": "null",
           "ServerLog": {
             "Enable": "boolean",
             "LogReleaseLineCount": "number"
@@ -610,7 +623,6 @@
         "DataBaseDirectory": "string",
         "DisableSandboxing": "boolean",
         "DistributedOutputDir": "string",
-        "EncryptionAtRest?": "null",
         "ForceReevaluationOfFeedersForFedCellsOnDataChange": "boolean",
         "HTTPPortNumber": "number",
         "IntegratedSecurityMode": "boolean",

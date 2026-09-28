@@ -3,7 +3,7 @@
 // TM1HttpClient. v11 = identity reroot + existing GET-ProductVersion login;
 // v12 = database-rooted paths + POST /{instance}/auth/v1/session login.
 import type { TM1Config } from "../../config.js";
-import { odataKey as enc } from "../services/odata-page.js";
+import { odataKey } from "../services/odata-page.js";
 
 export interface LoginRequest {
   url: string;
@@ -118,7 +118,7 @@ function createV12Profile(config: TM1Config): ConnectionProfile {
   const database = config.database ?? "";
   // encodeURIComponent (not `enc`) for the instance: it's a bare path segment,
   // not an OData quoted key — no apostrophe-doubling needed, just percent-encoding.
-  const dbRoot = `/${encodeURIComponent(instance)}/api/v1/Databases('${enc(database)}')`;
+  const dbRoot = `/${encodeURIComponent(instance)}/api/v1/Databases('${odataKey(database)}')`;
   return {
     // Replacement FUNCTION, not a string: String.replace treats "$&"/"$$"/"$1"
     // in a string replacement specially, which would corrupt dbRoot if instance
