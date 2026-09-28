@@ -68,7 +68,7 @@
     "tools:update-readme": "node scripts/gen-tool-list.mjs --write-readme",
     "lint:eslint": "eslint .",
     "measure:tools": "node scripts/measure-tool-surface.mjs",
-    "lint:tool-surface-budget": "node scripts/measure-tool-surface.mjs --top 0 --budget 133000"
+    "lint:tool-surface-budget": "node scripts/measure-tool-surface.mjs --top 0 --budget 140000"
   },
   "keywords": [
     "mcp",

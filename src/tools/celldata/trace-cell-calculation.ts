@@ -9,7 +9,7 @@ export const registerTraceCellCalculation = defineTool({
   description: [
     "Trace how a cell value is calculated: recursive component tree with per-component type (Consolidation/Rule/Simple), status (Null/Data/Error), value, and the rule statements that populate it — answers 'why is this cell X / empty?'.",
     "The tree is truncated client-side via maxDepth/maxComponents; truncated=true marks cut branches (re-run with the branch tuple as new start cell to drill deeper).",
-    "Elements are given in cube dimension order (discover with tm1_list_cubes). A bare name addresses the dimension's default hierarchy; write Hierarchy:Element for an alternate one. The split takes the first colon, so an element whose own name contains one is reached by naming its hierarchy: in dimension Region, 'Region:A:B' is element 'A:B' in the default hierarchy.",
+    "Elements are given in cube dimension order (discover with tm1_list_cubes). Write Hierarchy:Element for an alternate hierarchy; the first colon splits, so in dimension Region 'Region:A:B' is element 'A:B' of the default one.",
     "Related: tm1_check_feeders / tm1_trace_feeders for feeder issues, tm1_get_cube_rules for the full rule text.",
   ],
   annotations: READ_ONLY,

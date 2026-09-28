@@ -57,7 +57,7 @@ export const registerGetElementAttributeValues = defineTool({
       .string()
       .optional()
       .describe(
-        "Hierarchy the element belongs to (default: the same-named default hierarchy). Needed for elements of an alternate hierarchy. Single-element mode only.",
+        "Hierarchy of the element (default: the same-named one). Single-element mode only.",
       ),
     attributeNames: z
       .array(z.string())

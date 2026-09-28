@@ -9,7 +9,7 @@ export const registerTraceFeeders = defineTool({
   description: [
     "Trace the feeders of a cell: returns the cells this cell feeds plus the feeder statements involved — answers 'which feeder statement fires from this cell, and where to'.",
     "Use when a rule cell stays empty under SKIPCHECK: trace the source cell to see whether its feeder reaches the target.",
-    "Elements are given in cube dimension order (discover with tm1_list_cubes). A bare name addresses the dimension's default hierarchy; write Hierarchy:Element for an alternate one. The split takes the first colon, so an element whose own name contains one is reached by naming its hierarchy: in dimension Region, 'Region:A:B' is element 'A:B' in the default hierarchy.",
+    "Elements are given in cube dimension order (discover with tm1_list_cubes). Write Hierarchy:Element for an alternate hierarchy; the first colon splits, so in dimension Region 'Region:A:B' is element 'A:B' of the default one.",
     "Related: tm1_check_feeders (fed/unfed flags), tm1_audit_feeders (static analysis).",
   ],
   annotations: READ_ONLY,

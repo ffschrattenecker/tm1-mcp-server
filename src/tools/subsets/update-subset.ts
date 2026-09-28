@@ -27,7 +27,7 @@ export const registerUpdateSubset = defineTool({
       .optional()
       .default(false)
       .describe(
-        "Update in PrivateSubsets (owned by the signed-in user) instead of public Subsets",
+        "Use PrivateSubsets (the signed-in user's) instead of public Subsets",
       ),
   },
   handler: async (

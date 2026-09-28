@@ -20,7 +20,7 @@ export const registerDeleteSubset = defineTool({
       .optional()
       .default(false)
       .describe(
-        "Delete from PrivateSubsets (owned by the signed-in user) instead of public Subsets",
+        "Use PrivateSubsets (the signed-in user's) instead of public Subsets",
       ),
     ...CONFIRM_SCHEMA,
   },

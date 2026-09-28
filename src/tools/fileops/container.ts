@@ -8,6 +8,6 @@ export const CONTAINER_SCHEMA = {
     .optional()
     .default("files")
     .describe(
-      "Storage tree to address. 'files' (default) is the data directory TI processes read from — Files on v12, Blobs on v11, flat on v11. 'applications' is the tree users see under Applications in Architect and PAW: it nests on both versions, and only its documents carry content (a view reference does not).",
+      "'files' (default): the TI data directory (Files on v12, Blobs on v11). 'applications': the Applications tree of Architect/PAW; nests on both versions, only its documents carry content.",
     ),
 };
