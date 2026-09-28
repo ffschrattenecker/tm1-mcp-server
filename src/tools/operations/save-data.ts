@@ -4,6 +4,7 @@ import { withToolHint } from "../error-format.js";
 import { IDEMPOTENT_WRITE, withVersion } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { startHeartbeat } from "../heartbeat.js";
 
 export const registerSaveData = defineTool({
   name: "tm1_save_data",
@@ -35,15 +36,21 @@ export const registerSaveData = defineTool({
       ),
   },
   handler: async ({ cube, timeoutMs }, tm1Client, extra) => {
-    const result = await withToolHint(
-      tm1Client.processes.saveData(cube, {
-        signal: extra?.signal,
-        ...(timeoutMs ? { timeoutMs } : {}),
-      }),
-      "SaveData failed. On v12 this tool is unsupported (SaveDataAll removed). Check tm1_get_server_info for productVersion; for a single cube verify the name via tm1_list_cubes.",
-      // A timed-out or lost-track save is still running — keep that hint.
-      [TM1ErrorCode.LOCK_TIMEOUT, TM1ErrorCode.CONNECTION_FAILED],
-    );
+    const stopHeartbeat = startHeartbeat(extra, cube ?? "SaveDataAll");
+    let result;
+    try {
+      result = await withToolHint(
+        tm1Client.processes.saveData(cube, {
+          signal: extra?.signal,
+          ...(timeoutMs ? { timeoutMs } : {}),
+        }),
+        "SaveData failed. On v12 this tool is unsupported (SaveDataAll removed). Check tm1_get_server_info for productVersion; for a single cube verify the name via tm1_list_cubes.",
+        // A timed-out or lost-track save is still running — keep that hint.
+        [TM1ErrorCode.LOCK_TIMEOUT, TM1ErrorCode.CONNECTION_FAILED],
+      );
+    } finally {
+      stopHeartbeat();
+    }
     return {
       content: [
         {

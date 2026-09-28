@@ -5,6 +5,7 @@ import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { ProcessResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { startHeartbeat } from "../heartbeat.js";
 import { tailLines } from "../operations/error-log-helpers.js";
 import type { TM1Client } from "../../tm1-client.js";
 
@@ -84,30 +85,7 @@ export const registerExecuteProcess = defineTool({
     // speculatively — NOT a security control: whatever can call the tool can
     // also supply `confirm`.
     requireConfirm(confirm, processName, "process");
-    // R2-02: TM1 REST exposes no mid-run progress for tm1.Execute, so we
-    // emit periodic heartbeat notifications (every 5s) instead. Keeps
-    // client UI alive during long TI runs and lets users distinguish
-    // "still working" from "hung". Heartbeat-only; total stays undefined
-    // since TI duration is unknown ahead of time.
-    const progressToken = extra?._meta?.progressToken;
-    const start = Date.now();
-    let heartbeatTimer: NodeJS.Timeout | undefined;
-    if (progressToken !== undefined) {
-      const tick = (): void => {
-        const elapsedSec = Math.round((Date.now() - start) / 1000);
-        void extra
-          .sendNotification({
-            method: "notifications/progress",
-            params: {
-              progressToken,
-              progress: elapsedSec,
-              message: `${processName} still running (${elapsedSec}s elapsed)`,
-            },
-          })
-          .catch(() => undefined);
-      };
-      heartbeatTimer = setInterval(tick, 5000);
-    }
+    const stopHeartbeat = startHeartbeat(extra, processName);
     try {
       const result = await withToolHint(
         tm1Client.processes.execute(processName, parameters, {
@@ -153,7 +131,7 @@ export const registerExecuteProcess = defineTool({
       }
       throw err;
     } finally {
-      if (heartbeatTimer !== undefined) clearInterval(heartbeatTimer);
+      stopHeartbeat();
     }
   },
 });
