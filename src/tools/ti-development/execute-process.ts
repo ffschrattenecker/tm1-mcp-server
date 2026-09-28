@@ -12,12 +12,25 @@ import type { TM1Client } from "../../tm1-client.js";
  * Client-abort recovery hint, branched by TM1 major version: v11 exposes
  * server threads (tm1_list_threads / tm1_cancel_thread), v12 exposes jobs
  * (tm1_list_jobs / tm1_cancel_job) instead.
+ *
+ * The abort DELETEs the async operation, which on 11.8 cancels the run and
+ * rolls back its writes (tests/live/async-exec.live.test.ts). v12 is not
+ * measured, and the cancel is best-effort — so the hint still says to check.
  */
 export function abortHint(version: 11 | 12): string {
   const monitor = version === 12 ? "tm1_list_jobs" : "tm1_list_threads";
   const cancel = version === 12 ? "tm1_cancel_job" : "tm1_cancel_thread";
-  return `Request aborted by the client — the process was NOT confirmed failed and may still be executing. Use ${monitor} to check for it and ${cancel} to stop it. Do NOT blindly re-run: that risks a duplicate execution.`;
+  return `Request aborted by the client — TM1 was told to cancel the run, which stops it and rolls back its writes like ${cancel}. Confirm with ${monitor} that it is gone before running it again; if it still shows, stop it with ${cancel}.`;
 }
+
+// Codes that only reach the tool from the transport, never from the run
+// itself (ProcessService turns run failures into a result). Their own hints —
+// "still running", "outcome unknown" — must not be replaced by the tool's
+// "diagnose and re-run".
+const TRANSPORT_CODES = [
+  TM1ErrorCode.LOCK_TIMEOUT,
+  TM1ErrorCode.CONNECTION_FAILED,
+] as const;
 
 const ERROR_LOG_TAIL_LINES = 40;
 
@@ -57,7 +70,7 @@ export const registerExecuteProcess = defineTool({
       .max(3600000)
       .optional()
       .describe(
-        "Override the default 30s request timeout for this call (ms, 1000–3600000). Use for long-running TI runs.",
+        "Cap on the wait for this run (ms, 1000–3600000; default 3600000). The run is polled, so long runs need no raise. Reaching it stops the waiting, not the run — LOCK_TIMEOUT means still running.",
       ),
     ...CONFIRM_SCHEMA,
   },
@@ -102,6 +115,7 @@ export const registerExecuteProcess = defineTool({
           ...(timeoutMs ? { timeoutMs } : {}),
         }),
         `Process '${processName}' failed at runtime. Inspect cascade with tm1_diagnose_process_error(processName='${processName}', includeRelated=true). Verify parameter shape via tm1_get_process; check syntax with tm1_compile_process before re-running.`,
+        TRANSPORT_CODES,
       );
       // TM1 names the run's own error log when it wrote one (minor errors
       // included). Attach its tail so judging the run takes no extra call.
@@ -126,15 +140,14 @@ export const registerExecuteProcess = defineTool({
         ...(result.success === false ? { isError: true as const } : {}),
       };
     } catch (err) {
-      // Client-side cancellation (notifications/cancelled) aborts the fetch,
-      // but the TI process keeps running server-side — TM1 REST has no
-      // mid-run abort. withToolHint's runtime-failure hint ("diagnose then
-      // re-run") is actively wrong here: it invites a duplicate execution.
-      // Detect the abort via the MCP signal and point at the live thread.
+      // Client-side cancellation (notifications/cancelled) aborts the
+      // polling, and http.ts DELETEs the async operation, which cancels the
+      // run on the server. withToolHint's runtime-failure hint ("diagnose then
+      // re-run") is wrong here: the run did not fail, it was stopped.
       if (extra?.signal?.aborted) {
         throw new TM1Error({
           code: TM1ErrorCode.TM1_ERROR,
-          message: `Execution of '${processName}' was cancelled client-side before it returned; the TI process may still be running on the TM1 server.`,
+          message: `Execution of '${processName}' was cancelled client-side before it returned; TM1 was told to cancel the run.`,
           hint: abortHint(tm1Client.version),
         });
       }

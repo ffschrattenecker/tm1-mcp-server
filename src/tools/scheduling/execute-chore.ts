@@ -7,7 +7,7 @@ import { defineTool } from "../define-tool.js";
 export const registerExecuteChore = defineTool({
   name: "tm1_execute_chore",
   description: [
-    "Execute a TM1 chore immediately, bypassing its schedule. Runs synchronously — the call returns when the chore is done, so raise timeoutMs for long chains.",
+    "Execute a TM1 chore immediately, bypassing its schedule. The call returns when the chore is done; the run is polled, so long chains need no timeoutMs raise.",
     "Non-idempotent: runs every chained process. Before: tm1_analyze_chore_graph to preview the call chain.",
     "Chores do NOT stop at a failing step (measured): later steps still run and still commit. Read `outcome`, not `success` alone — `completed_with_errors` means a step failed AND the chore's writes were committed, so re-running duplicates them. A step that aborts commits inside a chore, unlike the same process run on its own.",
     "`rolled_back` (ChoreExecuteStatusCode ProcessRollbackCalled) discards the whole chore so far under ExecutionMode SingleCommit, only the rolling-back step under MultipleCommit.",
@@ -25,7 +25,7 @@ export const registerExecuteChore = defineTool({
       .max(3600000)
       .optional()
       .describe(
-        "Override the default 30s request timeout for this call (ms, 1000–3600000). Use for chores running long TI chains.",
+        "Cap on the wait for this run (ms, 1000–3600000; default 3600000). Reaching it stops the waiting, not the chore — LOCK_TIMEOUT means still running. Cancelling the call cancels the chore; steps already committed under MultipleCommit stay.",
       ),
     ...CONFIRM_SCHEMA,
   },
