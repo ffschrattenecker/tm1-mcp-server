@@ -260,3 +260,49 @@ hid control objects by default (the REST filter must say `not startswith(Name,'}
 - spms-tools `tm1-mcp` plugin: the four skills name the deleted tools; add the endpoint cheat sheet;
   `tm1-api` stops being a fallback and becomes the reference for the REST tools paths.
 - Major version bump (9.0.0).
+
+## Status (handoff, 2026-09-30)
+
+Paused mid-way on branch `feat/tool-consolidation` (not pushed). Paired branch `feat/tool-consolidation` in
+spms-tools exists but has no commits yet.
+
+Done:
+
+- Spec, decisions and live comparison (this file).
+- Built: `tm1_rest_read` / `tm1_rest_write` (`src/tools/rest/`, `src/tm1-client/services/rest-service.ts`),
+  `tm1_files_read` / `tm1_files_write`, `refresh` on `tm1_analyze_callgraph`, `usedInCubes` on
+  `tm1_analyze_object_usage`. The REST guard survived three red-team rounds; unit tests pass for all of it.
+- Deleted: the 60 tools (commit `4c44692`) and `delete-impact.ts`. `npm run typecheck`,
+  `lint:tool-registration` and `lint:output-schema-budget` (38.7 KB, 60%) pass.
+
+Left to do, in this order:
+
+1. **Unit tests** (red now). Typecheck fails in 12 files that imported deleted tools
+   (`monitoring-tools-registration`, `odata-pushdown`, `hierarchy-default`, `rest-tools`, `delete-dry-run`,
+   `slim-json-schema`, `output-schema-roundtrip`, `get-server-info-masking`, `get-hierarchy-tool`,
+   `get-file-content-base64`, `get-descendants-tool`, `element-attribute-values-page`). Runtime failures in the
+   shared lists: `output-schema-map`, `output-schema-additional-properties`, `confirm-coverage`,
+   `markdown-structured`, `tool-registration`, `annotation-requires-version`. Delete handler-only tests; keep any
+   service-layer assertions; repoint shared lists to the surviving tools.
+2. **Stale names in `src/`**: hints, descriptions, `server-instructions.ts`, prompts, resources, services
+   (e.g. `file-service.ts` hint names `tm1_list_files`), `http.ts` hints naming `tm1_list_threads`/`tm1_list_jobs`.
+   Remove now-dead schemas in `src/tools/schemas/items-*.ts` and empty category comments in `src/tools/index.ts`.
+   Service methods left unused by tools: list them, decide separately.
+3. **Live tests** (`tests/live/`): rewrite setup/teardown that used deleted tools to the REST tools; delete tests
+   of deleted tools; add `rest.live.test.ts`. Run only via `npm run test:live:for -- tm1-plapp-franz`.
+4. **Docs**: `npm run tools:list` / `tools:update-readme`, `docs/EXAMPLES.md`, `ARCHITECTURE.md`, `evals/`,
+   CHANGELOG 9.0.0 entry.
+5. **spms-tools skills**: route CRUD to the REST tools with one shared endpoint cheat sheet (include the
+   control-object and `tolower()` traps); repurpose `tm1-api` so it no longer competes with `tm1_rest_read`;
+   major plugin version bump paired with server 9.0.0.
+6. **Verify**: all gates in `npm run verify` except `lint:format` (run prettier on changed files only), the
+   coverage ratchet, and a word-grep for every deleted name (allowed only in CHANGELOG and this file).
+7. Bump `package.json` to 9.0.0. No tag / push / publish until asked.
+
+Known follow-ups from the build: `responseLimit()` in `src/tools/rest/shape.ts` reads `TM1_MAX_RESPONSE_CHARS`
+from env rather than the value passed to `withAnnotations()`; the secret-name check refuses `$filter`/`$orderby`
+on properties whose names contain `pass`/`auth`/`token`; a doubly-encoded `%XX` path is refused by design.
+
+The cleanup workflow script (steps 1–6 as parallel agents + verify loop) is saved at
+`~/.claude/projects/C--Users-franz-schrattenecker-repos-tm1-mcp-server/9215c3ef-2a08-45ea-8964-ad9d13e902a2/workflows/scripts/consolidation-cleanup-wf_1186b4a6-1d7.js`;
+none of its agents finished, so rerun it fresh.
