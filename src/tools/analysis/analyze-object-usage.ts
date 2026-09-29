@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { TM1Client } from "../../tm1-client.js";
 import { buildIndexFromTM1 } from "../../lib/callgraph/tm1-adapter.js";
 import { buildCubeOrDimUsages } from "../../lib/callgraph/callGraph.js";
 import { ObjectUsageResultSchema } from "../schemas/items.js";
@@ -15,6 +16,7 @@ export const registerAnalyzeObjectUsage = defineTool({
   description: [
     "Find every reference to a cube or dimension across all TI processes (CellGet/Put, ViewExtract, ZeroOut, …) and cube rules (DB(), [dim].[el]).",
     "Returns a flat list sorted by source; excludes a cube's self-references inside its own rules. accessMode picks read vs write (data-flow) analysis; mode='summary' collapses per-source and drops snippets.",
+    "For a dimension, usedInCubes lists the cubes built on it (TM1 refuses to delete a dimension while any cube uses it) — run this before deleting a cube or dimension.",
   ],
   annotations: READ_ONLY,
   output: ObjectUsageResultSchema,
@@ -82,11 +84,18 @@ export const registerAnalyzeObjectUsage = defineTool({
     // audit use-case still gets bulk output without an unbounded worst case.
     const effectiveLimit = limit ?? USAGE_MAX_ITEMS;
 
-    const index = await buildIndexFromTM1(tm1Client, { includeControl });
+    const [index, usedInCubes] = await Promise.all([
+      buildIndexFromTM1(tm1Client, { includeControl }),
+      kind === "dimension"
+        ? cubesUsingDimension(tm1Client, objectName, includeSystem)
+        : Promise.resolve(undefined),
+    ]);
     const all = buildCubeOrDimUsages(index, kind, objectName, {
       includeSystem,
       accessMode,
     });
+    // Only dimensions carry the key; a cube has no "used in cubes".
+    const cubesField = usedInCubes === undefined ? {} : { usedInCubes };
 
     if (mode === "summary") {
       const allSources = summarizeBySource(all);
@@ -103,6 +112,7 @@ export const registerAnalyzeObjectUsage = defineTool({
               name: objectName,
               accessMode,
               mode,
+              ...cubesField,
               count: all.length,
               sourceCount: allSources.length,
               returned: sources.length,
@@ -123,6 +133,7 @@ export const registerAnalyzeObjectUsage = defineTool({
             kind,
             name: objectName,
             accessMode,
+            ...cubesField,
             count: all.length,
             returned: usages.length,
             truncated,
@@ -133,6 +144,23 @@ export const registerAnalyzeObjectUsage = defineTool({
     };
   },
 });
+
+/**
+ * Cubes whose dimension list contains `dimensionName` (case-insensitive).
+ * One GET (Cubes?$select=Name&$expand=Dimensions). Control cubes ('}' names,
+ * e.g. }ElementAttributes_X) are dropped unless `includeSystem`.
+ */
+export async function cubesUsingDimension(
+  tm1Client: TM1Client,
+  dimensionName: string,
+  includeSystem: boolean,
+): Promise<string[]> {
+  const key = dimensionName.toLowerCase();
+  return (await tm1Client.cubes.list())
+    .filter((c) => includeSystem || !c.name.startsWith("}"))
+    .filter((c) => (c.dimensions ?? []).some((d) => d.toLowerCase() === key))
+    .map((c) => c.name);
+}
 
 /** One row per referencing process or rule, most references first. */
 export function summarizeBySource(

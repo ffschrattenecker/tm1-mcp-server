@@ -267,6 +267,7 @@ export const ObjectUsageResultSchema = z.object({
   kind: z.string(),
   name: z.string(),
   accessMode: z.string(),
+  usedInCubes: z.array(z.string()).optional(),
   count: z.number().int(),
   returned: z.number().int(),
   truncated: z.boolean(),

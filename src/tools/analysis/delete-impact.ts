@@ -4,7 +4,10 @@
 import type { TM1Client } from "../../tm1-client.js";
 import { buildIndexFromTM1 } from "../../lib/callgraph/tm1-adapter.js";
 import { buildCubeOrDimUsages } from "../../lib/callgraph/callGraph.js";
-import { summarizeBySource } from "./analyze-object-usage.js";
+import {
+  cubesUsingDimension,
+  summarizeBySource,
+} from "./analyze-object-usage.js";
 
 const MAX_SOURCES = 50;
 
@@ -13,9 +16,13 @@ export async function deleteImpact(
   kind: "cube" | "dimension",
   name: string,
 ) {
-  const [index, cubes] = await Promise.all([
+  // includeSystem=true keeps the control cubes (}ElementAttributes_X) this
+  // list has always shown.
+  const [index, usedInCubes] = await Promise.all([
     buildIndexFromTM1(tm1Client, { includeControl: false }),
-    kind === "dimension" ? tm1Client.cubes.list() : Promise.resolve([]),
+    kind === "dimension"
+      ? cubesUsingDimension(tm1Client, name, true)
+      : Promise.resolve([]),
   ]);
   const sources = summarizeBySource(
     buildCubeOrDimUsages(index, kind, name, {
@@ -23,10 +30,6 @@ export async function deleteImpact(
       accessMode: "all",
     }),
   );
-  const key = name.toLowerCase();
-  const usedInCubes = cubes
-    .filter((c) => (c.dimensions ?? []).some((d) => d.toLowerCase() === key))
-    .map((c) => c.name);
   return {
     ...(kind === "dimension" ? { usedInCubes } : {}),
     referencingSources: sources.length,

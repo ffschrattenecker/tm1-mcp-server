@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { buildIndexFromTM1 } from "../../lib/callgraph/tm1-adapter.js";
+import {
+  buildIndexFromTM1,
+  invalidateCallgraphCache,
+} from "../../lib/callgraph/tm1-adapter.js";
 import {
   buildCallGraph,
   type CallGraphNode,
@@ -390,6 +393,13 @@ export const registerAnalyzeCallgraph = defineTool({
       .describe(
         "Global-ranking mode only: cap on ranked processes returned (default 50).",
       ),
+    refresh: z
+      .boolean()
+      .optional()
+      .default(false)
+      .describe(
+        "Drop this connection's cached reference index (60 s TTL, shared with the other analysis tools) and rebuild it first. Only needed after changes made outside this server; its own writes already drop the cache.",
+      ),
   },
   handler: async (
     {
@@ -402,13 +412,21 @@ export const registerAnalyzeCallgraph = defineTool({
       maskSecrets: maskSecretsRequested,
       rankBy,
       topN,
+      refresh,
     },
     tm1Client,
   ) => {
     // A model-supplied `maskSecrets:false` only takes effect when the
     // operator allowed it via TM1_ALLOW_UNMASKED_SECRETS.
     const maskSecrets = resolveMaskSecrets(maskSecretsRequested);
-    const index = await buildIndexFromTM1(tm1Client, { includeControl });
+    // refresh: invalidate first so the rebuilt index is published for the
+    // other analysis tools too, then bypass the cache so a build that was
+    // already in flight (pre-invalidation) is not handed back as "fresh".
+    if (refresh) invalidateCallgraphCache(tm1Client.connectionId);
+    const index = await buildIndexFromTM1(tm1Client, {
+      includeControl,
+      bypassCache: refresh,
+    });
 
     if (start === undefined || start === "") {
       const result = globalRanking(index, { rankBy, topN, includeSystem });
