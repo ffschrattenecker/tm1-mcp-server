@@ -22,7 +22,7 @@ export const registerCheckFeeders = defineTool({
   description: [
     "Check the feeders of a cell: TM1's CheckFeeders walks the cells underlying this cell and returns problematic ones with a fed flag — fed=false marks a broken or missing feeder (the classic cause of consolidations that miss rule-calculated leaves).",
     "An empty fedCells is NOT proof of full feeding: TM1 has returned [] for consolidations with unfed leaves. conclusive=false says so; pass verifyLeaves=true for a check that does not rely on CheckFeeders — every leaf under the cell is read plain and under NON EMPTY, and a leaf with a value that NON EMPTY drops is unfed (leafCheck).",
-    "target reports the start cell's live state (value, ruleDerived, consolidated, fed).",
+    "target reports the start cell's live state (value, ruleDerived, consolidated, fed; fed is null for a consolidation, which survives NON EMPTY once any leaf is fed).",
     "Elements are given in cube dimension order (discover with tm1_list_cubes). Write Hierarchy:Element for an alternate hierarchy; the first colon splits, so in dimension Region 'Region:A:B' is element 'A:B' of the default one.",
     "Related: tm1_trace_feeders (statements involved), tm1_trace_cell_calculation (why has this cell value X).",
   ],
@@ -75,10 +75,13 @@ export const registerCheckFeeders = defineTool({
     );
     const unfedCount = fedCells.filter((c) => !c.fed).length;
 
-    const [target] = await withToolHint(
-      tm1Client.cells.probeCells(cubeName, [elements], opts),
-      `Reading the cell of cube '${cubeName}' failed after CheckFeeders succeeded.`,
-    );
+    // The cell's own state is extra; if it cannot be read, TM1's answer stands.
+    let target: CellProbe | undefined;
+    try {
+      [target] = await tm1Client.cells.probeCells(cubeName, [elements], opts);
+    } catch {
+      target = undefined;
+    }
 
     let leafCheck: LeafCheck | undefined;
     if (verifyLeaves) {
@@ -108,6 +111,9 @@ export const registerCheckFeeders = defineTool({
 
     const conclusive = leafCheck ? !leafCheck.truncated : unfedCount > 0;
     const warning = warningFor(unfedCount, target, leafCheck);
+    const unread = target
+      ? undefined
+      : "The cell's live state could not be read; target is omitted.";
 
     return {
       content: [
@@ -119,7 +125,9 @@ export const registerCheckFeeders = defineTool({
               unfedCount,
               fedCells,
               conclusive,
-              ...(warning ? { warning } : {}),
+              ...(warning || unread
+                ? { warning: [warning, unread].filter(Boolean).join(" ") }
+                : {}),
               ...(target ? { target: probeState(target) } : {}),
               ...(leafCheck ? { leafCheck } : {}),
             },
@@ -132,12 +140,14 @@ export const registerCheckFeeders = defineTool({
   },
 });
 
-function probeState(p: CellProbe) {
+// A consolidation survives NON EMPTY as soon as one leaf is fed, so its fed
+// state says nothing about full feeding — report it as unknown.
+export function probeState(p: CellProbe) {
   return {
     value: p.value,
     ruleDerived: p.ruleDerived,
     consolidated: p.consolidated,
-    fed: p.fed,
+    fed: p.consolidated ? null : p.fed,
   };
 }
 

@@ -3,6 +3,7 @@ import { withToolHint } from "../error-format.js";
 import { READ_ONLY } from "../annotations.js";
 import { TraceFeedersResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { probeState } from "./check-feeders.js";
 import type { CellProbe, FedCellDescriptor } from "../../types.js";
 
 // Targets read back by verifyTargets; the rest keep liveFed unset.
@@ -56,10 +57,13 @@ export const registerTraceFeeders = defineTool({
       tm1Client.cells.traceFeeders(cubeName, elements, opts),
       `TraceFeeders failed for cube '${cubeName}'. Verify dimension order/elements via tm1_list_cubes.`,
     );
-    const [source] = await withToolHint(
-      tm1Client.cells.probeCells(cubeName, [elements], opts),
-      `Reading the cell of cube '${cubeName}' failed after TraceFeeders succeeded.`,
-    );
+    // The cell's own state is extra; if it cannot be read, TM1's answer stands.
+    let source: CellProbe | undefined;
+    try {
+      [source] = await tm1Client.cells.probeCells(cubeName, [elements], opts);
+    } catch {
+      source = undefined;
+    }
 
     let fedCells: Array<FedCellDescriptor & { liveFed?: boolean | null }> =
       result.fedCells;
@@ -78,16 +82,7 @@ export const registerTraceFeeders = defineTool({
             count: result.fedCells.length,
             fedCells,
             statements: result.statements,
-            ...(source
-              ? {
-                  source: {
-                    value: source.value,
-                    ruleDerived: source.ruleDerived,
-                    consolidated: source.consolidated,
-                    fed: source.fed,
-                  },
-                }
-              : {}),
+            ...(source ? { source: probeState(source) } : {}),
             ...(warning ? { warning } : {}),
           }),
         },
@@ -134,6 +129,8 @@ function warningFor(
   fedCells: Array<{ liveFed?: boolean | null }>,
 ): string | undefined {
   const parts: string[] = [];
+  if (!source)
+    parts.push("The cell's live state could not be read; source is omitted.");
   if (source?.ruleDerived && !source.consolidated) {
     if (source.fed === false) {
       parts.push(

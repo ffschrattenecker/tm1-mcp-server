@@ -335,7 +335,8 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
       cubeName: sampleCube,
       elements: sampleElements,
     });
-    // Empty fedCells (fully-fed) is a valid non-error result on 11.8.
+    // Empty fedCells is a valid non-error result on 11.8 — not proof of full
+    // feeding, which is why the tool marks it conclusive=false.
     expect(r.isError).toBe(false);
     expect(r.json).toMatchObject({
       count: expect.any(Number),

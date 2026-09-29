@@ -14,8 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carries `conclusive` (false for an unverified empty result) and a `warning`, plus `target`,
   the start cell's live state. `verifyLeaves=true` checks without CheckFeeders: every leaf under
   the cell (up to `maxCells`, default 500) is read plain and under `NON EMPTY`, and a leaf with
-  a value that `NON EMPTY` drops is reported unfed in `leafCheck`, with the value the
-  consolidation is missing.
+  a value that `NON EMPTY` drops is reported unfed in `leafCheck`, with `unfedValue`, the
+  unweighted sum of those leaves. `target.fed` is null for a consolidation: it survives
+  `NON EMPTY` once any leaf is fed.
 - **`tm1_trace_feeders` says whether the feeder can fire.** `fedCells[].fed` is TM1's flag on the
   statement target and was `true` for a target that was not fed. The result now adds `source`
   (the traced cell's value, ruleDerived and live fed state) and a `warning` when the source is

@@ -93,11 +93,12 @@ describe("tm1_check_feeders", () => {
     expect(out.count).toBe(0);
     expect(out.conclusive).toBe(false);
     expect(out.warning).toMatch(/verifyLeaves=true/);
+    // A consolidation survives NON EMPTY once any leaf is fed: unknown, not true.
     expect(out.target).toEqual({
       value: 3,
       ruleDerived: false,
       consolidated: true,
-      fed: true,
+      fed: null,
     });
     expect(out.leafCheck).toBeUndefined();
     expect(cells.leafTuples).not.toHaveBeenCalled();
@@ -228,6 +229,20 @@ describe("tm1_trace_feeders", () => {
 
     expect(out.fedCells[0].liveFed).toBeUndefined();
     expect(out.warning).toBeUndefined();
+  });
+
+  it("returns TM1's answer when the cell's own state cannot be read", async () => {
+    const reported = [{ cube: "C", tuple: ["09", "A_4", "Qty"], fed: false }];
+    const { client, cells } = fakeClient(reported as never);
+    cells.probeCells.mockRejectedValueOnce(new Error("read refused"));
+    const out = await run(capture(registerCheckFeeders, client), {
+      cubeName: "C",
+      elements: ["Q3", "A_4", "Qty"],
+    });
+
+    expect(out.fedCells).toEqual(reported);
+    expect(out.target).toBeUndefined();
+    expect(out.warning).toMatch(/could not be read/);
   });
 });
 
