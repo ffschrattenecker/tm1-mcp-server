@@ -29,74 +29,91 @@ tm1_request({ connection, method: GET|POST|PATCH|PUT|DELETE, path, body?, confir
 - Reuses the existing HTTP layer: connection resolution, keychain credentials, session reuse, 401 stop,
   `TM1Error` hints, "outcome unknown, do not re-run" on dropped long calls.
 - Writes (`POST`/`PATCH`/`PUT`/`DELETE`) obey the write guard: only on a connection the user named.
-  `DELETE` and destructive actions (`tm1.Clear`, `tm1.Unload`, `tm1.CancelOperation`, `tm1.SaveDataAll`, ...)
-  require `confirm` = the target object name taken from the path, like `requireConfirm` today.
+  `DELETE` and cancel actions (`tm1.CancelOperation`, `tm1.Cancel`) require `confirm` = the target object
+  name taken from the path, like `requireConfirm` today.
+- Non-GET requests are never retried.
+- No bypass of kept tools. `tm1_request` rejects these and names the tool to use instead:
+  - `PATCH`/`POST`/`PUT` on `Processes(...)` or `POST Processes` → `tm1_upsert_process` (preflight, backup, rollback)
+  - `PATCH Cubes('C')` touching `Rules` → `tm1_set_cube_rules`
+  - any `Cellsets(...)` write, `tm1.Update`, `tm1.UpdateCells` → `tm1_write_cells`
+  - `tm1.Execute*` on processes, `ExecuteProcessWithReturn`, `tm1.Execute` on chores → `tm1_execute_process` / `tm1_execute_chore`
+  - `ExecuteMDX` / `Cellsets` reads → `tm1_execute_mdx` (compaction, cellset cleanup)
 - Response: strip `@odata.*` keys, cap `value[]` at `maxItems` (default 100) with `truncated` + `total` when
   `$count` is present, mask secrets (`maskSecretsDeep`).
 - Description holds a short endpoint cheat sheet. The four skills get a longer one.
 
-## Keep (50)
+## Keep (57)
 
-| Tool                                                                                         | Why                                                             |
-| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| **Analysis**                                                                                 |                                                                 |
-| tm1_analyze_callgraph                                                                        | TI parser + reference index; nothing in REST                    |
-| tm1_analyze_chore_graph                                                                      | chore → process → callgraph join                                |
-| tm1_analyze_object_usage                                                                     | cross-object reference index; absorbs delete impact (see Merge) |
-| tm1_audit_complexity                                                                         | process metrics + antipatterns                                  |
-| tm1_audit_feeders                                                                            | rule/feeder analysis                                            |
-| tm1_audit_naming                                                                             | naming rules across all object types                            |
-| tm1_check_v12_readiness                                                                      | deprecated-TI catalogue                                         |
-| tm1_compare_environments                                                                     | multi-connection diff                                           |
-| tm1_diff_cube_rules                                                                          | line diff, optionally cross-connection                          |
-| tm1_diff_hierarchy                                                                           | hierarchy diff                                                  |
-| tm1_trace_data_flow                                                                          | TI data-flow analysis                                           |
-| **Cells**                                                                                    |                                                                 |
-| tm1_execute_mdx                                                                              | cellset → compact rows; replaces tm1_get_cell_value too         |
-| tm1_get_view                                                                                 | cellset shaping + axis clipping                                 |
-| tm1_sample_cells                                                                             | sampling logic                                                  |
-| tm1_write_cells                                                                              | coordinate validation, cellset writeback                        |
-| tm1_check_writable_coords                                                                    | rule/consolidation/type checks per coordinate                   |
-| tm1_trace_cell_calculation                                                                   | rule tracing                                                    |
-| tm1_check_feeders                                                                            | CheckFeeders action + fed/consolidation fix                     |
-| tm1_trace_feeders                                                                            | feeder tracing                                                  |
-| **Rules**                                                                                    |                                                                 |
-| tm1_get_cube_rules                                                                           | outline, line ranges                                            |
-| tm1_get_all_cube_rules                                                                       | multi-cube with projections                                     |
-| tm1_search_rules                                                                             | regex across all rules                                          |
-| tm1_set_cube_rules                                                                           | patch, read-in-full loop, check                                 |
-| tm1_check_cube_rule                                                                          | rule check action with located errors                           |
-| **Processes**                                                                                |                                                                 |
-| tm1_get_process                                                                              | parts projection, comment stripping                             |
-| tm1_get_all_processes_code                                                                   | bulk code with projections                                      |
-| tm1_search_code                                                                              | regex across all TI code                                        |
-| tm1_check_process_code                                                                       | static checks                                                   |
-| tm1_validate_process_refs                                                                    | refs against live objects                                       |
-| tm1_upsert_process                                                                           | preflight, backup, compile, rollback                            |
-| tm1_execute_process                                                                          | heartbeat, timeout, error-log pickup, never-retry               |
-| tm1_diagnose_process_error                                                                   | error log + code correlation                                    |
-| tm1_diff_processes                                                                           | line diff, cross-connection                                     |
-| tm1_diff_process_with_file                                                                   | diff vs .pro / git file                                         |
-| tm1_export_process_to_pro                                                                    | .pro serializer                                                 |
-| tm1_export_process_to_git                                                                    | tm1-git format                                                  |
-| tm1_import_pro_file                                                                          | .pro parser, local file                                         |
-| tm1_import_process_from_git                                                                  | tm1-git format                                                  |
-| tm1_install_pro_bundle                                                                       | multi-file install                                              |
-| **Elements**                                                                                 |                                                                 |
-| tm1_bulk_upsert_elements                                                                     | batching, edges, weights in one call                            |
-| tm1_update_element_attribute_value                                                           | writes via `}ElementAttributes_` cube, batch                    |
-| **Chores**                                                                                   |                                                                 |
-| tm1_execute_chore                                                                            | heartbeat, timeout, never-retry                                 |
-| **Files** (Applications container resolution + bytes; revisit later as one `tm1_files` tool) |                                                                 |
-| tm1_list_files                                                                               |                                                                 |
-| tm1_search_files                                                                             |                                                                 |
-| tm1_get_file_content                                                                         | bytes / text decode                                             |
-| tm1_upload_file                                                                              | binary upload                                                   |
-| tm1_delete_file                                                                              |                                                                 |
-| **Server**                                                                                   |                                                                 |
-| tm1_list_connections                                                                         | local config, no REST                                           |
-| tm1_get_cube_stats                                                                           | `}StatsByCube` + concurrency                                    |
-| tm1_get_error_log_content                                                                    | tail / grep of raw log text                                     |
+| Tool                                                                                         | Why                                                                               |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Analysis**                                                                                 |                                                                                   |
+| tm1_analyze_callgraph                                                                        | TI parser + reference index; nothing in REST                                      |
+| tm1_analyze_chore_graph                                                                      | chore → process → callgraph join                                                  |
+| tm1_analyze_object_usage                                                                     | cross-object reference index; absorbs delete impact (see Merge)                   |
+| tm1_audit_complexity                                                                         | process metrics + antipatterns                                                    |
+| tm1_audit_feeders                                                                            | rule/feeder analysis                                                              |
+| tm1_audit_naming                                                                             | naming rules across all object types                                              |
+| tm1_check_v12_readiness                                                                      | deprecated-TI catalogue                                                           |
+| tm1_compare_environments                                                                     | multi-connection diff                                                             |
+| tm1_diff_cube_rules                                                                          | line diff, optionally cross-connection                                            |
+| tm1_diff_hierarchy                                                                           | hierarchy diff                                                                    |
+| tm1_trace_data_flow                                                                          | TI data-flow analysis                                                             |
+| **Cells**                                                                                    |                                                                                   |
+| tm1_execute_mdx                                                                              | cellset → compact rows; replaces tm1_get_cell_value too                           |
+| tm1_get_view                                                                                 | cellset shaping + axis clipping                                                   |
+| tm1_sample_cells                                                                             | sampling logic                                                                    |
+| tm1_write_cells                                                                              | coordinate validation, cellset writeback                                          |
+| tm1_check_writable_coords                                                                    | rule/consolidation/type checks per coordinate                                     |
+| tm1_trace_cell_calculation                                                                   | rule tracing                                                                      |
+| tm1_check_feeders                                                                            | CheckFeeders action + fed/consolidation fix                                       |
+| tm1_trace_feeders                                                                            | feeder tracing                                                                    |
+| **Rules**                                                                                    |                                                                                   |
+| tm1_get_cube_rules                                                                           | outline, line ranges                                                              |
+| tm1_get_all_cube_rules                                                                       | multi-cube with projections                                                       |
+| tm1_search_rules                                                                             | regex across all rules                                                            |
+| tm1_set_cube_rules                                                                           | patch, read-in-full loop, check                                                   |
+| tm1_check_cube_rule                                                                          | rule check action with located errors                                             |
+| **Processes**                                                                                |                                                                                   |
+| tm1_get_process                                                                              | parts projection, comment stripping                                               |
+| tm1_get_all_processes_code                                                                   | bulk code with projections                                                        |
+| tm1_search_code                                                                              | regex across all TI code                                                          |
+| tm1_check_process_code                                                                       | static checks                                                                     |
+| tm1_validate_process_refs                                                                    | refs against live objects                                                         |
+| tm1_upsert_process                                                                           | preflight, backup, compile, rollback                                              |
+| tm1_execute_process                                                                          | heartbeat, timeout, error-log pickup, never-retry                                 |
+| tm1_diagnose_process_error                                                                   | error log + code correlation                                                      |
+| tm1_diff_processes                                                                           | line diff, cross-connection                                                       |
+| tm1_diff_process_with_file                                                                   | diff vs .pro / git file                                                           |
+| tm1_export_process_to_pro                                                                    | .pro serializer                                                                   |
+| tm1_export_process_to_git                                                                    | tm1-git format                                                                    |
+| tm1_import_pro_file                                                                          | .pro parser, local file                                                           |
+| tm1_import_process_from_git                                                                  | tm1-git format                                                                    |
+| tm1_install_pro_bundle                                                                       | multi-file install                                                                |
+| **Elements**                                                                                 |                                                                                   |
+| tm1_delete_elements                                                                          | `$batch` with per-element results; falls back when batch unsupported              |
+| tm1_bulk_upsert_elements                                                                     | batching, edges, weights in one call                                              |
+| tm1_update_element_attribute_value                                                           | writes via `}ElementAttributes_` cube, batch                                      |
+| **Metadata**                                                                                 |                                                                                   |
+| tm1_resolve_default_members                                                                  | DefaultMember, then fallback tiers when none is defined                           |
+| **Cube lifecycle**                                                                           |                                                                                   |
+| tm1_clear_cube                                                                               | runs a temporary TI (no REST clear action); timeout                               |
+| tm1_save_data                                                                                | runs a temporary TI (`SaveDataAll` / `CubeSaveData`); heartbeat, timeout          |
+| **Processes (guards)**                                                                       |                                                                                   |
+| tm1_copy_process                                                                             | never-overwrite guard; GET + POST                                                 |
+| **Chores**                                                                                   |                                                                                   |
+| tm1_execute_chore                                                                            | heartbeat, timeout, never-retry                                                   |
+| **Files** (Applications container resolution + bytes; revisit later as one `tm1_files` tool) |                                                                                   |
+| tm1_list_files                                                                               |                                                                                   |
+| tm1_search_files                                                                             |                                                                                   |
+| tm1_get_file_content                                                                         | bytes / text decode                                                               |
+| tm1_upload_file                                                                              | binary upload                                                                     |
+| tm1_delete_file                                                                              |                                                                                   |
+| **Server**                                                                                   |                                                                                   |
+| tm1_list_connections                                                                         | local config, no REST                                                             |
+| tm1_get_cube_stats                                                                           | `}StatsByCube` + concurrency                                                      |
+| tm1_get_server_state                                                                         | joins six endpoints into one snapshot                                             |
+| tm1_list_error_logs                                                                          | `ErrorLogFiles` has only `Filename`; process-name and timestamp matching parse it |
+| tm1_get_error_log_content                                                                    | tail / grep of raw log text                                                       |
 
 ## Merge (3)
 
@@ -106,9 +123,9 @@ tm1_request({ connection, method: GET|POST|PATCH|PUT|DELETE, path, body?, confir
 | tm1_delete_dimension           | its `dryRun` impact → tm1_analyze_object_usage; the delete → tm1_request |
 | tm1_delete_cube                | same as tm1_delete_dimension                                             |
 
-## Delete (61)
+## Delete (54)
 
-Each row lists the replacing request.
+Each row lists the replacing request. Paths are taken from the service methods in `src/tm1-client/services/`.
 
 | Tool                             | Replacement                                                                                               |
 | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -118,9 +135,8 @@ Each row lists the replacing request.
 | tm1_get_hierarchy                | `GET Dimensions('D')/Hierarchies('H')?$expand=Elements($select=Name,Type;$top=50)` (+ `/Elements/$count`) |
 | tm1_get_ancestors                | `tm1_execute_mdx` with `ANCESTORS` / `GENERATE(...)`, or `Elements('e')/Parents`                          |
 | tm1_get_descendants              | `tm1_execute_mdx` with `DESCENDANTS` / `TM1FILTERBYLEVEL`                                                 |
-| tm1_resolve_default_members      | `GET Dimensions('D')/Hierarchies('H')/DefaultMember`                                                      |
 | tm1_list_processes               | `GET Processes?$select=Name&$filter=...`                                                                  |
-| tm1_list_processes_grouped       | same, grouping done by the model                                                                          |
+| tm1_list_processes_grouped       | same; the model groups by prefix (open question 5)                                                        |
 | tm1_list_chores                  | `GET Chores?$select=Name,Active,StartTime,Frequency&$expand=Tasks($expand=Process($select=Name))`         |
 | **Cells / views**                |                                                                                                           |
 | tm1_get_cell_value               | `tm1_execute_mdx`                                                                                         |
@@ -131,7 +147,6 @@ Each row lists the replacing request.
 | tm1_delete_view                  | `DELETE Cubes('C')/Views('V')`                                                                            |
 | **Cube lifecycle**               |                                                                                                           |
 | tm1_create_cube                  | `POST Cubes`                                                                                              |
-| tm1_clear_cube                   | `POST Cubes('C')/tm1.Clear` (confirm)                                                                     |
 | tm1_unload_cube                  | `POST Cubes('C')/tm1.Unload`                                                                              |
 | **Dimensions / elements**        |                                                                                                           |
 | tm1_create_dimension             | `POST Dimensions`                                                                                         |
@@ -140,7 +155,6 @@ Each row lists the replacing request.
 | tm1_create_element               | `POST .../Elements` (+ `Edges` for parent)                                                                |
 | tm1_update_element               | `PATCH .../Elements('e')`                                                                                 |
 | tm1_delete_element               | `DELETE .../Elements('e')`                                                                                |
-| tm1_delete_elements              | tm1_request per element, or a TI via tm1_upsert_process for large sets                                    |
 | tm1_list_element_attributes      | `GET .../ElementAttributes`                                                                               |
 | tm1_create_element_attribute     | `POST .../ElementAttributes`                                                                              |
 | tm1_get_element_attribute_values | `GET .../Elements?$select=Name,Attributes/Caption`                                                        |
@@ -152,12 +166,11 @@ Each row lists the replacing request.
 | tm1_delete_subset                | `DELETE .../Subsets('S')`                                                                                 |
 | **Chores**                       |                                                                                                           |
 | tm1_create_chore                 | `POST Chores`                                                                                             |
-| tm1_update_chore                 | `PATCH Chores('X')` (timezone coercion moves to the skill)                                                |
-| tm1_toggle_chore                 | `POST Chores('X')/tm1.Activate` / `tm1.Deactivate`                                                        |
+| tm1_update_chore                 | `PATCH Chores('X')` (drops the missing-offset → `Z` coercion; open question 5)                            |
+| tm1_toggle_chore                 | `PATCH Chores('X')` with `{ Active }`                                                                     |
 | tm1_delete_chore                 | `DELETE Chores('X')`                                                                                      |
 | **Processes**                    |                                                                                                           |
 | tm1_compile_process              | `POST Processes('P')/tm1.Compile`                                                                         |
-| tm1_copy_process                 | `GET` + `POST Processes` (or tm1_export/import)                                                           |
 | tm1_delete_process               | `DELETE Processes('P')`                                                                                   |
 | **Security**                     |                                                                                                           |
 | tm1_list_clients                 | `GET Users?$select=Name,Type&$expand=Groups($select=Name)`                                                |
@@ -165,26 +178,23 @@ Each row lists the replacing request.
 | tm1_create_client                | `POST Users`                                                                                              |
 | tm1_update_client                | `PATCH Users('u')`                                                                                        |
 | tm1_delete_client                | `DELETE Users('u')`                                                                                       |
-| tm1_assign_client_group          | `POST Users('u')/Groups/$ref`                                                                             |
-| tm1_remove_client_group          | `DELETE Users('u')/Groups('g')/$ref`                                                                      |
-| tm1_list_groups                  | `GET Groups?$select=Name&$expand=Clients($select=Name)`                                                   |
+| tm1_assign_client_group          | `PATCH Users('u')` with `Groups@odata.bind`                                                               |
+| tm1_remove_client_group          | `DELETE Users('u')/Groups?$id=Groups('g')`                                                                |
+| tm1_list_groups                  | `GET Groups?$expand=Users($select=Name)`                                                                  |
 | **Server / monitoring**          |                                                                                                           |
 | tm1_get_server_info              | `GET Configuration`, `GET ActiveConfiguration` (masked)                                                   |
-| tm1_get_server_state             | a few `$count` requests                                                                                   |
 | tm1_list_sessions                | `GET Sessions?$expand=User($select=Name),Threads`                                                         |
 | tm1_list_threads                 | `GET Threads`                                                                                             |
-| tm1_cancel_thread                | `POST Threads('id')/tm1.CancelOperation` (confirm)                                                        |
-| tm1_list_jobs                    | `GET Jobs` (v12)                                                                                          |
+| tm1_cancel_thread                | `POST Threads(id)/tm1.CancelOperation` (confirm)                                                          |
+| tm1_list_jobs                    | `GET Jobs?$expand=Session,WaitingOn` (v12)                                                                |
 | tm1_cancel_job                   | `POST Jobs('id')/tm1.Cancel` (v12, confirm)                                                               |
 | tm1_get_message_log              | `GET MessageLogEntries?$filter=...&$orderby=TimeStamp desc&$top=n`                                        |
 | tm1_get_audit_log                | `GET AuditLogEntries?$filter=...`                                                                         |
 | tm1_get_transaction_log          | `GET TransactionLogEntries?$filter=...`                                                                   |
-| tm1_list_error_logs              | `GET ErrorLogFiles?$select=Filename,LastUpdated&$filter=...`                                              |
-| tm1_save_data                    | `POST tm1.SaveDataAll` / `Cubes('C')/tm1.SaveData` (v11)                                                  |
 | **Analysis**                     |                                                                                                           |
 | tm1_find_orphan_dimensions       | `GET Dimensions` + `GET Cubes?$expand=Dimensions`, set difference                                         |
 
-Totals: keep 50 + `tm1_request` = 51 exposed tools; merge 3; delete 61.
+Totals: keep 57 + `tm1_request` = 58 exposed tools; merge 3; delete 54.
 
 ## Open questions
 
@@ -195,6 +205,9 @@ Totals: keep 50 + `tm1_request` = 51 exposed tools; merge 3; delete 61.
    turns between the named tool and `tm1_request`.
 3. `tm1_create_native_view` has a verbose body. Keep it if Claude gets it wrong via `tm1_request`.
 4. File tools: fold into one `tm1_files({ op })` or leave as they are.
+5. Two deletions push small logic into skill prose: `tm1_update_chore`'s missing-offset → `Z` coercion and
+   `tm1_list_processes_grouped`'s prefix grouping. Skills should not carry workarounds; either keep the
+   tools or accept that the logic is gone.
 
 ## Migration work
 
