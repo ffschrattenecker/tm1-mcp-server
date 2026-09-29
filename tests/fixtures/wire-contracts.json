@@ -1,6 +1,6 @@
 {
   "recordedAgainst": ["11.8.02900.8", "11.8.03500.4"],
-  "recordedAt": "2026-09-28",
+  "recordedAt": "2026-09-29",
   "endpoints": {
     "DELETE /api/v1/Chores('*') !404": {
       "error": {
@@ -583,7 +583,8 @@
         "@odata.id?": "string",
         "Edges[]?": {
           "@odata.id": "string",
-          "ComponentName": "string"
+          "ComponentName": "string",
+          "Weight?": "number"
         },
         "Level?": "number",
         "Name?": "string",
@@ -709,6 +710,23 @@
       "value[]": {
         "@odata.etag": "string",
         "DataProcedure?": "string",
+        "DataSource?": {
+          "asciiDecimalSeparator?": "string",
+          "asciiDelimiterChar?": "string",
+          "asciiDelimiterType?": "string",
+          "asciiHeaderRecords?": "number",
+          "asciiQuoteCharacter?": "string",
+          "asciiThousandSeparator?": "string",
+          "dataSourceNameForClient?": "string",
+          "dataSourceNameForServer?": "string",
+          "password?": "string",
+          "query?": "string",
+          "subset?": "string",
+          "Type": "string",
+          "userName?": "string",
+          "usesUnicode?": "boolean",
+          "view?": "string"
+        },
         "EpilogProcedure?": "string",
         "HasSecurityAccess?": "boolean",
         "MetadataProcedure?": "string",

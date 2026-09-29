@@ -1,6 +1,6 @@
 {
   "recordedAgainst": ["11.8.02900.8", "11.8.03500.4"],
-  "recordedAt": "2026-09-28",
+  "recordedAt": "2026-09-29",
   "methods": {
     "batch.execute": {
       "[]": {
@@ -280,6 +280,17 @@
         "type": "string"
       }
     },
+    "hierarchies.getStructure": {
+      "edges[]": {
+        "child": "string",
+        "parent": "string",
+        "weight": "number"
+      },
+      "elements[]": {
+        "name": "string",
+        "type": "string"
+      }
+    },
     "monitoring.getSessions": {
       "[]": {
         "active": "boolean",
@@ -438,6 +449,15 @@
         }
       },
       "total?": "number"
+    },
+    "processes.listDataSources": {
+      "[]": {
+        "name": "string",
+        "sourceName?": "string",
+        "subset?": "string",
+        "type": "string",
+        "view?": "string"
+      }
     },
     "security.getClient": {
       "@odata.context": "string",
