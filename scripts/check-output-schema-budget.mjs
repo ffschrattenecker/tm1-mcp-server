@@ -32,7 +32,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // schema (was z.unknown()/passthrough, now ~4.8KB) to close the drift-guard
 // blind spot, which had lifted the total past the earlier 78KB baseline; the
 // tools/list slimmer then took ~19KB back off.
-const BUDGET_BYTES = 65_000;
+// Raised to 66KB when tm1_check_feeders / tm1_trace_feeders gained their
+// live cell state (target, source, leafCheck, liveFed): +~0.9KB, one copy per
+// tool, so a shared $ref id would not shrink it.
+const BUDGET_BYTES = 66_000;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
