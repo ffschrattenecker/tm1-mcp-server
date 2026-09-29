@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.3.1] - 2026-09-29
+
 ### Removed
 
 - The tool-surface size gate (`lint:tool-surface-budget`) is out of `verify`, and
@@ -1504,7 +1506,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.3.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.3.1...HEAD
+[8.3.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.3.0...v8.3.1
 [8.3.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.2.0...v8.3.0
 [8.2.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.1.0...v8.2.0
 [8.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.0.0...v8.1.0
