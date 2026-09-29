@@ -72,7 +72,7 @@ function fakeClient(checkFeeders: CellProbe[] | []) {
           ? probe(t, 3, true, true)
           : t[1] === "A_3"
             ? probe(t, 3, false)
-            : leafState[t[0]!]!,
+            : leafState[t[0]],
       ),
     ),
   };
@@ -80,7 +80,7 @@ function fakeClient(checkFeeders: CellProbe[] | []) {
 }
 
 const run = async (h: ToolHandler, args: Record<string, unknown>) =>
-  JSON.parse((await h(args)).content[0]!.text);
+  JSON.parse((await h(args)).content[0].text);
 
 describe("tm1_check_feeders", () => {
   it("marks an empty CheckFeeders result inconclusive and points at verifyLeaves", async () => {
@@ -217,7 +217,7 @@ describe("tm1_trace_feeders", () => {
     const { client, cells } = fakeClient([]);
     cells.probeCells
       .mockImplementationOnce(async (_c: string, t: string[][]) => [
-        probe(t[0]!, 1, true),
+        probe(t[0], 1, true),
       ])
       .mockRejectedValueOnce(new Error("no such cube"));
     const out = await run(capture(registerTraceFeeders, client), {

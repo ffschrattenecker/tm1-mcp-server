@@ -1210,8 +1210,8 @@ describe("TM1Client – Cell Data Methods", () => {
         const [r] = await client.cells.probeCells("SalesCube", [["Jan", "EU"]]);
 
         expect(mdx[0]).toContain("[Sandboxes].[Sandboxes].[Base]");
-        expect(r!.tuple).toEqual(["Jan", "EU"]);
-        expect(r!.fed).toBe(true);
+        expect(r.tuple).toEqual(["Jan", "EU"]);
+        expect(r.fed).toBe(true);
       });
 
       it("fails when a member does not resolve", async () => {

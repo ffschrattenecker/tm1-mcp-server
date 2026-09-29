@@ -105,6 +105,7 @@ export function hintForCode(code: TM1ErrorCode | string): string {
 // because every consumer already imports them from this module.
 import type {
   AuditLogDetail,
+  CellProbe,
   CellValue,
   Chore,
   Client,
@@ -137,6 +138,7 @@ import type {
 
 export type {
   AuditLogDetail,
+  CellProbe,
   CellValue,
   Chore,
   Client,
@@ -193,23 +195,6 @@ export interface MdxResult {
 export interface FeederTraceResult {
   fedCells: FedCellDescriptor[];
   statements: string[];
-}
-
-/**
- * Live state of one cell, read twice: plain, then under NON EMPTY. Under
- * SKIPCHECK an unfed rule cell still computes its value but is dropped by
- * NON EMPTY — that is what `fed` measures.
- */
-export interface CellProbe {
-  tuple: string[];
-  value: CellValue;
-  ruleDerived: boolean;
-  consolidated: boolean;
-  /**
-   * true = survives NON EMPTY; false = has a value but is suppressed (unfed);
-   * null = empty or zero, so NON EMPTY cannot tell fed from unfed.
-   */
-  fed: boolean | null;
 }
 
 export interface LeafTuples {
