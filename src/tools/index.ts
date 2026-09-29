@@ -110,6 +110,12 @@ import { registerListFiles } from "./fileops/list-files.js";
 import { registerGetFileContent } from "./fileops/get-file-content.js";
 import { registerUploadFile } from "./fileops/upload-file.js";
 import { registerDeleteFile } from "./fileops/delete-file.js";
+import { registerFilesRead } from "./fileops/files-read.js";
+import { registerFilesWrite } from "./fileops/files-write.js";
+
+// Generic REST tools
+import { registerRestRead } from "./rest/rest-read.js";
+import { registerRestWrite } from "./rest/rest-write.js";
 import { registerSearchFiles } from "./fileops/search-files.js";
 
 // Analysis tools
@@ -254,6 +260,13 @@ const REGISTRARS: ToolRegistrar[] = [
   registerUploadFile,
   registerDeleteFile,
   registerSearchFiles,
+
+  registerFilesRead,
+  registerFilesWrite,
+
+  // Generic REST
+  registerRestRead,
+  registerRestWrite,
 
   // Analysis
   registerAnalyzeCallgraph,
