@@ -222,10 +222,33 @@ Totals: keep 59 (the 5 file tools become 2) + `tm1_rest_read` + `tm1_rest_write`
 2. `tm1_list_cubes` / `tm1_list_dimensions` / `tm1_get_hierarchy` are the most-called orientation tools
    (92 / 52 / 197 calls across 237 local session logs). They are deleted only if a live like-for-like
    comparison against plapp-franz (response characters and calls for the same information) shows the REST
-   tool is not worse. Result: see "Comparison" below.
+   tool is not worse. Result: deleted (see "Comparison").
 3. `tm1_create_native_view`: 0 calls in the session logs, only a live test and an EXAMPLES.md entry. Deleted.
 4. File tools: merged, 5 → 2 (two, not one, because of the readonly gate).
 5. `tm1_update_chore` and `tm1_list_processes_grouped` are kept; their logic does not move into skill prose.
+
+## Comparison (live, plapp-franz 11.8.03500.4, 2026-09-30)
+
+Replayed the argument shapes most used in the session logs. Characters are the response text the model reads.
+Tool definition cost (loaded once per session via tool search): `tm1_list_cubes` 2,576 + `tm1_list_dimensions`
+3,511 + `tm1_get_hierarchy` 3,979 = 10,066 chars, vs `tm1_rest_read` 1,677.
+
+| Scenario                                                                  | Old tool                               | `tm1_rest_read`                                                      |
+| ------------------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------- |
+| cubes, all non-control                                                    | 190                                    | 150 (`$filter=not startswith(Name,'}')`)                             |
+| dimensions + hierarchies, non-control (44)                                | 2,472                                  | 2,844                                                                |
+| dimensions + element counts                                               | 4,032                                  | 3,602 (`Hierarchies($select=Name,Cardinality)`)                      |
+| hierarchy, 145 elements, default (type, level, parents, children+weights) | 15,882                                 | 10,793 with `Parents`; 6,736 + 8,516 as elements + `Edges`           |
+| hierarchy, `compact` (no edges)                                           | 6,813                                  | 6,736                                                                |
+| hierarchy, 95 elements, `topN:10000`                                      | 10,167                                 | 6,902                                                                |
+| element count of a 160k-element dimension                                 | 234 (byType/byLevel)                   | 49 (`?$select=Cardinality`); a level split is one `$count` call each |
+| 10k elements of a 160k-element dimension                                  | error: RESPONSE_TOO_LARGE (749k chars) | 30k chars, `truncated:true` with kept/total                          |
+
+Same number of calls in every case except the per-type/level count split. The REST tool is smaller or equal
+everywhere except the dimension list (+15%, it keeps `Sandboxes` and TM1's key casing), and it degrades by
+truncating where `tm1_get_hierarchy` refused outright. Traps to put in the skills cheat sheet: the old tools
+hid control objects by default (the REST filter must say `not startswith(Name,'}')`), and name filters need
+`tolower()` to be case-insensitive. Decision: delete all three.
 
 ## Migration work
 
