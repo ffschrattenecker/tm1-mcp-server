@@ -33,7 +33,8 @@ tm1_request({ connection, method: GET|POST|PATCH|PUT|DELETE, path, body?, confir
   name taken from the path, like `requireConfirm` today.
 - Non-GET requests are never retried.
 - No bypass of kept tools. `tm1_request` rejects these and names the tool to use instead:
-  - `PATCH`/`POST`/`PUT` on `Processes(...)` or `POST Processes` → `tm1_upsert_process` (preflight, backup, rollback)
+  - `PATCH`/`POST`/`PUT` on `Processes(...)` or `POST Processes` → `tm1_upsert_process` (preflight, backup, rollback);
+    `POST Processes(...)/tm1.Compile` stays allowed
   - `PATCH Cubes('C')` touching `Rules` → `tm1_set_cube_rules`
   - any `Cellsets(...)` write, `tm1.Update`, `tm1.UpdateCells` → `tm1_write_cells`
   - `tm1.Execute*` on processes, `ExecuteProcessWithReturn`, `tm1.Execute` on chores → `tm1_execute_process` / `tm1_execute_chore`
