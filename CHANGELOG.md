@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [8.3.0] - 2026-09-29
+
 ### Added
 
 - **Compare two environments (DEV vs PROD) without reading either side into the model.** When
@@ -31,10 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `tm1_compare_environments` and `tm1_diff_cube_rules`. `EnableSandboxDimension` adds it to
   every cube, so without this every cube differed from a server that has the setting off. The
   full lists are still returned.
-- **Process datasources are read without their credentials.** `listDataSources` (used by
-  `tm1_trace_data_flow` and `tm1_compare_environments`) selected the whole `DataSource`, so
-  TM1 sent every process's datasource password, user name and ODBC query, which the client
-  then dropped. It now selects type, source, view and subset only.
 - **`contracts:record` / `contracts:verify` work with keychain connections.** With
   `--connection=<name>` they run through `test:live:for`, which reads `TM1_SECRETS=keychain`
   folders and probes one login before any test file runs. `contracts:verify` no longer
@@ -43,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file or process costs a table the size of the edit. A changed region too large to diff
   (over 16M LCS cells) reports line counts with `tooLarge: true` instead of hunks.
 
+### Security
+
+- **Process datasources are read without their credentials.** `listDataSources` (used by
+  `tm1_trace_data_flow` and `tm1_compare_environments`) selected the whole `DataSource`, so
+  TM1 sent every process's datasource password, user name and ODBC query, which the client
+  then dropped. It now selects type, source, view and subset only.
 ## [8.2.0] - 2026-09-28
 
 ### Fixed
@@ -1481,7 +1485,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.2.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.3.0...HEAD
+[8.3.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.2.0...v8.3.0
 [8.2.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.1.0...v8.2.0
 [8.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.0.0...v8.1.0
 [8.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v7.0.2...v8.0.0
