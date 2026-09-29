@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`tm1_check_feeders` no longer lets an empty result pass as "fully fed".** TM1's CheckFeeders
+  has returned `[]` for a consolidation whose rule-calculated leaf was unfed. The result now
+  carries `conclusive` (false for an unverified empty result) and a `warning`, plus `target`,
+  the start cell's live state. `verifyLeaves=true` checks without CheckFeeders: every leaf under
+  the cell (up to `maxCells`, default 500) is read plain and under `NON EMPTY`, and a leaf with
+  a value that `NON EMPTY` drops is reported unfed in `leafCheck`, with the value the
+  consolidation is missing.
+- **`tm1_trace_feeders` says whether the feeder can fire.** `fedCells[].fed` is TM1's flag on the
+  statement target and was `true` for a target that was not fed. The result now adds `source`
+  (the traced cell's value, ruleDerived and live fed state) and a `warning` when the source is
+  rule-calculated but unfed, since such a cell never fires its feeders. `verifyTargets=true`
+  reads each target back and sets `fedCells[].liveFed`.
+
+### Changed
+
+- **`tm1_trace_cell_calculation` lists each rule statement once.** Nodes carry `statementRefs`
+  into a top-level `statementTable` instead of repeating the full rule text; one quarter of a
+  rule-heavy cube was mostly the same statement. `dedupeStatements=false` restores per-node
+  `statements`.
+
+### Fixed
+
+- **The trace tools accept a coordinate without `Sandboxes`.** `tm1_check_feeders`,
+  `tm1_trace_feeders` and `tm1_trace_cell_calculation` bind a left-out `Sandboxes` to `Base`,
+  as `tm1_get_cell_value` does, instead of refusing the dimension count.
+
 ## [8.3.1] - 2026-09-29
 
 ### Removed
