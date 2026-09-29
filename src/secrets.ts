@@ -160,6 +160,6 @@ export async function withKeychainSecrets(
 export function keychainHint(connection: string): string {
   return (
     ` The secrets of "${connection}" are read from the OS keychain; store the ` +
-    `missing one with \`npx tm1-mcp-server secrets set ${connection} <KEY>\`.`
+    `missing one with \`npx -y @ffschrattenecker/tm1-mcp-server secrets set ${connection} <KEY>\`.`
   );
 }

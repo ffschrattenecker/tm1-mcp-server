@@ -269,7 +269,7 @@ export class ConnectionRegistry {
       this.logger.warn(
         { connections: plaintext },
         "plaintext secrets in .env — move them to the OS keychain with " +
-          "`npx tm1-mcp-server secrets migrate <connection>`",
+          "`npx -y @ffschrattenecker/tm1-mcp-server secrets migrate <connection>`",
       );
     }
   }

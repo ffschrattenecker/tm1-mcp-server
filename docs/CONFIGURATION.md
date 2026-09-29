@@ -32,7 +32,7 @@ The fastest way to switch an existing connection is to move its plaintext
 secrets out of the file:
 
 ```sh
-npx tm1-mcp-server secrets migrate my-dev
+npx -y @ffschrattenecker/tm1-mcp-server secrets migrate my-dev
 ```
 
 This stores every secret of `~/.tm1/mcp-servers/my-dev/.env` in the
@@ -40,13 +40,15 @@ keychain, reads each one back, and only then removes those lines and adds
 `TM1_SECRETS=keychain`. No plaintext backup is kept. Restart the MCP client
 afterwards.
 
-To set one by hand, you are prompted without echo, or it is read from stdin:
+To set one by hand, you are prompted without echo, or it is read from stdin.
+Run it in a real terminal (PowerShell, cmd, a POSIX tty): under Git Bash/mintty,
+or any shell that is not a TTY to Node, the typed input is echoed.
 
 ```sh
-npx tm1-mcp-server secrets set my-dev                 # TM1_PASSWORD
-npx tm1-mcp-server secrets set my-dev TM1_CLIENT_SECRET
-npx tm1-mcp-server secrets list my-dev                # which keys are stored, never values
-npx tm1-mcp-server secrets delete my-dev [KEY]
+npx -y @ffschrattenecker/tm1-mcp-server secrets set my-dev  # TM1_PASSWORD
+npx -y @ffschrattenecker/tm1-mcp-server secrets set my-dev TM1_CLIENT_SECRET
+npx -y @ffschrattenecker/tm1-mcp-server secrets list my-dev  # which keys are stored, never values
+npx -y @ffschrattenecker/tm1-mcp-server secrets delete my-dev [KEY]
 ```
 
 The keys that can live in the keychain are `TM1_PASSWORD`,

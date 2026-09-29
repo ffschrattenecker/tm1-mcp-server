@@ -191,7 +191,7 @@ Copy `mcp.json.example` to `.mcp.json` (project-local) or merge it into
 are routinely shared or committed; keep it in a gitignored `.env`
 ([where the server looks for one](docs/CONFIGURATION.md#where-credentials-are-read-from)),
 or out of files altogether in the OS keychain with
-`npx tm1-mcp-server secrets migrate <connection>`
+`npx -y @ffschrattenecker/tm1-mcp-server secrets migrate <connection>`
 ([details](docs/CONFIGURATION.md#secrets-in-the-os-keychain--tm1_secretskeychain)).
 
 For the `npx` install:
