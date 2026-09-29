@@ -3,7 +3,7 @@ import type { TM1Client } from "../../tm1-client.js";
 import { fingerprint } from "../../lib/fingerprint.js";
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
 import { compileUserRegex } from "../../lib/safe-regex.js";
-import { tm1NameKey } from "../../lib/tm1-name.js";
+import { tm1NameKey, withoutSandboxes } from "../../lib/tm1-name.js";
 import { CompareEnvironmentsResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -13,8 +13,6 @@ type ObjectType = (typeof OBJECT_TYPES)[number];
 
 // Hierarchy reads in deep mode, per side.
 const DEEP_CONCURRENCY = 4;
-
-const SANDBOXES = tm1NameKey("Sandboxes");
 
 /**
  * One object as the compare sees it: the name as the server spells it, and
@@ -49,24 +47,21 @@ async function readCubes(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
     includeControl: o.includeControl,
     withDimensions: true,
   });
-  return cubes.map((cube) => {
-    const dims = (cube.dimensions ?? []).map(tm1NameKey);
-    // EnableSandboxDimension puts Sandboxes first in every cube; without this,
-    // every cube differs from a server that has the setting off.
-    if (dims[0] === SANDBOXES) dims.shift();
-    return {
-      name: cube.cubeName,
-      aspects: {
-        dimensions: dims.join("\u0000"),
-        rules: fingerprint(cube.rulesText),
-      },
-    };
-  });
+  return cubes.map((cube) => ({
+    name: cube.cubeName,
+    aspects: {
+      dimensions: withoutSandboxes(cube.dimensions ?? [])
+        .map(tm1NameKey)
+        .join("\u0000"),
+      rules: fingerprint(cube.rulesText),
+    },
+  }));
 }
 
 async function readProcesses(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
-  // Datasource: type and source object only (listDataSources never selects
-  // credentials or the ODBC query), so a changed query is not detected here.
+  // Datasource: type and source object only. TM1 sends the whole DataSource,
+  // credentials and ODBC query included; listDataSources drops them, so a
+  // changed query is not detected here.
   const [processes, sources] = await Promise.all([
     c.processes.fetchForCallgraph(o.includeControl),
     c.processes.listDataSources(o.includeControl),

@@ -42,7 +42,7 @@ describe("tm1_diff_cube_rules", () => {
     dev: client({
       Sales: {
         rules: RULES.replace("['B']", "['C']"),
-        dims: ["Version", "Measure"],
+        dims: ["Sandboxes", "Version", "Measure"],
       },
     }),
     prod: client({
@@ -58,7 +58,8 @@ describe("tm1_diff_cube_rules", () => {
       connectionB: "dev",
     });
     expect(r.identical).toBe(false);
-    // Dimension names compare case-insensitively, as TM1 does.
+    // Dimension names compare case-insensitively, as TM1 does, and a leading
+    // Sandboxes dimension (EnableSandboxDimension) is ignored.
     expect(r.dimensions.identical).toBe(true);
     expect(r.skipCheck).toEqual({ a: true, b: true });
     expect(r.feeders).toEqual({ a: true, b: true });

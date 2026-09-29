@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tabCodeDiff } from "../../lib/line-diff.js";
-import { tm1NameEquals } from "../../lib/tm1-name.js";
+import { tm1NameEquals, withoutSandboxes } from "../../lib/tm1-name.js";
 import { DiffCubeRulesResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -54,9 +54,10 @@ export const registerDiffCubeRules = defineTool({
 
     const diff = tabCodeDiff(rulesA.rulesText, rulesB.rulesText, contextLines);
     const hunksOmitted = Math.max(0, diff.hunks.length - maxHunks);
+    const [coreA, coreB] = [withoutSandboxes(dimsA), withoutSandboxes(dimsB)];
     const dimensionsIdentical =
-      dimsA.length === dimsB.length &&
-      dimsA.every((d, i) => tm1NameEquals(d, dimsB[i]!));
+      coreA.length === coreB.length &&
+      coreA.every((d, i) => tm1NameEquals(d, coreB[i]!));
 
     return {
       content: [
