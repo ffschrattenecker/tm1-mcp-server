@@ -83,6 +83,8 @@ export const CalculationTraceResultSchema = z
     cube: z.string().optional(),
     tuple: z.array(z.string()).optional(),
     statements: z.array(z.string()).optional(),
+    statementRefs: z.array(z.number().int()).optional(),
+    statementTable: z.array(z.string()).optional(),
     components: z.array(z.unknown()).optional(),
     truncated: z.boolean().optional(),
   })

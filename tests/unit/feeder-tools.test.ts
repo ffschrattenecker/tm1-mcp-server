@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { z, type ZodRawShape } from "zod";
 import { registerCheckFeeders } from "../../src/tools/celldata/check-feeders.js";
 import { registerTraceFeeders } from "../../src/tools/celldata/trace-feeders.js";
+import { registerTraceCellCalculation } from "../../src/tools/celldata/trace-cell-calculation.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import type { CellProbe } from "../../src/types.js";
 
@@ -227,5 +228,55 @@ describe("tm1_trace_feeders", () => {
 
     expect(out.fedCells[0].liveFed).toBeUndefined();
     expect(out.warning).toBeUndefined();
+  });
+});
+
+describe("tm1_trace_cell_calculation", () => {
+  const rule = "['Qty','A_4'] = N: ['Qty','A_3'];";
+  const tree = {
+    type: "Consolidation",
+    value: 3,
+    tuple: ["Q3", "A_4", "Qty"],
+    components: [
+      {
+        type: "Rule",
+        value: 1,
+        tuple: ["07", "A_4", "Qty"],
+        statements: [rule],
+      },
+      {
+        type: "Rule",
+        value: 2,
+        tuple: ["08", "A_4", "Qty"],
+        statements: [rule],
+      },
+      { type: "Simple", value: 5, tuple: ["07", "A_4", "Src"] },
+    ],
+  };
+  const client = {
+    cells: { traceCellCalculation: vi.fn().mockResolvedValue(tree) },
+  } as unknown as TM1Client;
+
+  it("lists each statement once and references it by index", async () => {
+    const out = await run(capture(registerTraceCellCalculation, client), {
+      cubeName: "C",
+      elements: ["Q3", "A_4", "Qty"],
+    });
+
+    expect(out.statementTable).toEqual([rule]);
+    expect(out.components[0]).toMatchObject({ statementRefs: [0] });
+    expect(out.components[1]).toMatchObject({ statementRefs: [0] });
+    expect(out.components[0].statements).toBeUndefined();
+    expect(out.components[2].statementRefs).toBeUndefined();
+  });
+
+  it("dedupeStatements=false keeps TM1's per-node statements", async () => {
+    const out = await run(capture(registerTraceCellCalculation, client), {
+      cubeName: "C",
+      elements: ["Q3", "A_4", "Qty"],
+      dedupeStatements: false,
+    });
+
+    expect(out).toEqual(tree);
   });
 });
