@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scripts/measure-tool-surface.mjs` / `measure:tools` are gone. Clients load tools on demand,
   so the combined size no longer needs a hard cap.
 
+### Fixed
+
+- **The package now ships `docs/`.** The README links to `docs/CONFIGURATION.md` for the
+  keychain setup, and the installed copy had no such folder, so the only offline reference for
+  `secrets set` was `dist/secrets-cli.js`.
+- **`secrets` commands name the scoped package.** `npx tm1-mcp-server secrets …` resolves to
+  upstream, which has no `secrets` command. Messages, `.env.example` and the docs now say
+  `npx -y @ffschrattenecker/tm1-mcp-server secrets …`.
+- **The `AUTH_FAILED` hint no longer sends you to env vars.** With `TM1_SECRETS=keychain` the
+  password is in the OS keychain, and a rejected login is not retried, so the hint now names
+  both places and the restart.
+- `docs/CONFIGURATION.md` says the `secrets set` prompt echoes under Git Bash/mintty.
+
 ## [8.3.0] - 2026-09-29
 
 ### Added

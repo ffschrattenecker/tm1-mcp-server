@@ -73,7 +73,7 @@ export class TM1Error extends Error {
 export function hintForCode(code: TM1ErrorCode | string): string {
   switch (code) {
     case TM1ErrorCode.AUTH_FAILED:
-      return "Re-check TM1_USER/TM1_PASSWORD env vars; call tm1_get_server_info to verify reach.";
+      return "TM1 rejected the credentials. Fix TM1_USER and the password: in the connection's .env, or in the OS keychain (`npx -y @ffschrattenecker/tm1-mcp-server secrets set <connection>`) when it sets TM1_SECRETS=keychain. A rejected login is not retried, so restart the MCP server afterwards.";
     case TM1ErrorCode.PERMISSION_DENIED:
       return "Caller lacks rights for this object/operation. Inspect membership via tm1_list_groups and assign with tm1_assign_client_group.";
     case TM1ErrorCode.NOT_FOUND:
