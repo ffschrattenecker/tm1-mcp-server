@@ -227,6 +227,23 @@ describe("tm1_compare_environments", () => {
     expect(reads).toEqual(["Region", "Region"]);
   });
 
+  it("ignores a leading Sandboxes dimension (EnableSandboxDimension)", async () => {
+    const cube = { dims: ["Version", "Measure"], rules: "" };
+    const sandboxed = {
+      ...prod,
+      cubes: { Sales: { ...cube, dims: ["Sandboxes", ...cube.dims] } },
+    };
+    const r = await peerRunner(registerCompareEnvironments, {
+      dev: client(sandboxed),
+      prod: client({ ...prod, cubes: { Sales: cube } }),
+    })<Result>({
+      connection: "dev",
+      connectionB: "prod",
+      objectTypes: ["cubes"],
+    });
+    expect(r.cubes).toMatchObject({ identical: 1, differs: [] });
+  });
+
   it("filters by nameRegex and caps lists", async () => {
     const r = await run<Result>({
       connection: "prod",

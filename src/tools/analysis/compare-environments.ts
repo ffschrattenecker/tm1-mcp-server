@@ -14,6 +14,8 @@ type ObjectType = (typeof OBJECT_TYPES)[number];
 // Hierarchy reads in deep mode, per side.
 const DEEP_CONCURRENCY = 4;
 
+const SANDBOXES = tm1NameKey("Sandboxes");
+
 /**
  * One object as the compare sees it: the name as the server spells it, and
  * per aspect a fingerprint. Two objects differ in every aspect whose
@@ -47,13 +49,19 @@ async function readCubes(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
     includeControl: o.includeControl,
     withDimensions: true,
   });
-  return cubes.map((cube) => ({
-    name: cube.cubeName,
-    aspects: {
-      dimensions: (cube.dimensions ?? []).map(tm1NameKey).join("\u0000"),
-      rules: fingerprint(cube.rulesText),
-    },
-  }));
+  return cubes.map((cube) => {
+    const dims = (cube.dimensions ?? []).map(tm1NameKey);
+    // EnableSandboxDimension puts Sandboxes first in every cube; without this,
+    // every cube differs from a server that has the setting off.
+    if (dims[0] === SANDBOXES) dims.shift();
+    return {
+      name: cube.cubeName,
+      aspects: {
+        dimensions: dims.join("\u0000"),
+        rules: fingerprint(cube.rulesText),
+      },
+    };
+  });
 }
 
 async function readProcesses(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
