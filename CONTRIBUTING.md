@@ -216,4 +216,5 @@ it does. See `tests/fixtures/README.md` for the format, how to re-record, and
 why `contract-exceptions.json` exists.
 
 `contracts:verify` is not part of `npm run verify`: it needs a live TM1 server.
+Name it like the recorder: `npm run contracts:verify -- --connection=<name>`.
 Run it when touching the client or service layer, and after a server upgrade.

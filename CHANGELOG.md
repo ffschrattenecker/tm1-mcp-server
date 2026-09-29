@@ -27,6 +27,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A cube's leading `Sandboxes` dimension is ignored when comparing dimension lists** in
+  `tm1_compare_environments` and `tm1_diff_cube_rules`. `EnableSandboxDimension` adds it to
+  every cube, so without this every cube differed from a server that has the setting off. The
+  full lists are still returned.
+- **Process datasources are read without their credentials.** `listDataSources` (used by
+  `tm1_trace_data_flow` and `tm1_compare_environments`) selected the whole `DataSource`, so
+  TM1 sent every process's datasource password, user name and ODBC query, which the client
+  then dropped. It now selects type, source, view and subset only.
+- **`contracts:record` / `contracts:verify` work with keychain connections.** With
+  `--connection=<name>` they run through `test:live:for`, which reads `TM1_SECRETS=keychain`
+  folders and probes one login before any test file runs. `contracts:verify` no longer
+  defaults to `tm1-test`; name the server like `contracts:record`.
 - **Text diffs skip the common head and tail before diffing**, so a one-line edit in a long rule
   file or process costs a table the size of the edit. A changed region too large to diff
   (over 16M LCS cells) reports line counts with `tooLarge: true` instead of hunks.
