@@ -406,7 +406,8 @@ export function assertMatchesContract(
   if (!contract) {
     throw new Error(
       `no wire contract recorded for "${endpoint}". Record one with ` +
-        `\`npm run contracts:record\`, or fix the endpoint key — see ` +
+        `\`npm run contracts:record -- --connection=<name>\`, or fix the ` +
+        `endpoint key — see ` +
         `tests/fixtures/README.md.`,
     );
   }

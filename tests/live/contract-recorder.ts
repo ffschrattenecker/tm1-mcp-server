@@ -118,7 +118,8 @@ if (!RECORDING) {
         [...new Set(drift)].join("\n\n  ") +
         `\n\nEither TM1 changed — a different version, or a real behaviour ` +
         `change worth knowing about — or the contracts are stale. Re-record ` +
-        `with \`npm run contracts:record\` and read the diff before ` +
+        `with \`npm run contracts:record -- --connection=<name>\` and read ` +
+        `the diff before ` +
         `committing it.`,
     );
   });

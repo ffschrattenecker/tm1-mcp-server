@@ -98,7 +98,7 @@ export function stubContractCheckedFetch(spy: FnSpy): void {
               `fix the fake — or TM1 does send it and the recording never saw ` +
               `it. In the second case add an entry with its reason to ` +
               `tests/fixtures/contract-exceptions.json, or widen the recording ` +
-              `(\`npm run contracts:record\`).`,
+              `(\`npm run contracts:record -- --connection=<name>\`).`,
           );
         }
       }

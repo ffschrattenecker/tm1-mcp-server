@@ -11,7 +11,10 @@
 //   node scripts/record-wire-contracts.mjs --connection=<name> [--replace] ...
 //
 //   --connection=<name>  take the server from ~/.tm1/mcp-servers/<name>/.env
-//                (or TM1_CONNECTIONS_DIR) instead of an .mcp.json entry
+//                (or TM1_CONNECTIONS_DIR) instead of an .mcp.json entry. Runs
+//                through scripts/run-live-for.ts, so the .env is read the way
+//                the server reads it, TM1_SECRETS=keychain folders get their
+//                secrets from the OS keychain, and one login probe runs first.
 //   --replace    start the contracts over from this run alone, discarding
 //                what is on disk. The default is to merge, because a run only
 //                ever observes the shapes its target happens to hold: recording
@@ -67,12 +70,13 @@ if (!entry?.env?.TM1_BASE_URL) {
   );
   process.exit(1);
 }
-// This script hands the folder's env to vitest as-is; it cannot read the OS
-// keychain. Fail here rather than let every live file miss TM1_PASSWORD.
-if (entry.env.TM1_SECRETS) {
+// An .mcp.json entry's env goes to vitest as-is, and the keychain is keyed by
+// connection folder, so only --connection can resolve TM1_SECRETS. Fail here
+// rather than let every live file miss TM1_PASSWORD.
+if (!connection && entry.env.TM1_SECRETS) {
   console.error(
-    `record-wire-contracts: "${name}" keeps its secrets in the OS keychain (TM1_SECRETS), ` +
-      `which this script does not read. Use: npm run test:live:for -- ${name}`,
+    `record-wire-contracts: "${name}" keeps its secrets in the OS keychain (TM1_SECRETS); ` +
+      `name its connection folder instead: --connection=<name>`,
   );
   process.exit(1);
 }
@@ -94,28 +98,40 @@ const target = readOnly
   ? ["tests/live/read-broad.live.test.ts", "tests/live/read-smoke.live.test.ts"]
   : [];
 
-// vitest's own entry through this node, not `npx`: on Windows npx is
-// npx.cmd, which spawnSync cannot start without a shell.
-const res = spawnSync(
-  process.execPath,
-  [
-    join(root, "node_modules", "vitest", "vitest.mjs"),
-    "run",
-    "--config",
-    "vitest.live.config.ts",
-    ...target,
-  ],
-  {
-    cwd: root,
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      ...entry.env,
-      ...(flags.has("--verify") ? {} : { RECORD_CONTRACTS: "1" }),
-      ...(flags.has("--replace") ? {} : { CONTRACTS_MERGE: "1" }),
-    },
-  },
-);
+const modeEnv = {
+  ...(flags.has("--verify") ? {} : { RECORD_CONTRACTS: "1" }),
+  ...(flags.has("--replace") ? {} : { CONTRACTS_MERGE: "1" }),
+};
+
+// Entry points through this node, not `npx`: on Windows npx is npx.cmd,
+// which spawnSync cannot start without a shell. run-live-for builds the
+// connection's env itself and passes the rest of process.env (modeEnv) on.
+const res = connection
+  ? spawnSync(
+      process.execPath,
+      [
+        join(root, "node_modules", "tsx", "dist", "cli.mjs"),
+        join(root, "scripts", "run-live-for.ts"),
+        connection,
+        ...target,
+      ],
+      { cwd: root, stdio: "inherit", env: { ...process.env, ...modeEnv } },
+    )
+  : spawnSync(
+      process.execPath,
+      [
+        join(root, "node_modules", "vitest", "vitest.mjs"),
+        "run",
+        "--config",
+        "vitest.live.config.ts",
+        ...target,
+      ],
+      {
+        cwd: root,
+        stdio: "inherit",
+        env: { ...process.env, ...entry.env, ...modeEnv },
+      },
+    );
 if (res.error) {
   console.error(
     `record-wire-contracts: could not start vitest: ${res.error.message}`,
@@ -125,6 +141,11 @@ if (res.error) {
 // The live suite has known per-version failures; a failing assertion still
 // produced real responses, so a non-zero exit does not invalidate the
 // recording. Surface the code without treating it as fatal.
+// run-live-for exits 2 (usage) or 3 (login refused) before any test runs, so
+// nothing was recorded.
+if (connection && (res.status === 2 || res.status === 3)) {
+  process.exit(res.status);
+}
 if (res.status !== 0) {
   console.log(
     `\nlive suite exited ${res.status} — contracts recorded from whatever ran.`,

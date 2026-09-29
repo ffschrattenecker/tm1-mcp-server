@@ -59,6 +59,9 @@ The server is named explicitly — an `.mcp.json` entry, or with `--connection=<
 a connection folder `~/.tm1/mcp-servers/<name>/.env` — never taken from the repo's
 `.env`: that may point at a production instance, and the full suite creates and
 deletes sandbox objects.
+With `--connection` the run goes through `npm run test:live:for`: the `.env` is
+read as the server reads it, `TM1_SECRETS=keychain` folders get their secrets
+from the OS keychain, and a single login probe runs before any test file does.
 `--read-only` restricts the run to the read sweep, which is safe anywhere.
 
 Recording merges into what is already on disk. That is how a sandbox recording
