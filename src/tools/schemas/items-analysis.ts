@@ -3,10 +3,7 @@
 // callgraph-cache invalidation result.
 import { z } from "zod";
 export { FedCellDescriptorSchema } from "../../schemas/cells.js";
-import {
-  CellProbeSchema as CellProbeWireSchema,
-  FedCellDescriptorSchema,
-} from "../../schemas/cells.js";
+import { FedCellDescriptorSchema } from "../../schemas/cells.js";
 
 import { CellValueSchema } from "./items-common.js";
 
@@ -33,40 +30,16 @@ export const InvalidateCallgraphCacheResultSchema = z.object({
 // Modeled as one passthrough schema with all fields optional except none.
 // ── Feeder / calculation tracing (v11 cell diagnostics) ─────────────────────
 
-// The tools report a cell's state without repeating the tuple they were given.
-const CellProbeSchema = CellProbeWireSchema.omit({ tuple: true });
-
 export const CheckFeedersResultSchema = z.object({
   count: z.number().int(),
   unfedCount: z.number().int(),
   fedCells: z.array(FedCellDescriptorSchema),
-  conclusive: z.boolean().optional(),
-  warning: z.string().optional(),
-  target: CellProbeSchema.optional(),
-  leafCheck: z
-    .object({
-      checked: z.number().int(),
-      total: z.number().int(),
-      truncated: z.boolean(),
-      unfedCount: z.number().int(),
-      unfedValue: z.number(),
-      unfed: z.array(
-        z.object({ tuple: z.array(z.string()), value: CellValueSchema }),
-      ),
-    })
-    .optional(),
 });
 
 export const TraceFeedersResultSchema = z.object({
   count: z.number().int(),
-  fedCells: z.array(
-    FedCellDescriptorSchema.extend({
-      liveFed: z.boolean().nullable().optional(),
-    }),
-  ),
+  fedCells: z.array(FedCellDescriptorSchema),
   statements: z.array(z.string()),
-  source: CellProbeSchema.optional(),
-  warning: z.string().optional(),
 });
 
 // Recursive component tree — children typed as unknown to avoid recursive

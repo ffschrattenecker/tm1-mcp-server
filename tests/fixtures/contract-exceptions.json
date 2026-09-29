@@ -127,16 +127,6 @@
       "endpoint": "GET /api/v1/Chores",
       "path": "$.value[].Tasks[].Parameters[].Value",
       "reason": "A chore task parameter's value is numeric or string depending on the parameter's type. Only numeric values were recorded; see the Processes('*')/Parameters entry."
-    },
-    {
-      "endpoint": "POST /api/v1/ExecuteMDX",
-      "path": "$.Cells[].RuleDerived",
-      "reason": "CellService.probeCells selects Cells($select=Value,FormattedValue,RuleDerived,Consolidated); no recorded query selected these columns. Observed live on 11.8 (booleans)."
-    },
-    {
-      "endpoint": "POST /api/v1/ExecuteMDX",
-      "path": "$.Cells[].Consolidated",
-      "reason": "CellService.probeCells selects Cells($select=Value,FormattedValue,RuleDerived,Consolidated); no recorded query selected these columns. Observed live on 11.8 (booleans)."
     }
   ]
 }

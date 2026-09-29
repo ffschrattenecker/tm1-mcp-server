@@ -105,7 +105,6 @@ export function hintForCode(code: TM1ErrorCode | string): string {
 // because every consumer already imports them from this module.
 import type {
   AuditLogDetail,
-  CellProbe,
   CellValue,
   Chore,
   Client,
@@ -138,7 +137,6 @@ import type {
 
 export type {
   AuditLogDetail,
-  CellProbe,
   CellValue,
   Chore,
   Client,
@@ -195,13 +193,6 @@ export interface MdxResult {
 export interface FeederTraceResult {
   fedCells: FedCellDescriptor[];
   statements: string[];
-}
-
-export interface LeafTuples {
-  tuples: string[][];
-  /** Leaf combinations under the start tuple, before the cap. */
-  total: number;
-  truncated: boolean;
 }
 
 export interface CalculationTraceNode {

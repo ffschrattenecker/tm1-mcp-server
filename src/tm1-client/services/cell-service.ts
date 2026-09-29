@@ -7,17 +7,15 @@
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type {
   CalculationTraceNode,
-  CellProbe,
   CellValue,
   FedCellDescriptor,
   FeederTraceResult,
-  LeafTuples,
   MdxResult,
 } from "../../types.js";
 import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { escapeMdxName } from "../../lib/mdx.js";
 import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
-import { bindLeftOutSandbox, sandboxPosition } from "../../lib/cell-address.js";
+import { bindLeftOutSandbox } from "../../lib/cell-address.js";
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
 import { freeCellset, transformCellsetResponse } from "./cellset-transform.js";
 import { odataKey } from "./odata-page.js";
@@ -47,31 +45,6 @@ function splitHierarchyQualified(
   if (i <= 0 || i === entry.length - 1)
     return { hierarchy: dimension, element: entry };
   return { hierarchy: entry.slice(0, i), element: entry.slice(i + 1) };
-}
-
-// Inverse of splitHierarchyQualified: the entry that addresses `element` in
-// `hierarchy`. The default hierarchy is written bare unless the name holds a
-// colon, which would otherwise be read as a hierarchy prefix.
-function joinHierarchyQualified(
-  dimension: string,
-  hierarchy: string,
-  element: string,
-): string {
-  if (hierarchy === dimension && !element.includes(":")) return element;
-  return `${hierarchy}:${element}`;
-}
-
-// `[Dim].[Hier].[Elem]` for a coordinate entry, `]`-escaped.
-function mdxMember(dimension: string, entry: string): string {
-  const { hierarchy, element } = splitHierarchyQualified(entry, dimension);
-  return `[${escapeMdxName(dimension)}].[${escapeMdxName(hierarchy)}].[${escapeMdxName(element)}]`;
-}
-
-// Tuples per probe query — keeps the MDX text and the cellset small.
-const PROBE_CHUNK = 100;
-
-function hasValue(v: CellValue): boolean {
-  return typeof v === "number" ? v !== 0 : typeof v === "string" && v !== "";
 }
 
 // Build a fully-qualified MDX member reference for a write coordinate.
@@ -447,154 +420,6 @@ export class CellService {
   }
 
   /**
-   * Read the live fed state of cells: one plain read (value, RuleDerived,
-   * Consolidated — it also proves every member resolves), then the same set
-   * under NON EMPTY. A cell with a value that NON EMPTY drops is unfed; an
-   * empty or zero cell is dropped either way, so its fed state is unknown.
-   * The tuples go on COLUMNS only, so NON EMPTY judges each cell on its own.
-   */
-  async probeCells(
-    cubeName: string,
-    tuples: string[][],
-    opts?: RequestOptions,
-  ): Promise<CellProbe[]> {
-    const dims = await this.dimOrder.get(cubeName);
-    // Sandboxes left out → Base; trace actions return target tuples that way.
-    const bound = tuples.map((t) => bindLeftOutSandbox(dims, t) ?? t);
-    for (const t of bound) {
-      if (t.length !== dims.length)
-        throw dimensionCountMismatch(cubeName, dims, t);
-    }
-    const cube = escapeMdxName(cubeName);
-    const out: CellProbe[] = [];
-    for (let i = 0; i < tuples.length; i += PROBE_CHUNK) {
-      const chunk = tuples.slice(i, i + PROBE_CHUNK);
-      const set = `{${bound
-        .slice(i, i + PROBE_CHUNK)
-        .map((t) => `(${dims.map((d, j) => mdxMember(d, t[j]!)).join(",")})`)
-        .join(",")}}`;
-      // Same Axes/Cells shape as executeMdx, so the wire contract covers it.
-      const axes =
-        "Axes($expand=Tuples($expand=Members($select=Name;$expand=Hierarchy($select=Name))))";
-      const plain = await this.http.request<RawProbeCellset>(
-        "POST",
-        `/api/v1/ExecuteMDX?$expand=Cells($select=Value,FormattedValue,RuleDerived,Consolidated),${axes}`,
-        { MDX: `SELECT ${set} ON 0 FROM [${cube}]` },
-        opts,
-      );
-      let kept: Set<string>;
-      try {
-        const nonEmpty = await this.http.request<RawProbeCellset>(
-          "POST",
-          `/api/v1/ExecuteMDX?$expand=${axes}`,
-          { MDX: `SELECT NON EMPTY ${set} ON 0 FROM [${cube}]` },
-          opts,
-        );
-        try {
-          kept = new Set(axisKeys(nonEmpty));
-        } finally {
-          await freeCellset(this.http, nonEmpty.ID, opts);
-        }
-        const keys = axisKeys(plain);
-        const cells = plain.Cells ?? [];
-        if (keys.length !== chunk.length || cells.length !== chunk.length) {
-          throw new TM1Error({
-            code: TM1ErrorCode.NOT_FOUND,
-            message: `Probe of cube '${cubeName}' resolved ${cells.length} of ${chunk.length} cell(s). At least one element name does not exist in its dimension.`,
-            endpoint: "/api/v1/ExecuteMDX",
-          });
-        }
-        chunk.forEach((tuple, k) => {
-          const c = cells[k]!;
-          const value = c.Value ?? null;
-          out.push({
-            tuple,
-            value,
-            ruleDerived: c.RuleDerived === true,
-            consolidated: c.Consolidated === true,
-            fed: kept.has(keys[k]!) ? true : hasValue(value) ? false : null,
-          });
-        });
-      } finally {
-        await freeCellset(this.http, plain.ID, opts);
-      }
-    }
-    return out;
-  }
-
-  /**
-   * Expand a coordinate to its leaf combinations: every consolidated entry is
-   * replaced by the leaves beneath it (in its own hierarchy), capped at
-   * maxCells. One axis-only query per dimension; no cells are fetched.
-   */
-  async leafTuples(
-    cubeName: string,
-    elements: string[],
-    maxCells: number,
-    opts?: RequestOptions,
-  ): Promise<LeafTuples> {
-    const dims = await this.dimOrder.get(cubeName);
-    const bound = bindLeftOutSandbox(dims, elements);
-    elements = bound ?? elements;
-    if (elements.length !== dims.length)
-      throw dimensionCountMismatch(cubeName, dims, elements);
-    const cube = escapeMdxName(cubeName);
-    const sandbox = sandboxPosition(dims);
-    const perDim: string[][] = [];
-    for (let j = 0; j < dims.length; j++) {
-      const d = dims[j]!;
-      if (j === sandbox) {
-        perDim.push([elements[j]!]);
-        continue;
-      }
-      const { hierarchy } = splitHierarchyQualified(elements[j]!, d);
-      const where = dims
-        .map((dd, k) => (k === j ? null : mdxMember(dd, elements[k]!)))
-        .filter((m): m is string => m !== null);
-      const mdx =
-        `SELECT {TM1FILTERBYLEVEL({DESCENDANTS(${mdxMember(d, elements[j]!)})}, 0)} ON 0 FROM [${cube}]` +
-        (where.length > 0 ? ` WHERE (${where.join(",")})` : "");
-      const res = await this.http.request<RawProbeCellset>(
-        "POST",
-        `/api/v1/ExecuteMDX?$expand=Axes($expand=Tuples($expand=Members($select=Name;$expand=Hierarchy($select=Name))))`,
-        { MDX: mdx },
-        opts,
-      );
-      try {
-        const names = (res.Axes?.[0]?.Tuples ?? []).map(
-          (t) => t.Members?.[0]?.Name ?? "",
-        );
-        perDim.push(
-          [...new Set(names)].map((n) =>
-            joinHierarchyQualified(d, hierarchy, n),
-          ),
-        );
-      } finally {
-        await freeCellset(this.http, res.ID, opts);
-      }
-    }
-    const total = perDim.reduce((n, l) => n * l.length, 1);
-    const tuples: string[][] = [];
-    const walk = (j: number, acc: string[]): void => {
-      if (tuples.length >= maxCells) return;
-      if (j === perDim.length) {
-        tuples.push([...acc]);
-        return;
-      }
-      for (const e of perDim[j]!) {
-        acc.push(e);
-        walk(j + 1, acc);
-        acc.pop();
-        if (tuples.length >= maxCells) return;
-      }
-    };
-    if (total > 0) walk(0, []);
-    // Hand tuples back in the caller's shape: a left-out Sandboxes stays out.
-    if (bound) for (const t of tuples) t.splice(sandbox, 1);
-    return { tuples, total, truncated: total > tuples.length };
-  }
-
-  /**
    * Trace how a cell value is calculated: recursive component tree with
    * per-component type (consolidation/rule), status, value, and rule
    * statements. The server returns the full tree; maxDepth/maxComponents
@@ -649,24 +474,6 @@ interface RawCalcComponent {
   Tuple?: Array<{ Name?: string }>;
   Statements?: string[];
   Components?: RawCalcComponent[];
-}
-
-interface RawProbeCellset {
-  ID?: string;
-  Cells?: Array<{
-    Value?: CellValue;
-    RuleDerived?: boolean;
-    Consolidated?: boolean;
-  }>;
-  Axes?: Array<{ Tuples?: Array<{ Members?: Array<{ Name?: string }> }> }>;
-}
-
-// One key per column tuple — TM1's canonical member names, so the plain and
-// NON EMPTY reads of the same set match regardless of how the caller cased them.
-function axisKeys(res: RawProbeCellset): string[] {
-  return (res.Axes?.[0]?.Tuples ?? []).map((t) =>
-    (t.Members ?? []).map((m) => m.Name ?? "").join("\u0000"),
-  );
 }
 
 function mapFedCell(raw: RawFedCell): FedCellDescriptor {
