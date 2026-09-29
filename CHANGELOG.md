@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- The tool-surface size gate (`lint:tool-surface-budget`) is out of `verify`, and
+  `scripts/measure-tool-surface.mjs` / `measure:tools` are gone. Clients load tools on demand,
+  so the combined size no longer needs a hard cap.
+
 ## [8.3.0] - 2026-09-29
 
 ### Added
