@@ -532,7 +532,8 @@ export class CellService {
     opts?: RequestOptions,
   ): Promise<LeafTuples> {
     const dims = await this.dimOrder.get(cubeName);
-    elements = bindLeftOutSandbox(dims, elements) ?? elements;
+    const bound = bindLeftOutSandbox(dims, elements);
+    elements = bound ?? elements;
     if (elements.length !== dims.length)
       throw dimensionCountMismatch(cubeName, dims, elements);
     const cube = escapeMdxName(cubeName);
@@ -586,6 +587,8 @@ export class CellService {
       }
     };
     if (total > 0) walk(0, []);
+    // Hand tuples back in the caller's shape: a left-out Sandboxes stays out.
+    if (bound) for (const t of tuples) t.splice(sandbox, 1);
     return { tuples, total, truncated: total > tuples.length };
   }
 
