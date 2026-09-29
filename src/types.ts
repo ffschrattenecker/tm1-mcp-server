@@ -195,6 +195,30 @@ export interface FeederTraceResult {
   statements: string[];
 }
 
+/**
+ * Live state of one cell, read twice: plain, then under NON EMPTY. Under
+ * SKIPCHECK an unfed rule cell still computes its value but is dropped by
+ * NON EMPTY — that is what `fed` measures.
+ */
+export interface CellProbe {
+  tuple: string[];
+  value: CellValue;
+  ruleDerived: boolean;
+  consolidated: boolean;
+  /**
+   * true = survives NON EMPTY; false = has a value but is suppressed (unfed);
+   * null = empty or zero, so NON EMPTY cannot tell fed from unfed.
+   */
+  fed: boolean | null;
+}
+
+export interface LeafTuples {
+  tuples: string[][];
+  /** Leaf combinations under the start tuple, before the cap. */
+  total: number;
+  truncated: boolean;
+}
+
 export interface CalculationTraceNode {
   type?: string;
   status?: string;
