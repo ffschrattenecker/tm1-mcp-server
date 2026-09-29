@@ -1133,9 +1133,9 @@ describe("TM1Client – Cell Data Methods", () => {
           {
             ID: "p1",
             Cells: [
-              { Ordinal: 0, Value: 5, RuleDerived: true, Consolidated: false },
-              { Ordinal: 1, Value: 0, RuleDerived: true, Consolidated: false },
-              { Ordinal: 2, Value: 7, RuleDerived: true, Consolidated: false },
+              { Value: 5, RuleDerived: true, Consolidated: false },
+              { Value: 0, RuleDerived: true, Consolidated: false },
+              { Value: 7, RuleDerived: true, Consolidated: false },
             ],
             Axes: axis(["Jan", "EU"], ["Feb", "EU"], ["Mar", "EU"]),
           },
@@ -1173,7 +1173,7 @@ describe("TM1Client – Cell Data Methods", () => {
           cubeMeta,
           {
             ID: "p1",
-            Cells: [{ Ordinal: 0, Value: 1 }],
+            Cells: [{ Value: 1 }],
             Axes: axis(["Jan", "North"]),
           },
           { ID: "p2", Axes: axis(["Jan", "North"]) },
@@ -1200,7 +1200,7 @@ describe("TM1Client – Cell Data Methods", () => {
           },
           {
             ID: "p1",
-            Cells: [{ Ordinal: 0, Value: 1 }],
+            Cells: [{ Value: 1 }],
             Axes: axis(["Base", "Jan", "EU"]),
           },
           { ID: "p2", Axes: axis(["Base", "Jan", "EU"]) },

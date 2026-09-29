@@ -473,10 +473,12 @@ export class CellService {
         .slice(i, i + PROBE_CHUNK)
         .map((t) => `(${dims.map((d, j) => mdxMember(d, t[j]!)).join(",")})`)
         .join(",")}}`;
-      const axes = "Axes($expand=Tuples($expand=Members($select=Name)))";
+      // Same Axes/Cells shape as executeMdx, so the wire contract covers it.
+      const axes =
+        "Axes($expand=Tuples($expand=Members($select=Name;$expand=Hierarchy($select=Name))))";
       const plain = await this.http.request<RawProbeCellset>(
         "POST",
-        `/api/v1/ExecuteMDX?$expand=Cells($select=Ordinal,Value,RuleDerived,Consolidated),${axes}`,
+        `/api/v1/ExecuteMDX?$expand=Cells($select=Value,FormattedValue,RuleDerived,Consolidated),${axes}`,
         { MDX: `SELECT ${set} ON 0 FROM [${cube}]` },
         opts,
       );
@@ -503,7 +505,7 @@ export class CellService {
           });
         }
         chunk.forEach((tuple, k) => {
-          const c = cells.find((x) => x.Ordinal === k) ?? cells[k]!;
+          const c = cells[k]!;
           const value = c.Value ?? null;
           out.push({
             tuple,
@@ -554,7 +556,7 @@ export class CellService {
         (where.length > 0 ? ` WHERE (${where.join(",")})` : "");
       const res = await this.http.request<RawProbeCellset>(
         "POST",
-        `/api/v1/ExecuteMDX?$expand=Axes($expand=Tuples($expand=Members($select=Name)))`,
+        `/api/v1/ExecuteMDX?$expand=Axes($expand=Tuples($expand=Members($select=Name;$expand=Hierarchy($select=Name))))`,
         { MDX: mdx },
         opts,
       );
@@ -652,7 +654,6 @@ interface RawCalcComponent {
 interface RawProbeCellset {
   ID?: string;
   Cells?: Array<{
-    Ordinal?: number;
     Value?: CellValue;
     RuleDerived?: boolean;
     Consolidated?: boolean;

@@ -130,18 +130,13 @@
     },
     {
       "endpoint": "POST /api/v1/ExecuteMDX",
-      "path": "$.Cells[].Ordinal",
-      "reason": "CellService.probeCells selects Cells($select=Ordinal,Value,RuleDerived,Consolidated); no recorded query selected these columns. Observed live on 11.8 (booleans / number)."
-    },
-    {
-      "endpoint": "POST /api/v1/ExecuteMDX",
       "path": "$.Cells[].RuleDerived",
-      "reason": "CellService.probeCells selects Cells($select=Ordinal,Value,RuleDerived,Consolidated); no recorded query selected these columns. Observed live on 11.8 (booleans / number)."
+      "reason": "CellService.probeCells selects Cells($select=Value,FormattedValue,RuleDerived,Consolidated); no recorded query selected these columns. Observed live on 11.8 (booleans)."
     },
     {
       "endpoint": "POST /api/v1/ExecuteMDX",
       "path": "$.Cells[].Consolidated",
-      "reason": "CellService.probeCells selects Cells($select=Ordinal,Value,RuleDerived,Consolidated); no recorded query selected these columns. Observed live on 11.8 (booleans / number)."
+      "reason": "CellService.probeCells selects Cells($select=Value,FormattedValue,RuleDerived,Consolidated); no recorded query selected these columns. Observed live on 11.8 (booleans)."
     }
   ]
 }
