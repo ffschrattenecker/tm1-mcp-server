@@ -79,6 +79,21 @@ describe.skipIf(!LIVE_ENABLED)("live: cross-connection compare", () => {
     expect(r.json.a.edges).toBe(r.json.b.edges);
   });
 
+  it("getStructure: small pages stitch to the single-page read", async () => {
+    if (!dimension) return;
+    const read = (pageSize?: number) =>
+      h.client.hierarchies.getStructure(dimension!, dimension!, pageSize);
+    const whole = await read();
+    const paged = await read(Math.max(1, Math.ceil(whole.elements.length / 4)));
+    const names = paged.elements.map((e) => e.name);
+    expect(new Set(names).size).toBe(names.length);
+    const sorted = (s: typeof whole) => ({
+      elements: s.elements.map((e) => e.name).sort(),
+      edges: s.edges.map((e) => `${e.parent}>${e.child}:${e.weight}`).sort(),
+    });
+    expect(sorted(paged)).toEqual(sorted(whole));
+  });
+
   it("tm1_diff_processes: processB defaults to processA", async () => {
     if (!processName) return;
     const r = await h.ok("tm1_diff_processes", { processA: processName });

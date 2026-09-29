@@ -275,20 +275,21 @@ export class HierarchyService {
    * children are rebuilt from `Parents` and only within one page.
    *
    * Paged by name (`$orderby=Name`, see `get()` for why the order is
-   * required) in windows of {@link STRUCTURE_PAGE_SIZE}.
+   * required) in windows of `pageSize` (default {@link STRUCTURE_PAGE_SIZE}).
    *
    * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Name,Type&$expand=Edges($select=ComponentName,Weight)
    */
   async getStructure(
     dimensionName: string,
     hierarchyName: string,
+    pageSize = STRUCTURE_PAGE_SIZE,
   ): Promise<HierarchyStructure> {
     const base =
       `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')` +
       `/Elements?$select=Name,Type&$expand=Edges($select=ComponentName,Weight)`;
     const out: HierarchyStructure = { elements: [], edges: [] };
-    for (let skip = 0; ; skip += STRUCTURE_PAGE_SIZE) {
-      const clauses = pageClauseList({ top: STRUCTURE_PAGE_SIZE, skip });
+    for (let skip = 0; ; skip += pageSize) {
+      const clauses = pageClauseList({ top: pageSize, skip });
       const response = await this.http.request<{
         value?: Array<{
           Name: string;
@@ -309,7 +310,7 @@ export class HierarchyService {
             weight: edge.Weight,
           });
       }
-      if (rows.length < STRUCTURE_PAGE_SIZE) return out;
+      if (rows.length < pageSize) return out;
     }
   }
 
