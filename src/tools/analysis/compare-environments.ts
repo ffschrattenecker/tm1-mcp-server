@@ -59,9 +59,8 @@ async function readCubes(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
 }
 
 async function readProcesses(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
-  // Datasource: type and source object only. TM1 sends the whole DataSource,
-  // credentials and ODBC query included; listDataSources drops them, so a
-  // changed query is not detected here.
+  // Datasource: type and source object only (listDataSources never selects
+  // credentials or the ODBC query), so a changed query is not detected here.
   const [processes, sources] = await Promise.all([
     c.processes.fetchForCallgraph(o.includeControl),
     c.processes.listDataSources(o.includeControl),

@@ -830,10 +830,12 @@ export class ProcessService {
 
   /**
    * Bulk-fetch the datasource of every process in one OData call, projected to
-   * the few fields data-flow analysis needs (type + source object). Credentials
-   * are never selected. Used by tm1_trace_data_flow to detect view-sourced reads
-   * that leave no CellGet in the code and so never reach the reference index.
-   * GET /api/v1/Processes?$select=Name,DataSource
+   * the few fields data-flow analysis needs (type + source object). The
+   * properties are selected one by one: a bare `DataSource` select returns the
+   * whole complex type, password, userName and ODBC query included. Used by
+   * tm1_trace_data_flow to detect view-sourced reads that leave no CellGet in
+   * the code and so never reach the reference index.
+   * GET /api/v1/Processes?$select=Name,DataSource/Type,DataSource/dataSourceNameForServer,DataSource/view,DataSource/subset
    */
   async listDataSources(includeControl = false): Promise<
     Array<{
@@ -845,7 +847,9 @@ export class ProcessService {
     }>
   > {
     const filter = includeControl ? "" : "&$filter=not startswith(Name,'}')";
-    const path = `/api/v1/Processes?$select=Name,DataSource${filter}`;
+    const path =
+      "/api/v1/Processes?$select=Name,DataSource/Type,DataSource/dataSourceNameForServer,DataSource/view,DataSource/subset" +
+      filter;
     const response = await this.http.request<{
       value: Array<{
         Name?: string;
