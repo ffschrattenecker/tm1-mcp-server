@@ -1,13 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
-  parseBracketList,
   extractBracketLists,
   type BracketEntry,
 } from "../../src/lib/feeders/brackets.js";
 
-describe("parseBracketList — positional unqualified form", () => {
+// The first list on a line, or null — exercises the bracket parser directly.
+const firstList = (text: string) => extractBracketLists(text)[0] ?? null;
+
+describe("bracket parsing — positional unqualified form", () => {
   it("parses single positional element", () => {
-    const r = parseBracketList("['Sales']");
+    const r = firstList("['Sales']");
     expect(r).not.toBeNull();
     expect(r!.entries).toEqual<BracketEntry[]>([{ elem: "Sales" }]);
     expect(r!.isPositional).toBe(true);
@@ -15,7 +17,7 @@ describe("parseBracketList — positional unqualified form", () => {
   });
 
   it("parses many positional elements (most common feeder form)", () => {
-    const r = parseBracketList("['Alpha_Entry', 'Wert', 'DS_000']");
+    const r = firstList("['Alpha_Entry', 'Wert', 'DS_000']");
     expect(r!.entries).toEqual<BracketEntry[]>([
       { elem: "Alpha_Entry" },
       { elem: "Wert" },
@@ -25,21 +27,21 @@ describe("parseBracketList — positional unqualified form", () => {
   });
 
   it("tolerates whitespace inside the bracket", () => {
-    const r = parseBracketList("[  'A'  ,'B'  ,    'C'  ]");
+    const r = firstList("[  'A'  ,'B'  ,    'C'  ]");
     expect(r!.entries.map((e) => e.elem)).toEqual(["A", "B", "C"]);
   });
 });
 
-describe("parseBracketList — qualified form", () => {
+describe("bracket parsing — qualified form", () => {
   it("parses single qualified pair", () => {
-    const r = parseBracketList("['Year':'2026']");
+    const r = firstList("['Year':'2026']");
     expect(r!.entries).toEqual<BracketEntry[]>([{ dim: "Year", elem: "2026" }]);
     expect(r!.isPositional).toBe(false);
     expect(r!.isMixed).toBe(false);
   });
 
   it("parses multiple qualified pairs", () => {
-    const r = parseBracketList("['Region':'North', 'Product':'Widget']");
+    const r = firstList("['Region':'North', 'Product':'Widget']");
     expect(r!.entries).toEqual<BracketEntry[]>([
       { dim: "Region", elem: "North" },
       { dim: "Product", elem: "Widget" },
@@ -47,16 +49,16 @@ describe("parseBracketList — qualified form", () => {
   });
 
   it("parses set form `{...}`", () => {
-    const r = parseBracketList("['Year':{'2025','2026','2027'}]");
+    const r = firstList("['Year':{'2025','2026','2027'}]");
     expect(r!.entries).toEqual<BracketEntry[]>([
       { dim: "Year", elems: ["2025", "2026", "2027"] },
     ]);
   });
 });
 
-describe("parseBracketList — mixed positional + qualified", () => {
+describe("bracket parsing — mixed positional + qualified", () => {
   it("flags mixed bracket and preserves both forms", () => {
-    const r = parseBracketList("['Year':'2026', 'Sales']");
+    const r = firstList("['Year':'2026', 'Sales']");
     expect(r!.entries).toEqual<BracketEntry[]>([
       { dim: "Year", elem: "2026" },
       { elem: "Sales" },
@@ -66,9 +68,9 @@ describe("parseBracketList — mixed positional + qualified", () => {
   });
 });
 
-describe("parseBracketList — edge cases", () => {
+describe("bracket parsing — edge cases", () => {
   it("parses empty brackets as empty entries", () => {
-    const r = parseBracketList("[]");
+    const r = firstList("[]");
     expect(r).not.toBeNull();
     expect(r!.entries).toEqual([]);
     expect(r!.isPositional).toBe(true);
@@ -76,21 +78,21 @@ describe("parseBracketList — edge cases", () => {
   });
 
   it("handles doubled single-quote escape inside element", () => {
-    const r = parseBracketList("['It''s_Sales']");
+    const r = firstList("['It''s_Sales']");
     expect(r!.entries[0].elem).toBe("It's_Sales");
   });
 
   it("handles doubled single-quote escape inside dim", () => {
-    const r = parseBracketList("['My''Dim':'X']");
+    const r = firstList("['My''Dim':'X']");
     expect(r!.entries[0]).toEqual({ dim: "My'Dim", elem: "X" });
   });
 
   it("returns null on missing brackets", () => {
-    expect(parseBracketList("no brackets here")).toBeNull();
+    expect(firstList("no brackets here")).toBeNull();
   });
 
   it("returns null on unterminated bracket", () => {
-    expect(parseBracketList("['A','B'")).toBeNull();
+    expect(firstList("['A','B'")).toBeNull();
   });
 });
 

@@ -7,10 +7,10 @@ import {
   detectOrphanFeeder,
   collectElementBag,
 } from "../../src/lib/feeders/static-heuristics.js";
-import { parseBracketList } from "../../src/lib/feeders/brackets.js";
+import { extractBracketLists } from "../../src/lib/feeders/brackets.js";
 
 function lhs(text: string) {
-  const r = parseBracketList(text);
+  const r = extractBracketLists(text)[0];
   if (!r) throw new Error(`parse failed: ${text}`);
   return r;
 }

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { detectFeederToConsolidated } from "../../src/lib/feeders/static-heuristics.js";
-import { parseBracketList } from "../../src/lib/feeders/brackets.js";
+import { extractBracketLists } from "../../src/lib/feeders/brackets.js";
 import { ElementTypeCache } from "../../src/lib/feeders/element-type-cache.js";
 
 function lhs(text: string) {
-  const r = parseBracketList(text);
+  const r = extractBracketLists(text)[0];
   if (!r) throw new Error(`parse failed: ${text}`);
   return r;
 }

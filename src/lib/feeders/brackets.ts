@@ -162,30 +162,6 @@ function parseBracketAt(
 }
 
 /**
- * Parse the first complete `[...]` list found in `text`. Returns `null` if
- * no opening bracket exists outside string literals or the bracket is
- * malformed / unterminated.
- */
-export function parseBracketList(text: string): BracketList | null {
-  let i = 0;
-  while (i < text.length) {
-    const c = text[i]!;
-    if (c === "'") {
-      const s = readQuotedString(text, i);
-      if (!s) return null;
-      i = s.next;
-      continue;
-    }
-    if (c === "[") {
-      const r = parseBracketAt(text, i);
-      return r ? r.list : null;
-    }
-    i++;
-  }
-  return null;
-}
-
-/**
  * Scan `line` for every complete top-level `[...]` list and return them in
  * source order. Brackets inside single-quoted string literals are ignored.
  * Malformed lists are skipped silently — extraction is best-effort.
