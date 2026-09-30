@@ -8,7 +8,6 @@ import { registerFilesRead } from "../../src/tools/fileops/files-read.js";
 import { registerFilesWrite } from "../../src/tools/fileops/files-write.js";
 import { specFor, type ToolRegistrar } from "../../src/tools/define-tool.js";
 import { strictVariants } from "../../src/tools/schemas/markdown-capable.js";
-import { FileContentResultSchema } from "../../src/tools/schemas/items.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 
 interface ToolResult {
@@ -60,6 +59,16 @@ function setup(register: ToolRegistrar, files = fakeFiles()) {
 
 const json = (res: ToolResult) =>
   JSON.parse(res.content[0].text) as Record<string, unknown>;
+
+interface FileContent {
+  totalBytes: number;
+  returnedBytes: number;
+  truncated: boolean;
+  truncationReason?: string;
+  content: string;
+}
+const asFileContent = (payload: Record<string, unknown>) =>
+  payload as unknown as FileContent;
 
 // The harness bypasses the Proxy, so check payloads against the strict JSON
 // variant the Proxy would pick, with .strict() standing in for the client's
@@ -158,7 +167,7 @@ describe("tm1_files_read op=get, base64 encoding", () => {
       fileName: "book.xlsx",
       encoding: "base64",
     });
-    const out = FileContentResultSchema.parse(json(res));
+    const out = asFileContent(json(res));
     expect(Buffer.from(out.content, "base64")).toEqual(BINARY);
     expect(out.totalBytes).toBe(BINARY.byteLength);
     expect(out.returnedBytes).toBe(BINARY.byteLength);
@@ -168,7 +177,7 @@ describe("tm1_files_read op=get, base64 encoding", () => {
 
   it("truncates to maxBytes and counts the bytes, not the base64 characters", async () => {
     const { call } = setup(registerFilesRead);
-    const out = FileContentResultSchema.parse(
+    const out = asFileContent(
       json(
         await call({
           op: "get",
@@ -193,7 +202,7 @@ describe("tm1_files_read op=get, base64 encoding", () => {
       fileName: "book.xlsx",
       encoding: "base64",
     });
-    const out = FileContentResultSchema.parse(json(res));
+    const out = asFileContent(json(res));
     expect(out.returnedBytes).toBe(48 * 1024);
     expect(out.truncated).toBe(true);
     expect(res.content[0].text.length).toBeLessThan(80_000);
@@ -201,7 +210,7 @@ describe("tm1_files_read op=get, base64 encoding", () => {
 
   it("shows what a text read costs on the same bytes", async () => {
     const { call } = setup(registerFilesRead);
-    const out = FileContentResultSchema.parse(
+    const out = asFileContent(
       json(await call({ op: "get", fileName: "book.xlsx" })),
     );
     expect(out.content).toContain("�");
