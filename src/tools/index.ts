@@ -14,7 +14,7 @@ import { registerCheckFeeders } from "./celldata/check-feeders.js";
 import { registerTraceFeeders } from "./celldata/trace-feeders.js";
 import { registerTraceCellCalculation } from "./celldata/trace-cell-calculation.js";
 
-// TI development tools (process CRUD, execution, code, params, datasource)
+// TI development tools (process read/write, execution, code, .pro and git)
 import { registerExecuteProcess } from "./ti-development/execute-process.js";
 import { registerGetProcess } from "./ti-development/get-process.js";
 import { registerCopyProcess } from "./ti-development/copy-process.js";
@@ -37,8 +37,6 @@ import { registerDeleteElements } from "./dimension-management/delete-elements.j
 import { registerBulkUpsertElements } from "./dimension-management/bulk-upsert-elements.js";
 import { registerUpdateElementAttributeValue } from "./dimension-management/update-element-attribute-value.js";
 
-// Subset tools
-
 // Model building tools
 import { registerGetCubeRules } from "./model-building/get-cube-rules.js";
 import { registerSetCubeRules } from "./model-building/set-cube-rules.js";
@@ -46,8 +44,6 @@ import { registerClearCube } from "./model-building/clear-cube.js";
 import { registerGetAllCubeRules } from "./model-building/get-all-cube-rules.js";
 import { registerCheckCubeRule } from "./model-building/check-cube-rule.js";
 import { registerSearchRules } from "./model-building/search-rules.js";
-
-// View tools
 
 // Scheduling tools
 import { registerExecuteChore } from "./scheduling/execute-chore.js";
@@ -82,8 +78,6 @@ import { registerCheckV12Readiness } from "./analysis/check-v12-readiness.js";
 import { registerAuditNaming } from "./analysis/audit-naming.js";
 import { registerAuditComplexity } from "./analysis/audit-complexity.js";
 import { registerAuditFeeders } from "./analysis/audit-feeders.js";
-
-// Security tools
 
 // Single registry of every tool registrar, grouped by category. Adding a tool
 // = add its import above and one entry here (adjacent edit, one PR hunk). The
@@ -128,8 +122,6 @@ const REGISTRARS: ToolRegistrar[] = [
   registerDeleteElements,
   registerUpdateElementAttributeValue,
 
-  // Subsets
-
   // Model building
   registerGetCubeRules,
   registerSetCubeRules,
@@ -137,8 +129,6 @@ const REGISTRARS: ToolRegistrar[] = [
   registerGetAllCubeRules,
   registerCheckCubeRule,
   registerSearchRules,
-
-  // Views
 
   // Scheduling
   registerExecuteChore,
@@ -154,7 +144,6 @@ const REGISTRARS: ToolRegistrar[] = [
   registerSaveData,
 
   // File operations
-
   registerFilesRead,
   registerFilesWrite,
 
@@ -174,8 +163,6 @@ const REGISTRARS: ToolRegistrar[] = [
   registerAuditNaming,
   registerAuditComplexity,
   registerAuditFeeders,
-
-  // Security
 ];
 
 export function registerAllTools(
