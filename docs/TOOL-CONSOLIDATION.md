@@ -261,45 +261,37 @@ hid control objects by default (the REST filter must say `not startswith(Name,'}
   `tm1-api` stops being a fallback and becomes the reference for the REST tools paths.
 - Major version bump (9.0.0).
 
-## Status (handoff, 2026-09-30)
+## Status (2026-09-30: all steps done, nothing pushed)
 
-Paused mid-way on branch `feat/tool-consolidation` (not pushed). Paired branch `feat/tool-consolidation` in
-spms-tools exists but has no commits yet.
+Branch `feat/tool-consolidation` here and the paired `feat/tool-consolidation` in spms-tools are complete
+and committed, neither pushed. Server is 9.0.0 (`package.json`, CHANGELOG), plugin `tm1-mcp` 6.0.0.
+Next is release, only when asked: push both branches, PR, tag `v9.0.0` (tag push publishes to npm).
 
-Done:
+Built: `tm1_rest_read` / `tm1_rest_write`, `tm1_files_read` / `tm1_files_write`, `refresh` on
+`tm1_analyze_callgraph`, `usedInCubes` on `tm1_analyze_object_usage`, `server: {name, version}` on
+`tm1_list_connections` (the skills' version floor reads it; only `tm1_get_server_info` had it). The REST
+guard refuses deleting a dimension's same-named hierarchy.
 
-- Spec, decisions and live comparison (this file).
-- Built: `tm1_rest_read` / `tm1_rest_write` (`src/tools/rest/`, `src/tm1-client/services/rest-service.ts`),
-  `tm1_files_read` / `tm1_files_write`, `refresh` on `tm1_analyze_callgraph`, `usedInCubes` on
-  `tm1_analyze_object_usage`. The REST guard survived three red-team rounds; unit tests pass for all of it.
-- Deleted: the 60 tools (commit `4c44692`) and `delete-impact.ts`. `npm run typecheck`,
-  `lint:tool-registration` and `lint:output-schema-budget` (38.7 KB, 60%) pass.
-
-Left to do, in this order:
-
-1. ~~**Unit tests**~~ done (`cb26be9`). Green except the 4 symlink cases in `local-file.test.ts`, which fail
-   with EPERM on `main` too (Windows without Developer Mode cannot create symlinks). So `coverage:check` and
-   `npm run verify` cannot go fully green on this machine.
-2. ~~**Stale names in `src/`**~~ done (`4c0371c`..`5e8d885`). No deleted name is left in `src/`. Hints,
-   descriptions and prompts now name REST paths; server instructions carry the `$select`/control-object/`tolower()`
-   rules; dead output schemas and the three empty `items-*.ts` files are gone. Scratch list of the 60 deleted names
-   (for step 6): tools:list on `main` minus tools:list here, plus `tm1_list_jobs` / `tm1_cancel_job`.
-
-   Unused code removed on the user's call (2026-09-30: "remove them, same as everything else that is no
-   longer relevant"): 42 service methods and 3 client getters (found with the TypeScript language service, not grep), the empty
-   `MonitoringService`, and the types, schemas and helpers only they used (knip, iterated to a fixpoint). Two
-   language-service hits are structural uses and stay: `ElementService.exists`, `HierarchyService.getElementTypes`.
-
-3. **Live tests** (`tests/live/`): rewrite setup/teardown that used deleted tools to the REST tools; delete tests
-   of deleted tools; add `rest.live.test.ts`. Run only via `npm run test:live:for -- tm1-plapp-franz`.
-4. **Docs**: `npm run tools:list` / `tools:update-readme`, `docs/EXAMPLES.md`, `ARCHITECTURE.md`, `evals/`,
-   CHANGELOG 9.0.0 entry.
-5. **spms-tools skills**: route CRUD to the REST tools with one shared endpoint cheat sheet (include the
-   control-object and `tolower()` traps); repurpose `tm1-api` so it no longer competes with `tm1_rest_read`;
-   major plugin version bump paired with server 9.0.0.
-6. **Verify**: all gates in `npm run verify` except `lint:format` (run prettier on changed files only), the
-   coverage ratchet, and a word-grep for every deleted name (allowed only in CHANGELOG and this file).
-7. Bump `package.json` to 9.0.0. No tag / push / publish until asked.
+1. Unit tests: green except the 4 symlink cases in `local-file.test.ts`, which fail with EPERM on `main`
+   too (Windows without Developer Mode cannot create symlinks), so `npm run verify` cannot go fully green on
+   this machine. With that file excluded, coverage passes the ratchet (floors raised to 78/77/79/69).
+2. `src/`: no deleted name left; hints, descriptions, prompts and server instructions name REST paths.
+   Unused code removed on the user's call ("remove them, same as everything else that is no longer
+   relevant"): 42 service methods, 3 client getters, the empty `MonitoringService`, and the types, schemas
+   and helpers only they used (TypeScript language service + knip to a fixpoint). `ElementService.exists`
+   and `HierarchyService.getElementTypes` stay: structural uses the language service misses.
+3. Live tests: every suite builds its fixtures through the REST tools (helpers in `tests/live/harness.ts`);
+   `rest.live.test.ts` covers the paths the hints name. Full suite on plapp-franz 11.8.03500.4: 204 passed,
+   3 skipped (v12-only). Contracts re-recorded (merge), endpoints and methods of deleted code dropped,
+   `contracts:verify` clean. The drift check uses subset mode for requests that carry their own `$select`.
+   `v12-connection.live.test.ts` is not run: no v12 target.
+4. Docs: README/TOOLS regenerated, EXAMPLES, CONFIGURATION, `mcp.json.example` (autoApprove = the 41
+   read-only tools), CHANGELOG 9.0.0. Word-grep for the 60 names: only CHANGELOG and this file.
+5. spms-tools: `common/rest-paths.md` is the shared path sheet (traps, bodies, refusals; † marks the two
+   paths not live-tested); skills and common notes route CRUD through it; `tm1-api` keeps only `--exec`
+   jobs, oversize sweeps and a missing MCP; pins `@9`; release-metadata check passes.
+6. Gates: audit, both typechecks, all lint scripts, eslint (0 errors), prettier on changed files, tier-1
+   tarball smoke (tier 2 not run: its default target is `tm1-test`).
 
 Known follow-ups: the name-based masking hides all of `ActiveConfiguration/Access/Authentication`,
 including the non-secret `IntegratedSecurityMode` (pinned in `rest.live`). From the build: `responseLimit()` in `src/tools/rest/shape.ts` reads `TM1_MAX_RESPONSE_CHARS`
@@ -322,7 +314,3 @@ Measured facts that lived in the deleted tools and tests; the step-5 cheat sheet
 - What is running: v11 `Threads` + `POST Threads({id})/tm1.CancelOperation`; v12 `Jobs` +
   `POST Jobs('{id}')/tm1.Cancel`. Each is absent on the other version.
 - Transaction-log scans run server-side and can take minutes to hours; always bound them with a time filter.
-
-The cleanup workflow script (steps 1–6 as parallel agents + verify loop) is saved at
-`~/.claude/projects/C--Users-franz-schrattenecker-repos-tm1-mcp-server/9215c3ef-2a08-45ea-8964-ad9d13e902a2/workflows/scripts/consolidation-cleanup-wf_1186b4a6-1d7.js`;
-none of its agents finished, so rerun it fresh.
