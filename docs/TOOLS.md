@@ -6,8 +6,7 @@
 # Tool reference
 
 Every tool this server can register, with the first sentence of the description
-the model sees. Working JSON payloads for the main flows are in
-[EXAMPLES.md](EXAMPLES.md).
+the model sees.
 
 Two things the raw list does not show:
 

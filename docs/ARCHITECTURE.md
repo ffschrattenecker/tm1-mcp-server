@@ -257,3 +257,21 @@ The service-composition path was chosen because:
    isolating tests from unrelated domains.
 4. Adding a new domain is a new file plus a constructor line; no
    existing file needs to be touched.
+
+## Tests
+
+Four kinds of test prove different things; know which one you are writing.
+
+- **Behavioral/invariant** (`tests/unit/`, `tests/property/`): our logic against
+  hand-written mocks. Proves intent, not TM1 behaviour.
+- **Recorded contract** (`tests/fixtures/`): every fake is checked against the
+  _structure_ of real responses, so a mock cannot invent a field. Only
+  `npm run contracts:verify -- --connection=<name>` (needs a live server) shows
+  the recording is still current. See `tests/fixtures/README.md`.
+- **Request-shape** (`tests/unit/` client and service suites): the OData request
+  we build. Prefix new `describe`s with `request shape:`.
+- **Live** (`tests/live/`, opt-in, `npm run test:live`): real calls against a
+  real server. Never runs in CI.
+
+The aggregate test count is suite size, not evidence of REST correctness.
+Run one file with `npx vitest run tests/unit/<file>.test.ts`.

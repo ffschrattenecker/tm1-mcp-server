@@ -32,8 +32,7 @@ Everything below describes this fork's state. For the real project, read the
 ## Features
 
 58 tools across 10 categories — every one listed in
-[docs/TOOLS.md](docs/TOOLS.md), with working JSON payloads in
-[docs/EXAMPLES.md](docs/EXAMPLES.md). Past plain CRUD over the REST API:
+[docs/TOOLS.md](docs/TOOLS.md). Past plain CRUD over the REST API:
 
 - **Bulk reads instead of N round-trips.** Pull every process's source or every
   cube's rules in one call, then regex-search across them with per-process and
@@ -286,18 +285,15 @@ npm run lint:eslint     # eslint .
 npm run verify          # everything CI runs (audit + typecheck + lint gates + tests)
 ```
 
-Contributions are welcome; run `npm run verify` before opening a PR.
-[CONTRIBUTING.md](CONTRIBUTING.md) documents the gates and
-how to add a tool or service.
+Run `npm run verify` before opening a PR; it is the gate CI and publish run.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers how to add a tool or service.
 
 ## Documentation
 
 - [docs/TOOLS.md](docs/TOOLS.md) — every tool, grouped, with one-line descriptions
-- [docs/EXAMPLES.md](docs/EXAMPLES.md) — working JSON tool-call payloads for every major feature
 - [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — CAM login, TM1 v12 connection, host-disk file access, Streamable HTTP setup and `autoApprove`
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — layering, service-class pattern, transports, the readonly/readwrite gate
-- [CONTRIBUTING.md](CONTRIBUTING.md) — workflow, lint gates, coverage policy, how to add a tool
-- [CHANGELOG.md](CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- [CHANGELOG.md](CHANGELOG.md) · [SECURITY.md](SECURITY.md)
 
 ## Provenance
 
