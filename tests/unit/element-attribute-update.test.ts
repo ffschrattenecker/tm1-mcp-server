@@ -1,9 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
+import type { FnSpy } from "../helpers/spy-types.js";
+import { makeTestConfig } from "../helpers/tm1-config.js";
 import { ElementService } from "../../src/tm1-client/services/element-service.js";
 import { registerUpdateElementAttributeValue } from "../../src/tools/dimension-management/update-element-attribute-value.js";
 import { TM1Error } from "../../src/types.js";
 import type { TM1Client } from "../../src/tm1-client.js";
-import { captureParsedTool } from "../helpers/client-harness.js";
+import {
+  captureParsedTool,
+  mockResponse,
+  stubbedClient,
+} from "../helpers/client-harness.js";
 
 type Written = {
   cube: string;
@@ -80,6 +87,70 @@ describe("ElementService.updateAttributeValues", () => {
     expect((err as TM1Error).code).toBe("NOT_FOUND");
     expect((err as TM1Error).message).toContain("'Colour' does not exist");
     expect((err as TM1Error).message).toContain("Weight, Caption, Code");
+  });
+});
+
+// Through a full TM1Client: the attribute list is read first, then the value is
+// written as a cellset.
+describe("ElementService.updateAttributeValue — REST round-trip", () => {
+  let fetchSpy: FnSpy;
+  let client: TM1Client;
+
+  beforeEach(() => {
+    fetchSpy = vi.fn();
+    stubContractCheckedFetch(fetchSpy);
+    client = stubbedClient(makeTestConfig({ requestTimeoutMs: 5_000 }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  const mdxOf = (call: unknown[]) =>
+    (JSON.parse(String((call[1] as { body: string }).body)) as { MDX: string })
+      .MDX;
+
+  // The attribute cube spans every hierarchy of the dimension. Measured: v12
+  // refuses a bare name another hierarchy shares ("Member name A is
+  // ambiguous"), and v11 finds a bare name only in the default hierarchy.
+  it("writes to an element of an alternate hierarchy", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockResponse({ value: [{ Name: "Caption", Type: "String" }] }),
+    );
+    fetchSpy.mockResolvedValueOnce(mockResponse({ ID: "cs-1" }));
+    fetchSpy.mockResolvedValue(mockResponse({}));
+    await client.elements.updateAttributeValue(
+      "Region",
+      "North",
+      "Caption",
+      "N",
+      "Alt",
+    );
+    expect(mdxOf(fetchSpy.mock.calls[1])).toContain("[Region].[Alt].[North]");
+  });
+
+  it("refuses to write when the dimension has no attributes", async () => {
+    fetchSpy.mockResolvedValueOnce(mockResponse({ value: [] }));
+    await expect(
+      client.elements.updateAttributeValue("Region", "North", "Caption", "N"),
+    ).rejects.toThrow(/has no attributes/);
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it("matches the attribute name ignoring case and spaces, as TM1 does", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockResponse({ value: [{ Name: "Caption Text", Type: "String" }] }),
+    );
+    fetchSpy.mockResolvedValueOnce(mockResponse({ ID: "cs-1" }));
+    fetchSpy.mockResolvedValue(mockResponse({}));
+    await client.elements.updateAttributeValue(
+      "Region",
+      "North",
+      "captiontext",
+      "N",
+    );
+    expect(fetchSpy.mock.calls.length).toBeGreaterThan(1);
   });
 });
 
