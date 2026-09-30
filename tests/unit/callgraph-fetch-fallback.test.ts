@@ -22,22 +22,10 @@ import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type { FnSpy } from "../helpers/spy-types.js";
 import { TM1Client } from "../../src/tm1-client.js";
 import { SessionManager } from "../../src/session-manager.js";
-import type { TM1Config } from "../../src/config.js";
-import { baseTestConfig } from "../helpers/tm1-config.js";
+import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockLogger } from "../helpers/client-harness.js";
 
-function makeConfig(): TM1Config {
-  return {
-    ...baseTestConfig,
-    baseUrl: "https://tm1server:8010",
-    user: "admin",
-    password: "secret",
-    ssl: { rejectUnauthorized: true },
-    keepAliveIntervalMs: 60000,
-    requestTimeoutMs: 5000,
-    logLevel: "info",
-  };
-}
+const makeConfig = () => makeTestConfig({ requestTimeoutMs: 5000 });
 
 function mockResponse(body: unknown, status = 200): Response {
   return {

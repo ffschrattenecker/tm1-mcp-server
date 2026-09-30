@@ -9,22 +9,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import * as fc from "fast-check";
 import { SessionManager } from "../../src/session-manager.js";
-import type { TM1Config } from "../../src/config.js";
-import { baseTestConfig } from "../helpers/tm1-config.js";
+import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockLogger } from "../helpers/client-harness.js";
-
-function makeConfig(user: string, password: string): TM1Config {
-  return {
-    ...baseTestConfig,
-    baseUrl: "https://tm1server:8010",
-    user,
-    password,
-    ssl: { rejectUnauthorized: true },
-    keepAliveIntervalMs: 60000,
-    requestTimeoutMs: 30000,
-    logLevel: "info",
-  };
-}
 
 const originalFetch = globalThis.fetch;
 
@@ -51,7 +37,10 @@ describe("Property 2: Authentifizierungs-Header-Konstruktion", () => {
           });
           globalThis.fetch = localFetch as typeof fetch;
 
-          const sm = new SessionManager(makeConfig(user, password), mockLogger);
+          const sm = new SessionManager(
+            makeTestConfig({ user, password }),
+            mockLogger,
+          );
           await sm.authenticate();
 
           expect(localFetch).toHaveBeenCalledOnce();

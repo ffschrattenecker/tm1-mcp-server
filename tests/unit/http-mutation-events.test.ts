@@ -1,23 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TM1HttpClient } from "../../src/tm1-client/http.js";
 import { SessionManager } from "../../src/session-manager.js";
-import type { TM1Config } from "../../src/config.js";
-import { baseTestConfig } from "../helpers/tm1-config.js";
+import { makeTestConfig } from "../helpers/tm1-config.js";
 import { tm1Events, type Tm1MutationEvent } from "../../src/lib/tm1-events.js";
 import { mockLogger } from "../helpers/client-harness.js";
-
-function makeConfig(): TM1Config {
-  return {
-    ...baseTestConfig,
-    baseUrl: "https://tm1server:8010",
-    user: "admin",
-    password: "secret",
-    ssl: { rejectUnauthorized: true },
-    keepAliveIntervalMs: 60000,
-    requestTimeoutMs: 60000,
-    logLevel: "info",
-  };
-}
 
 describe("R2-05: HTTP layer emits mutation events", () => {
   let client: TM1HttpClient;
@@ -25,7 +11,7 @@ describe("R2-05: HTTP layer emits mutation events", () => {
   let listener: (e: Tm1MutationEvent) => void;
 
   beforeEach(() => {
-    const cfg = makeConfig();
+    const cfg = makeTestConfig({ requestTimeoutMs: 60000 });
     const sm = new SessionManager(cfg, mockLogger);
     vi.spyOn(sm, "ensureSession").mockResolvedValue("cookie");
     client = new TM1HttpClient(cfg, sm, mockLogger);

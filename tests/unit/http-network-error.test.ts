@@ -2,22 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import { TM1HttpClient } from "../../src/tm1-client/http.js";
 import { SessionManager } from "../../src/session-manager.js";
-import type { TM1Config } from "../../src/config.js";
-import { baseTestConfig } from "../helpers/tm1-config.js";
+import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockLogger } from "../helpers/client-harness.js";
-
-function makeConfig(): TM1Config {
-  return {
-    ...baseTestConfig,
-    baseUrl: "https://tm1server:8010",
-    user: "admin",
-    password: "secret",
-    ssl: { rejectUnauthorized: true },
-    keepAliveIntervalMs: 60000,
-    requestTimeoutMs: 60000,
-    logLevel: "info",
-  };
-}
 
 /** Build an error whose wrapped cause carries an OS-level `.code` (the undici shape). */
 function fetchFailedWithCause(code: string): TypeError {
@@ -60,7 +46,7 @@ describe("Watch-item #5: isNetworkError classifies via err.cause.code", () => {
   let client: TM1HttpClient;
 
   beforeEach(() => {
-    const cfg = makeConfig();
+    const cfg = makeTestConfig({ requestTimeoutMs: 60000 });
     const sm = new SessionManager(cfg, mockLogger);
     vi.spyOn(sm, "ensureSession").mockResolvedValue("cookie");
     client = new TM1HttpClient(cfg, sm, mockLogger);

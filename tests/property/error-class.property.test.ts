@@ -12,22 +12,10 @@ import * as fc from "fast-check";
 import { TM1HttpClient } from "../../src/tm1-client/http.js";
 import { SessionManager } from "../../src/session-manager.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
-import type { TM1Config } from "../../src/config.js";
-import { baseTestConfig } from "../helpers/tm1-config.js";
+import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockLogger } from "../helpers/client-harness.js";
 
-function makeConfig(): TM1Config {
-  return {
-    ...baseTestConfig,
-    baseUrl: "https://tm1server:8010",
-    user: "admin",
-    password: "secret",
-    ssl: { rejectUnauthorized: true },
-    keepAliveIntervalMs: 60000,
-    requestTimeoutMs: 5000,
-    logLevel: "info",
-  };
-}
+const makeConfig = () => makeTestConfig({ requestTimeoutMs: 5000 });
 
 class TestTM1Client extends TM1HttpClient {
   async testRequest<T = unknown>(

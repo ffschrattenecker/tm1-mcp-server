@@ -5,25 +5,10 @@ import { TM1Client } from "../../src/tm1-client.js";
 import { TM1HttpClient } from "../../src/tm1-client/http.js";
 import { SessionManager } from "../../src/session-manager.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
-import type { TM1Config } from "../../src/config.js";
-import { baseTestConfig } from "../helpers/tm1-config.js";
+import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockLogger } from "../helpers/client-harness.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function makeConfig(overrides?: Partial<TM1Config>): TM1Config {
-  return {
-    ...baseTestConfig,
-    baseUrl: "https://tm1server:8010",
-    user: "admin",
-    password: "secret",
-    ssl: { rejectUnauthorized: true },
-    keepAliveIntervalMs: 60000,
-    requestTimeoutMs: 5000,
-    logLevel: "info",
-    ...overrides,
-  };
-}
 
 function mockResponse(opts: {
   ok?: boolean;
@@ -70,7 +55,7 @@ describe("TM1Client", () => {
     fetchSpy = vi.fn();
     stubContractCheckedFetch(fetchSpy);
 
-    const config = makeConfig();
+    const config = makeTestConfig({ requestTimeoutMs: 5000 });
     sessionManager = new SessionManager(config, mockLogger);
     client = new TestTM1Client(config, sessionManager, mockLogger);
     lifecycleClient = new TM1Client(config, sessionManager, mockLogger);

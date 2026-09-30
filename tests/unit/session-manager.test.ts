@@ -2,26 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type { FnSpy } from "../helpers/spy-types.js";
 import { SessionManager } from "../../src/session-manager.js";
-import type { TM1Config } from "../../src/config.js";
-import { baseTestConfig } from "../helpers/tm1-config.js";
+import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockLogger } from "../helpers/client-harness.js";
 
 // Silence logger in tests
-
-function makeConfig(overrides?: Partial<TM1Config>): TM1Config {
-  return {
-    ...baseTestConfig,
-    baseUrl: "https://tm1server:8010",
-    user: "admin",
-    password: "secret",
-    ssl: { rejectUnauthorized: true },
-    keepAliveIntervalMs: 60000,
-    requestTimeoutMs: 30000,
-    logLevel: "info",
-    version: 11,
-    ...overrides,
-  };
-}
 
 function mockFetchResponse(opts: {
   ok?: boolean;
@@ -67,7 +51,7 @@ describe("SessionManager", () => {
         }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       const cookie = await sm.authenticate();
 
       expect(cookie).toBe(sessionId);
@@ -90,7 +74,7 @@ describe("SessionManager", () => {
           setCookie: "TM1SessionId=fresh; Path=/",
         }),
       );
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       const first = await sm.authenticate();
       expect(first).toBe("fresh");
       expect(fetchSpy).toHaveBeenCalledOnce();
@@ -112,7 +96,7 @@ describe("SessionManager", () => {
         .mockResolvedValueOnce(
           mockFetchResponse({ ok: true, setCookie: "TM1SessionId=c2; Path=/" }),
         );
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       const first = await sm.authenticate();
       expect(first).toBe("c1");
 
@@ -130,7 +114,7 @@ describe("SessionManager", () => {
         }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       expect(sm.isSessionActive()).toBe(false);
 
       await sm.authenticate();
@@ -146,7 +130,7 @@ describe("SessionManager", () => {
         }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       await expect(sm.authenticate()).rejects.toThrow(
         "Authentication failed with status 401: Unauthorized",
       );
@@ -162,7 +146,7 @@ describe("SessionManager", () => {
         }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       await expect(sm.authenticate()).rejects.toMatchObject({
         code: "AUTH_FAILED",
         httpStatus: 401,
@@ -190,7 +174,7 @@ describe("SessionManager", () => {
           }),
         );
         const sm = new SessionManager(
-          makeConfig({ keepAliveIntervalMs: 1000 }),
+          makeTestConfig({ keepAliveIntervalMs: 1000 }),
           mockLogger,
         );
         sm.startKeepAlive();
@@ -206,7 +190,7 @@ describe("SessionManager", () => {
         mockFetchResponse({ ok: true, setCookie: null }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       await expect(sm.authenticate()).rejects.toThrow(
         "no TM1SessionId cookie found",
       );
@@ -225,7 +209,7 @@ describe("SessionManager", () => {
       fetchSpy.mockResolvedValueOnce(gatewayLogin);
       fetchSpy.mockResolvedValueOnce(mockFetchResponse({ ok: true }));
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       const cookie = await sm.authenticate();
       expect(sm.cookieHeader(cookie)).toBe(
         "TM1SessionId_Sales=tm1sess; paSession=pasess",
@@ -247,7 +231,7 @@ describe("SessionManager", () => {
       login.headers.append("set-cookie", "other=x; Path=/");
       fetchSpy.mockResolvedValueOnce(login);
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       const cookie = await sm.authenticate();
       expect(cookie).toBe("direct");
       expect(sm.cookieHeader(cookie)).toBe("TM1SessionId=direct");
@@ -268,7 +252,7 @@ describe("SessionManager", () => {
       );
 
       const sm = new SessionManager(
-        makeConfig({ requestTimeoutMs: 50 }),
+        makeTestConfig({ requestTimeoutMs: 50 }),
         mockLogger,
       );
       await expect(sm.authenticate()).rejects.toThrow("timed out");
@@ -283,7 +267,7 @@ describe("SessionManager", () => {
       );
 
       const sm = new SessionManager(
-        makeConfig({ user: "user@domain", password: "p@ss:word!" }),
+        makeTestConfig({ user: "user@domain", password: "p@ss:word!" }),
         mockLogger,
       );
       await sm.authenticate();
@@ -299,7 +283,7 @@ describe("SessionManager", () => {
       );
 
       const sm = new SessionManager(
-        makeConfig({ user: "alice", password: "pw", namespace: "LDAP" }),
+        makeTestConfig({ user: "alice", password: "pw", namespace: "LDAP" }),
         mockLogger,
       );
       await sm.authenticate();
@@ -317,7 +301,11 @@ describe("SessionManager", () => {
 
       const sm = new SessionManager(
         // Passport mode ignores user/password and namespace.
-        makeConfig({ user: "", password: "", camPassport: "PASSPORT_TOKEN" }),
+        makeTestConfig({
+          user: "",
+          password: "",
+          camPassport: "PASSPORT_TOKEN",
+        }),
         mockLogger,
       );
       await sm.authenticate();
@@ -332,7 +320,7 @@ describe("SessionManager", () => {
       );
 
       const sm = new SessionManager(
-        makeConfig({ namespace: "LDAP", camPassport: "PT" }),
+        makeTestConfig({ namespace: "LDAP", camPassport: "PT" }),
         mockLogger,
       );
       await sm.authenticate();
@@ -342,7 +330,7 @@ describe("SessionManager", () => {
     });
 
     it("v12 s2s: logs in via POST /{instance}/auth/v1/session with User body", async () => {
-      const config = makeConfig({
+      const config = makeTestConfig({
         baseUrl: "http://host:4444",
         user: "admin",
         version: 12,
@@ -373,7 +361,7 @@ describe("SessionManager", () => {
     });
 
     it("v12 keepAlive targets the database-rooted ActiveSession", async () => {
-      const config = makeConfig({
+      const config = makeTestConfig({
         baseUrl: "http://host:4444",
         version: 12,
         instance: "tm1",
@@ -408,7 +396,7 @@ describe("SessionManager", () => {
         mockFetchResponse({ ok: true, setCookie: "TM1SessionId=tok; Path=/" }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       const [a, b] = await Promise.all([sm.authenticate(), sm.authenticate()]);
 
       expect(a).toBe(b);
@@ -436,7 +424,7 @@ describe("SessionManager", () => {
       );
 
       const sm = new SessionManager(
-        makeConfig({ requestTimeoutMs: 50 }),
+        makeTestConfig({ requestTimeoutMs: 50 }),
         mockLogger,
       );
       await sm.authenticate();
@@ -460,7 +448,7 @@ describe("SessionManager", () => {
         mockFetchResponse({ ok: true, status: 200 }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       await sm.authenticate();
       await sm.keepAlive();
 
@@ -502,7 +490,7 @@ describe("SessionManager", () => {
         }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       await sm.authenticate();
       await sm.keepAlive();
 
@@ -518,7 +506,7 @@ describe("SessionManager", () => {
         }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       await sm.keepAlive();
 
       expect(fetchSpy).toHaveBeenCalledOnce();
@@ -540,7 +528,7 @@ describe("SessionManager", () => {
         }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       await sm.authenticate();
       await expect(sm.keepAlive()).rejects.toThrow(
         "Keep-alive failed with status 500",
@@ -557,7 +545,7 @@ describe("SessionManager", () => {
         }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       await sm.authenticate();
 
       const cookie = await sm.ensureSession();
@@ -574,7 +562,7 @@ describe("SessionManager", () => {
         }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       const cookie = await sm.ensureSession();
 
       expect(cookie).toBe("new");
@@ -601,7 +589,7 @@ describe("SessionManager", () => {
       );
 
       const sm = new SessionManager(
-        makeConfig({ keepAliveIntervalMs: 1000 }),
+        makeTestConfig({ keepAliveIntervalMs: 1000 }),
         mockLogger,
       );
       await sm.authenticate();
@@ -625,7 +613,7 @@ describe("SessionManager", () => {
       );
 
       const sm = new SessionManager(
-        makeConfig({ keepAliveIntervalMs: 1000 }),
+        makeTestConfig({ keepAliveIntervalMs: 1000 }),
         mockLogger,
       );
       await sm.authenticate();
@@ -648,7 +636,7 @@ describe("SessionManager", () => {
       );
 
       const sm = new SessionManager(
-        makeConfig({ keepAliveIntervalMs: 1000 }),
+        makeTestConfig({ keepAliveIntervalMs: 1000 }),
         mockLogger,
       );
       await sm.authenticate();
@@ -666,7 +654,7 @@ describe("SessionManager", () => {
 
   describe("isSessionActive()", () => {
     it("should return false before authentication", () => {
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       expect(sm.isSessionActive()).toBe(false);
     });
 
@@ -678,7 +666,7 @@ describe("SessionManager", () => {
         }),
       );
 
-      const sm = new SessionManager(makeConfig(), mockLogger);
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
       await sm.authenticate();
       expect(sm.isSessionActive()).toBe(true);
     });

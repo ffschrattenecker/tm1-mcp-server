@@ -2,29 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import { TM1HttpClient } from "../../src/tm1-client/http.js";
 import { SessionManager } from "../../src/session-manager.js";
-import type { TM1Config } from "../../src/config.js";
-import { baseTestConfig } from "../helpers/tm1-config.js";
+import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockLogger } from "../helpers/client-harness.js";
-
-function makeConfig(): TM1Config {
-  return {
-    ...baseTestConfig,
-    baseUrl: "https://tm1server:8010",
-    user: "admin",
-    password: "secret",
-    ssl: { rejectUnauthorized: true },
-    keepAliveIntervalMs: 60000,
-    requestTimeoutMs: 60000,
-    logLevel: "info",
-  };
-}
 
 describe("R2-03: AbortSignal propagation through HTTP layer", () => {
   let sessionManager: SessionManager;
   let client: TM1HttpClient;
 
   beforeEach(() => {
-    const cfg = makeConfig();
+    const cfg = makeTestConfig({ requestTimeoutMs: 60000 });
     sessionManager = new SessionManager(cfg, mockLogger);
     vi.spyOn(sessionManager, "ensureSession").mockResolvedValue(
       "session-cookie",
