@@ -53,7 +53,6 @@
     "typecheck": "tsc --noEmit",
     "typecheck:tests": "tsc -p tsconfig.test.json",
     "lint": "tsc --noEmit && eslint .",
-    "lint:no-flat-api": "node scripts/check-no-flat-tm1-methods.mjs",
     "lint:output-schema-budget": "node scripts/check-output-schema-budget.mjs",
     "lint:tool-registration": "node scripts/check-tool-registration.mjs",
     "lint:input-naming": "node scripts/check-no-bare-name-input.mjs",
@@ -62,7 +61,7 @@
     "lint:format": "prettier --check .",
     "format": "prettier --write .",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
-    "verify": "npm run audit:prod && npm run typecheck && npm run typecheck:tests && npm run lint:no-flat-api && npm run lint:output-schema-budget && npm run lint:tool-registration && npm run lint:input-naming && npm run lint:mutation-envelope && npm run lint:no-local-enc && npm run lint:format && npm run lint:eslint && npm run coverage:check",
+    "verify": "npm run audit:prod && npm run typecheck && npm run typecheck:tests && npm run lint:output-schema-budget && npm run lint:tool-registration && npm run lint:input-naming && npm run lint:mutation-envelope && npm run lint:no-local-enc && npm run lint:format && npm run lint:eslint && npm run coverage:check",
     "tools:list": "node scripts/gen-tool-list.mjs",
     "tools:update-readme": "node scripts/gen-tool-list.mjs --write-readme",
     "lint:eslint": "eslint ."

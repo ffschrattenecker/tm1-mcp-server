@@ -196,10 +196,10 @@ export class TM1Client {
 extending it. That is a load-bearing type boundary: because `TM1Client` does
 not `extend TM1HttpClient`, its public type does **not** expose
 `request()/requestRaw()/requestBinary()`, so a tool typed on `TM1Client`
-cannot call raw REST — that is a `tsc` compile error, not merely a
-`lint:no-flat-api` failure. Services that legitimately need transport receive
-`this.http` explicitly (`new CubeService(this.http)`), so they see the HTTP
-surface while tools never do.
+cannot call raw REST — that is a `tsc` compile error. Services that
+legitimately need transport receive `this.http` explicitly
+(`new CubeService(this.http)`), so they see the HTTP surface while tools never
+do.
 
 **Init order is load-bearing where one service depends on another.**
 `ElementService` takes `CellService` and `BatchService`
@@ -210,14 +210,11 @@ asserts both before wiring `elements`. Keep dependency-bearing services after
 the ones they consume, or the assert throws.
 
 `TM1Client` holds **no** flat pass-through methods. Tools always reach TM1
-through a service (`client.cubes.list()`, `client.processes.execute()`, …).
-The `lint:no-flat-api` CI gate fails the build if a flat-client TM1 call is
-reintroduced.
-
-The same gate also forbids tools under `src/tools/**` from calling the raw
-transport (`.request()` / `.requestRaw()` / `.requestBinary()`) directly.
-Hand-rolling OData in a tool bypasses the service layer and reimplements
-paging, OData-quote escaping, and version branches that belong in a service.
+through a service (`client.cubes.list()`, `client.processes.execute()`, …),
+and cannot call the raw transport (`.request()` / `.requestRaw()` /
+`.requestBinary()`) — neither exists on `TM1Client`'s type. Hand-rolling OData
+in a tool would bypass the service layer and reimplement paging, OData-quote
+escaping, and version branches that belong in a service.
 If a tool needs a call no service exposes yet, add the method to the relevant
 service (e.g. `ElementService.scanElementNames`) and call that.
 

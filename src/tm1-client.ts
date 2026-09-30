@@ -29,7 +29,7 @@ export class TM1Client {
   // Transport is HELD, not inherited. Because TM1Client no longer `extends`
   // TM1HttpClient, its public type does not expose `request()/requestRaw()/
   // requestBinary()`, so a tool typed on TM1Client cannot call raw REST — that
-  // is now a compile error (`tsc`), not just a `lint:no-flat-api` failure.
+  // is a compile error (`tsc`).
   // Services that legitimately need transport receive `this.http` explicitly.
   private readonly http: TM1HttpClient;
   private readonly sessionManager: SessionManager;

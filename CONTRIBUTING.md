@@ -41,7 +41,6 @@ This chains:
 | ---------------- | ----------------------------------- | ------------------------------------------------------------------ |
 | Types            | `npm run typecheck`                 | `tsc --noEmit`, strict flags on                                    |
 | Types (tests)    | `npm run typecheck:tests`           | `tests/` under the same strict flags (`tsconfig.test.json`)        |
-| API shape        | `npm run lint:no-flat-api`          | new TM1 calls go through a service, not flat client                |
 | Schema budget    | `npm run lint:output-schema-budget` | serialized output schemas stay within the byte budget              |
 | Registration     | `npm run lint:tool-registration`    | every `register*` is wired into `src/tools/index.ts`               |
 | Input naming     | `npm run lint:input-naming`         | no tool takes a bare top-level `name` input (use `<entity>Name`)   |
@@ -114,9 +113,9 @@ and a token, and a failing build is a stronger signal than a green shield.
 ## Architecture Notes
 
 - **Service composition.** TM1 REST calls live in a service under
-  `src/tm1-client/services/`, not directly on a flat client. The
-  `lint:no-flat-api` gate enforces this — add new calls to the appropriate
-  service.
+  `src/tm1-client/services/`, not directly on a flat client. Tools only see
+  `TM1Client`, which does not expose the transport, so `tsc` enforces this —
+  add new calls to the appropriate service.
 - **Tools** are registered under `src/tools/<category>/` and wired in
   `src/tools/index.ts`. Each tool declares `readOnlyHint` / `destructiveHint` /
   `idempotentHint` annotations. Every tool is built with `defineTool()`

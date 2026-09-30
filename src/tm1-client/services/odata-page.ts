@@ -1,10 +1,11 @@
 // Shared OData paging/filter clause builder for server-side $top/$skip
 // push-down.
 //
-// Lives in the service layer on purpose: `lint:no-flat-api` keeps every OData
-// query fragment inside a service, so handlers pass semantic options
-// ({page, nameContains, includeControl}) and the service turns them into a
-// query string. Nothing here interpolates a caller string without escaping it.
+// Lives in the service layer on purpose: tools cannot reach the transport, so
+// every OData query fragment stays inside a service; handlers pass semantic
+// options ({page, nameContains, includeControl}) and the service turns them
+// into a query string. Nothing here interpolates a caller string without
+// escaping it.
 //
 // Why the clauses always travel together:
 //   $orderby — mandatory. `$skip` without a stable sort is undefined in OData;
