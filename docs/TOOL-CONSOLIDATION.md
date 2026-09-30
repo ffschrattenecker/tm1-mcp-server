@@ -301,7 +301,8 @@ Left to do, in this order:
    coverage ratchet, and a word-grep for every deleted name (allowed only in CHANGELOG and this file).
 7. Bump `package.json` to 9.0.0. No tag / push / publish until asked.
 
-Known follow-ups from the build: `responseLimit()` in `src/tools/rest/shape.ts` reads `TM1_MAX_RESPONSE_CHARS`
+Known follow-ups: the name-based masking hides all of `ActiveConfiguration/Access/Authentication`,
+including the non-secret `IntegratedSecurityMode` (pinned in `rest.live`). From the build: `responseLimit()` in `src/tools/rest/shape.ts` reads `TM1_MAX_RESPONSE_CHARS`
 from env rather than the value passed to `withAnnotations()`; the secret-name check refuses `$filter`/`$orderby`
 on properties whose names contain `pass`/`auth`/`token`; a doubly-encoded `%XX` path is refused by design.
 

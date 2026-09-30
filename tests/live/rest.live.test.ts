@@ -149,6 +149,15 @@ describe.skipIf(!LIVE_ENABLED)("live: REST tools", () => {
       expect(Array.isArray(rows)).toBe(true);
     });
 
+    // The masking keys on names: everything under Access/Authentication is
+    // masked, IntegratedSecurityMode included, although it is not a secret.
+    it("masks the Authentication settings wholesale", async () => {
+      const r = await h.ok("tm1_rest_read", {
+        path: "ActiveConfiguration/Access/Authentication/IntegratedSecurityMode/$value",
+      });
+      expect(r.json.text ?? r.json.data).toBe("***");
+    });
+
     it("compiles a process through the read tool", async () => {
       const [proc] = await restGet<Array<{ Name: string }>>(
         h,

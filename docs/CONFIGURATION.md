@@ -332,8 +332,9 @@ servers allow a blank admin password — an empty `TM1_PASSWORD` is accepted and
 the server logs a warning rather than blocking, so the real TM1 `401` surfaces
 with context. For CAM/LDAP servers a `401` usually means the wrong
 `TM1_NAMESPACE` (or an interactive account on PA Cloud — use a non-interactive
-service account); confirm the server's `IntegratedSecurityMode` with
-`tm1_rest_read ActiveConfiguration/Access/IntegratedSecurityMode/$value`.
+service account); confirm the server's `IntegratedSecurityMode` in `tm1s.cfg` or with the TM1 admin.
+The MCP cannot read it: `ActiveConfiguration/Access/Authentication` is masked
+wholesale.
 
 **v11 vs v12 feature errors** (`DataSource.usesUnicode`, hierarchy/`Files`
 endpoints): set `TM1_VERSION=11.8` (or your `11.x`) so v12-only paths are
