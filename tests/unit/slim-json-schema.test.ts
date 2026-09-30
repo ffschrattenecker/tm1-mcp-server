@@ -9,7 +9,7 @@ import {
   stripDefaultPhrase,
 } from "../../src/lib/slim-json-schema.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
-import "../../src/tools/metadata/list-cubes.js";
+import "../../src/tools/fileops/files-read.js";
 
 const SAFE_INT_MIN = -9007199254740991;
 const SAFE_INT_MAX = 9007199254740991;
@@ -173,7 +173,7 @@ describe("tools/list advertises slimmed schemas", () => {
 
   // Real tool name so its declared annotation + outputSchema resolve. The
   // import above pulls in the defineTool() spec that declares them.
-  const TOOL = "tm1_list_cubes";
+  const TOOL = "tm1_files_read";
   const handler = () => ({ content: [{ type: "text" as const, text: "{}" }] });
 
   async function listTools(server: McpServer) {
@@ -195,7 +195,7 @@ describe("tools/list advertises slimmed schemas", () => {
     const wrapped = withAnnotations(server, mockLogger, "readwrite");
     (wrapped.tool as (...a: unknown[]) => unknown)(
       TOOL,
-      "list cubes",
+      "read files",
       inputShape,
       handler,
     );
@@ -229,7 +229,7 @@ describe("tools/list advertises slimmed schemas", () => {
     const server = new McpServer({ name: "test", version: "0.0.0" });
     server.registerTool(
       TOOL,
-      { description: "list cubes", inputSchema: inputShape },
+      { description: "read files", inputSchema: inputShape },
       handler,
     );
 

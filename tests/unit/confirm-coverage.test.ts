@@ -43,23 +43,13 @@ function collectInputSchemas(): Map<string, Record<string, unknown>> {
 // destructive op without repeating the target name. This gate fails if any of
 // these drops the field.
 //
-// H4-full (2026-07-04): the guard now covers the whole object-destruction
-// surface. remove_client_group is technically reversible (re-assign) but guards
-// on clientName so an auto-approve client can't silently strip memberships.
+// 9.0.0: single-object deletes go through tm1_rest_write, which asks for
+// confirm = the key of the object a DELETE or cancel/close action hits.
 const CONFIRM_REQUIRED = [
-  "tm1_delete_process",
+  "tm1_rest_write",
+  "tm1_files_write",
   "tm1_clear_cube",
-  "tm1_delete_cube",
-  "tm1_delete_dimension",
-  "tm1_delete_element",
   "tm1_delete_elements",
-  "tm1_delete_hierarchy",
-  "tm1_delete_subset",
-  "tm1_delete_view",
-  "tm1_delete_chore",
-  "tm1_delete_client",
-  "tm1_delete_file",
-  "tm1_remove_client_group",
   // K2/S9 (2026-08-05): the guard used to cover object DESTRUCTION only, so this
   // list read as complete while irreversible writes and TI side-effects sat
   // outside it. A tool that overwrites data, or runs code whose effects the
@@ -68,7 +58,6 @@ const CONFIRM_REQUIRED = [
   "tm1_execute_chore",
   "tm1_write_cells",
   "tm1_set_cube_rules",
-  "tm1_upload_file",
   // 5.0.0: create-or-update tools confirm an OVERWRITE (optional field, required
   // at runtime once the target exists).
   "tm1_upsert_process",

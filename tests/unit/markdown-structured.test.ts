@@ -22,6 +22,7 @@ import {
   strictVariants,
 } from "../../src/tools/schemas/markdown-capable.js";
 import {
+  FORMAT_SCHEMA,
   pageResponse,
   payloadResponse,
   wrappedPageResponse,
@@ -29,7 +30,23 @@ import {
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 // Importing the tool barrel runs every top-level defineTool() call.
 import "../../src/tools/index.js";
-import { allSpecs } from "../../src/tools/define-tool.js";
+import { allSpecs, defineTool } from "../../src/tools/define-tool.js";
+import { pageShapeFor } from "../../src/tools/schemas/common.js";
+import { READ_ONLY } from "../../src/tools/annotations.js";
+
+// A paged, markdown-capable fixture tool, so the end-to-end cases do not
+// depend on which real tools happen to return a page.
+const PAGE_TOOL = "tm1_fixture_page";
+defineTool({
+  name: PAGE_TOOL,
+  description: "fixture",
+  annotations: READ_ONLY,
+  output: pageShapeFor(
+    z.object({ name: z.string(), dimensions: z.array(z.string()) }),
+  ),
+  input: { ...FORMAT_SCHEMA },
+  handler: () => ({ content: [{ type: "text" as const, text: "{}" }] }),
+});
 
 const mockLogger = {
   info: vi.fn(),
@@ -145,8 +162,8 @@ describe("end-to-end over the SDK", () => {
     const server = new McpServer({ name: "t", version: "0.0.0" });
     const wrapped = withAnnotations(server, mockLogger, "readwrite");
     (wrapped.tool as (...a: unknown[]) => unknown)(
-      "tm1_list_cubes",
-      "list cubes",
+      PAGE_TOOL,
+      "fixture",
       {},
       () => result,
     );
@@ -154,7 +171,7 @@ describe("end-to-end over the SDK", () => {
     const client = new Client({ name: "c", version: "0.0.0" });
     await Promise.all([client.connect(ct), server.connect(st)]);
     const res = await client.callTool({
-      name: "tm1_list_cubes",
+      name: PAGE_TOOL,
       arguments: {},
     });
     await client.close();
@@ -203,7 +220,7 @@ describe("markdown-capable schema coverage", () => {
     .map(([name]) => name);
 
   it("covers a non-trivial number of tools", () => {
-    expect(markdownCapableTools.length).toBeGreaterThan(30);
+    expect(markdownCapableTools.length).toBeGreaterThan(5);
   });
 
   it.each(markdownCapableTools)(

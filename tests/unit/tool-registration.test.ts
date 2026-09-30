@@ -38,9 +38,8 @@ function makeServer(): McpServer {
   return new McpServer({ name: "test", version: "0.0.0" });
 }
 
-// Version-gated tools (tm1_list_jobs/tm1_cancel_job on v12, tm1_list_threads/
-// tm1_cancel_thread on v11) only register under one version at a time — union
-// both so "registered" reflects full coverage across the version split.
+// Version-gated tools (tm1_save_data, v11 only) register under one version at
+// a time — union both so "registered" reflects full coverage.
 function collectRegisteredNames(mode: "readwrite" | "readonly"): Set<string> {
   const names = new Set<string>();
   for (const version of [11, 12] as const) {
@@ -115,7 +114,7 @@ describe("L8 auto-derived tool titles", () => {
     for (const [name, { config }] of captured) {
       expect(config.title, `${name} missing title`).toBe(deriveTitle(name));
     }
-    expect(captured.get("tm1_list_cubes")?.config.title).toBe("List Cubes");
+    expect(captured.get("tm1_rest_read")?.config.title).toBe("Rest Read");
   });
 });
 
@@ -147,7 +146,7 @@ describe("L9 output-schema drift guard", () => {
   }
 
   it("schema-violating payload → isError envelope with drift message, no structuredContent", async () => {
-    const { cb } = registerFake("tm1_list_cubes", () =>
+    const { cb } = registerFake("tm1_list_processes_grouped", () =>
       mkResult({ totally: "wrong shape" }),
     );
     const result = (await cb()) as {
@@ -158,19 +157,21 @@ describe("L9 output-schema drift guard", () => {
     expect(result.isError).toBe(true);
     expect(result.structuredContent).toBeUndefined();
     const payload = JSON.parse(result.content[0].text) as { message: string };
-    expect(payload.message).toContain("output schema drift in tm1_list_cubes");
+    expect(payload.message).toContain(
+      "output schema drift in tm1_list_processes_grouped",
+    );
   });
 
   it("schema-conforming payload → structuredContent attached, no isError", async () => {
     const good = {
-      total: 1,
-      count: 1,
-      offset: 0,
-      has_more: false,
-      next_offset: null,
-      items: [{ name: "Cube_Sales" }],
+      totalProcesses: 2,
+      groupCount: 1,
+      prefixSegments: 1,
+      groups: [{ prefix: "Load", count: 2 }],
     };
-    const { cb } = registerFake("tm1_list_cubes", () => mkResult(good));
+    const { cb } = registerFake("tm1_list_processes_grouped", () =>
+      mkResult(good),
+    );
     const result = (await cb()) as {
       isError?: boolean;
       structuredContent?: unknown;

@@ -10,7 +10,6 @@ import type pino from "pino";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import type { ToolRegistrar } from "../../src/tools/define-tool.js";
-import { registerListClients } from "../../src/tools/security/list-clients.js";
 import { registerListErrorLogs } from "../../src/tools/operations/list-error-logs.js";
 
 const mockLogger = {
@@ -69,32 +68,4 @@ describe("output schema round-trip", () => {
       totalFiles: 2,
     });
   });
-
-  it.each([["type"], ["friendlyName"], ["enabled"], ["groupCount"]])(
-    "tm1_list_clients fields=['%s'] still carries Name",
-    async (field) => {
-      const tm1 = {
-        security: {
-          listClients: () =>
-            Promise.resolve([
-              {
-                Name: "u1",
-                FriendlyName: "U 1",
-                Type: "User",
-                Enabled: true,
-                Groups: [],
-              },
-            ]),
-        },
-      };
-      const res = await call(registerListClients, tm1, "tm1_list_clients", {
-        fields: [field],
-      });
-      expect(res.isError).toBeFalsy();
-      expect(
-        (res.structuredContent as { items: Array<{ Name: string }> }).items[0]
-          .Name,
-      ).toBe("u1");
-    },
-  );
 });

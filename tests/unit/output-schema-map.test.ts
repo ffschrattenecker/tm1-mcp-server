@@ -6,7 +6,6 @@ import type pino from "pino";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerAllTools } from "../../src/tools/index.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
-import { paginate } from "../../src/tools/pagination.js";
 // Output schemas come from the defineTool() specs; registerAllTools is
 // imported above, so every spec has been defined.
 import { allSpecs } from "../../src/tools/define-tool.js";
@@ -37,56 +36,6 @@ function schemaOf(toolName: string): ZodTypeAny {
   return asSchema(entry);
 }
 
-// Minimal fixtures matching each item schema. Kept inline so the test fails
-// loud if a schema field changes underneath us.
-const SAMPLES: Record<string, unknown[]> = {
-  tm1_list_cubes: [{ name: "Sales", dimensions: ["Region", "Period"] }],
-  tm1_list_dimensions: [
-    { name: "Region", hierarchies: ["Region"] },
-    // Validates the optional `elementCounts` field surfaces under includeElementCount=true.
-    { name: "Period", hierarchies: ["Period"], elementCounts: { Period: 24 } },
-  ],
-  tm1_list_processes: [
-    {
-      name: "p1",
-      parameters: [{ name: "p", type: "String", defaultValue: "x" }],
-    },
-  ],
-  tm1_list_chores: [
-    {
-      name: "c1",
-      active: true,
-      startTime: "2026-01-01T00:00:00",
-      frequency: "P1D",
-      processes: [{ name: "p1", parameters: { region: "EU" } }],
-    },
-  ],
-  tm1_list_clients: [{ Name: "admin", Enabled: true }],
-  tm1_list_groups: [{ Name: "ADMIN", Clients: [{ Name: "admin" }] }],
-  tm1_list_views: [{ name: "v1", private: false }],
-  tm1_list_subsets: [
-    {
-      name: "s1",
-      dimensionName: "Region",
-      hierarchyName: "Region",
-      private: false,
-      elements: ["EU", "US"],
-    },
-  ],
-  tm1_list_threads: [
-    {
-      id: 1,
-      type: "User",
-      name: "admin",
-      state: "Idle",
-      function: "",
-      objectName: "",
-    },
-  ],
-  tm1_list_sessions: [{ id: "1", user: "admin", threads: [] }],
-  tm1_list_element_attributes: [{ name: "Currency", type: "String" }],
-};
-
 const mockLogger = {
   info: vi.fn(),
   error: vi.fn(),
@@ -99,9 +48,8 @@ const mockLogger = {
   flush: vi.fn(),
 } as unknown as pino.Logger;
 
-// Version-gated tools (tm1_list_jobs/tm1_cancel_job on v12, tm1_list_threads/
-// tm1_cancel_thread on v11) only register under one version at a time — union
-// both so "registered" reflects full coverage across the version split.
+// Version-gated tools (tm1_save_data, v11 only) register under one version at
+// a time — union both so "registered" reflects full coverage.
 function registeredToolNames(): Set<string> {
   const names = new Set<string>();
   for (const version of [11, 12] as const) {
@@ -132,26 +80,6 @@ describe("declared output schemas", () => {
     expect(orphans).toEqual([]);
   });
 
-  for (const [toolName, items] of Object.entries(SAMPLES)) {
-    it(`${toolName}: paginated output validates against schema`, () => {
-      const schema = schemaOf(toolName);
-      const page = paginate(items, 50, 0);
-      const result = schema.safeParse(page);
-      if (!result.success) {
-        throw new Error(
-          `${toolName} validation failed: ${JSON.stringify(result.error.issues, null, 2)}`,
-        );
-      }
-    });
-  }
-
-  it("tm1_list_files: paginated output (with `path`) validates against schema", () => {
-    const schema = schemaOf("tm1_list_files");
-    const payload = { path: "Subdir", ...paginate(["a.csv", "b.csv"], 50, 0) };
-    const result = schema.safeParse(payload);
-    expect(result.success).toBe(true);
-  });
-
   // Live-sweep regression 2026-07-12: the not-found branch omitted choreName/
   // tasks and was rejected by the strict output schema (surfaced as isError
   // via the drift pre-validation). Both branches must conform.
@@ -167,25 +95,6 @@ describe("declared output schemas", () => {
     if (!result.success) {
       throw new Error(
         `warning-branch validation failed: ${JSON.stringify(result.error.issues, null, 2)}`,
-      );
-    }
-  });
-
-  it("tm1_list_sessions: compact-mode summary output validates against schema", () => {
-    const schema = schemaOf("tm1_list_sessions");
-    const payload = {
-      total: 3,
-      count: 0,
-      offset: 0,
-      has_more: false,
-      next_offset: null,
-      items: [],
-      summary: { namedUsers: 2, anonymousCount: 1 },
-    };
-    const result = schema.safeParse(payload);
-    if (!result.success) {
-      throw new Error(
-        `compact validation failed: ${JSON.stringify(result.error.issues, null, 2)}`,
       );
     }
   });
@@ -210,13 +119,6 @@ describe("declared output schemas", () => {
       unresolvableArgs: 0,
       partial: false,
     },
-    tm1_get_subset: {
-      name: "EU",
-      dimensionName: "Region",
-      hierarchyName: "Region",
-      private: false,
-      elements: ["DE", "FR"],
-    },
     tm1_get_view: {
       cubeName: "Sales",
       viewName: "Default",
@@ -232,28 +134,6 @@ describe("declared output schemas", () => {
       next_offset: null,
       items: [{ value: 100, formattedValue: "100.00" }],
     },
-    tm1_get_hierarchy: {
-      name: "Region",
-      dimensionName: "Region",
-      elements: [
-        {
-          name: "EU",
-          type: "Consolidated",
-          level: 1,
-          parents: [],
-          children: [{ name: "DE", weight: 1 }],
-        },
-      ],
-      truncated: false,
-      total: 1,
-      offset: 0,
-      has_more: false,
-    },
-    tm1_get_descendants: {
-      element: "EU",
-      descendants: [{ name: "DE", type: "Numeric", level: 0, depth: 1 }],
-      truncated: false,
-    },
     tm1_get_process: {
       name: "Load.Sales",
       prolog: "# pro",
@@ -265,7 +145,6 @@ describe("declared output schemas", () => {
       dataSource: { type: "None" },
       hasSecurityAccess: false,
     },
-    tm1_get_cell_value: { value: 42 },
     tm1_get_all_cube_rules: {
       count: 1,
       countIsExact: true,
@@ -299,13 +178,6 @@ describe("declared output schemas", () => {
           epilogLines: 0,
           commentLines: 2,
         },
-      ],
-    },
-    tm1_get_element_attribute_values: {
-      dimensionName: "Region",
-      elementName: "EU",
-      attributes: [
-        { elementName: "EU", attributeName: "Currency", value: "EUR" },
       ],
     },
     tm1_execute_mdx: {
@@ -469,13 +341,6 @@ describe("declared output schemas", () => {
       tabsChecked: ["prolog"],
       partial: true,
     },
-    tm1_compile_process: {
-      ok: true,
-      processName: "Load.Sales",
-      errorCount: 0,
-      errors: [],
-    },
-    tm1_get_client: { Name: "admin", Enabled: true },
     tm1_get_cube_rules: {
       cubeName: "Sales",
       rulesText: "[]=N:1;",
@@ -501,40 +366,6 @@ describe("declared output schemas", () => {
         },
       ],
     },
-    tm1_get_server_info: {
-      serverName: "tm1srv",
-      productVersion: "11.8",
-      extra: {},
-    },
-    tm1_get_message_log: {
-      count: 1,
-      entries: [
-        { timestamp: "2026-05-02T10:00:00", level: "INFO", message: "ok" },
-      ],
-    },
-    tm1_get_transaction_log: {
-      count: 1,
-      coverage: "partial",
-      scannedFrom: "2026-05-02T00:00:00Z",
-      entries: [
-        {
-          timestamp: "2026-05-02T10:00:00",
-          user: "admin",
-          cubeName: "Sales",
-          elements: ["EU", "Jan"],
-          oldValue: 100,
-          newValue: 200,
-        },
-      ],
-    },
-    tm1_get_file_content: {
-      fileName: "data.csv",
-      totalBytes: 1024,
-      returnedBytes: 1024,
-      truncated: false,
-      encoding: "text" as const,
-      content: "a,b,c\n1,2,3",
-    },
     tm1_list_error_logs: {
       total: 1,
       count: 1,
@@ -558,35 +389,11 @@ describe("declared output schemas", () => {
     },
     // Generic mutation envelope: success + per-tool extras flow through
     // passthrough. One fixture per shape variant is enough to lock behavior.
-    tm1_assign_client_group: {
-      success: true,
-      clientName: "admin",
-      groupName: "ADMIN",
-    },
-    tm1_cancel_thread: { success: true, threadId: 42 },
     tm1_clear_cube: {
       success: true,
       cubeName: "Sales",
       summary: "all cells",
     },
-    tm1_create_chore: {
-      success: true,
-      name: "Daily.Load",
-      stepCount: 2,
-      active: true,
-    },
-    tm1_create_client: { success: true, name: "newuser" },
-    tm1_create_element: { success: true, elementName: "DE" },
-    tm1_create_element_attribute: {
-      success: true,
-      attributeName: "Currency",
-      attributeType: "String",
-    },
-    tm1_create_subset: { success: true, subsetName: "EU", kind: "static" },
-    tm1_delete_element: { success: true, elementName: "DE" },
-    tm1_delete_process: { success: true, processName: "Load.Sales" },
-    tm1_delete_subset: { success: true, subsetName: "EU" },
-    tm1_update_element: { success: true, elementName: "DE" },
     tm1_update_element_attribute_value: {
       success: true,
       dimensionName: "Region",
@@ -594,19 +401,7 @@ describe("declared output schemas", () => {
       attributeName: "Currency",
       value: "EUR",
     },
-    tm1_update_subset: { success: true, subsetName: "EU" },
     tm1_write_cells: { success: true, cellsWritten: 100 },
-    tm1_invalidate_callgraph_cache: {
-      cleared: 3,
-      entriesBefore: [
-        {
-          key: "tm1://server/refs",
-          ageMs: 1234,
-          ttlRemainingMs: 60_000,
-          buildMs: 250,
-        },
-      ],
-    },
   };
 
   for (const [toolName, payload] of Object.entries(PHASE2_SAMPLES)) {

@@ -35,12 +35,7 @@ describe("R2-21: requiresVersion annotation extension", () => {
     // Only tools the server actually withholds on v12 carry the tag. The
     // .pro tools and the cell diagnostics used to be tagged too and were
     // measured working on 12.5.9 — see the "not tagged" case below.
-    const v11OnlyTools = [
-      "tm1_save_data",
-      "tm1_get_audit_log",
-      "tm1_get_message_log",
-      "tm1_get_transaction_log",
-    ];
+    const v11OnlyTools = ["tm1_save_data"];
 
     it.each(v11OnlyTools)("%s is tagged requiresVersion='v11'", (tool) => {
       const annot = specFor(tool)?.annotations;
@@ -50,10 +45,10 @@ describe("R2-21: requiresVersion annotation extension", () => {
 
     it("untagged tools have no requiresVersion field (version-agnostic)", () => {
       const sample = [
-        "tm1_list_cubes",
         "tm1_execute_mdx",
-        "tm1_create_dimension",
-        "tm1_get_cell_value",
+        "tm1_rest_read",
+        "tm1_rest_write",
+        "tm1_files_read",
       ];
       for (const tool of sample) {
         expect(specFor(tool)?.annotations.requiresVersion).toBeUndefined();

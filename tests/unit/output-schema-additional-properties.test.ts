@@ -34,28 +34,14 @@ function asSchema(entry: ZodRawShape | ZodTypeAny): JsonSchemaInput {
 
 const TOOLS_WITH_EXTRAS: string[] = [
   // Mutation envelope (success + per-tool extras)
-  "tm1_assign_client_group",
-  "tm1_cancel_thread",
   "tm1_clear_cube",
-  "tm1_create_chore",
-  "tm1_create_client",
-  "tm1_create_element",
-  "tm1_create_element_attribute",
-  "tm1_create_subset",
-  "tm1_delete_element",
-  "tm1_delete_process",
-  "tm1_delete_subset",
-  "tm1_update_element",
   "tm1_update_element_attribute_value",
-  "tm1_update_subset",
   "tm1_write_cells",
   // Bespoke schemas that also rely on .passthrough()
   "tm1_upsert_process",
   "tm1_diff_process_with_file",
   "tm1_install_pro_bundle",
   "tm1_check_writable_coords",
-  "tm1_get_client",
-  "tm1_get_server_info",
   "tm1_analyze_callgraph",
 ];
 

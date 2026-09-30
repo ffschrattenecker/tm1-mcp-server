@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { z, type ZodRawShape } from "zod";
 import { ElementService } from "../../src/tm1-client/services/element-service.js";
-import { registerGetElementAttributeValues } from "../../src/tools/dimension-management/get-element-attribute-values.js";
-import type { TM1Client } from "../../src/tm1-client.js";
 import type { MdxResult } from "../../src/types.js";
 
 // A 2-attribute × 3-element page, cells row-major as TM1 returns them.
@@ -85,56 +82,5 @@ describe("ElementService.getAttributeValuesPage", () => {
     });
     expect(mdx).toEqual([]);
     expect(out).toEqual({ total: 2, items: [] });
-  });
-});
-
-describe("tm1_get_element_attribute_values without elementName", () => {
-  function handlerFor(client: unknown) {
-    let h: ((a: unknown) => Promise<{ content: { text: string }[] }>) | null =
-      null;
-    let parser: z.ZodObject<ZodRawShape> | null = null;
-    registerGetElementAttributeValues(
-      {
-        tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-          parser = z.object(s);
-          h = cb;
-        },
-      } as never,
-      client as TM1Client,
-    );
-    return (args: Record<string, unknown>) => h!(parser!.parse(args));
-  }
-
-  it("returns a page envelope with has_more/next_offset", async () => {
-    const svc = makeService(10, [], []);
-    const call = handlerFor({ elements: svc });
-    const out = JSON.parse(
-      (await call({ dimensionName: "Region", limit: 3 })).content[0].text,
-    );
-    expect(out.dimensionName).toBe("Region");
-    expect(out.total).toBe(10);
-    expect(out.count).toBe(3);
-    expect(out.has_more).toBe(true);
-    expect(out.next_offset).toBe(3);
-    expect(out.items[0].values.Code).toBe("A.Code");
-  });
-
-  it("keeps the single-element shape when elementName is given", async () => {
-    const call = handlerFor({
-      elements: {
-        getAttributeValues: async () => [
-          { elementName: "A", attributeName: "Code", value: "x" },
-        ],
-      },
-    });
-    const out = JSON.parse(
-      (await call({ dimensionName: "Region", elementName: "A" })).content[0]
-        .text,
-    );
-    expect(out).toEqual({
-      dimensionName: "Region",
-      elementName: "A",
-      attributes: [{ elementName: "A", attributeName: "Code", value: "x" }],
-    });
   });
 });

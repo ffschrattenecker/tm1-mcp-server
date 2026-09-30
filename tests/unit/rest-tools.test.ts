@@ -128,7 +128,7 @@ describe("tm1_rest_read", () => {
 
   // Addressing one Procedure property returns the code as `value` (JSON) or
   // as the whole body ($value): no *Procedure key marks it as code.
-  it.each([
+  it.each<[string, RestBody]>([
     [
       "Processes('P')/PrologProcedure",
       json({
@@ -489,7 +489,7 @@ describe("tm1_rest_write: string body", () => {
 // Reading the secret property itself: TM1 answers `{ value: "<secret>" }`, or
 // with /$value the bare secret as the whole body. No secret-named key.
 describe("tm1_rest_read: secret property paths", () => {
-  it.each([
+  it.each<[string, RestBody]>([
     [
       "Processes('P')/DataSource/password",
       json({ "@odata.context": "x", value: "hunter2" }),
