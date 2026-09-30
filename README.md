@@ -102,6 +102,7 @@ TM1_BASE_URL=https://your-tm1-server:8010
 TM1_USER=admin
 TM1_PASSWORD=your-password
 TM1_SSL_REJECT_UNAUTHORIZED=false
+# TM1_PROXY=socks5://proxy:1080   # optional; reach TM1 through a SOCKS5 proxy
 TM1_VERSION=11.8
 TM1_MODE=readonly                   # readonly (default) | readwrite
 # TM1_ENVIRONMENT=prod              # dev | test | prod; prod forces readonly

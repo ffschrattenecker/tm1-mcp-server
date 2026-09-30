@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   names the real target. The request timeouts stay switched off, and TLS verification still
   follows `TM1_SSL_REJECT_UNAUTHORIZED`. Other schemes fail at startup.
 
+### Changed
+
+- **Smaller package:** 384 kB instead of 545 kB, with 196 files instead of 395. The tarball ships
+  compiled JavaScript, `NOTICE` and `npm-shrinkwrap.json` only. TypeScript declarations, `docs/`
+  and `CHANGELOG.md` are no longer included (this is a bin-only package; the docs live on GitHub).
+
+### Fixed
+
+- The MCP prompt texts named tool arguments that no longer exist.
+- The `tm1_upsert_process` description pointed at the removed `tm1_get_process_variables`.
+
 ## [9.0.0] - 2026-09-30
 
 ### Removed
