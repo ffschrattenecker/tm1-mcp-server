@@ -1,15 +1,6 @@
-// Scheduling-domain schemas: chore list item for tm1_list_chores, run result
-// for tm1_execute_chore.
+// Scheduling-domain schemas: run result for tm1_execute_chore.
 import { z } from "zod";
-import { ChoreSchema } from "../../schemas/scheduling.js";
 import { CHORE_OUTCOME } from "./items-common.js";
-
-// In compact mode (tm1_list_chores compact=true) the full processes[] array is
-// replaced by processCount, so both are optional at schema level; the tool
-// guarantees exactly one is present.
-export const ChoreItemSchema = ChoreSchema.partial({ processes: true }).extend({
-  processCount: z.number().int().optional(),
-});
 
 // Result of tm1_execute_chore. `choreErrorStatus` carries TM1's raw
 // ChoreExecuteStatusCode, or — when the outcome is indeterminate — the reason

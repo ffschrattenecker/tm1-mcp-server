@@ -7,19 +7,6 @@ import { FedCellDescriptorSchema } from "../../schemas/cells.js";
 
 import { CellValueSchema } from "./items-common.js";
 
-// Bespoke shapes for mutations whose payload is rich enough to type explicitly.
-export const InvalidateCallgraphCacheResultSchema = z.object({
-  cleared: z.number().int(),
-  entriesBefore: z.array(
-    z.object({
-      key: z.string(),
-      ageMs: z.number(),
-      ttlRemainingMs: z.number(),
-      buildMs: z.number(),
-    }),
-  ),
-});
-
 // ── Phase 2e: analysis tools ─────────────────────────────────────────────────
 
 // analyze_callgraph emits one of:

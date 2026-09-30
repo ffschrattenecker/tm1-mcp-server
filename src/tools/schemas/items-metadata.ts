@@ -1,79 +1,6 @@
-// Metadata-domain item/result schemas: cubes, dimensions, hierarchies,
-// elements, attributes, rules, cube stats and hierarchy navigation.
+// Metadata-domain result schemas: cube rules, cube stats and default members.
 import { z } from "zod";
-export {
-  ElementAttributeValueSchema,
-  ElementStatsSchema,
-} from "../../schemas/metadata.js";
-import {
-  CubeSchema,
-  DimensionSchema,
-  HierarchyElementSchema as HierarchyElementBase,
-  HierarchySchema as HierarchyBase,
-} from "../../schemas/metadata.js";
-
-// Published list item = the canonical shape with the projections tm1_list_cubes
-// offers made optional. Derived, so a new cube field cannot reach the client
-// without appearing here.
-export const CubeItemSchema = CubeSchema.partial({
-  // Omitted when caller sets includeDimensions=false on tm1_list_cubes.
-  dimensions: true,
-});
-
-// `lastUpdated` is only attached when the caller asks for it — but it IS part
-// of the payload then, so the published schema has to carry it (a strict
-// schema that omits it makes the client reject the whole response).
-export const DimensionItemSchema = DimensionSchema;
-
-// parents/children are omitted when the caller passes compact=true to
-// tm1_get_hierarchy.
-export const HierarchyElementSchema = HierarchyElementBase.partial({
-  parents: true,
-  children: true,
-});
-
-// The tool wraps the canonical hierarchy in a page envelope.
-export const HierarchySchema = HierarchyBase.extend({
-  elements: z.array(HierarchyElementSchema),
-  total: z.number().int(),
-  offset: z.number().int(),
-  has_more: z.boolean(),
-  // true when the topN cap clipped the (post-filter) element set — raise topN.
-  truncated: z.boolean(),
-  // countOnly=true: totals of the filtered set; elements is then empty.
-  counts: z
-    .object({
-      byType: z.object({
-        Numeric: z.number().int(),
-        String: z.number().int(),
-        Consolidated: z.number().int(),
-      }),
-      byLevel: z.record(z.string(), z.number().int()),
-      maxLevel: z.number().int(),
-    })
-    .optional(),
-});
-
-export const BulkUpsertElementsResultSchema = z.object({
-  success: z.boolean(),
-  dimension: z.string(),
-  hierarchy: z.string(),
-  totalElements: z.number().int(),
-  counts: z.object({
-    N: z.number().int(),
-    C: z.number().int(),
-    S: z.number().int(),
-  }),
-});
-
-// Attribute *definition* (as returned by listAttributes) — distinct from a
-// per-element attribute *value* above. Used by tm1_list_element_attributes.
-export const ElementAttributeDefinitionSchema = z.object({
-  name: z.string().describe("Attribute name"),
-  type: z
-    .enum(["Numeric", "String", "Alias"])
-    .describe("Attribute storage type"),
-});
+export { ElementStatsSchema } from "../../schemas/metadata.js";
 
 export const CubeRulesSchema = z.object({
   cubeName: z.string(),
@@ -147,26 +74,6 @@ export const CubeStatsResultSchema = z
 
 // ── Phase 2i: hierarchy navigation, server snapshots, diagnostics ────────────
 
-export const AncestorsResultSchema = z.object({
-  element: z.string(),
-  ancestors: z.array(z.object({ name: z.string(), level: z.number().int() })),
-  paths: z.array(z.array(z.string())),
-});
-
-export const DescendantsResultSchema = z.object({
-  element: z.string(),
-  descendants: z.array(
-    z.object({
-      name: z.string(),
-      type: z.string(),
-      level: z.number().int(),
-      depth: z.number().int(),
-    }),
-  ),
-  // true when the topN cap clipped the descendant set — raise topN.
-  truncated: z.boolean(),
-});
-
 export const DefaultMemberResolutionSchema = z.object({
   dimension: z.string(),
   hierarchy: z.string(),
@@ -192,22 +99,4 @@ export const DefaultMembersBulkResultSchema = z.object({
   results: z.array(
     z.union([DefaultMemberResolutionSchema, DefaultMemberErrorSchema]),
   ),
-});
-
-export const OrphanDimensionSchema = z.object({
-  name: z.string(),
-  hierarchies: z.array(z.string()),
-});
-
-export const FindOrphanDimensionsResultSchema = z.object({
-  totalDimensions: z.number().int(),
-  totalCubes: z.number().int(),
-  orphanCount: z.number().int(),
-  includeControl: z.boolean(),
-  total: z.number().int(),
-  count: z.number().int(),
-  offset: z.number().int(),
-  has_more: z.boolean(),
-  next_offset: z.number().int().nullable(),
-  items: z.array(OrphanDimensionSchema),
 });

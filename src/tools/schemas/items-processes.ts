@@ -11,12 +11,8 @@ import {
   IgnoredColumnSchema,
   ProcessCodeSchema as ProcessCodeBase,
   ProcessParameterSchema,
-  ProcessSchema,
   ProcessVariableSchema,
 } from "../../schemas/processes.js";
-
-// Omitted when caller passes fields=['name'] to tm1_list_processes.
-export const ProcessItemSchema = ProcessSchema.partial({ parameters: true });
 
 // `hint` is a tool-side addition: guidance attached when the code could not be
 // read in full, never part of the stored process.

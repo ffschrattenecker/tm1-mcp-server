@@ -1,54 +1,9 @@
-// Monitoring/server-domain schemas: server info & state, message/transaction/
-// audit/error logs, threads, jobs and sessions.
+// Monitoring/server-domain schemas: server state and error logs.
 import { z } from "zod";
 
 // Canonical shapes — defined once in src/schemas/monitoring.ts, re-exported so
 // the output-schema side and the TM1 client cannot drift apart.
-export {
-  AuditLogDetailSchema,
-  ErrorLogFileSchema,
-  JobSchema,
-  MessageLogEntrySchema,
-  SessionSchema,
-  ThreadSchema,
-  TransactionLogEntrySchema,
-} from "../../schemas/monitoring.js";
-import { AuditLogDetailSchema } from "../../schemas/monitoring.js";
-
-export const ServerInfoSchema = z
-  .object({
-    mcpServer: z
-      .object({
-        name: z.string(),
-        version: z.string(),
-        mode: z.enum(["readwrite", "readonly"]).optional(),
-        environment: z.enum(["dev", "test", "prod", "unspecified"]).optional(),
-        modeReason: z.string().optional(),
-      })
-      .optional(),
-    serverName: z.string(),
-    productVersion: z.string(),
-    productEdition: z.string().optional(),
-    adminHost: z.string().optional(),
-    dataDirectory: z.string().optional(),
-    timeZoneId: z.string().optional(),
-    integratedSecurityMode: z.string().optional(),
-    modelling: z.unknown().optional(),
-    ti: z.unknown().optional(),
-    rules: z.unknown().optional(),
-    mtq: z.unknown().optional(),
-    jobQueuing: z.unknown().optional(),
-    memory: z.unknown().optional(),
-    logging: z.unknown().optional(),
-    http: z.unknown().optional(),
-    security: z.unknown().optional(),
-    _raw: z.record(z.string(), z.unknown()).optional(),
-  })
-  .passthrough();
-
-export const AuditLogEntrySchema = AuditLogDetailSchema.extend({
-  details: z.array(AuditLogDetailSchema).optional(),
-});
+export { ErrorLogFileSchema } from "../../schemas/monitoring.js";
 
 // groupBy='process' audit-summary item: per-process failure aggregation.
 export const ErrorLogGroupSchema = z.object({
