@@ -81,10 +81,9 @@ function linkAbortSignals(
 
 export class TM1HttpClient {
   // config is private: it carries credentials (TM1Config.password), so it must
-  // not be reachable as `client.config` from the service layer or leak into the
-  // compiled .d.ts public surface. Services get only what they need —
-  // `version` (numeric getter) for version-conditional paths and `logger`
-  // for structured logs.
+  // not be reachable as `client.config` from the service layer. Services get
+  // only what they need — `version` (numeric getter) for version-conditional
+  // paths and `logger` for structured logs.
   private readonly config: TM1Config;
   public readonly logger: pino.Logger;
   protected readonly sessionManager: SessionManager;

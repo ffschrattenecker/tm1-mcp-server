@@ -108,6 +108,7 @@ const FORBIDDEN_IN_TARBALL = [
   /^package\/src\//,
   /^package\/tests\//,
   /\.map$/,
+  /\.d\.ts$/,
 ];
 
 // ---------------------------------------------------------------- arguments
@@ -454,7 +455,7 @@ async function packAndInstall(work, opts) {
     );
   }
   say(
-    `   ${entries.length} entries, shrinkwrap present, no source/tests/maps/secrets`,
+    `   ${entries.length} entries, shrinkwrap present, no source/tests/maps/typings/secrets`,
   );
   say("");
 
