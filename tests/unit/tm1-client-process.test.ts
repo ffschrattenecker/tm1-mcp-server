@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type { FnSpy } from "../helpers/spy-types.js";
 import { type TM1Client } from "../../src/tm1-client.js";
+import { TM1Error, TM1ErrorCode } from "../../src/types.js";
+import type { TM1Config } from "../../src/config.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockResponse, stubbedClient } from "../helpers/client-harness.js";
 
@@ -18,9 +20,21 @@ function mock204Response(): Response {
   } as unknown as Response;
 }
 
+function mock201Response(body?: unknown): Response {
+  const bodyText = body ? JSON.stringify(body) : "";
+  return {
+    ok: true,
+    status: 201,
+    statusText: "Created",
+    headers: new Headers(),
+    text: vi.fn().mockResolvedValue(bodyText),
+    json: vi.fn().mockResolvedValue(body ?? {}),
+  } as unknown as Response;
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("TM1Client – Process Execution Methods", () => {
+describe("TM1Client – ProcessService", () => {
   let fetchSpy: FnSpy;
   let client: TM1Client;
 
@@ -207,18 +221,9 @@ describe("TM1Client – Process Execution Methods", () => {
         client.processes.execute("LongRunningLoad"),
       ).rejects.toThrow();
     });
-
-    it("should encode special characters in process name", async () => {
-      fetchSpy.mockResolvedValueOnce(mock204Response());
-
-      await client.processes.execute("My Process");
-
-      const [url] = fetchSpy.mock.calls[0];
-      expect(url).toContain("Processes('My%20Process')");
-    });
   });
 
-  // ── getProcessParameters() ───────────────────────────────────────────────
+  // ── exists() / getProcessParameters() ────────────────────────────────────
 
   describe("exists()", () => {
     it("returns true on 200 and probes with $select=Name (not a full list)", async () => {
@@ -282,21 +287,6 @@ describe("TM1Client – Process Execution Methods", () => {
       expect(params).toEqual([]);
     });
 
-    it("should map Type 'Numeric' / 'String' from TM1 v11 API", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          value: [
-            { Name: "numParam", Type: "Numeric", Value: 0 },
-            { Name: "strParam", Type: "String", Value: "" },
-          ],
-        }),
-      );
-
-      const params = await client.processes.getParameters("TestProc");
-      expect(params[0].type).toBe("Numeric");
-      expect(params[1].type).toBe("String");
-    });
-
     it("should omit prompt when not present in API response", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
@@ -306,15 +296,6 @@ describe("TM1Client – Process Execution Methods", () => {
 
       const params = await client.processes.getParameters("TestProc");
       expect(params[0]).not.toHaveProperty("prompt");
-    });
-
-    it("should encode special characters in process name", async () => {
-      fetchSpy.mockResolvedValueOnce(mockResponse({ value: [] }));
-
-      await client.processes.getParameters("My Process");
-
-      const [url] = fetchSpy.mock.calls[0];
-      expect(url).toContain("Processes('My%20Process')");
     });
   });
 
@@ -373,12 +354,415 @@ describe("TM1Client – Process Execution Methods", () => {
     });
   });
 
+  // ── createProcess() ──────────────────────────────────────────────────────
+
+  describe("createProcess()", () => {
+    it("should POST to /api/v1/Processes with the process name", async () => {
+      fetchSpy.mockResolvedValueOnce(mock201Response({ Name: "NewProcess" }));
+
+      await client.processes.create("NewProcess");
+
+      const [url, opts] = fetchSpy.mock.calls[0];
+      expect(url).toContain("/api/v1/Processes");
+      expect(opts.method).toBe("POST");
+      const body = JSON.parse(opts.body);
+      expect(body).toEqual({ Name: "NewProcess" });
+    });
+
+    it("should throw CONFLICT error when process already exists (409)", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockResponse(
+          {
+            error: { message: "Process 'Existing' already exists" },
+          },
+          409,
+        ),
+      );
+
+      const err = await client.processes
+        .create("Existing")
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(TM1Error);
+      expect((err as TM1Error).code).toBe(TM1ErrorCode.CONFLICT);
+      expect((err as TM1Error).httpStatus).toBe(409);
+    });
+
+    it("sends a name with spaces verbatim in the body", async () => {
+      fetchSpy.mockResolvedValueOnce(mock201Response());
+
+      await client.processes.create("My New Process");
+
+      const [, opts] = fetchSpy.mock.calls[0];
+      const body = JSON.parse(opts.body);
+      expect(body.Name).toBe("My New Process");
+    });
+  });
+
+  // ── getProcessCode() ─────────────────────────────────────────────────────
+
+  describe("getProcessCode()", () => {
+    it("should return all four code tabs from the process", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockResponse({
+          Name: "TestProcess",
+          PrologProcedure: "# Prolog\nASCIIOutput('log.txt', 'start');",
+          MetadataProcedure: "# Metadata",
+          DataProcedure: "# Data\nCellPutN(1, 'Cube', 'e1', 'e2');",
+          EpilogProcedure: "# Epilog\nASCIIOutput('log.txt', 'done');",
+        }),
+      );
+
+      const code = await client.processes.getCode("TestProcess");
+
+      expect(code).toEqual({
+        prolog: "# Prolog\nASCIIOutput('log.txt', 'start');",
+        metadata: "# Metadata",
+        data: "# Data\nCellPutN(1, 'Cube', 'e1', 'e2');",
+        epilog: "# Epilog\nASCIIOutput('log.txt', 'done');",
+      });
+
+      const [url] = fetchSpy.mock.calls[0];
+      expect(url).toContain("/api/v1/Processes('TestProcess')");
+    });
+
+    it("should return empty strings for empty code tabs", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockResponse({
+          Name: "EmptyProcess",
+          PrologProcedure: "",
+          MetadataProcedure: "",
+          DataProcedure: "",
+          EpilogProcedure: "",
+        }),
+      );
+
+      const code = await client.processes.getCode("EmptyProcess");
+
+      expect(code.prolog).toBe("");
+      expect(code.metadata).toBe("");
+      expect(code.data).toBe("");
+      expect(code.epilog).toBe("");
+    });
+  });
+
+  // ── updateProcessCode() ──────────────────────────────────────────────────
+
+  describe("updateProcessCode()", () => {
+    it("should PATCH only the specified tabs", async () => {
+      fetchSpy.mockResolvedValueOnce(mock204Response());
+
+      await client.processes.updateCode("TestProcess", {
+        prolog: "# New Prolog",
+        data: "# New Data",
+      });
+
+      const [url, opts] = fetchSpy.mock.calls[0];
+      expect(url).toContain("/api/v1/Processes('TestProcess')");
+      expect(opts.method).toBe("PATCH");
+      const body = JSON.parse(opts.body);
+      expect(body).toEqual({
+        PrologProcedure: "# New Prolog",
+        DataProcedure: "# New Data",
+      });
+      expect(body.MetadataProcedure).toBeUndefined();
+      expect(body.EpilogProcedure).toBeUndefined();
+    });
+
+    it("should PATCH all four tabs when all are provided", async () => {
+      fetchSpy.mockResolvedValueOnce(mock204Response());
+
+      await client.processes.updateCode("TestProcess", {
+        prolog: "p",
+        metadata: "m",
+        data: "d",
+        epilog: "e",
+      });
+
+      const [, opts] = fetchSpy.mock.calls[0];
+      const body = JSON.parse(opts.body);
+      expect(body).toEqual({
+        PrologProcedure: "p",
+        MetadataProcedure: "m",
+        DataProcedure: "d",
+        EpilogProcedure: "e",
+      });
+    });
+
+    it("should PATCH a single tab", async () => {
+      fetchSpy.mockResolvedValueOnce(mock204Response());
+
+      await client.processes.updateCode("TestProcess", {
+        epilog: "# Epilog only",
+      });
+
+      const [, opts] = fetchSpy.mock.calls[0];
+      const body = JSON.parse(opts.body);
+      expect(body).toEqual({ EpilogProcedure: "# Epilog only" });
+    });
+  });
+
+  // ── getProcessDataSource() ───────────────────────────────────────────────
+
+  describe("getProcessDataSource()", () => {
+    it("should return data source with type None", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockResponse({
+          Name: "TestProcess",
+          DataSource: { Type: "None" },
+        }),
+      );
+
+      const ds = await client.processes.getDataSource("TestProcess");
+
+      expect(ds).toEqual({ type: "None" });
+    });
+
+    it("should return ASCII data source with all fields", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockResponse({
+          Name: "ImportCSV",
+          DataSource: {
+            Type: "ASCII",
+            dataSourceNameForServer: "/data/input.csv",
+            dataSourceNameForClient: "C:\\data\\input.csv",
+            asciiDelimiterChar: ",",
+            asciiQuoteCharacter: '"',
+            asciiHeaderRecords: 1,
+          },
+        }),
+      );
+
+      const ds = await client.processes.getDataSource("ImportCSV");
+
+      expect(ds).toEqual({
+        type: "ASCII",
+        dataSourceNameForServer: "/data/input.csv",
+        dataSourceNameForClient: "C:\\data\\input.csv",
+        asciiDelimiterChar: ",",
+        asciiQuoteCharacter: '"',
+        asciiHeaderRecords: 1,
+      });
+    });
+
+    it("should return ODBC data source", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockResponse({
+          Name: "ODBCProcess",
+          DataSource: {
+            Type: "ODBC",
+            dataSourceNameForServer: "MyDB",
+            query: "SELECT * FROM table1",
+          },
+        }),
+      );
+
+      const ds = await client.processes.getDataSource("ODBCProcess");
+
+      expect(ds.type).toBe("ODBC");
+      expect(ds.dataSourceNameForServer).toBe("MyDB");
+      expect(ds.query).toBe("SELECT * FROM table1");
+    });
+
+    it("should omit undefined optional fields", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockResponse({
+          Name: "SimpleProcess",
+          DataSource: { Type: "None" },
+        }),
+      );
+
+      const ds = await client.processes.getDataSource("SimpleProcess");
+
+      expect(ds).toEqual({ type: "None" });
+      expect(ds).not.toHaveProperty("dataSourceNameForServer");
+      expect(ds).not.toHaveProperty("query");
+    });
+  });
+
+  // ── updateProcessDataSource() ────────────────────────────────────────────
+
+  describe("updateProcessDataSource()", () => {
+    it("should PATCH with DataSource object for ASCII type", async () => {
+      fetchSpy.mockResolvedValueOnce(mock204Response());
+
+      await client.processes.updateDataSource("ImportCSV", {
+        type: "ASCII",
+        dataSourceNameForServer: "/data/new.csv",
+        asciiDelimiterChar: ";",
+        asciiHeaderRecords: 2,
+      });
+
+      const [url, opts] = fetchSpy.mock.calls[0];
+      expect(url).toContain("/api/v1/Processes('ImportCSV')");
+      expect(opts.method).toBe("PATCH");
+      const body = JSON.parse(opts.body);
+      expect(body.DataSource).toEqual({
+        Type: "ASCII",
+        dataSourceNameForServer: "/data/new.csv",
+        asciiDelimiterChar: ";",
+        asciiHeaderRecords: 2,
+      });
+    });
+
+    it("should PATCH with DataSource type None", async () => {
+      fetchSpy.mockResolvedValueOnce(mock204Response());
+
+      await client.processes.updateDataSource("TestProcess", { type: "None" });
+
+      const [, opts] = fetchSpy.mock.calls[0];
+      const body = JSON.parse(opts.body);
+      expect(body.DataSource).toEqual({ Type: "None" });
+    });
+
+    it("should PATCH with ODBC data source", async () => {
+      fetchSpy.mockResolvedValueOnce(mock204Response());
+
+      await client.processes.updateDataSource("ODBCProcess", {
+        type: "ODBC",
+        dataSourceNameForServer: "NewDB",
+        query: "SELECT id FROM users",
+      });
+
+      const [, opts] = fetchSpy.mock.calls[0];
+      const body = JSON.parse(opts.body);
+      expect(body.DataSource.Type).toBe("ODBC");
+      expect(body.DataSource.dataSourceNameForServer).toBe("NewDB");
+      expect(body.DataSource.query).toBe("SELECT id FROM users");
+    });
+
+    // usesUnicode is an ODBC setting, not a version one. 11.8 rejects it for an
+    // ASCII source ("unprocessed properties") and accepts it for an ODBC source,
+    // where it also drives .pro line 559 — measured on both servers. The old
+    // pair of tests asserted the opposite and pinned the bug in place.
+    it.each([
+      ["11.8", 11],
+      ["12.0", 12],
+    ])(
+      "%s: sends usesUnicode for an ODBC source",
+      async (tm1Version, version) => {
+        const cfg = makeTestConfig({
+          requestTimeoutMs: 5000,
+          version,
+          tm1Version,
+        } as Partial<TM1Config>);
+        const c = stubbedClient(cfg, "sess");
+        fetchSpy.mockResolvedValueOnce(mock204Response());
+
+        await c.processes.updateDataSource("ImportODBC", {
+          type: "ODBC",
+          dataSourceNameForServer: "DSN",
+          usesUnicode: false,
+        });
+
+        const [, opts] = fetchSpy.mock.calls[0];
+        const body = JSON.parse(opts.body);
+        expect(body.DataSource.usesUnicode).toBe(false);
+      },
+    );
+
+    it.each([
+      ["11.8", 11],
+      ["12.0", 12],
+    ])(
+      "%s: drops usesUnicode for a non-ODBC source",
+      async (tm1Version, version) => {
+        const cfg = makeTestConfig({
+          requestTimeoutMs: 5000,
+          version,
+          tm1Version,
+        } as Partial<TM1Config>);
+        const c = stubbedClient(cfg, "sess");
+        fetchSpy.mockResolvedValueOnce(mock204Response());
+
+        await c.processes.updateDataSource("ImportCSV", {
+          type: "ASCII",
+          dataSourceNameForServer: "/data/x.csv",
+          usesUnicode: true,
+        });
+
+        const [, opts] = fetchSpy.mock.calls[0];
+        const body = JSON.parse(opts.body);
+        expect(body.DataSource).not.toHaveProperty("usesUnicode");
+      },
+    );
+  });
+
+  // Every per-process endpoint addresses the entity by key in the URL.
+  describe("process name encoding", () => {
+    const emptyCode = {
+      PrologProcedure: "",
+      MetadataProcedure: "",
+      DataProcedure: "",
+      EpilogProcedure: "",
+    };
+    it.each([
+      [
+        "execute",
+        () => mock204Response(),
+        (c: TM1Client) => c.processes.execute("My Process"),
+      ],
+      [
+        "getParameters",
+        () => mockResponse({ value: [] }),
+        (c: TM1Client) => c.processes.getParameters("My Process"),
+      ],
+      [
+        "getCode",
+        () => mockResponse(emptyCode),
+        (c: TM1Client) => c.processes.getCode("My Process"),
+      ],
+    ] as const)(
+      "%s encodes special characters in the process name",
+      async (_method, response, call) => {
+        fetchSpy.mockResolvedValueOnce(response());
+
+        await call(client);
+
+        const [url] = fetchSpy.mock.calls[0];
+        expect(url).toContain("Processes('My%20Process')");
+      },
+    );
+  });
+
   // Regression: TM1 v11 ignores the parameter `Type` field and classifies a
   // parameter from the JSON type of `Value`. Encoding must coerce `Value` to
   // the declared `type` (and emit the correct OData enum: String=1, Numeric=2),
   // otherwise a Numeric param whose default arrives as a string is stored as
   // String. Verified against a live PATCH+read roundtrip.
   describe("updateParameters() – parameter encoding", () => {
+    it("should PATCH with Parameters array", async () => {
+      fetchSpy.mockResolvedValueOnce(mock204Response());
+
+      await client.processes.updateParameters("TestProcess", [
+        {
+          name: "pFile",
+          type: "String",
+          defaultValue: "/data/in.csv",
+          prompt: "File path",
+        },
+        { name: "pYear", type: "Numeric", defaultValue: 2024 },
+      ]);
+
+      const [url, opts] = fetchSpy.mock.calls[0];
+      expect(url).toContain("/api/v1/Processes('TestProcess')");
+      expect(opts.method).toBe("PATCH");
+      const body = JSON.parse(opts.body);
+      expect(body.Parameters).toEqual([
+        { Name: "pFile", Type: 1, Value: "/data/in.csv", Prompt: "File path" },
+        { Name: "pYear", Type: 2, Value: 2024 },
+      ]);
+    });
+
+    it("should send empty Parameters array when no params provided", async () => {
+      fetchSpy.mockResolvedValueOnce(mock204Response());
+
+      await client.processes.updateParameters("TestProcess", []);
+
+      const [, opts] = fetchSpy.mock.calls[0];
+      const body = JSON.parse(opts.body);
+      expect(body.Parameters).toEqual([]);
+    });
+
     it("encodes Numeric as Type 2 and coerces a string default to a number", async () => {
       fetchSpy.mockResolvedValueOnce(mock204Response());
 
