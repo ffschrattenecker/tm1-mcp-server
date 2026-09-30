@@ -2,10 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   extractBracketLists,
   type BracketEntry,
+  type BracketList,
 } from "../../src/lib/feeders/brackets.js";
 
 // The first list on a line, or null — exercises the bracket parser directly.
-const firstList = (text: string) => extractBracketLists(text)[0] ?? null;
+const firstList = (text: string): BracketList | null =>
+  extractBracketLists(text)[0] ?? null;
 
 describe("bracket parsing — positional unqualified form", () => {
   it("parses single positional element", () => {

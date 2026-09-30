@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "vitest";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
 // Output schemas come from the defineTool() specs; the barrel import runs them.
 import "../../src/tools/index.js";
