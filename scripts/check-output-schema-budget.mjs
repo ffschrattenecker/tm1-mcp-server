@@ -2,10 +2,10 @@
 // Guard the serialized size of every published outputSchema against creep.
 //
 // The server's tools/list payload is dominated by tool schemas; the
-// outputSchemas alone serialize to ~69KB of JSON that ships on every session.
+// outputSchemas alone serialize to ~38KB of JSON that ships on every session.
 // There was no gate stopping that number from drifting upward one schema at a
-// time. This script sums the exact bytes the SDK emits for each entry in
-// OUTPUT_SCHEMA_MAP and fails the build if the total crosses BUDGET_BYTES.
+// time. This script sums the exact bytes the SDK emits for each published
+// outputSchema and fails the build if the total crosses BUDGET_BYTES.
 //
 // It measures the SHIPPED bytes, not an approximation: it reuses the SDK's own
 // `normalizeObjectSchema` + `toJsonSchemaCompat` (the exact functions McpServer
@@ -24,15 +24,12 @@ import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-// Current total is ~59.5KB (114 schemas), measured AFTER slimJsonSchema() —
-// i.e. these are the bytes that actually reach the wire. Budget = round number
-// a few % above that, so ordinary additions pass but a runaway new schema (or a
-// sloppy .describe() spree) trips the gate. Re-baseline deliberately when a real
-// feature needs it — e.g. G1 typed the recursive tm1_analyze_callgraph output
-// schema (was z.unknown()/passthrough, now ~4.8KB) to close the drift-guard
-// blind spot, which had lifted the total past the earlier 78KB baseline; the
-// tools/list slimmer then took ~19KB back off.
-const BUDGET_BYTES = 65_000;
+// Current total is ~38.0KB (58 schemas, 38,895 bytes after the 9.0 tool
+// consolidation), measured AFTER slimJsonSchema() — i.e. these are the bytes
+// that actually reach the wire. Budget = round number ~10% above that, so
+// ordinary additions pass but a runaway new schema (or a sloppy .describe()
+// spree) trips the gate. Re-baseline deliberately when a real feature needs it.
+const BUDGET_BYTES = 43_000;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
