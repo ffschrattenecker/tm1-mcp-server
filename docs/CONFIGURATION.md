@@ -425,10 +425,10 @@ queries can hit the query timeout.
 var (`TM1_KEEP_ALIVE_INTERVAL`, `TM1_REQUEST_TIMEOUT`, `TM1_MCP_HTTP_PORT`) has a
 non-numeric or non-positive value. Fix the value or unset it to use the default.
 
-**HTTP transport: `401 Unauthorized` on `/mcp`:** `TM1_MCP_HTTP_TOKEN` is set — send
-`Authorization: Bearer <token>`.
+**HTTP transport: `401 Unauthorized` on `/mcp`:** `TM1_MCP_HTTP_TOKEN` is
+set — send `Authorization: Bearer <token>`.
 
-**HTTP transport: connection refused / origin rejected:** the server binds `127.0.0.1` by
-default and validates `Host`/`Origin`; add your origin to
-`TM1_MCP_HTTP_ALLOWED_ORIGINS`, or set `TM1_MCP_HTTP_HOST` (loopback only unless
-fronted by an authenticating proxy).
+**HTTP transport: connection refused / origin rejected:** the server binds
+`127.0.0.1` by default and validates `Host`/`Origin`; add your origin to
+`TM1_MCP_HTTP_ALLOWED_ORIGINS`, or set `TM1_MCP_HTTP_HOST` (loopback only
+unless fronted by an authenticating proxy).
