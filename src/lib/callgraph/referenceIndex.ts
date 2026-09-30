@@ -55,6 +55,16 @@ const TRACKED_FUNCS = [
 ];
 const FUNC_RE = new RegExp(`\\b(${TRACKED_FUNCS.join("|")})\\s*\\(`, "gi");
 
+/** @internal Exported only for the pinned-table test. */
+export {
+  CUBE_ARG_IDX,
+  DIM_ARG_IDX,
+  PROCESS_ARG_IDX,
+  ELEM_ARG_IDX,
+  SUBSET_ARG_IDX,
+  FUNC_RE,
+};
+
 const SKIP_VALIDATION_FUNCS = new Set([
   "dimensioncreate",
   "cubecreate",
