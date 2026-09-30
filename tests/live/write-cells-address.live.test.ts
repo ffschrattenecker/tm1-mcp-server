@@ -15,9 +15,13 @@
 // Opt-in: requires TM1_BASE_URL + TM1_USER (see harness.ts). Skips otherwise.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  createCube,
+  createDimension,
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
   SANDBOX,
+  seg,
   rawRequest,
   type LiveHarness,
 } from "./harness.js";
@@ -45,39 +49,17 @@ describe.skipIf(!LIVE_ENABLED)("live: write_cells address resolution", () => {
     } catch {
       /* already gone */
     }
-    for (const [tool, args] of [
-      ["tm1_delete_cube", { cubeName: CUBE, confirm: CUBE }],
-      ["tm1_delete_dimension", { dimensionName: ROW, confirm: ROW }],
-      ["tm1_delete_dimension", { dimensionName: MEAS, confirm: MEAS }],
-    ] as const) {
-      try {
-        await h.call(tool, args);
-      } catch {
-        /* already gone */
-      }
-    }
+    await dropIfExists(h, seg("Cubes", CUBE));
+    await dropIfExists(h, seg("Dimensions", ROW));
+    await dropIfExists(h, seg("Dimensions", MEAS));
   };
 
   beforeAll(async () => {
     h = await getHarness();
     await cleanup();
-    await h.ok("tm1_create_dimension", { dimensionName: ROW });
-    await h.ok("tm1_create_dimension", { dimensionName: MEAS });
-    await h.ok("tm1_bulk_upsert_elements", {
-      dimensionName: ROW,
-      elements: [
-        { name: "R1", type: "Numeric" },
-        { name: "R2", type: "Numeric" },
-      ],
-    });
-    await h.ok("tm1_bulk_upsert_elements", {
-      dimensionName: MEAS,
-      elements: [
-        { name: "Amount", type: "Numeric" },
-        { name: "Other", type: "Numeric" },
-      ],
-    });
-    await h.ok("tm1_create_cube", { cubeName: CUBE, dimensions: [ROW, MEAS] });
+    await createDimension(h, ROW, ["R1", "R2"]);
+    await createDimension(h, MEAS, ["Amount", "Other"]);
+    await createCube(h, CUBE, [ROW, MEAS]);
     const dims = await h.client.cubes.getDimensionNames(CUBE);
     sandboxed = dims[0] === "Sandboxes";
     if (!sandboxed) return;

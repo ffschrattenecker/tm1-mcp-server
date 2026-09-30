@@ -357,7 +357,7 @@ export async function cellValue(
   const r = await h.ok("tm1_execute_mdx", {
     mdx: `SELECT {(${tuple})} ON 0 FROM [${mdxName(cube)}]`,
   });
-  return r.json.cells[0]?.value ?? null;
+  return r.json.items[0]?.value ?? null;
 }
 
 /**

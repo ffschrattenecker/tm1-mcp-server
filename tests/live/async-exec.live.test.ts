@@ -9,9 +9,15 @@
 //     commits
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  cellValue,
+  createCube,
+  createDimension,
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
+  restGet,
   SANDBOX,
+  seg,
   type LiveHarness,
 } from "./harness.js";
 import { loadConfig } from "../../src/config.js";
@@ -31,39 +37,23 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 describe.skipIf(!LIVE_ENABLED)("async TI execution", () => {
   let h: LiveHarness;
 
-  const cell = async (element: string): Promise<unknown> => {
-    const res = await h.ok("tm1_get_cell_value", {
-      cubeName: CUBE,
-      elements: [element, "F1"],
-    });
-    return res.json?.value ?? null;
+  const cell = (element: string): Promise<unknown> =>
+    cellValue(h, CUBE, [DIM_A, DIM_B], [element, "F1"]);
+  const cleanup = async () => {
+    await dropIfExists(h, seg("Processes", PROC));
+    await dropIfExists(h, seg("Cubes", CUBE));
+    for (const d of [DIM_A, DIM_B]) {
+      await dropIfExists(h, seg("Dimensions", d));
+    }
   };
   const run = (el: string, ms: number) => ({ pEl: el, pVal: 7, pMs: ms });
 
   beforeAll(async () => {
     h = await getHarness();
-    await h.call("tm1_delete_process", { processName: PROC, confirm: PROC });
-    await h.call("tm1_delete_cube", { cubeName: CUBE, confirm: CUBE });
-    for (const d of [DIM_A, DIM_B]) {
-      await h.call("tm1_delete_dimension", { dimensionName: d, confirm: d });
-    }
-    await h.ok("tm1_create_dimension", { dimensionName: DIM_A });
-    await h.ok("tm1_bulk_upsert_elements", {
-      dimensionName: DIM_A,
-      elements: ["LONG", "CANCEL", "TIMEOUT", "TOOL"].map((name) => ({
-        name,
-        type: "Numeric",
-      })),
-    });
-    await h.ok("tm1_create_dimension", { dimensionName: DIM_B });
-    await h.ok("tm1_bulk_upsert_elements", {
-      dimensionName: DIM_B,
-      elements: [{ name: "F1", type: "Numeric" }],
-    });
-    await h.ok("tm1_create_cube", {
-      cubeName: CUBE,
-      dimensions: [DIM_A, DIM_B],
-    });
+    await cleanup();
+    await createDimension(h, DIM_A, ["LONG", "CANCEL", "TIMEOUT", "TOOL"]);
+    await createDimension(h, DIM_B, ["F1"]);
+    await createCube(h, CUBE, [DIM_A, DIM_B]);
     // Write FIRST, then sleep: whether the write survives says whether the
     // run committed.
     await h.ok("tm1_upsert_process", {
@@ -79,11 +69,7 @@ describe.skipIf(!LIVE_ENABLED)("async TI execution", () => {
   });
 
   afterAll(async () => {
-    await h.call("tm1_delete_process", { processName: PROC, confirm: PROC });
-    await h.call("tm1_delete_cube", { cubeName: CUBE, confirm: CUBE });
-    for (const d of [DIM_A, DIM_B]) {
-      await h.call("tm1_delete_dimension", { dimensionName: d, confirm: d });
-    }
+    await cleanup();
   });
 
   it("completes a run that outlasts the per-request timeout", async () => {
@@ -117,8 +103,11 @@ describe.skipIf(!LIVE_ENABLED)("async TI execution", () => {
     // The run would take 20s. Give the cancel a moment, then check it is gone
     // well before that — and that its write was rolled back.
     await sleep(2000);
-    const threads = await h.ok("tm1_list_threads", {});
-    expect(JSON.stringify(threads.json)).not.toContain(PROC);
+    const running = await restGet<unknown[]>(
+      h,
+      h.client.version === 12 ? "Jobs" : "Threads",
+    );
+    expect(JSON.stringify(running)).not.toContain(PROC);
     expect(Date.now() - started).toBeLessThan(15_000);
     expect(await cell("CANCEL")).not.toBe(7);
   }, 60_000);

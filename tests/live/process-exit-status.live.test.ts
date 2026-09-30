@@ -28,9 +28,15 @@
 // context; pinning that here would assert an accident.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  cellValue,
+  createCube,
+  createDimension,
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
+  restWrite,
   SANDBOX,
+  seg,
   type LiveHarness,
 } from "./harness.js";
 
@@ -153,66 +159,34 @@ describe.skipIf(!LIVE_ENABLED)(
       // Leftovers from an interrupted run (idempotent — missing objects are fine).
       // A leftover process would make the case's upsert an overwrite, which
       // needs confirm and fails every case before it tests anything.
-      for (const c of EXIT_CASES) {
-        const proc = `${PREFIX}_${c.name}`;
-        await h.call("tm1_delete_process", {
-          processName: proc,
-          confirm: proc,
-        });
-      }
-      await h.call("tm1_delete_cube", { cubeName: CUBE, confirm: CUBE });
-      for (const d of [DIM_A, DIM_B]) {
-        await h.call("tm1_delete_dimension", { dimensionName: d, confirm: d });
-      }
+      await cleanup();
 
-      // tm1_create_dimension takes the name only; elements arrive via bulk upsert.
-      await h.ok("tm1_create_dimension", { dimensionName: DIM_A });
-      await h.ok("tm1_bulk_upsert_elements", {
-        dimensionName: DIM_A,
-        // E1 carries the marker. E2 exists ONLY so the consolidation below can
-        // roll up a leaf that is not E1 — see the CONSOL case.
-        elements: [
-          { name: "E1", type: "Numeric" },
-          { name: "E2", type: "Numeric" },
-        ],
-      });
-      await h.ok("tm1_create_dimension", { dimensionName: DIM_B });
-      await h.ok("tm1_bulk_upsert_elements", {
-        dimensionName: DIM_B,
-        elements: [{ name: "F1", type: "Numeric" }],
-      });
-      // C1 is the consolidation the CONSOL case writes into. Its single
-      // component MUST be E2, not the marker leaf E1: over E2 the illegal write
-      // returns HasMinorErrors and the marker commits; over E1 the very same
-      // write returns Aborted and rolls everything back. Both measured on 11.8.
-      await h.ok("tm1_bulk_upsert_elements", {
-        dimensionName: DIM_A,
-        elements: [
-          {
-            name: "C1",
-            type: "Consolidated",
-            components: [{ name: "E2", weight: 1 }],
-          },
-        ],
-      });
-      await h.ok("tm1_create_cube", {
-        cubeName: CUBE,
-        dimensions: [DIM_A, DIM_B],
-      });
+      // E1 carries the marker. E2 exists ONLY so the consolidation C1 can roll
+      // up a leaf that is not E1 — see the CONSOL case. C1's single component
+      // MUST be E2, not the marker leaf E1: over E2 the illegal write returns
+      // HasMinorErrors and the marker commits; over E1 the very same write
+      // returns Aborted and rolls everything back. Both measured on 11.8.
+      await createDimension(h, DIM_A, [
+        "E1",
+        "E2",
+        { name: "C1", children: ["E2"] },
+      ]);
+      await createDimension(h, DIM_B, ["F1"]);
+      await createCube(h, CUBE, [DIM_A, DIM_B]);
     });
 
-    afterAll(async () => {
+    const cleanup = async () => {
       for (const c of EXIT_CASES) {
-        const proc = `${PREFIX}_${c.name}`;
-        await h.call("tm1_delete_process", {
-          processName: proc,
-          confirm: proc,
-        });
+        await dropIfExists(h, seg("Processes", `${PREFIX}_${c.name}`));
       }
-      await h.call("tm1_delete_cube", { cubeName: CUBE, confirm: CUBE });
+      await dropIfExists(h, seg("Cubes", CUBE));
       for (const d of [DIM_A, DIM_B]) {
-        await h.call("tm1_delete_dimension", { dimensionName: d, confirm: d });
+        await dropIfExists(h, seg("Dimensions", d));
       }
+    };
+
+    afterAll(async () => {
+      await cleanup();
     });
 
     for (const c of EXIT_CASES) {
@@ -265,15 +239,12 @@ describe.skipIf(!LIVE_ENABLED)(
           c.outcome !== "succeeded",
         );
 
-        const cell = await h.ok("tm1_get_cell_value", {
-          cubeName: CUBE,
-          elements: ["E1", "F1"],
-        });
+        const cell = await cellValue(h, CUBE, [DIM_A, DIM_B], ["E1", "F1"]);
         // 42 = the Prolog write was committed. null = it was rolled back with
         // the run: the reset above emptied the cell, and TM1 stores no zeros,
         // so an unwritten cell reads back as null rather than 0.
         expect(
-          cell.json?.value,
+          cell,
           finding(
             c,
             c.committed
@@ -282,7 +253,7 @@ describe.skipIf(!LIVE_ENABLED)(
           ),
         ).toBe(c.committed ? 42 : null);
 
-        await h.ok("tm1_delete_process", { processName: proc, confirm: proc });
+        await restWrite(h, "DELETE", seg("Processes", proc));
       });
     }
   },

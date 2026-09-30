@@ -7,10 +7,15 @@
 // prefixed `${SANDBOX}_CUBE` so a stray run can never touch real model data.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  cellValue,
+  createCube,
+  createDimension,
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
+  names,
   SANDBOX,
-  skipUnlessRegistered,
+  seg,
   type LiveHarness,
 } from "./harness.js";
 
@@ -19,7 +24,7 @@ const D2 = `${SANDBOX}_CUBE_D2`;
 const C1 = `${SANDBOX}_CUBE_C1`;
 
 // D1 elements: a plain leaf and a leaf whose name contains a single quote, so
-// every coordinate lookup (get_cell_value, write_cells, MDX, sample) drives the
+// every coordinate lookup (write_cells, MDX, sample) drives the
 // OData single-quote escaping path ('' doubling) at least once.
 const D1_PLAIN = "E1";
 const D1_QUOTE = "O'Brien"; // single quote → tests OData escaping
@@ -33,91 +38,50 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
     h = await getHarness();
 
     // Clean any leftovers from a crashed prior run (idempotent).
-    await h.call("tm1_delete_cube", { cubeName: C1, confirm: C1 });
-    await h.call("tm1_delete_dimension", { dimensionName: D1, confirm: D1 });
-    await h.call("tm1_delete_dimension", { dimensionName: D2, confirm: D2 });
+    await cleanup();
 
     // Dimensions first — a cube cannot be created without them.
-    await h.ok("tm1_create_dimension", { dimensionName: D1 });
-    await h.ok("tm1_create_dimension", { dimensionName: D2 });
-
-    // Populate. create_dimension makes a default hierarchy of the same name.
-    for (const name of [D1_PLAIN, D1_QUOTE]) {
-      await h.ok("tm1_create_element", {
-        dimensionName: D1,
-        hierarchyName: D1,
-        element: { name, type: "Numeric" },
-      });
-    }
-    for (const name of [D2_A, D2_B]) {
-      await h.ok("tm1_create_element", {
-        dimensionName: D2,
-        hierarchyName: D2,
-        element: { name, type: "Numeric" },
-      });
-    }
+    await createDimension(h, D1, [D1_PLAIN, D1_QUOTE]);
+    await createDimension(h, D2, [D2_A, D2_B]);
 
     // Cube over the two dimensions. Order matters for perf, not for the test.
-    await h.ok("tm1_create_cube", { cubeName: C1, dimensions: [D1, D2] });
+    await createCube(h, C1, [D1, D2]);
   });
+
+  // Idempotent teardown. Cube must go before its dimensions (dim delete fails
+  // while referenced by a cube).
+  const cleanup = async () => {
+    await dropIfExists(h, seg("Cubes", C1));
+    await dropIfExists(h, seg("Dimensions", D1));
+    await dropIfExists(h, seg("Dimensions", D2));
+  };
 
   afterAll(async () => {
-    // Idempotent teardown — swallow per-object errors so one failure does not
-    // leak the rest. Cube must go before its dimensions (dim delete fails while
-    // referenced by a cube).
-    const swallow = async (p: Promise<unknown>) => {
-      try {
-        await p;
-      } catch {
-        /* best-effort cleanup */
-      }
-    };
-    await swallow(h.call("tm1_delete_cube", { cubeName: C1, confirm: C1 }));
-    await swallow(
-      h.call("tm1_delete_dimension", { dimensionName: D1, confirm: D1 }),
-    );
-    await swallow(
-      h.call("tm1_delete_dimension", { dimensionName: D2, confirm: D2 }),
-    );
+    await cleanup();
   });
 
-  it("create_cube produced a cube over the two sandbox dimensions", async () => {
-    const r = await h.ok("tm1_list_cubes", {
-      nameContains: SANDBOX,
-      fetchAll: true,
-    });
-    const found = (r.json.items as Array<{ name: string }>).find(
-      (c) => c.name === C1,
-    );
-    expect(found).toBeTruthy();
+  it("the cube exists over the two sandbox dimensions", async () => {
+    expect(await names(h, "Cubes", SANDBOX)).toContain(C1);
   });
 
-  it("write_cells then get_cell_value round-trips a value (plain coord)", async () => {
+  it("write_cells round-trips a value (plain coord)", async () => {
     await h.ok("tm1_write_cells", {
       cubeName: C1,
       dimensions: [D1, D2],
       cells: [{ elements: [D1_PLAIN, D2_A], value: 42 }],
       confirm: C1,
     });
-    const r = await h.ok("tm1_get_cell_value", {
-      cubeName: C1,
-      elements: [D1_PLAIN, D2_A],
-    });
-    expect(r.json.value).toBe(42);
+    expect(await cellValue(h, C1, [D1, D2], [D1_PLAIN, D2_A])).toBe(42);
   });
 
-  it("write_cells + get_cell_value round-trips through the single-quote element (OData escaping)", async () => {
+  it("write_cells round-trips through the single-quote element (OData escaping)", async () => {
     await h.ok("tm1_write_cells", {
       cubeName: C1,
       dimensions: [D1, D2],
       cells: [{ elements: [D1_QUOTE, D2_B], value: 7 }],
       confirm: C1,
     });
-    const r = await h.ok("tm1_get_cell_value", {
-      cubeName: C1,
-      elements: [D1_QUOTE, D2_B],
-    });
-    expect(r.json.value).toBe(7);
+    expect(await cellValue(h, C1, [D1, D2], [D1_QUOTE, D2_B])).toBe(7);
   });
 
   it("check_writable_coords reports leaf coords as writable", async () => {
@@ -247,20 +211,5 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
       confirm: C1,
     });
     expect(r.isError).toBeFalsy();
-  });
-
-  it("unload_cube succeeds on the sandbox cube", async (ctx) => {
-    skipUnlessRegistered(ctx, h, "tm1_unload_cube");
-    const r = await h.call("tm1_unload_cube", { cubeName: C1 });
-    expect(r.isError).toBeFalsy();
-  });
-
-  it("get_cell_value with a bad element returns an error envelope, not a throw", async () => {
-    const r = await h.call("tm1_get_cell_value", {
-      cubeName: C1,
-      elements: ["ZZ_NO_SUCH_ELEMENT", D2_A],
-    });
-    expect(r.isError).toBe(true);
-    expect(r.json?.code).toBeTruthy();
   });
 });

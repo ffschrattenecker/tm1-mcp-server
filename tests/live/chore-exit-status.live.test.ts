@@ -36,9 +36,15 @@
 // The chore is created DEACTIVATED so it can never fire on a schedule.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  cellValue,
+  createCube,
+  createDimension,
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
+  restWrite,
   SANDBOX,
+  seg,
   type CallResult,
   type LiveHarness,
 } from "./harness.js";
@@ -146,14 +152,19 @@ describe.skipIf(!LIVE_ENABLED)(
         ],
         confirm: CUBE,
       });
-      await h.call("tm1_delete_chore", { choreName: CHORE, confirm: CHORE });
-      await h.ok("tm1_create_chore", {
-        choreName: CHORE,
-        startTime: START,
-        active: false,
-        executionMode,
-        frequency: { days: 1, hours: 0, minutes: 0, seconds: 0 },
-        steps: tasks.map((p) => ({ process: p, parameters: [] })),
+      await dropIfExists(h, seg("Chores", CHORE));
+      await restWrite(h, "POST", "Chores", {
+        Name: CHORE,
+        StartTime: START,
+        DSTSensitive: false,
+        Active: false,
+        ExecutionMode: executionMode,
+        Frequency: "P1DT00H00M00S",
+        Tasks: tasks.map((p, i) => ({
+          Step: i,
+          "Process@odata.bind": seg("Processes", p),
+          Parameters: [],
+        })),
       });
       return h.call("tm1_execute_chore", {
         choreName: CHORE,
@@ -162,42 +173,30 @@ describe.skipIf(!LIVE_ENABLED)(
       });
     };
 
-    const marker = async (element: string): Promise<unknown> => {
-      const res = await h.ok("tm1_get_cell_value", {
-        cubeName: CUBE,
-        elements: [element, "F1"],
-      });
-      return res.json?.value ?? null;
+    const marker = (element: string): Promise<unknown> =>
+      cellValue(h, CUBE, [DIM_A, DIM_B], [element, "F1"]);
+
+    const cleanup = async () => {
+      await dropIfExists(h, seg("Chores", CHORE));
+      for (const p of [CLEAN_STEP, ...CASES.map((c) => stepProc(c.name))]) {
+        await dropIfExists(h, seg("Processes", p));
+      }
+      await dropIfExists(h, seg("Cubes", CUBE));
+      for (const d of [DIM_A, DIM_B]) {
+        await dropIfExists(h, seg("Dimensions", d));
+      }
     };
 
     beforeAll(async () => {
       h = await getHarness();
       // Leftovers from an interrupted run (idempotent).
-      await h.call("tm1_delete_chore", { choreName: CHORE, confirm: CHORE });
-      await h.call("tm1_delete_cube", { cubeName: CUBE, confirm: CUBE });
-      for (const d of [DIM_A, DIM_B]) {
-        await h.call("tm1_delete_dimension", { dimensionName: d, confirm: d });
-      }
+      await cleanup();
 
-      await h.ok("tm1_create_dimension", { dimensionName: DIM_A });
-      await h.ok("tm1_bulk_upsert_elements", {
-        dimensionName: DIM_A,
-        // M1 belongs to the clean step, M2 to the step under test — the fail-fast
-        // probe needs to tell the two apart.
-        elements: [
-          { name: "M1", type: "Numeric" },
-          { name: "M2", type: "Numeric" },
-        ],
-      });
-      await h.ok("tm1_create_dimension", { dimensionName: DIM_B });
-      await h.ok("tm1_bulk_upsert_elements", {
-        dimensionName: DIM_B,
-        elements: [{ name: "F1", type: "Numeric" }],
-      });
-      await h.ok("tm1_create_cube", {
-        cubeName: CUBE,
-        dimensions: [DIM_A, DIM_B],
-      });
+      // M1 belongs to the clean step, M2 to the step under test — the fail-fast
+      // probe needs to tell the two apart.
+      await createDimension(h, DIM_A, ["M1", "M2"]);
+      await createDimension(h, DIM_B, ["F1"]);
+      await createCube(h, CUBE, [DIM_A, DIM_B]);
 
       await h.ok("tm1_upsert_process", {
         processName: CLEAN_STEP,
@@ -224,14 +223,7 @@ describe.skipIf(!LIVE_ENABLED)(
     });
 
     afterAll(async () => {
-      await h.call("tm1_delete_chore", { choreName: CHORE, confirm: CHORE });
-      for (const p of [CLEAN_STEP, ...CASES.map((c) => stepProc(c.name))]) {
-        await h.call("tm1_delete_process", { processName: p, confirm: p });
-      }
-      await h.call("tm1_delete_cube", { cubeName: CUBE, confirm: CUBE });
-      for (const d of [DIM_A, DIM_B]) {
-        await h.call("tm1_delete_dimension", { dimensionName: d, confirm: d });
-      }
+      await cleanup();
     });
 
     for (const mode of ["SingleCommit", "MultipleCommit"] as const) {
