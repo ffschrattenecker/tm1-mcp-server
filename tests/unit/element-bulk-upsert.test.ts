@@ -298,6 +298,30 @@ describe.each([
   });
 });
 
+describe("ElementService.bulkUpsert — per-request path", () => {
+  it("rethrows the leaf's own error unwrapped", async () => {
+    const boom = new TM1Error({
+      code: TM1ErrorCode.TM1_ERROR,
+      message: "Invalid element type",
+      httpStatus: 400,
+    });
+    const http = contractCheckedHttp({
+      async request<T>(method: string, _path: string, body?: unknown) {
+        if (method === "POST" && (body as { Name?: string }).Name === "L2") {
+          throw boom;
+        }
+        return undefined as T;
+      },
+    } as unknown as TM1HttpClient);
+    await expect(
+      new ElementService(http, cells).bulkUpsert("Dim", "Dim", [
+        { name: "L1", type: "Numeric" },
+        { name: "L2", type: "Numeric" },
+      ]),
+    ).rejects.toBe(boom);
+  });
+});
+
 // Consolidation weights. TM1 accepts `Weight` inside the Components link and
 // ignores it — every edge it creates has weight 1 — so the deviating ones have
 // to be PATCHed on the Edge entity afterwards. Measured on 11.8 via
