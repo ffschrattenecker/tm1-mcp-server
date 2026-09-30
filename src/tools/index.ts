@@ -82,7 +82,7 @@ import { registerAuditFeeders } from "./analysis/audit-feeders.js";
 // Single registry of every tool registrar, grouped by category. Adding a tool
 // = add its import above and one entry here (adjacent edit, one PR hunk). The
 // previous design kept a second hand-ordered call block that drifted from the
-// import order; this array is the only call site. check-tool-registration.mjs
+// import order; this array is the only call site. check-conventions.mjs
 // fails the build if a `register*` export under src/tools/ is missing here.
 const REGISTRARS: ToolRegistrar[] = [
   // Metadata

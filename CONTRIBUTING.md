@@ -37,17 +37,15 @@ npm run verify
 
 This chains:
 
-| Step             | Command                             | Checks                                                             |
-| ---------------- | ----------------------------------- | ------------------------------------------------------------------ |
-| Types            | `npm run typecheck`                 | `tsc --noEmit`, strict flags on                                    |
-| Types (tests)    | `npm run typecheck:tests`           | `tests/` under the same strict flags (`tsconfig.test.json`)        |
-| Schema budget    | `npm run lint:output-schema-budget` | serialized output schemas stay within the byte budget              |
-| Registration     | `npm run lint:tool-registration`    | every `register*` is wired into `src/tools/index.ts`               |
-| Input naming     | `npm run lint:input-naming`         | no tool takes a bare top-level `name` input (use `<entity>Name`)   |
-| Envelope         | `npm run lint:mutation-envelope`    | mutation tools return via `actionResponse()`, not hand-rolled      |
-| Wire contracts   | `npm run contracts:verify`\*        | the live server still matches the recorded response shapes         |
-| Lint             | `npm run lint:eslint`               | ESLint over `src/` and `tests/`                                    |
-| Tests + coverage | `npm run coverage:check`            | full `vitest` suite under coverage, then the coverage ratchet gate |
+| Step             | Command                             | Checks                                                                      |
+| ---------------- | ----------------------------------- | --------------------------------------------------------------------------- |
+| Types            | `npm run typecheck`                 | `tsc --noEmit`, strict flags on                                             |
+| Types (tests)    | `npm run typecheck:tests`           | `tests/` under the same strict flags (`tsconfig.test.json`)                 |
+| Schema budget    | `npm run lint:output-schema-budget` | serialized output schemas stay within the byte budget                       |
+| Conventions      | `npm run lint:conventions`          | registrars wired, `<entity>Name` inputs, `actionResponse()`, shared escaper |
+| Wire contracts   | `npm run contracts:verify`\*        | the live server still matches the recorded response shapes                  |
+| Lint             | `npm run lint:eslint`               | ESLint over `src/` and `tests/`                                             |
+| Tests + coverage | `npm run coverage:check`            | full `vitest` suite under coverage, then the coverage ratchet gate          |
 
 If your change adds, removes, or renames a tool, regenerate the tool list — one
 command, two generated blocks (`docs/TOOLS.md` and the category table in

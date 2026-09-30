@@ -73,7 +73,8 @@ export function escapeOdataLiteral(value: string): string {
 /**
  * Entity-key segment for a URL path: `Cubes('${odataKey(name)}')`. Doubles `'`,
  * then percent-encodes, so `#`, `?`, `%`, `&` and `/` in a TM1 name stay inside
- * the key. The one encoder for every service — see scripts/check-no-local-enc.mjs.
+ * the key. The one encoder for every service — see scripts/check-conventions.mjs
+ * (no-local-enc).
  */
 export function odataKey(value: string): string {
   return encodeURIComponent(escapeOdataLiteral(String(value)));

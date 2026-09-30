@@ -1,5 +1,5 @@
 // Shared scanner for tool declarations under src/tools/**/*.ts. Used by
-// gen-tool-list.mjs and check-no-bare-name-input.mjs.
+// gen-tool-list.mjs and check-conventions.mjs.
 //
 // Every tool is declared the same way:
 //
