@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerExportProcessToPro } from "../../src/tools/ti-development/export-process-to-pro.js";
 import { registerExportProcessToGit } from "../../src/tools/ti-development/export-process-to-git.js";
@@ -7,11 +6,7 @@ import { supportsCredentialExport } from "../../src/lib/credential-format.js";
 import { serializeProcessToGit } from "../../src/lib/git-process.js";
 import { serializeToPro } from "../../src/lib/pro-serializer.js";
 import { parseProFile } from "../../src/lib/pro-parser.js";
-
-type ToolCb = (
-  args: Record<string, unknown>,
-  extra: Record<string, unknown>,
-) => Promise<{ content: Array<{ type: string; text: string }> }>;
+import { captureTool, type ToolCb } from "../helpers/client-harness.js";
 
 // The ODBC password is a server-bound ciphertext on v11 and plain text on v12,
 // so it only leaves the server when the caller asks for it AND names a file.
@@ -45,17 +40,10 @@ function captureProExport(version: 11 | 12 = 11): {
       };
     },
   };
-  let cb: ToolCb | undefined;
-  const server = {
-    tool: (_n: string, _d: string, _s: unknown, handler: ToolCb) => {
-      cb = handler;
-    },
-  } as unknown as McpServer;
-  registerExportProcessToPro(server, {
+  const { cb } = captureTool(registerExportProcessToPro, {
     processes,
     version,
   } as unknown as TM1Client);
-  if (!cb) throw new Error("handler not registered");
   return { cb, secretsAsked };
 }
 
@@ -137,17 +125,10 @@ describe("git export refuses credentials on v11", () => {
       }),
       getDeployMeta: async () => ({ hasSecurityAccess: false }),
     };
-    let cb: ToolCb | undefined;
-    const server = {
-      tool: (_n: string, _d: string, _s: unknown, handler: ToolCb) => {
-        cb = handler;
-      },
-    } as unknown as McpServer;
-    registerExportProcessToGit(server, {
+    const { cb } = captureTool(registerExportProcessToGit, {
       processes,
       version,
     } as unknown as TM1Client);
-    if (!cb) throw new Error("handler not registered");
     return cb;
   }
 

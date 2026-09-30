@@ -4,17 +4,12 @@
 // calls, so a removed parameter or a source switched to None stayed on the
 // server while the deploy reported success.
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerUpsertProcess } from "../../src/tools/ti-development/upsert-process.js";
 import { registerImportProcessFromGit } from "../../src/tools/ti-development/import-process-from-git.js";
 import { registerImportProFile } from "../../src/tools/ti-development/import-pro-file.js";
 import type { ToolRegistrar } from "../../src/tools/define-tool.js";
-
-type ToolCb = (
-  args: Record<string, unknown>,
-  extra: Record<string, unknown>,
-) => Promise<{ content: Array<{ type: string; text: string }> }>;
+import { captureTool } from "../helpers/client-harness.js";
 
 // These are overwrites: the fork asks for confirm and backs the installed
 // version up first. Neither is what this file tests.
@@ -59,14 +54,7 @@ function harness(
       ...(opts.serverUIData ? { variablesUIData: opts.serverUIData } : {}),
     }),
   };
-  let cb: ToolCb | undefined;
-  const server = {
-    tool: (_n: string, _d: string, _s: unknown, handler: ToolCb) => {
-      cb = handler;
-    },
-  } as unknown as McpServer;
-  register(server, { processes } as unknown as TM1Client);
-  if (!cb) throw new Error("handler not registered");
+  const { cb } = captureTool(register, { processes } as unknown as TM1Client);
   const call = cb;
   return {
     calls,

@@ -1,29 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { contractCheckedClient } from "../helpers/service-contract.js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerValidateProcessRefs } from "../../src/tools/ti-development/validate-process-refs.js";
+import { captureTool, type ToolCb } from "../helpers/client-harness.js";
 
 // Capture the registered handler and drive it with inline .pro content against
 // a stubbed object catalogue. Covers the reference-extraction gaps found in
 // the 2026-07-04 prod live sweep: DIMIX literal dim refs and arg-2 cube refs
 // (CellPutN/CellPutS/CellIncrementN) were not scanned at all, and a quoted
 // value in arg 1 of CellPutS was mis-captured as the cube name.
-type ToolCb = (
-  args: { content?: string; processName?: string; includeControl?: boolean },
-  extra: Record<string, unknown>,
-) => Promise<{ content: Array<{ type: string; text: string }> }>;
+type Args = {
+  content?: string;
+  processName?: string;
+  includeControl?: boolean;
+};
 
-function captureHandler(opts: {
-  cubes: string[];
-  dimensions: string[];
-}): ToolCb {
-  let cb: ToolCb | undefined;
-  const server = {
-    tool: (_name: string, _desc: string, _schema: unknown, handler: ToolCb) => {
-      cb = handler;
-    },
-  } as unknown as McpServer;
+function captureHandler(opts: { cubes: string[]; dimensions: string[] }) {
   const client = contractCheckedClient({
     cubes: {
       list: async () => opts.cubes.map((name) => ({ name })),
@@ -32,9 +24,7 @@ function captureHandler(opts: {
       list: async () => opts.dimensions.map((name) => ({ name })),
     },
   } as unknown as TM1Client);
-  registerValidateProcessRefs(server, client);
-  if (!cb) throw new Error("handler was not registered");
-  return cb;
+  return captureTool<Args>(registerValidateProcessRefs, client).cb;
 }
 
 // Minimal .pro body: only the prolog section (572) is needed for these cases.
@@ -43,7 +33,7 @@ function buildPro(prolog: string): string {
   return [`572,${lines.length}`, ...lines, "573,0", ""].join("\r\n");
 }
 
-async function run(cb: ToolCb, prolog: string) {
+async function run(cb: ToolCb<Args>, prolog: string) {
   const result = await cb({ content: buildPro(prolog) }, {});
   return JSON.parse(result.content[0].text);
 }

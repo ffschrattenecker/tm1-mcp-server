@@ -1,45 +1,31 @@
 import { describe, it, expect } from "vitest";
 import { contractCheckedClient } from "../helpers/service-contract.js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
 import { registerExecuteProcess } from "../../src/tools/ti-development/execute-process.js";
+import { captureTool } from "../helpers/client-harness.js";
 
 // Capture the handler the tool registers, then invoke it directly with a
 // stubbed TM1Client to assert the isError contract (T2.1): a TI process that
 // runs but reports success:false must be surfaced as an MCP error, not a
 // successful call carrying success:false.
-type ToolCb = (
-  args: {
-    processName: string;
-    parameters?: Record<string, string | number>;
-    // K2/S9: execute_process carries the confirmation guard, so every call has
-    // to repeat the process name — exactly as a real client would.
-    confirm: string;
-  },
-  extra: Record<string, unknown>,
-) => Promise<{
-  isError?: boolean;
-  content: Array<{ type: string; text: string }>;
-}>;
+type Args = {
+  processName: string;
+  parameters?: Record<string, string | number>;
+  // K2/S9: execute_process carries the confirmation guard, so every call has
+  // to repeat the process name — exactly as a real client would.
+  confirm: string;
+};
 
 function captureHandler(
   execute: TM1Client["processes"]["execute"],
   getErrorLogContent?: (f: string) => Promise<string>,
-): ToolCb {
-  let cb: ToolCb | undefined;
-  const server = {
-    tool: (_name: string, _desc: string, _schema: unknown, handler: ToolCb) => {
-      cb = handler;
-    },
-  } as unknown as McpServer;
+) {
   const client = contractCheckedClient({
     processes: { execute },
     ...(getErrorLogContent ? { server: { getErrorLogContent } } : {}),
   } as unknown as TM1Client);
-  registerExecuteProcess(server, client);
-  if (!cb) throw new Error("handler was not registered");
-  return cb;
+  return captureTool<Args>(registerExecuteProcess, client).cb;
 }
 
 describe("tm1_execute_process isError contract (T2.1)", () => {

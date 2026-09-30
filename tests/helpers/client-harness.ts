@@ -1,10 +1,13 @@
 // Shared scaffolding for unit tests that drive a TM1Client (or one of its
-// layers) against a stubbed fetch.
+// layers) against a stubbed fetch, or a single tool handler directly.
 import { vi } from "vitest";
 import type pino from "pino";
+import type { ZodRawShape } from "zod";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Config } from "../../src/config.js";
 import { SessionManager } from "../../src/session-manager.js";
 import { TM1Client } from "../../src/tm1-client.js";
+import type { ClientSource } from "../../src/tools/define-tool.js";
 
 /**
  * A silent pino stand-in. Module state is per test file (vitest isolates
@@ -55,4 +58,33 @@ export function stubSession(
 /** A TM1Client over {@link stubSession}, talking to whatever fetch is stubbed. */
 export function stubbedClient(config: TM1Config, cookie?: string): TM1Client {
   return new TM1Client(config, stubSession(config, cookie), mockLogger);
+}
+
+/** A tool handler as registered through `server.tool(name, desc, schema, cb)`. */
+export type ToolCb<A = Record<string, unknown>> = (
+  args: A,
+  extra: Record<string, unknown>,
+) => Promise<{
+  isError?: boolean;
+  content: Array<{ type: string; text: string }>;
+}>;
+
+/**
+ * Register one tool against a fake server and hand back what the SDK would
+ * hold: its raw input shape and its handler. The handler gets args exactly as
+ * passed — run them through `z.object(schema)` first when defaults matter.
+ */
+export function captureTool<A = Record<string, unknown>, S = ClientSource>(
+  register: (server: McpServer, source: S) => void,
+  source: S,
+): { schema: ZodRawShape; cb: ToolCb<A> } {
+  let captured: { schema: ZodRawShape; cb: ToolCb<A> } | undefined;
+  const server = {
+    tool: (_n: string, _d: string, schema: ZodRawShape, cb: ToolCb<A>) => {
+      captured = { schema, cb };
+    },
+  } as unknown as McpServer;
+  register(server, source);
+  if (!captured) throw new Error("tool was not registered");
+  return captured;
 }

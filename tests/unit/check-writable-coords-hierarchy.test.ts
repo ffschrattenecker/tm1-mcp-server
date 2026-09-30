@@ -3,14 +3,9 @@
 // only ever looked in the default hierarchy — so a `[Dim].[Hier].[Elem]`
 // coordinate that tm1_write_cells accepts came back as "(missing)".
 import { describe, it, expect } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerCheckWritableCoords } from "../../src/tools/celldata/check-writable-coords.js";
-
-type ToolCb = (
-  args: Record<string, unknown>,
-  extra: Record<string, unknown>,
-) => Promise<{ content: Array<{ type: string; text: string }> }>;
+import { captureTool } from "../helpers/client-harness.js";
 
 // Region has DE only in the alternate hierarchy AltHier.
 const ELEMENTS: Record<string, { name: string; type: string }> = {
@@ -38,16 +33,11 @@ function run(coords: string[], dimensions?: string[]) {
       },
     },
   };
-  let cb: ToolCb | undefined;
-  registerCheckWritableCoords(
-    {
-      tool: (_n: string, _d: string, _s: unknown, h: ToolCb) => {
-        cb = h;
-      },
-    } as unknown as McpServer,
+  const { cb } = captureTool(
+    registerCheckWritableCoords,
     tm1 as unknown as TM1Client,
   );
-  return cb!({ cubeName: "Sales", coords, dimensions }, {}).then((r) => ({
+  return cb({ cubeName: "Sales", coords, dimensions }, {}).then((r) => ({
     out: JSON.parse(r.content[0].text) as {
       writable: boolean;
       coords: Array<{ element: string; exists: boolean; type: string }>;

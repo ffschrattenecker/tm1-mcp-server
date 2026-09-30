@@ -1,13 +1,8 @@
 import { describe, it, expect } from "vitest";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import type { DataSource } from "../../src/types.js";
 import { registerImportProFile } from "../../src/tools/ti-development/import-pro-file.js";
-
-type ToolCb = (
-  args: Record<string, unknown>,
-  extra: Record<string, unknown>,
-) => Promise<{ content: Array<{ type: string; text: string }> }>;
+import { captureTool, type ToolCb } from "../helpers/client-harness.js";
 
 // A .pro never carries a usable ODBC password — TM1 stores it as a
 // server-encrypted blob — so the caller re-supplies it on import.
@@ -38,16 +33,9 @@ function capture(): { cb: ToolCb; applied: DataSource[] } {
       applied.push(ds);
     },
   };
-  let cb: ToolCb | undefined;
-  const server = {
-    tool: (_n: string, _d: string, _s: unknown, handler: ToolCb) => {
-      cb = handler;
-    },
-  } as unknown as McpServer;
-  registerImportProFile(server, {
+  const { cb } = captureTool(registerImportProFile, {
     processes,
   } as unknown as TM1Client);
-  if (!cb) throw new Error("handler not registered");
   return { cb, applied };
 }
 

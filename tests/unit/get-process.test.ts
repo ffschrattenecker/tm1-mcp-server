@@ -1,13 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { contractCheckedClient } from "../helpers/service-contract.js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerGetProcess } from "../../src/tools/ti-development/get-process.js";
-
-type ToolCb = (
-  args: Record<string, unknown>,
-  extra: Record<string, unknown>,
-) => Promise<{ content: Array<{ type: string; text: string }> }>;
+import { captureTool, type ToolCb } from "../helpers/client-harness.js";
 
 function capture(processes: Partial<TM1Client["processes"]>): {
   cb: ToolCb;
@@ -32,17 +27,10 @@ function capture(processes: Partial<TM1Client["processes"]>): {
       return orig;
     },
   });
-  let cb: ToolCb | undefined;
-  const server = {
-    tool: (_n: string, _d: string, _s: unknown, handler: ToolCb) => {
-      cb = handler;
-    },
-  } as unknown as McpServer;
-  registerGetProcess(
-    server,
+  const { cb } = captureTool(
+    registerGetProcess,
     contractCheckedClient({ processes: counting } as unknown as TM1Client),
   );
-  if (!cb) throw new Error("handler not registered");
   return { cb, calls };
 }
 
