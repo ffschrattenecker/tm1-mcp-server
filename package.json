@@ -1,6 +1,6 @@
 {
   "name": "@ffschrattenecker/tm1-mcp-server",
-  "version": "9.1.0",
+  "version": "9.1.1",
   "description": "Personal testing fork of flameY3T1/tm1-mcp-server (npm: tm1-mcp-server). Use the original.",
   "repository": {
     "type": "git",

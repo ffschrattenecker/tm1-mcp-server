@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.1.1] - 2026-10-01
+
+### Changed
+
+- Internal clean-up only, no change to any tool: unused exports, dead helpers and the unused
+  `pino-pretty` dev dependency removed; the nightly live runner, the coverage ratchet and the
+  live handshake tier of `smoke:tarball` dropped; contributor boilerplate and the stale
+  `docs/EXAMPLES.md` deleted.
+
 ## [9.1.0] - 2026-09-30
 
 ### Added
@@ -277,7 +286,8 @@ response-size guard, the per-connection caches) are unchanged.
 Older history (before 8.0.0): see the git tags and the upstream repository,
 https://github.com/flameY3T1/tm1-mcp-server.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.1.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.1.1...HEAD
+[9.1.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.1.0...v9.1.1
 [9.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.0.0...v9.1.0
 [9.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.3.1...v9.0.0
 [8.3.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.3.0...v8.3.1
