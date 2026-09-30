@@ -64,18 +64,6 @@ export function readCount(
   return response?.["@odata.count"];
 }
 
-/**
- * Read the `<Nav>@odata.count` that a nested `$expand=Nav($count=true)` adds to
- * the *parent* entity (TM1 hangs the count off the owner, not the array).
- */
-export function readNestedCount(
-  response: Record<string, unknown> | null | undefined,
-  navigationProperty: string,
-): number | undefined {
-  const raw = response?.[`${navigationProperty}@odata.count`];
-  return typeof raw === "number" ? raw : undefined;
-}
-
 /** Double `'` per OData literal rules so a caller string cannot break out of a literal. */
 export function escapeOdataLiteral(value: string): string {
   return value.replace(/'/g, "''");

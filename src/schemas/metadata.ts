@@ -41,10 +41,3 @@ export const HierarchyElementSchema = z.object({
   children: z.array(z.object({ name: z.string(), weight: z.number() })),
 });
 export type HierarchyElement = z.infer<typeof HierarchyElementSchema>;
-
-export const HierarchySchema = z.object({
-  name: z.string(),
-  dimensionName: z.string(),
-  elements: z.array(HierarchyElementSchema),
-});
-export type Hierarchy = z.infer<typeof HierarchySchema>;

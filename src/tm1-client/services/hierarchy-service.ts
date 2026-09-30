@@ -1,31 +1,14 @@
-// Hierarchy domain service. Owns the OData calls under
-// /api/v1/Dimensions('{d}')/Hierarchies(...) — get, create, delete, plus the
-// derived ancestors/descendants traversals that fetch a hierarchy and walk it
-// client-side. See docs/ARCHITECTURE.md for the layering.
-import { compileUserRegex } from "../../lib/safe-regex.js";
-import type { Hierarchy, HierarchyElement } from "../../types.js";
+// Hierarchy domain service. Owns the element reads under
+// /api/v1/Dimensions('{d}')/Hierarchies(...) that tools and caches need in
+// bulk: the full structure (elements + weighted edges) and a name → type map.
+// See docs/ARCHITECTURE.md for the layering.
+import type { HierarchyElement } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
-import {
-  escapeOdataLiteral,
-  odataKey,
-  pageClauseList,
-  readNestedCount,
-} from "./odata-page.js";
-
-/**
- * A hierarchy plus the size of the element set the request selected, so
- * callers can page without guessing. `totalElements` counts elements that
- * survived *every* filter — the server-side `$filter` ones via
- * `Elements@odata.count`, the client-side ones (elementType, nameRegex) by
- * counting what is left after filtering. It is therefore always exact, and
- * always ≥ `elements.length`.
- */
-export type HierarchyPage = Hierarchy & { totalElements: number };
+import { odataKey, pageClauseList } from "./odata-page.js";
 
 /**
  * A hierarchy as a flat element list plus every parent→child edge with its
- * weight — the shape a structural comparison needs, without the per-element
- * parents/children arrays {@link HierarchyService.get} builds.
+ * weight — the shape a structural comparison needs.
  */
 export interface HierarchyStructure {
   elements: Array<{ name: string; type: HierarchyElement["type"] }>;
@@ -35,215 +18,19 @@ export interface HierarchyStructure {
 /** Elements per request in {@link HierarchyService.getStructure}. */
 export const STRUCTURE_PAGE_SIZE = 50_000;
 
-/** Element filters shared by {@link HierarchyService.get} and {@link HierarchyService.getCounts}. */
-export interface ElementFilterOpts {
-  level?: number;
-  levelMax?: number;
-  elementType?: "Numeric" | "String" | "Consolidated" | "All";
-  nameContains?: string;
-  nameStartsWith?: string;
-  nameRegex?: string;
-}
-
-// elementType pushes down as the ORDINAL, not the name: `Type eq
-// 'Consolidated'` is accepted and matches nothing — silently, which is
-// worse than an error and is why this filter used to run client-side.
-// `Type eq 3` works (verified live on 11.8: 1 → Numeric, 2 → String,
-// 3 → Consolidated).
-//
-// Doing it server-side matters more since elements carry their Edges: a
-// client-side type filter means fetching every element of the dimension
-// with its edges attached — measured at 99 MB on a 171k-element dimension,
-// against 300 KB for the pushed-down page.
-//
-// nameRegex stays client-side; OData has no regex.
-const TYPE_ORDINAL: Record<string, number> = {
-  Numeric: 1,
-  String: 2,
-  Consolidated: 3,
-};
-
-function elementFilters(opts: ElementFilterOpts | undefined): {
-  filters: string[];
-  regex: RegExp | undefined;
-} {
-  const filters: string[] = [];
-  if (opts?.level !== undefined) filters.push(`Level eq ${opts.level}`);
-  if (opts?.levelMax !== undefined) filters.push(`Level le ${opts.levelMax}`);
-  if (opts?.nameContains)
-    filters.push(`contains(Name, '${escapeOdataLiteral(opts.nameContains)}')`);
-  if (opts?.nameStartsWith)
-    filters.push(
-      `startswith(Name, '${escapeOdataLiteral(opts.nameStartsWith)}')`,
-    );
-  const typeOrdinal =
-    opts?.elementType && opts.elementType !== "All"
-      ? TYPE_ORDINAL[opts.elementType]
-      : undefined;
-  if (typeOrdinal !== undefined) filters.push(`Type eq ${typeOrdinal}`);
-  const regex =
-    opts?.nameRegex !== undefined
-      ? compileUserRegex(opts.nameRegex, undefined, "nameRegex")
-      : undefined;
-  return { filters, regex };
-}
-
 export class HierarchyService {
   constructor(private readonly http: TM1HttpClient) {}
-
-  /**
-   * Get a specific hierarchy with its elements, including parent/child
-   * relationships. TM1 11.8 does not expose `Children` on Element, only
-   * `Parents` — children are derived client-side. Filtered-out parents are
-   * removed from the surviving elements' parents/children arrays to avoid
-   * dangling references.
-   *
-   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')?$expand=Elements(...)
-   *
-   * Paging: when no client-side post-filter is needed, `topN`/`skip` are
-   * pushed into the nested Elements expand together with `$orderby=Name` and
-   * `$count=true`. On a live 211k-element dimension that is 48 KB/page against
-   * 67 MB for the unbounded fetch. `$orderby` is not optional — without it
-   * `$skip` walks TM1's internal index order, which shifts on every element
-   * create/delete and would duplicate or drop elements between pages.
-   */
-  async get(
-    dimensionName: string,
-    hierarchyName: string,
-    opts?: ElementFilterOpts & {
-      topN?: number;
-      /**
-       * Elements to skip before `topN`. Applied server-side when possible and
-       * after client-side filtering otherwise, so the caller sees the same
-       * pagination semantics either way.
-       */
-      skip?: number;
-    },
-  ): Promise<HierarchyPage> {
-    const elementClauses: string[] = [
-      "$select=Name,Type,Level",
-      // Parents for the tree, Edges for the child weights. Both are element
-      // navigations, so one request answers both — see the weight join below
-      // for why the separate Edges scan is gone.
-      "$expand=Parents($select=Name),Edges($select=ComponentName,Weight)",
-    ];
-    const { filters, regex } = elementFilters(opts);
-    const needsClientPostFilter = regex !== undefined;
-    if (filters.length > 0)
-      elementClauses.push(`$filter=${filters.join(" and ")}`);
-    const skip = opts?.skip ?? 0;
-    const topN = opts?.topN;
-    // Push the window down only when nothing is filtered afterwards. With a
-    // client post-filter active, `Elements@odata.count` would count rows the
-    // caller never sees, so both the window and the total have to be computed
-    // here, on the filtered set.
-    const pushDown = topN !== undefined && !needsClientPostFilter;
-    if (pushDown) elementClauses.push(...pageClauseList({ top: topN, skip }));
-
-    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')?$expand=Elements(${elementClauses.join(";")})`;
-    const rawResponse = await this.http.request<{
-      Name: string;
-      "Elements@odata.count"?: number;
-      Elements: Array<{
-        Name: string;
-        Type: string;
-        Level: number;
-        Parents?: Array<{ Name: string }>;
-        Edges?: Array<{ ComponentName: string; Weight: number }>;
-      }>;
-    }>("GET", path);
-    let filteredElements = rawResponse.Elements;
-    if (regex !== undefined)
-      filteredElements = filteredElements.filter((e) => regex.test(e.Name));
-    // Total of everything the filters kept, before the window is applied.
-    // Server-side count when it was pushed down; otherwise the post-filter
-    // length, which is exact because we hold the whole filtered set.
-    let totalElements = pushDown
-      ? (readNestedCount(rawResponse, "Elements") ??
-        skip + filteredElements.length)
-      : filteredElements.length;
-    if (!pushDown && (skip > 0 || topN !== undefined)) {
-      filteredElements = filteredElements.slice(
-        skip,
-        skip + (topN ?? filteredElements.length),
-      );
-    }
-    // A count below what we already hold means the hierarchy shrank between
-    // count and slice — trust the rows in hand.
-    totalElements = Math.max(totalElements, skip + filteredElements.length);
-    const response = { Name: rawResponse.Name, Elements: filteredElements };
-
-    const keptNames = new Set(response.Elements.map((e) => e.Name));
-
-    // Edge weights ride along with the elements: `Element` has an `Edges`
-    // navigation carrying its OUTGOING edges — its children, with weights —
-    // so the page already fetched above answers the question. Verified live:
-    // every consolidated row's edges had ParentName equal to that row, and no
-    // row carried an edge belonging to anything else.
-    //
-    // The alternative this replaces was reading the hierarchy's whole `Edges`
-    // collection: 21.6 MB and 594 ms for a 171k-element dimension, against
-    // 309 KB and 98 ms for the page-with-edges — one round trip instead of
-    // two, and bounded by the page's fan-out rather than by the dimension.
-    //
-    // A missing edge still falls back to 1, TM1's default. That fallback is
-    // why tests/live/dimension.live.test.ts pins a weight of -1: with 1 there
-    // is no way to tell a weight that was read from one that was invented.
-    const weightByEdge = new Map<string, Map<string, number>>();
-    for (const e of response.Elements) {
-      for (const edge of e.Edges ?? []) {
-        let byChild = weightByEdge.get(e.Name);
-        if (!byChild) {
-          byChild = new Map<string, number>();
-          weightByEdge.set(e.Name, byChild);
-        }
-        byChild.set(edge.ComponentName, edge.Weight);
-      }
-    }
-
-    const childrenByParent = new Map<
-      string,
-      Array<{ name: string; weight: number }>
-    >();
-    for (const e of response.Elements) {
-      for (const p of e.Parents ?? []) {
-        if (!keptNames.has(p.Name)) continue;
-        const list = childrenByParent.get(p.Name) ?? [];
-        list.push({
-          name: e.Name,
-          weight: weightByEdge.get(p.Name)?.get(e.Name) ?? 1,
-        });
-        childrenByParent.set(p.Name, list);
-      }
-    }
-
-    const elements: HierarchyElement[] = response.Elements.map((e) => ({
-      name: e.Name,
-      type: e.Type as HierarchyElement["type"],
-      level: e.Level,
-      parents: (e.Parents ?? [])
-        .filter((p) => keptNames.has(p.Name))
-        .map((p) => p.Name),
-      children: childrenByParent.get(e.Name) ?? [],
-    }));
-
-    return {
-      name: response.Name,
-      dimensionName,
-      elements,
-      totalElements,
-    };
-  }
 
   /**
    * Every element (name, type) and every edge (parent, child, weight) of a
    * hierarchy. Edges are read from each element's OUTGOING `Edges`
    * navigation, so an edge always arrives with its parent's row and paging by
-   * element can neither split nor duplicate one — unlike `get()`, whose
-   * children are rebuilt from `Parents` and only within one page.
+   * element can neither split nor duplicate one.
    *
-   * Paged by name (`$orderby=Name`, see `get()` for why the order is
-   * required) in windows of `pageSize` (default {@link STRUCTURE_PAGE_SIZE}).
+   * Paged by name in windows of `pageSize` (default
+   * {@link STRUCTURE_PAGE_SIZE}). `$orderby=Name` is not optional — without
+   * it `$skip` walks TM1's internal index order, which shifts on every
+   * element create/delete and would duplicate or drop elements between pages.
    *
    * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Name,Type&$expand=Edges($select=ComponentName,Weight)
    */
@@ -285,9 +72,7 @@ export class HierarchyService {
   /**
    * Element name + type for a whole hierarchy — nothing else.
    *
-   * `get()` is the wrong tool for a type lookup: it expands `Parents` and
-   * `Edges` on every element to build the tree and weight the children. This
-   * reads the Elements collection directly with `$select=Name,Type` — no
+   * Reads the Elements collection directly with `$select=Name,Type` — no
    * expand at all — which is the minimum payload for name → type resolution.
    *
    * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Name,Type

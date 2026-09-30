@@ -4,7 +4,6 @@ import { ElementTypeCache } from "../../src/lib/feeders/element-type-cache.js";
 
 interface HierarchyMock {
   getElementTypes: FnSpy;
-  get: FnSpy;
 }
 
 function makeHierarchyMock(
@@ -14,11 +13,6 @@ function makeHierarchyMock(
     getElementTypes: vi.fn(async (dim: string, hier: string) => {
       const key = `${dim}|${hier}`;
       return (map[key] ?? []).map((e) => ({ name: e.name, type: e.type }));
-    }),
-    // The full-hierarchy read must never be used for a type lookup — it
-    // expands Parents and scans Edges.
-    get: vi.fn(async () => {
-      throw new Error("hierarchy.get() must not be called for type lookups");
     }),
   };
 }
@@ -58,14 +52,13 @@ describe("ElementTypeCache", () => {
     expect(hier.getElementTypes).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the narrow Name,Type read, not the full hierarchy expand", async () => {
+  it("reads types with getElementTypes(dimension, hierarchy)", async () => {
     const hier = makeHierarchyMock({
       "Region|Region": [{ name: "DE", type: "Numeric" }],
     });
     const cache = new ElementTypeCache(hier);
     expect(await cache.getType("Region", "Region", "DE")).toBe("Numeric");
     expect(hier.getElementTypes).toHaveBeenCalledWith("Region", "Region");
-    expect(hier.get).not.toHaveBeenCalled();
   });
 
   it("element names case-insensitive on lookup (TM1 semantics)", async () => {
@@ -92,7 +85,6 @@ describe("ElementTypeCache", () => {
       getElementTypes: vi.fn(async () => {
         throw new Error("hier 404");
       }),
-      get: vi.fn(),
     };
     const cache = new ElementTypeCache(hier);
     expect(await cache.getType("Bogus", "Bogus", "X")).toBeNull();
@@ -106,7 +98,6 @@ describe("ElementTypeCache", () => {
         if (calls === 1) throw new Error("transient timeout");
         return [{ name: "DE", type: "Numeric" }];
       }),
-      get: vi.fn(),
     };
     const cache = new ElementTypeCache(hier);
 
@@ -129,7 +120,6 @@ describe("ElementTypeCache", () => {
         await gate;
         throw new Error("hier 500");
       }),
-      get: vi.fn(),
     };
     const cache = new ElementTypeCache(hier);
 
@@ -150,7 +140,6 @@ describe("ElementTypeCache", () => {
         // for a dimension the auditing user may not read.
         throw new Error("ObjectSecurityNoReadRights");
       }),
-      get: vi.fn(),
     };
     const cache = new ElementTypeCache(hier);
 
@@ -180,7 +169,6 @@ describe("ElementTypeCache", () => {
         if (calls < 3) throw new Error("transient");
         return [{ name: "DE", type: "Numeric" }];
       }),
-      get: vi.fn(),
     };
     const cache = new ElementTypeCache(hier);
 
@@ -199,7 +187,6 @@ describe("ElementTypeCache", () => {
         if (dim === "Region") throw new Error("ObjectSecurityNoReadRights");
         return [{ name: "P1", type: "Numeric" }];
       }),
-      get: vi.fn(),
     };
     const cache = new ElementTypeCache(hier);
 
@@ -226,7 +213,6 @@ describe("ElementTypeCache", () => {
         }
         throw new Error("hier 500");
       }),
-      get: vi.fn(),
     };
     const cache = new ElementTypeCache(hier);
 

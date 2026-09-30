@@ -216,21 +216,6 @@
       "created": "boolean",
       "root": "string"
     },
-    "hierarchies.get": {
-      "dimensionName": "string",
-      "elements[]": {
-        "children[]": {
-          "name": "string",
-          "weight": "number"
-        },
-        "level": "number",
-        "name": "string",
-        "parents[]": "string",
-        "type": "string"
-      },
-      "name": "string",
-      "totalElements": "number"
-    },
     "hierarchies.getElementTypes": {
       "[]": {
         "name": "string",

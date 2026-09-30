@@ -16,7 +16,6 @@ import {
   pageClauseList,
   pageClauses,
   readCount,
-  readNestedCount,
 } from "../../src/tm1-client/services/odata-page.js";
 
 describe("paginate", () => {
@@ -262,13 +261,10 @@ describe("odata-page clause builders", () => {
     expect(odataKey("}Clients")).toBe("%7DClients");
   });
 
-  it("reads collection and nested counts, and reports absence as undefined", () => {
+  it("reads the collection count, and reports absence as undefined", () => {
     expect(readCount({ "@odata.count": 7 })).toBe(7);
     expect(readCount({})).toBeUndefined();
     expect(readCount(undefined)).toBeUndefined();
-    expect(readNestedCount({ "Elements@odata.count": 3 }, "Elements")).toBe(3);
-    expect(readNestedCount({ Elements: [] }, "Elements")).toBeUndefined();
-    expect(readNestedCount(undefined, "Elements")).toBeUndefined();
   });
 
   it("sorts by ordinal code unit, matching TM1's $orderby=Name", () => {
