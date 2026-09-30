@@ -23,20 +23,9 @@ import type { FnSpy } from "../helpers/spy-types.js";
 import { TM1Client } from "../../src/tm1-client.js";
 import { SessionManager } from "../../src/session-manager.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
-import { mockLogger } from "../helpers/client-harness.js";
+import { mockLogger, mockResponse } from "../helpers/client-harness.js";
 
 const makeConfig = () => makeTestConfig({ requestTimeoutMs: 5000 });
-
-function mockResponse(body: unknown, status = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    statusText: status === 200 ? "OK" : "Error",
-    headers: new Headers(),
-    text: vi.fn().mockResolvedValue(JSON.stringify(body)),
-    json: vi.fn().mockResolvedValue(body),
-  } as unknown as Response;
-}
 
 /** TM1 refusing the query SHAPE — an unparsable $select/$expand comes back 400. */
 const shapeRejection = (): Response =>

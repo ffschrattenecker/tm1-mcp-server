@@ -4,7 +4,7 @@ import type { FnSpy } from "../helpers/spy-types.js";
 import { TM1Client } from "../../src/tm1-client.js";
 import { SessionManager } from "../../src/session-manager.js";
 import type { TM1Config } from "../../src/config.js";
-import { mockLogger } from "../helpers/client-harness.js";
+import { mockLogger, mockResponse } from "../helpers/client-harness.js";
 
 function makeConfig(): TM1Config {
   return {
@@ -16,17 +16,6 @@ function makeConfig(): TM1Config {
     requestTimeoutMs: 5_000,
     logLevel: "info",
   } as unknown as TM1Config;
-}
-
-function mockResponse(body: unknown): Response {
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    headers: new Headers(),
-    text: vi.fn().mockResolvedValue(JSON.stringify(body)),
-    json: vi.fn().mockResolvedValue(body),
-  } as unknown as Response;
 }
 
 // getAttributeValues builds MDX by interpolating the dimension and element names

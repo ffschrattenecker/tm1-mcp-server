@@ -20,18 +20,7 @@ import type { ProcessResult } from "../../src/types.js";
 import { ProcessResultSchema } from "../../src/tools/schemas/items-processes.js";
 import { classifyExecution } from "../../src/tm1-client/services/process-status.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
-import { mockLogger } from "../helpers/client-harness.js";
-
-function mockResponse(body: unknown, status = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    statusText: status === 200 ? "OK" : "Error",
-    headers: new Headers(),
-    text: vi.fn().mockResolvedValue(JSON.stringify(body)),
-    json: vi.fn().mockResolvedValue(body),
-  } as unknown as Response;
-}
+import { mockLogger, mockResponse } from "../helpers/client-harness.js";
 
 function mockEmptyBody(status = 200): Response {
   return {

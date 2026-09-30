@@ -6,23 +6,11 @@ import { TM1Client } from "../../src/tm1-client.js";
 import { SessionManager } from "../../src/session-manager.js";
 import { TM1Error } from "../../src/types.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
-import { mockLogger } from "../helpers/client-harness.js";
+import { mockLogger, mockResponse } from "../helpers/client-harness.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const makeConfig = () => makeTestConfig({ requestTimeoutMs: 5000 });
-
-function mockResponse(body: unknown): Response {
-  const bodyText = JSON.stringify(body);
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    headers: new Headers(),
-    text: vi.fn().mockResolvedValue(bodyText),
-    json: vi.fn().mockResolvedValue(body),
-  } as unknown as Response;
-}
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 

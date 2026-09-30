@@ -16,18 +16,7 @@ import { SessionManager } from "../../src/session-manager.js";
 import { ChoreResultSchema } from "../../src/tools/schemas/items-scheduling.js";
 import { classifyChoreExecution } from "../../src/tm1-client/services/chore-status.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
-import { mockLogger } from "../helpers/client-harness.js";
-
-function mockResponse(body: unknown, status = 200): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    statusText: status === 200 ? "OK" : "Error",
-    headers: new Headers(),
-    text: vi.fn().mockResolvedValue(JSON.stringify(body)),
-    json: vi.fn().mockResolvedValue(body),
-  } as unknown as Response;
-}
+import { mockLogger, mockResponse } from "../helpers/client-harness.js";
 
 function mockEmpty(status = 204): Response {
   return {

@@ -18,3 +18,15 @@ export const mockLogger = {
   level: "silent",
   flush: vi.fn(),
 } as unknown as pino.Logger;
+
+/** A fetch `Response` stub whose body is `body` as JSON. */
+export function mockResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: status === 200 ? "OK" : "Error",
+    headers: new Headers(),
+    text: vi.fn().mockResolvedValue(JSON.stringify(body)),
+    json: vi.fn().mockResolvedValue(body),
+  } as unknown as Response;
+}
