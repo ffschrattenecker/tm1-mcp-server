@@ -2,7 +2,7 @@
 // layers) against a stubbed fetch, or a single tool handler directly.
 import { vi } from "vitest";
 import type pino from "pino";
-import type { ZodRawShape } from "zod";
+import { z, type ZodRawShape } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Config } from "../../src/config.js";
 import { SessionManager } from "../../src/session-manager.js";
@@ -87,4 +87,17 @@ export function captureTool<A = Record<string, unknown>, S = ClientSource>(
   register(server, source);
   if (!captured) throw new Error("tool was not registered");
   return captured;
+}
+
+/**
+ * {@link captureTool}, returning a one-argument caller that parses its input
+ * through the tool's schema first — so zod defaults apply, as through the SDK.
+ */
+export function captureParsedTool<R = unknown, S = ClientSource>(
+  register: (server: McpServer, source: S) => void,
+  source: S,
+): (args: Record<string, unknown>) => Promise<R> {
+  const { schema, cb } = captureTool(register, source);
+  const parser = z.object(schema);
+  return (args) => cb(parser.parse(args), {}) as Promise<R>;
 }

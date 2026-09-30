@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { z, type ZodRawShape } from "zod";
 import { registerCheckWritableCoords } from "../../src/tools/celldata/check-writable-coords.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 type Types = Record<string, { name: string; type: string } | null>;
 
@@ -25,19 +25,9 @@ function setup(opts: { dims?: string[] | "missing"; types: Types }) {
       },
     },
   } as unknown as TM1Client;
-  let h: ((a: unknown) => Promise<unknown>) | null = null;
-  let parser: z.ZodObject<ZodRawShape> | null = null;
-  registerCheckWritableCoords(
-    {
-      tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-        parser = z.object(s);
-        h = cb;
-      },
-    } as never,
-    client,
-  );
+  const h = captureParsedTool(registerCheckWritableCoords, client);
   const call = async (args: Record<string, unknown>) => {
-    const res = (await h!(parser!.parse(args))) as {
+    const res = (await h(args)) as {
       content: Array<{ text: string }>;
     };
     return JSON.parse(res.content[0].text) as Record<string, unknown>;

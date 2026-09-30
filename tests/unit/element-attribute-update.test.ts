@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { z, type ZodRawShape } from "zod";
 import { ElementService } from "../../src/tm1-client/services/element-service.js";
 import { registerUpdateElementAttributeValue } from "../../src/tools/dimension-management/update-element-attribute-value.js";
 import { TM1Error } from "../../src/types.js";
 import type { TM1Client } from "../../src/tm1-client.js";
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 type Written = {
   cube: string;
@@ -37,18 +37,10 @@ function makeService(written: Written[]) {
 }
 
 function handlerFor(elements: unknown) {
-  let h: ((a: unknown) => Promise<unknown>) | null = null;
-  let parser: z.ZodObject<ZodRawShape> | null = null;
-  registerUpdateElementAttributeValue(
-    {
-      tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-        parser = z.object(s);
-        h = cb;
-      },
-    } as never,
-    { elements } as unknown as TM1Client,
-  );
-  return (args: Record<string, unknown>) => h!(parser!.parse(args));
+  const h = captureParsedTool(registerUpdateElementAttributeValue, {
+    elements,
+  } as unknown as TM1Client);
+  return (args: Record<string, unknown>) => h(args);
 }
 
 describe("ElementService.updateAttributeValues", () => {

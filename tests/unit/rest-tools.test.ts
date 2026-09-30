@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { z, type ZodRawShape } from "zod";
 import type { TM1Client } from "../../src/tm1-client.js";
 import type { RestBody } from "../../src/tm1-client/services/rest-service.js";
 import { ConnectionRegistry } from "../../src/connections.js";
@@ -7,6 +6,7 @@ import { registerRestRead } from "../../src/tools/rest/rest-read.js";
 import { registerRestWrite } from "../../src/tools/rest/rest-write.js";
 import type { ToolRegistrar } from "../../src/tools/define-tool.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 interface Sent {
   method: string;
@@ -48,19 +48,12 @@ function setup(
   mode: "readonly" | "readwrite" = "readwrite",
 ) {
   const { client, sent } = fakeClient(reply);
-  let h: ((a: unknown) => Promise<unknown>) | null = null;
-  let parser: z.ZodObject<ZodRawShape> | null = null;
-  register(
-    {
-      tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-        parser = z.object(s);
-        h = cb;
-      },
-    } as never,
+  const h = captureParsedTool(
+    register,
     ConnectionRegistry.of([{ name: "default", client, mode }]),
   );
   const call = async (args: Record<string, unknown>) => {
-    const res = (await h!(parser!.parse(args))) as {
+    const res = (await h(args)) as {
       content: Array<{ text: string }>;
     };
     return JSON.parse(res.content[0].text) as Record<string, unknown>;

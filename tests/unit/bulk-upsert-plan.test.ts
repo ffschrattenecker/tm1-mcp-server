@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { z, type ZodRawShape } from "zod";
 import { ElementService } from "../../src/tm1-client/services/element-service.js";
 import { registerBulkUpsertElements } from "../../src/tools/dimension-management/bulk-upsert-elements.js";
 import type { TM1Client } from "../../src/tm1-client.js";
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 type Ctor = ConstructorParameters<typeof ElementService>;
 
@@ -73,27 +73,17 @@ describe("ElementService.planBulkUpsert", () => {
 
 describe("tm1_bulk_upsert_elements removal guard", () => {
   function call(args: Record<string, unknown>, upserts: unknown[][]) {
-    let h: ((a: unknown) => Promise<unknown>) | null = null;
-    let parser: z.ZodObject<ZodRawShape> | null = null;
     const svc = service([]);
-    registerBulkUpsertElements(
-      {
-        tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-          parser = z.object(s);
-          h = cb;
+    const h = captureParsedTool(registerBulkUpsertElements, {
+      elements: {
+        planBulkUpsert: svc.planBulkUpsert.bind(svc),
+        bulkUpsert: async (...a: unknown[]) => {
+          upserts.push(a);
+          return { typeChanges: [] };
         },
-      } as never,
-      {
-        elements: {
-          planBulkUpsert: svc.planBulkUpsert.bind(svc),
-          bulkUpsert: async (...a: unknown[]) => {
-            upserts.push(a);
-            return { typeChanges: [] };
-          },
-        },
-      } as unknown as TM1Client,
-    );
-    return h!(parser!.parse(args)) as Promise<{
+      },
+    } as unknown as TM1Client);
+    return h(args) as Promise<{
       structuredContent: Record<string, unknown>;
     }>;
   }

@@ -2,12 +2,12 @@ import { describe, it, expect, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { z, type ZodRawShape } from "zod";
 import { applyRulesPatch } from "../../src/lib/rules-patch.js";
 import { registerSetCubeRules } from "../../src/tools/model-building/set-cube-rules.js";
 import { registerCheckCubeRule } from "../../src/tools/model-building/check-cube-rule.js";
 import { TM1Error } from "../../src/types.js";
 import type { TM1Client } from "../../src/tm1-client.js";
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 const STORED = [
   "SKIPCHECK;",
@@ -84,18 +84,8 @@ describe("tm1_set_cube_rules sources", () => {
     args: Record<string, unknown>,
     register: typeof registerSetCubeRules = registerSetCubeRules,
   ) {
-    let h: ((a: unknown) => Promise<unknown>) | null = null;
-    let parser: z.ZodObject<ZodRawShape> | null = null;
-    register(
-      {
-        tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-          parser = z.object(s);
-          h = cb;
-        },
-      } as never,
-      client,
-    );
-    return h!(parser!.parse(args)) as Promise<{
+    const h = captureParsedTool(register, client);
+    return h(args) as Promise<{
       structuredContent: Record<string, unknown>;
       content: Array<{ text: string }>;
       isError?: boolean;

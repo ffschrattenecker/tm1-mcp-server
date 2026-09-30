@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { z, type ZodRawShape } from "zod";
 import type { TM1Client } from "../../src/tm1-client.js";
 import {
   buildIndexFromTM1,
@@ -7,6 +6,7 @@ import {
   invalidateCallgraphCache,
 } from "../../src/lib/callgraph/tm1-adapter.js";
 import { registerAnalyzeCallgraph } from "../../src/tools/analysis/analyze-callgraph.js";
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 // refresh:true drops this connection's cached index and rebuilds it before
 // answering.
@@ -27,21 +27,9 @@ function stubClient(connectionId: string) {
 }
 
 function register(client: TM1Client) {
-  let h: ((a: unknown) => Promise<unknown>) | null = null;
-  let parser: z.ZodObject<ZodRawShape> | null = null;
-  registerAnalyzeCallgraph(
-    {
-      tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-        parser = z.object(s);
-        h = cb;
-      },
-    } as never,
-    client,
-  );
+  const h = captureParsedTool(registerAnalyzeCallgraph, client);
   return (args: Record<string, unknown>) =>
-    (
-      h!(parser!.parse(args)) as Promise<{ content: Array<{ text: string }> }>
-    ).then((r) => ({
+    (h(args) as Promise<{ content: Array<{ text: string }> }>).then((r) => ({
       // The server proxy turns the JSON text into structuredContent; the bare
       // handler only returns the text.
       structuredContent: JSON.parse(r.content[0].text) as Record<

@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { z, type ZodRawShape } from "zod";
 import { ElementService } from "../../src/tm1-client/services/element-service.js";
 import {
   BatchUnsupportedError,
@@ -9,6 +8,7 @@ import {
 import { registerDeleteElements } from "../../src/tools/dimension-management/delete-elements.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
 import type { TM1Client } from "../../src/tm1-client.js";
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 type Ctor = ConstructorParameters<typeof ElementService>;
 
@@ -112,18 +112,8 @@ describe("ElementService.deleteMany", () => {
 
 describe("tm1_delete_elements", () => {
   function call(args: Record<string, unknown>, client: unknown) {
-    let h: ((a: unknown) => Promise<unknown>) | null = null;
-    let parser: z.ZodObject<ZodRawShape> | null = null;
-    registerDeleteElements(
-      {
-        tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-          parser = z.object(s);
-          h = cb;
-        },
-      } as never,
-      client as TM1Client,
-    );
-    return h!(parser!.parse(args)) as Promise<{
+    const h = captureParsedTool(registerDeleteElements, client as TM1Client);
+    return h(args) as Promise<{
       structuredContent: Record<string, unknown>;
     }>;
   }

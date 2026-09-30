@@ -3,13 +3,13 @@
 // every dimension must be named — except Sandboxes, which is bound to Base
 // explicitly instead of being left to TM1's default member.
 import { describe, it, expect } from "vitest";
-import { z, type ZodRawShape } from "zod";
 import {
   bindLeftOutSandbox,
   resolveCellAddress,
 } from "../../src/lib/cell-address.js";
 import { registerWriteCells } from "../../src/tools/celldata/write-cells.js";
 import type { TM1Client } from "../../src/tm1-client.js";
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 const PLAIN = ["Version", "Row", "Measure"];
 const SANDBOXED = ["Sandboxes", "Row", "Measure"];
@@ -111,19 +111,9 @@ describe("tm1_write_cells address resolution", () => {
         getValue,
       },
     } as unknown as TM1Client;
-    let h: ((a: unknown) => Promise<unknown>) | null = null;
-    let parser: z.ZodObject<ZodRawShape> | null = null;
-    registerWriteCells(
-      {
-        tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-          parser = z.object(s);
-          h = cb;
-        },
-      } as never,
-      client,
-    );
+    const h = captureParsedTool(registerWriteCells, client);
     const call = (args: Record<string, unknown>) =>
-      h!(parser!.parse(args)) as Promise<{
+      h(args) as Promise<{
         structuredContent: Record<string, unknown>;
       }>;
     return { call, writes };

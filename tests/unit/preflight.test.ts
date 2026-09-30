@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { z, type ZodRawShape } from "zod";
 import { runPreflight } from "../../src/tools/ti-development/preflight.js";
 import { registerUpsertProcess } from "../../src/tools/ti-development/upsert-process.js";
 import { unplacedBlobContent } from "../../src/lib/git-process.js";
 import type { TM1Client } from "../../src/tm1-client.js";
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 interface Calls {
   check: unknown[];
@@ -98,18 +98,8 @@ describe("runPreflight", () => {
 
 describe("tm1_upsert_process preflight", () => {
   function call(c: TM1Client, args: Record<string, unknown>) {
-    let h: ((a: unknown) => Promise<unknown>) | null = null;
-    let parser: z.ZodObject<ZodRawShape> | null = null;
-    registerUpsertProcess(
-      {
-        tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-          parser = z.object(s);
-          h = cb;
-        },
-      } as never,
-      c,
-    );
-    return h!(parser!.parse(args)) as Promise<{
+    const h = captureParsedTool(registerUpsertProcess, c);
+    return h(args) as Promise<{
       isError?: boolean;
       content: Array<{ text: string }>;
     }>;

@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { z, type ZodRawShape } from "zod";
 import {
   OUTLINE_MAX_ENTRIES,
   outlineRules,
@@ -7,6 +6,7 @@ import {
 } from "../../src/lib/rules-outline.js";
 import { registerGetCubeRules } from "../../src/tools/model-building/get-cube-rules.js";
 import type { TM1Client } from "../../src/tm1-client.js";
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 // Shape of a real rule file: a header comment block, SKIPCHECK, numbered
 // comment blocks introducing each rule group, FEEDERS, a feeder comment.
@@ -68,16 +68,8 @@ describe("sliceLines", () => {
 
 describe("tm1_get_cube_rules modes", () => {
   function call(args: Record<string, unknown>) {
-    let h: ((a: unknown) => Promise<{ content: { text: string }[] }>) | null =
-      null;
-    let parser: z.ZodObject<ZodRawShape> | null = null;
-    registerGetCubeRules(
-      {
-        tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-          parser = z.object(s);
-          h = cb;
-        },
-      } as never,
+    const h = captureParsedTool<{ content: { text: string }[] }>(
+      registerGetCubeRules,
       {
         cubes: {
           getRules: async () => ({
@@ -88,7 +80,7 @@ describe("tm1_get_cube_rules modes", () => {
         },
       } as unknown as TM1Client,
     );
-    return h!(parser!.parse(args)).then(
+    return h(args).then(
       (r) => JSON.parse(r.content[0].text) as Record<string, unknown>,
     );
   }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { z, type ZodRawShape } from "zod";
 import type { TM1Client } from "../../src/tm1-client.js";
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 // The impact check before deleting a cube or dimension: what
 // tm1_analyze_object_usage mode='summary' returns, plus usedInCubes for a
@@ -54,21 +54,9 @@ function setup() {
       },
     },
   } as unknown as TM1Client;
-  let h: ((a: unknown) => Promise<unknown>) | null = null;
-  let parser: z.ZodObject<ZodRawShape> | null = null;
-  registerAnalyzeObjectUsage(
-    {
-      tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-        parser = z.object(s);
-        h = cb;
-      },
-    } as never,
-    client,
-  );
+  const h = captureParsedTool(registerAnalyzeObjectUsage, client);
   const call = (args: Record<string, unknown>) =>
-    (
-      h!(parser!.parse(args)) as Promise<{ content: Array<{ text: string }> }>
-    ).then((r) => ({
+    (h(args) as Promise<{ content: Array<{ text: string }> }>).then((r) => ({
       // The server proxy turns the JSON text into structuredContent; the bare
       // handler only returns the text.
       structuredContent: JSON.parse(r.content[0].text) as Record<
