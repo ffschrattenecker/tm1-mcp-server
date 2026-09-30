@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { registerCheckWritableCoords } from "../../src/tools/celldata/check-writable-coords.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
-import { captureParsedTool } from "../helpers/client-harness.js";
+import { captureParsedTool, captureTool } from "../helpers/client-harness.js";
 
 type Types = Record<string, { name: string; type: string } | null>;
 
@@ -76,5 +76,74 @@ describe("tm1_check_writable_coords", () => {
     await expect(call({ cubeName: "Ghost", coords: ["a"] })).rejects.toThrow(
       "Cube 'Ghost' not found",
     );
+  });
+});
+
+// tm1_check_writable_coords used to load every hierarchy of the cube in full
+// (Parents + Edges on every element) to find one name per dimension, and it
+// only ever looked in the default hierarchy — so a `[Dim].[Hier].[Elem]`
+// coordinate that tm1_write_cells accepts came back as "(missing)".
+
+// Region has DE only in the alternate hierarchy AltHier.
+const ELEMENTS: Record<string, { name: string; type: string }> = {
+  "Region/AltHier/de": { name: "DE", type: "Numeric" },
+  "Region/Region/europe": { name: "Europe", type: "Consolidated" },
+  "Month/Month/jan": { name: "Jan", type: "Numeric" },
+};
+
+function run(coords: string[], dimensions?: string[]) {
+  const lookups: string[] = [];
+  const tm1 = {
+    cubes: {
+      getDimensionNames: async () => ["Region", "Month"],
+      getRules: async () => ({ rulesText: "" }),
+    },
+    elements: {
+      getType: async (d: string, h: string, e: string) => {
+        lookups.push(`${d}/${h}/${e}`);
+        return ELEMENTS[`${d}/${h}/${e.toLowerCase()}`] ?? null;
+      },
+    },
+  };
+  const { cb } = captureTool(
+    registerCheckWritableCoords,
+    tm1 as unknown as TM1Client,
+  );
+  return cb({ cubeName: "Sales", coords, dimensions }, {}).then((r) => ({
+    out: JSON.parse(r.content[0].text) as {
+      writable: boolean;
+      coords: Array<{ element: string; exists: boolean; type: string }>;
+    },
+    lookups,
+  }));
+}
+
+describe("tm1_check_writable_coords — hierarchies", () => {
+  it("resolves a qualified coordinate in the hierarchy it names", async () => {
+    const { out, lookups } = await run(["[Region].[AltHier].[DE]", "Jan"]);
+    expect(lookups[0]).toBe("Region/AltHier/DE");
+    expect(out.coords[0]).toMatchObject({ exists: true, type: "Numeric" });
+    expect(out.writable).toBe(true);
+  });
+
+  it("does not find an unqualified alt-hierarchy element in the default hierarchy", async () => {
+    const { out } = await run(["DE", "Jan"]);
+    expect(out.coords[0]).toMatchObject({ exists: false, type: "(missing)" });
+  });
+
+  it("reorders coords given in the write's dimension order", async () => {
+    const { out } = await run(
+      ["Jan", "[Region].[AltHier].[DE]"],
+      ["Month", "Region"],
+    );
+    expect(out.writable).toBe(true);
+    expect(out.coords.map((c) => c.element)).toEqual([
+      "[Region].[AltHier].[DE]",
+      "Jan",
+    ]);
+  });
+
+  it("refuses a dimension list that misses a cube dimension", async () => {
+    await expect(run(["Jan"], ["Month"])).rejects.toThrow(/missing: Region/);
   });
 });
