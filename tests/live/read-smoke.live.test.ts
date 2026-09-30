@@ -13,7 +13,8 @@ describe.skipIf(!LIVE_ENABLED)("live: read smoke", () => {
 
   it("registers the full readwrite tool set", () => {
     const names = h.toolNames();
-    expect(names.length).toBeGreaterThan(50);
+    // 58 defineTool specs; tm1_save_data is v11-only.
+    expect(names).toHaveLength(h.client.version === 11 ? 58 : 57);
     expect(names).toContain("tm1_rest_read");
     expect(names).toContain("tm1_write_cells"); // readwrite-only tool present
   });
