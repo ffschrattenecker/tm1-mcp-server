@@ -280,7 +280,8 @@ specifics in [docs/HTTP-TRANSPORT.md](docs/HTTP-TRANSPORT.md#troubleshooting).
 ```bash
 npm run dev             # tsx live-reload
 npm test                # vitest
-npm run lint            # tsc --noEmit && eslint .
+npm run typecheck       # tsc --noEmit
+npm run lint:eslint     # eslint .
 npm run coverage:check  # vitest --coverage + coverage ratchet gate
 npm run verify          # everything CI runs (typecheck + lint gates + coverage:check)
 ```

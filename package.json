@@ -52,7 +52,6 @@
     "coverage:ratchet": "node scripts/check-coverage-ratchet.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:tests": "tsc -p tsconfig.test.json",
-    "lint": "tsc --noEmit && eslint .",
     "lint:output-schema-budget": "node scripts/check-output-schema-budget.mjs",
     "lint:conventions": "node scripts/check-conventions.mjs",
     "lint:format": "prettier --check .",
