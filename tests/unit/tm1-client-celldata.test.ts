@@ -32,7 +32,7 @@ describe("TM1Client – Cell Data Methods", () => {
 
   // ── getCellValue() ─────────────────────────────────────────────────────────
 
-  describe("getCellValue()", () => {
+  describe("cells.getValue()", () => {
     const salesCubeMeta = {
       Name: "SalesCube",
       Dimensions: [{ Name: "Time" }, { Name: "Region" }, { Name: "Scenario" }],
@@ -236,7 +236,7 @@ describe("TM1Client – Cell Data Methods", () => {
 
   // ── executeMdx() ───────────────────────────────────────────────────────────
 
-  describe("executeMdx()", () => {
+  describe("cells.executeMdx()", () => {
     const sampleResponse = {
       ID: "cellset-100",
       Cells: [
@@ -502,7 +502,7 @@ describe("TM1Client – Cell Data Methods", () => {
 
   // ── writeCells() partial-commit reporting (M4) ──────────────────────────────
 
-  describe("writeCells() partial commit", () => {
+  describe("cells.writeCells() partial commit", () => {
     // Route by URL/body so one specific cell's PATCH fails while the rest
     // succeed. Each cell = ExecuteMDX (→ cellset id) + PATCH Cells(0) + DELETE.
     function routeWithBadCell(): void {
@@ -592,7 +592,7 @@ describe("TM1Client – Cell Data Methods", () => {
 
   // ── writeCells() coordinate MDX (D1 escaping / D2 alt-hierarchy) ────────────
 
-  describe("writeCells() coordinate MDX", () => {
+  describe("cells.writeCells() coordinate MDX", () => {
     // Accept every write cell; capture the ExecuteMDX slice bodies.
     function routeOk(): void {
       fetchSpy.mockImplementation((url: unknown) => {
@@ -652,7 +652,7 @@ describe("TM1Client – Cell Data Methods", () => {
 
   // ── getView() ──────────────────────────────────────────────────────────────
 
-  describe("getView()", () => {
+  describe("views.getView()", () => {
     it("should return ViewResult with cubeName, viewName, cells and axes", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
@@ -726,7 +726,7 @@ describe("TM1Client – Cell Data Methods", () => {
 
   // ── clearCube() ────────────────────────────────────────────────────────────
 
-  describe("clearCube()", () => {
+  describe("cubes.clear()", () => {
     function newClient(version: string): TM1Client {
       // Service version-gating branches on the NUMERIC config.version (source of
       // truth); tm1Version is display-only. Derive the numeric from the string.

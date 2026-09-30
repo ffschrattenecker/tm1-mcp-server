@@ -21,7 +21,7 @@ function mockResponse(body: unknown): Response {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("TM1Client – createNative()", () => {
+describe("TM1Client – views.getDefinition() on a native view", () => {
   let fetchSpy: FnSpy;
   let client: TM1Client;
 

@@ -53,7 +53,7 @@ describe("TM1Client – ProcessService", () => {
 
   // ── executeProcess() ─────────────────────────────────────────────────────
 
-  describe("executeProcess()", () => {
+  describe("execute()", () => {
     it("should POST tm1.ExecuteWithReturn and report success on CompletedSuccessfully", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
@@ -248,7 +248,7 @@ describe("TM1Client – ProcessService", () => {
     });
   });
 
-  describe("getProcessParameters()", () => {
+  describe("getParameters()", () => {
     it("should return parameters with correct type mapping", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
@@ -356,7 +356,7 @@ describe("TM1Client – ProcessService", () => {
 
   // ── createProcess() ──────────────────────────────────────────────────────
 
-  describe("createProcess()", () => {
+  describe("create()", () => {
     it("should POST to /api/v1/Processes with the process name", async () => {
       fetchSpy.mockResolvedValueOnce(mock201Response({ Name: "NewProcess" }));
 
@@ -400,7 +400,7 @@ describe("TM1Client – ProcessService", () => {
 
   // ── getProcessCode() ─────────────────────────────────────────────────────
 
-  describe("getProcessCode()", () => {
+  describe("getCode()", () => {
     it("should return all four code tabs from the process", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
@@ -447,7 +447,7 @@ describe("TM1Client – ProcessService", () => {
 
   // ── updateProcessCode() ──────────────────────────────────────────────────
 
-  describe("updateProcessCode()", () => {
+  describe("updateCode()", () => {
     it("should PATCH only the specified tabs", async () => {
       fetchSpy.mockResolvedValueOnce(mock204Response());
 
@@ -503,7 +503,7 @@ describe("TM1Client – ProcessService", () => {
 
   // ── getProcessDataSource() ───────────────────────────────────────────────
 
-  describe("getProcessDataSource()", () => {
+  describe("getDataSource()", () => {
     it("should return data source with type None", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
@@ -581,7 +581,7 @@ describe("TM1Client – ProcessService", () => {
 
   // ── updateProcessDataSource() ────────────────────────────────────────────
 
-  describe("updateProcessDataSource()", () => {
+  describe("updateDataSource()", () => {
     it("should PATCH with DataSource object for ASCII type", async () => {
       fetchSpy.mockResolvedValueOnce(mock204Response());
 
@@ -850,7 +850,7 @@ describe("TM1Client – ProcessService", () => {
     });
   });
 
-  describe("TM1Client – getAllCode security access", () => {
+  describe("getAllCode() – security access", () => {
     it("selects HasSecurityAccess and maps it onto each row", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({

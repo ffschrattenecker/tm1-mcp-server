@@ -29,7 +29,7 @@ describe("TM1Client – Metadata Methods", () => {
 
   // ── getCubes() ─────────────────────────────────────────────────────────────
 
-  describe("getCubes()", () => {
+  describe("cubes.list()", () => {
     it("should return cubes with name and dimension names", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
@@ -102,7 +102,7 @@ describe("TM1Client – Metadata Methods", () => {
 
   // ── getDimensions() ────────────────────────────────────────────────────────
 
-  describe("getDimensions()", () => {
+  describe("dimensions.list()", () => {
     it("should return dimensions with name and hierarchy names", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
@@ -188,7 +188,7 @@ describe("TM1Client – Metadata Methods", () => {
 
   // ── getElementTypes() ──────────────────────────────────────────────────────
 
-  describe("getElementTypes()", () => {
+  describe("hierarchies.getElementTypes()", () => {
     it("should read Name,Type from Elements without expanding Parents", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
@@ -234,7 +234,7 @@ describe("TM1Client – Metadata Methods", () => {
 
   // ── getProcesses() ─────────────────────────────────────────────────────────
 
-  describe("getProcesses()", () => {
+  describe("processes.list()", () => {
     it("should return processes with mapped parameters", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
@@ -314,7 +314,7 @@ describe("TM1Client – Metadata Methods", () => {
 
   // ── getChores() ────────────────────────────────────────────────────────────
 
-  describe("getChores()", () => {
+  describe("chores.list()", () => {
     it("should return chores with tasks mapped to processes", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
