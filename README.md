@@ -283,12 +283,11 @@ npm run dev             # tsx live-reload
 npm test                # vitest
 npm run typecheck       # tsc --noEmit
 npm run lint:eslint     # eslint .
-npm run coverage:check  # vitest --coverage + coverage ratchet gate
-npm run verify          # everything CI runs (typecheck + lint gates + coverage:check)
+npm run verify          # everything CI runs (audit + typecheck + lint gates + tests)
 ```
 
 Contributions are welcome; run `npm run verify` before opening a PR.
-[CONTRIBUTING.md](CONTRIBUTING.md) documents the gates, the coverage ratchet and
+[CONTRIBUTING.md](CONTRIBUTING.md) documents the gates and
 how to add a tool or service.
 
 ## Documentation

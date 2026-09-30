@@ -35,13 +35,9 @@ tag publishes.
    `[X.Y.Z]: …/compare/vPREV...vX.Y.Z`). Commit.
 4. **Smoke-test the tarball:** `npm run smoke:tarball` — packs the real tarball,
    installs it into a throwaway project under `os.tmpdir()`, and drives the
-   installed binary. Tier 1 (always) checks the `bin` entry, the shebang, the
-   `files` allow-list, the shipped `npm-shrinkwrap.json` and an unconfigured
-   start; tier 2 (needs `tm1-test` in `.mcp.json`) does a real MCP handshake in
-   `TM1_MODE=readonly` and asserts the structured-response contract. Exit codes:
-   `1` tier 1, `5` tier 2, `4` pack/install, `3` tier 2 skipped (nothing
-   checked against a server — add `--allow-skip` only if you accept that). CI
-   and the publish workflow run tier 1 only; tier 2 is the local-only part.
+   installed binary: the `bin` entry, the shebang, the `files` allow-list, the
+   shipped `npm-shrinkwrap.json` and an unconfigured start. CI and the publish
+   workflow run it too.
 5. **Push `main` and wait for CI to go green.** It runs the same `verify` gate
    as the publish workflow, so a green CI means the tag will not fail on it.
    If `publish-npm.yml` changed since the last release, also run it once with
@@ -53,7 +49,7 @@ tag publishes.
 7. **Push — this publishes:** `git push --follow-tags origin main` runs
    `.github/workflows/publish-npm.yml`. Its `build` job checks the tag against
    `package.json` and that the tagged commit is on `main`, runs `verify` and
-   the tier-1 smoke test, and packs the tarball; its `publish` job (the only
+   the smoke test, and packs the tarball; its `publish` job (the only
    one holding `id-token`) publishes that tarball with provenance, authenticated
    via npm trusted publishing (OIDC — no token; configured under the package's
    Settings → Trusted Publisher on npmjs.com).

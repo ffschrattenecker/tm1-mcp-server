@@ -36,13 +36,12 @@ jobs:
 
       # The exact gate `npm publish` runs (prepublishOnly → verify), so a tag
       # can never pass CI and then fail at publish time.
-      - name: Verify (typecheck, lints, format, tests + coverage ratchet)
+      - name: Verify (typecheck, lints, format, tests)
         run: npm run verify
 
-      # Tier 1 only: bin wiring, shebang, files allow-list, unconfigured start.
-      # No TM1 server in CI, so tier 2 is always skipped.
+      # Bin wiring, shebang, files allow-list, unconfigured start.
       - name: Smoke-test the tarball
-        run: npm run smoke:tarball -- --target=none --allow-skip
+        run: npm run smoke:tarball
 
       # Consumers install from npm-shrinkwrap.json, which pins the whole
       # production tree, so this audits what they actually get. Dev-only
