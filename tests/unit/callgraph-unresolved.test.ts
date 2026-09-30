@@ -3,6 +3,7 @@ import {
   extractTiReferences,
   buildReferenceIndex,
 } from "../../src/lib/callgraph/referenceIndex.js";
+import { buildCallGraph } from "../../src/lib/callgraph/callGraph.js";
 
 // extractTiReferences(text, env?, sharedLiveVars?, unresolvedOut?) — 4th out-param collects
 // process-call call-sites whose target could not be resolved to a literal.
@@ -104,5 +105,51 @@ describe("buildReferenceIndex — unresolvedCallsBySourceProcess", () => {
         reason: "dynamic",
       },
     ]);
+  });
+});
+
+async function indexWithDynamicCall() {
+  return buildReferenceIndex({
+    fetchProcesses: async () => [
+      {
+        name: "Orchestrator",
+        prolog:
+          "ExecuteProcess('Child');\nsDyn = sOther;\nExecuteProcess(sDyn);",
+        metadata: "",
+        data: "",
+        epilog: "",
+        parameters: [],
+      },
+      {
+        name: "Child",
+        prolog: "",
+        metadata: "",
+        data: "",
+        epilog: "",
+        parameters: [],
+      },
+    ],
+    fetchCubesWithRules: async () => [],
+    fetchChores: async () => [],
+  });
+}
+
+describe("buildCallGraph — unresolvedCalls on nodes", () => {
+  it("attaches unresolvedCalls to downstream root node", async () => {
+    const index = await indexWithDynamicCall();
+    const tree = buildCallGraph(index, "Orchestrator", {
+      direction: "downstream",
+    });
+    expect(tree.unresolvedCalls).toBeDefined();
+    expect(tree.unresolvedCalls?.length).toBe(1);
+    expect(tree.unresolvedCalls?.[0]?.reason).toBe("dynamic");
+  });
+
+  it("omits unresolvedCalls for upstream direction", async () => {
+    const index = await indexWithDynamicCall();
+    const tree = buildCallGraph(index, "Orchestrator", {
+      direction: "upstream",
+    });
+    expect(tree.unresolvedCalls).toBeUndefined();
   });
 });
