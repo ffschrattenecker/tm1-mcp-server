@@ -86,7 +86,9 @@ describe("ElementService.updateAttributeValues", () => {
       .catch((e: unknown) => e);
     expect((err as TM1Error).code).toBe("NOT_FOUND");
     expect((err as TM1Error).message).toContain("'Colour' does not exist");
-    expect((err as TM1Error).message).toContain("Weight, Caption, Code");
+    expect((err as TM1Error).message).toContain(
+      "Existing: Weight, Caption, Code",
+    );
   });
 });
 
