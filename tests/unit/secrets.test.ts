@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { loadConfig } from "../../src/config.js";
 import {
   keychainAccount,
-  keychainTarget,
   plaintextSecretKeys,
   usesKeychain,
   withKeychainSecrets,
@@ -57,12 +56,9 @@ describe("plaintextSecretKeys", () => {
 });
 
 describe("keychain naming", () => {
-  // tm1.py (stdlib only) reads the Windows entry by exactly this target.
-  it("pins the account and Windows target name", () => {
+  // tm1.py (stdlib only) finds the Windows entry by "<account>.tm1-mcp-server".
+  it("pins the account name", () => {
     expect(keychainAccount("dev", "TM1_PASSWORD")).toBe("dev/TM1_PASSWORD");
-    expect(keychainTarget("dev", "TM1_PASSWORD")).toBe(
-      "dev/TM1_PASSWORD.tm1-mcp-server",
-    );
   });
 });
 

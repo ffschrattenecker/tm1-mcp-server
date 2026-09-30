@@ -8,7 +8,7 @@
 //   Windows target name "<connection>/<KEY>.tm1-mcp-server"
 //
 // The Windows target name is the library default ("<account>.<service>"),
-// pinned by keychainTarget() because a stdlib-only reader — the tm1-api
+// and must stay that way because a stdlib-only reader — the tm1-api
 // skill's tm1.py calls CredReadW via ctypes — looks the entry up by it. The
 // blob is UTF-16LE. Entry.withTarget() is deliberately not used: in
 // @napi-rs/keyring 2.1.0 on Windows a fresh Entry reads back "" for it.
@@ -41,11 +41,6 @@ export function isSecretKey(key: string): key is SecretKey {
 
 export function keychainAccount(connection: string, key: SecretKey): string {
   return `${connection}/${key}`;
-}
-
-/** The Windows Credential Manager target name of one entry. */
-export function keychainTarget(connection: string, key: SecretKey): string {
-  return `${keychainAccount(connection, key)}.${KEYCHAIN_SERVICE}`;
 }
 
 /** Secret keys that carry a non-empty plaintext value in `env`. */
