@@ -8,7 +8,6 @@ import {
 } from "../../src/tools/pagination.js";
 import { FORMAT_SCHEMA } from "../../src/tools/format.js";
 import {
-  compareByName,
   escapeOdataLiteral,
   filterClause,
   nameFilterPredicates,
@@ -265,17 +264,5 @@ describe("odata-page clause builders", () => {
     expect(readCount({ "@odata.count": 7 })).toBe(7);
     expect(readCount({})).toBeUndefined();
     expect(readCount(undefined)).toBeUndefined();
-  });
-
-  it("sorts by ordinal code unit, matching TM1's $orderby=Name", () => {
-    // Live-probed: uppercase sorts before lowercase, which localeCompare would
-    // get wrong (it collates case-insensitively).
-    const names = ["c1", "Alpha", "Zulu"].map((name) => ({ name }));
-    expect([...names].sort(compareByName).map((n) => n.name)).toEqual([
-      "Alpha",
-      "Zulu",
-      "c1",
-    ]);
-    expect(compareByName({ name: "x" }, { name: "x" })).toBe(0);
   });
 });

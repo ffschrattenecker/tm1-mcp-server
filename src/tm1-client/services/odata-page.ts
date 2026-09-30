@@ -119,17 +119,3 @@ export function nameFilterPredicates(opts: NameFilterOpts): string[] {
   }
   return predicates;
 }
-
-/**
- * Ordinal (UTF-16 code-unit) name comparator. TM1's `$orderby=Name` was
- * live-probed against a 340-dimension / 319-process / 121-cube model and
- * matched this ordering exactly, so the client-side fallback path can present
- * the same order as the pushed-down path. Do not swap in `localeCompare` —
- * it collates case- and accent-insensitively and would diverge.
- */
-export function compareByName(
-  a: { name: string },
-  b: { name: string },
-): number {
-  return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
-}
