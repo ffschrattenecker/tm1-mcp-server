@@ -18,20 +18,21 @@
     "changing which code is exercised — functions dipped 60 -> 57 on the first,",
     "then climbed to 63 on the second, which is why the floor lands at 61.",
     "2026-09-26: deleting the unused rule linter (687 lines, ~12% covered) lifted every metric past the slack; floors raised to the ratchet's numbers.",
-    "2026-09-28: the upstream 5.0.0 merge (rule linter removal plus new tests) lifted lines/statements/branches past the slack; floors raised to the ratchet numbers."
+    "2026-09-28: the upstream 5.0.0 merge (rule linter removal plus new tests) lifted lines/statements/branches past the slack; floors raised to the ratchet numbers.",
+    "2026-09-30: the tool consolidation (60 thin tools and the service code only they used removed) lifted functions/branches past the slack; floors raised to the ratchet numbers."
   ],
   "floors": {
-    "lines": 76,
-    "statements": 75,
-    "functions": 71,
-    "branches": 66
+    "lines": 78,
+    "statements": 77,
+    "functions": 79,
+    "branches": 69
   },
   "slack": 5,
   "headroomPoints": 2,
   "target": {
-    "lines": 76,
-    "statements": 75,
-    "functions": 71,
-    "branches": 66
+    "lines": 78,
+    "statements": 77,
+    "functions": 79,
+    "branches": 69
   }
 }
