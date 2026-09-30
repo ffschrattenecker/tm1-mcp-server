@@ -255,7 +255,7 @@ export async function restWrite(
   const target =
     confirm ??
     (last
-      ? decodeURIComponent(last[1] ?? last[2]!).replace(/''/g, "'")
+      ? decodeURIComponent(last[1] ?? last[2]).replace(/''/g, "'")
       : undefined);
   return h.ok("tm1_rest_write", {
     method,
@@ -350,7 +350,7 @@ export async function cellValue(
 ): Promise<unknown> {
   const tuple = elements
     .map((e, i) => {
-      const d = mdxName(dimensions[i]!);
+      const d = mdxName(dimensions[i]);
       return `[${d}].[${d}].[${mdxName(e)}]`;
     })
     .join(",");

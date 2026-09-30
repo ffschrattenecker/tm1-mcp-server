@@ -164,7 +164,7 @@ describe.skipIf(!LIVE_ENABLED)("live: REST tools", () => {
         "Processes?$select=Name&$filter=not startswith(Name,'}')&$top=1",
       );
       const r = await h.ok("tm1_rest_read", {
-        path: `${seg("Processes", proc!.Name)}/tm1.Compile`,
+        path: `${seg("Processes", proc.Name)}/tm1.Compile`,
       });
       expect(r.isError).toBe(false);
     });
