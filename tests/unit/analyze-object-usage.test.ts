@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { z, type ZodRawShape } from "zod";
 import type { TM1Client } from "../../src/tm1-client.js";
 
-// Ported from delete-dry-run.test.ts: the dryRun impact of tm1_delete_dimension
-// / tm1_delete_cube is what tm1_analyze_object_usage mode='summary' returns,
-// plus usedInCubes for a dimension.
+// The impact check before deleting a cube or dimension: what
+// tm1_analyze_object_usage mode='summary' returns, plus usedInCubes for a
+// dimension.
 vi.mock("../../src/lib/callgraph/tm1-adapter.js", () => ({
   buildIndexFromTM1: async () => ({}),
   invalidateCallgraphCache: () => ({ cleared: 0 }),

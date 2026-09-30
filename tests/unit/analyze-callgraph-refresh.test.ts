@@ -8,8 +8,8 @@ import {
 } from "../../src/lib/callgraph/tm1-adapter.js";
 import { registerAnalyzeCallgraph } from "../../src/tools/analysis/analyze-callgraph.js";
 
-// refresh:true replaces tm1_invalidate_callgraph_cache: it drops this
-// connection's cached index and rebuilds it before answering.
+// refresh:true drops this connection's cached index and rebuilds it before
+// answering.
 function stubClient(connectionId: string) {
   let fetches = 0;
   const client = {

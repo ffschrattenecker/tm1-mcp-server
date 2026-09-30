@@ -95,7 +95,7 @@ const DEFAULT_TARGET = "tm1-test";
 
 // The tier-2 tools/call. Must be read-only and cheap: it runs against a real
 // server on every release.
-const DEFAULT_TOOL = "tm1_get_server_info";
+const DEFAULT_TOOL = "tm1_get_server_state";
 
 // Tar entries that must never appear inside the published tarball (npm prefixes
 // every path with `package/`). `files` in package.json already restricts the
