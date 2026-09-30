@@ -174,14 +174,15 @@ another admin account). This is why the script never retries a failed login.
   `global-setup.ts`'s `teardown` is a safety net that sweeps any
   `ZZ_MCP_LIVE`-prefixed leftovers (including `}Subsets_…` control objects)
   after the whole run, in dependency order (chores → processes → cubes → dims).
-- **Avoided:** `tm1_get_transaction_log` (slow full-scan / timeout trap) and
-  `tm1_save_data` (global flush).
+- **Avoided:** unbounded `TransactionLogEntries` reads (slow full-scan /
+  timeout trap; `rest.live` always filters by TimeStamp) and `tm1_save_data`
+  (global flush).
 
 ## Layout
 
 | File | Domain |
 |------|--------|
-| `harness.ts` | shared infra: connect, capture handlers, `call`/`ok`, `sweepSandbox` |
+| `harness.ts` | shared infra: connect, capture handlers, `call`/`ok`, REST fixtures (`restGet`/`restWrite`/`names`/`createDimension`/`createCube`/`dropIfExists`/`cellValue`), `sweepSandbox` |
 | `global-setup.ts` | vitest globalSetup; `teardown` = safety-net sweep |
 | `read-smoke.live.test.ts` | non-mutating read battery + error-envelope checks |
 | `dimension.live.test.ts` | dimensions / hierarchies / elements / attributes / subsets-of-dim |
@@ -191,6 +192,7 @@ another admin account). This is why the script never retries a failed login.
 | `chore.live.test.ts` | chores (deactivated; create / toggle / execute / delete) |
 | `ops.live.test.ts` | server / monitoring / security / files |
 | `analysis.live.test.ts` | read-only audits over the existing model |
+| `rest.live.test.ts` | `tm1_rest_read` / `tm1_rest_write`: cheat-sheet paths, guard refusals |
 
 ## Writing a new live test
 
@@ -215,3 +217,5 @@ describe.skipIf(!LIVE_ENABLED)("live: my domain", () => {
   steps that must succeed.
 - Prefix **every** created object with `${SANDBOX}_<DOMAIN>` and delete it in
   `afterAll` (the global sweep is a backstop, not a substitute).
+- Build fixtures with the REST helpers: `createDimension(h, D, ["A", { name: "T", children: ["A"] }])`,
+  `createCube(h, C, [D1, D2])` (TM1 needs at least two dimensions), `dropIfExists(h, seg("Cubes", C))`.

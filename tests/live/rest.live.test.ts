@@ -1,8 +1,7 @@
 // Live checks for tm1_rest_read / tm1_rest_write: the paths the prompts, hints
 // and skills name must work on a real server, and the guard must refuse what
-// the kept tools own. Also pins what TM1 does when asked to delete a
-// dimension's same-named hierarchy (the old tm1_delete_hierarchy refused it
-// client-side; the REST tools only ask for confirm).
+// the kept tools own, including a dimension's same-named hierarchy, whose
+// DELETE TM1 itself accepts and leaves the dimension without one.
 //
 // Every object is SANDBOX-prefixed and removed in afterAll (sweepSandbox in
 // global-setup is the safety net).
