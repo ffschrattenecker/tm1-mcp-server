@@ -217,24 +217,14 @@ export class FileService {
   }
 
   /**
-   * Check whether a file exists. Tries v12 'Files' first, falls back to 'Blobs'.
-   * Implemented as a cheap GET on the entity ($select=Name) — TM1 REST does
-   * not expose HEAD on these. 404 → false; other errors propagate.
+   * Whether a file exists in the file store — {@link upload}'s create-or-update
+   * probe. Tries v12 'Files' first, falls back to 'Blobs'. Implemented as a
+   * cheap GET on the entity ($select=Name) — TM1 REST does not expose HEAD on
+   * these. 404 → false; other errors propagate.
    */
-  async exists(
-    fileName: string,
-    container: FileContainer = "files",
-  ): Promise<boolean> {
+  private async exists(fileName: string): Promise<boolean> {
     const parts = splitPath(fileName);
     if (parts.length === 0) return false;
-    if (container === "applications") {
-      try {
-        return (await this.appsResolve(parts)).entry !== undefined;
-      } catch (e) {
-        if ((e as { code?: string }).code === "NOT_FOUND") return false;
-        throw e;
-      }
-    }
     const buildUrl = (root: string): string => {
       const segs = parts
         .slice(0, -1)
