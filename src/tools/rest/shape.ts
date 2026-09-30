@@ -130,7 +130,7 @@ function maskBareValue(data: unknown): unknown {
 }
 
 /** Strip annotations and mask secrets in a parsed JSON body. */
-export function cleanJson(json: unknown, opts: ShapeOptions = {}): unknown {
+function cleanJson(json: unknown, opts: ShapeOptions = {}): unknown {
   const data = maskProcedures(maskSecretsDeep(stripAnnotations(json)));
   if (opts.secret) return maskBareValue(data);
   if (!opts.code) return data;

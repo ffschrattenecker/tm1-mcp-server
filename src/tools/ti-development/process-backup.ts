@@ -80,7 +80,7 @@ export async function readProcessAsGit(
 }
 
 /** The backup root, or null when backups are switched off. */
-export function backupRoot(): string | null {
+function backupRoot(): string | null {
   const raw = process.env[DIR_ENV]?.trim();
   if (raw?.toLowerCase() === "off") return null;
   return raw

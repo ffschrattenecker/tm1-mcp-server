@@ -39,7 +39,7 @@ const VARIANTS = new WeakMap<object, StrictVariants>();
 // Strict on purpose: a markdown response that also carries payload fields
 // means a handler mixed the two paths, and the client the markdown was meant
 // for would render the leaked JSON.
-export const MARKDOWN_ONLY_SCHEMA = z.strictObject({
+const MARKDOWN_ONLY_SCHEMA = z.strictObject({
   markdown: z.string(),
 });
 

@@ -221,7 +221,7 @@ function summarize(root: CallGraphNode): {
   };
 }
 
-export interface RankEntry {
+interface RankEntry {
   process: string;
   outgoingCalls: number;
   outgoingDistinct: number;

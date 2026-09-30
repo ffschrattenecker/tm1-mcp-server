@@ -318,7 +318,7 @@ export const DataFlowResultSchema = z.object({
   hint: z.string().optional(),
 });
 
-export const SearchCodeMatchSchema = z.object({
+const SearchCodeMatchSchema = z.object({
   process: z.string(),
   tab: z.string(),
   line: z.number().int(),
@@ -329,7 +329,7 @@ export const SearchCodeMatchSchema = z.object({
 });
 
 // groupBy mode item: one row per process/tab with its match count.
-export const SearchCodeGroupSchema = z.object({
+const SearchCodeGroupSchema = z.object({
   process: z.string().optional(),
   tab: z.string().optional(),
   matchCount: z.number().int(),
@@ -429,7 +429,7 @@ export const SearchRulesResultSchema = z
   })
   .passthrough();
 
-export const V12FindingSchema = z.object({
+const V12FindingSchema = z.object({
   severity: z.enum(["error", "warning"]),
   category: z.enum(["deprecated_ti_function"]),
   objectKind: z.enum(["process", "cube"]),

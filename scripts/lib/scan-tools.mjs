@@ -25,7 +25,7 @@ export function* walk(dir) {
   }
 }
 
-export const DEFINE_TOOL_RE = /defineTool\(\{/g;
+const DEFINE_TOOL_RE = /defineTool\(\{/g;
 
 const STRING_LITERAL_RE = /"((?:[^"\\]|\\.)*)"/g;
 const NAME_KEY_RE = /\bname:\s*"(tm1_[a-z0-9_]+)"/;

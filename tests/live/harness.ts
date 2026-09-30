@@ -180,29 +180,6 @@ async function build(): Promise<LiveHarness> {
 }
 
 /**
- * Skip the current test when a version-gated tool is not registered on the
- * target server.
- *
- * A tool the version gate deliberately withholds must read as **skipped**, not
- * failed. Before this existed, a v12 run reported seven red tests that were
- * working exactly as designed — and a real v12 regression would have been
- * indistinguishable from that noise. The gate itself is asserted positively in
- * ops.live.test.ts, so skipping here loses no coverage.
- */
-export function skipUnlessRegistered(
-  ctx: TestContext,
-  h: LiveHarness,
-  ...names: string[]
-): void {
-  const missing = names.filter((n) => !h.has(n));
-  if (missing.length > 0) {
-    ctx.skip(
-      `version-gated off on this server (v${h.client.version}): ${missing.join(", ")}`,
-    );
-  }
-}
-
-/**
  * A raw REST call for fixtures no tool covers (e.g. TM1 sandboxes). The
  * transport is private on TM1Client by design; tests reach it deliberately.
  */

@@ -162,4 +162,4 @@ export async function withToolHint<T>(
   }
 }
 
-export type { UniformErrorPayload, McpToolResult };
+export type { McpToolResult };

@@ -11,7 +11,7 @@ import type pino from "pino";
 
 const USER_AGENT = `${PRODUCT}/${VERSION}`;
 
-export class TimeoutError extends Error {
+class TimeoutError extends Error {
   readonly timeoutMs: number;
   constructor(label: string, timeoutMs: number) {
     super(`${label} request timed out after ${timeoutMs}ms`);

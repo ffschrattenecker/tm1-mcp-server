@@ -2,7 +2,7 @@
 import { z } from "zod";
 import { CellValueSchema } from "./common.js";
 
-export const TransactionLogEntrySchema = z.object({
+const TransactionLogEntrySchema = z.object({
   timestamp: z.string(),
   user: z.string(),
   cubeName: z.string(),

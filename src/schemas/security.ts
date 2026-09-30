@@ -3,7 +3,7 @@
 // callers may already match on.
 import { z } from "zod";
 
-export const ClientSchema = z.object({
+const ClientSchema = z.object({
   Name: z.string(),
   FriendlyName: z.string().optional(),
   Type: z.string().optional(),

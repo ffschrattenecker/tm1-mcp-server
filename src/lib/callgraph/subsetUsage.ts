@@ -11,7 +11,7 @@ import {
 import { splitArgs, extractStringLiteral } from "./referenceIndex.js";
 import { classifyAccess } from "./callGraph.js";
 
-export interface ViewUsage {
+interface ViewUsage {
   view?: string | undefined;
   cube?: string | undefined;
   zeroOut: boolean;

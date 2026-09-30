@@ -35,7 +35,7 @@ import type { TM1Client } from "../../tm1-client.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 
 /** Server-side `}StatsByCube` measure labels mapped to stable typed fields. */
-export const KNOWN_METRICS: Record<string, string> = {
+const KNOWN_METRICS: Record<string, string> = {
   "Memory Used for Views": "memoryViews",
   "Memory Used for Input Data": "memoryInput",
   "Memory Used for Feeders": "memoryFeeders",
@@ -87,7 +87,7 @@ export class CubeStatsUnavailableError extends Error {
 }
 
 /** The cube the MDX reads. Probed by name when the query fails. */
-export const STATS_CUBE = "}StatsByCube";
+const STATS_CUBE = "}StatsByCube";
 
 /**
  * The one string this module compares against, and it is not prose: TM1's
@@ -167,7 +167,7 @@ function absentError(version?: 11 | 12): CubeStatsUnavailableError {
  *
  * `version` feeds the wording only; nothing branches on it.
  */
-export async function classifyCubeStatsFailure(
+async function classifyCubeStatsFailure(
   tm1Client: TM1Client,
   err: unknown,
 ): Promise<CubeStatsUnavailableError | null> {

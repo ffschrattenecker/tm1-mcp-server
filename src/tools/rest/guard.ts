@@ -24,10 +24,10 @@ import { tm1NameEquals } from "../../lib/tm1-name.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 
 export type WriteMethod = "POST" | "PATCH" | "PUT" | "DELETE";
-export type RestMethod = "GET" | WriteMethod;
+type RestMethod = "GET" | WriteMethod;
 
 /** One path segment, e.g. `Elements('a/b')` or `tm1.Compile`. */
-export interface Segment {
+interface Segment {
   /** Lowercased, trimmed name before any `(`, e.g. `elements`, `tm1.compile`. */
   name: string;
   /** Last dotted component of `name`: the operation name without namespace. */

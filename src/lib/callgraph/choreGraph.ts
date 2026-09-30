@@ -6,7 +6,7 @@ import type {
 import type { CallGraphNode, EffectiveValue } from "./callGraph.js";
 import { buildCallGraph } from "./callGraph.js";
 
-export interface ChoreTaskTree {
+interface ChoreTaskTree {
   step: number;
   processName: string;
   choreParams: ChoreTaskRef["params"];

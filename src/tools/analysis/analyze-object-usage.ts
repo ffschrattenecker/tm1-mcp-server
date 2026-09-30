@@ -150,7 +150,7 @@ export const registerAnalyzeObjectUsage = defineTool({
  * One GET (Cubes?$select=Name&$expand=Dimensions). Control cubes ('}' names,
  * e.g. }ElementAttributes_X) are dropped unless `includeSystem`.
  */
-export async function cubesUsingDimension(
+async function cubesUsingDimension(
   tm1Client: TM1Client,
   dimensionName: string,
   includeSystem: boolean,
@@ -163,9 +163,7 @@ export async function cubesUsingDimension(
 }
 
 /** One row per referencing process or rule, most references first. */
-export function summarizeBySource(
-  all: ReturnType<typeof buildCubeOrDimUsages>,
-) {
+function summarizeBySource(all: ReturnType<typeof buildCubeOrDimUsages>) {
   // Aggregate per source (process or rule). Key by kind+name so a process
   // and a cube-rule sharing a name don't collapse into one row.
   const bySource = new Map<

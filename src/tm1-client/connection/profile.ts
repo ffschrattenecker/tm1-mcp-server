@@ -5,7 +5,7 @@
 import type { TM1Config } from "../../config.js";
 import { odataKey } from "../services/odata-page.js";
 
-export interface LoginRequest {
+interface LoginRequest {
   url: string;
   method: "GET" | "POST";
   headers: Record<string, string>;

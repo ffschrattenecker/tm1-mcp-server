@@ -28,7 +28,7 @@ const FIXTURE = join(here, "..", "fixtures", "service-contracts.json");
 
 let cached: ServiceContractFile | undefined;
 
-export function loadServiceContracts(): ServiceContractFile {
+function loadServiceContracts(): ServiceContractFile {
   cached ??= JSON.parse(readFileSync(FIXTURE, "utf8")) as ServiceContractFile;
   return cached;
 }

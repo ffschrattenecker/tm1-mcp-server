@@ -4,7 +4,7 @@
 // dimension) so callers can report them as unresolved rather than imply
 // "no elements".
 
-export interface MdxMemberRef {
+interface MdxMemberRef {
   dimension: string;
   element: string;
 }
@@ -15,7 +15,7 @@ export interface MdxExtractResult {
 }
 
 /** MDX set functions that compute membership without naming elements (Bucket C boundary). */
-export const MDX_COMPUTED_FUNCS: ReadonlySet<string> = new Set([
+const MDX_COMPUTED_FUNCS: ReadonlySet<string> = new Set([
   "TM1FILTERBYLEVEL",
   "TM1FILTERBYPATTERN",
   "TM1SUBSETALL",

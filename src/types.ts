@@ -120,7 +120,6 @@ import type {
   ProcessParameter,
   ProcessVariable,
   Subset,
-  TransactionLogEntry,
   ViewAxisSubsetRef,
 } from "./schemas/index.js";
 
@@ -141,8 +140,6 @@ export type {
   ProcessParameter,
   ProcessVariable,
   Subset,
-  TransactionLogEntry,
-  ViewAxisSubsetRef,
 };
 
 // NOT derived from a Zod schema, on purpose. The similarly-named schemas in
@@ -193,11 +190,11 @@ export interface ViewResult {
   totalCellCount: number;
 }
 
-export interface ViewTitleRef extends ViewAxisSubsetRef {
+interface ViewTitleRef extends ViewAxisSubsetRef {
   selectedElement?: string | undefined;
 }
 
-export interface NativeViewDefinition {
+interface NativeViewDefinition {
   titles: ViewTitleRef[];
   columns: ViewAxisSubsetRef[];
   rows: ViewAxisSubsetRef[];
@@ -374,7 +371,7 @@ export interface CubeRules {
   dimensions?: string[];
 }
 
-export interface ChoreStep {
+interface ChoreStep {
   process: string;
   parameters: Array<{ name: string; value: string | number }>;
 }

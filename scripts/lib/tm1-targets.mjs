@@ -14,7 +14,7 @@ import http from "node:http";
 import https from "node:https";
 
 /** Env keys whose VALUES are redacted from everything a script prints. */
-export const SECRET_KEYS = [
+const SECRET_KEYS = [
   "TM1_PASSWORD",
   "TM1_CLIENT_SECRET",
   "TM1_CLIENT_ID",

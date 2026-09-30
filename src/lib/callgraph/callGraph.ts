@@ -24,7 +24,7 @@ export type EffectiveValue =
  * Each call site has its own params (same caller→callee pair can appear
  * multiple times with different params).
  */
-export interface CallEdge {
+interface CallEdge {
   caller: string;
   callee: string;
   section: string; // prolog/metadata/data/epilog
@@ -62,7 +62,7 @@ export interface CallGraphNode {
   unresolvedCalls?: UnresolvedCall[] | undefined;
 }
 
-export type Direction = "downstream" | "upstream";
+type Direction = "downstream" | "upstream";
 
 export interface BuildCallGraphOptions {
   direction: Direction;
@@ -132,7 +132,7 @@ function refToEdge(r: TmReference): CallEdge {
  *     known literal → propagate; unknown → mark unknown; dynamic → dynamic
  * - dynamic stays dynamic
  */
-export function resolveEdgeParam(
+function resolveEdgeParam(
   res: CallParamResolution,
   parentEnv: Map<string, EffectiveValue>,
 ): EffectiveValue {

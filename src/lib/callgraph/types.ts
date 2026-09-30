@@ -2,13 +2,13 @@
 export type TiParseResult =
   { ok: true; ast: TiAst } | { ok: false; error: TiParseError };
 
-export interface TiParseError {
+interface TiParseError {
   line: number;
   message: string;
 }
 
 /** AST = Array von Statements */
-export type TiAst = TiStatement[];
+type TiAst = TiStatement[];
 
 export type TiStatement =
   TiAssignment | TiIfBlock | TiWhileBlock | TiFunctionCall;

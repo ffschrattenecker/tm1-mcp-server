@@ -15,8 +15,7 @@ import {
   odataKey,
 } from "./odata-page.js";
 
-export type DefaultMemberSource =
-  "defined" | "single_root" | "first_root" | "index_1";
+type DefaultMemberSource = "defined" | "single_root" | "first_root" | "index_1";
 
 export interface DefaultMemberResolution {
   dimension: string;

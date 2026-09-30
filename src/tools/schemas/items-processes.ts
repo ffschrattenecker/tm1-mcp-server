@@ -9,12 +9,6 @@ import {
   ProcessVariableSchema,
 } from "../../schemas/processes.js";
 
-// `hint` is a tool-side addition: guidance attached when the code could not be
-// read in full, never part of the stored process.
-export const ProcessCodeSchema = ProcessCodeBase.extend({
-  hint: z.string().optional(),
-});
-
 import { PROCESS_OUTCOME } from "./items-common.js";
 
 export const CompileErrorSchema = z.object({
@@ -26,7 +20,7 @@ export const CompileErrorSchema = z.object({
 // Published as passthrough: `ProcessDataSource` is an OpenType entity, so a
 // server may hand back fields this shape does not model and rejecting them
 // would fail the whole call. The field set itself is the canonical one.
-export const DataSourceSchema = DataSourceBase.passthrough();
+const DataSourceSchema = DataSourceBase.passthrough();
 
 // tm1_get_process — every section is gated by an include-flag, so all fields
 // except `name` are optional. The code tabs sit at the TOP level (the handler

@@ -33,7 +33,7 @@ export function contractCheckedHttp<T>(http: T): T {
  * Wrap a stubbed `request` so every body it resolves is checked against the
  * recorded contract for that endpoint. Returns a drop-in replacement.
  */
-export function contractCheckedRequest(fn: RequestFn): RequestFn {
+function contractCheckedRequest(fn: RequestFn): RequestFn {
   const { endpoints } = loadContracts();
   return async (method: string, path: string, ...rest: unknown[]) => {
     const body = await fn(method, path, ...rest);

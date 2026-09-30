@@ -126,7 +126,7 @@ export interface PageRenderOpts<T> {
   columns: Column<T>[];
 }
 
-export function renderPage<T>(page: Page<T>, opts: PageRenderOpts<T>): string {
+function renderPage<T>(page: Page<T>, opts: PageRenderOpts<T>): string {
   const meta = `${page.total} total · ${page.count} shown · offset ${page.offset}${
     page.has_more ? ` · next_offset ${page.next_offset}` : ""
   }`;
@@ -147,7 +147,7 @@ interface TextResult {
 // invisible on the other client. The JSON payload is deliberately NOT included
 // alongside: a client that reads structuredContent would then be shown the
 // JSON it asked not to get, which is exactly the bug this replaces.
-export function markdownResult(markdown: string): TextResult {
+function markdownResult(markdown: string): TextResult {
   return {
     content: [{ type: "text" as const, text: markdown }],
     structuredContent: { markdown },

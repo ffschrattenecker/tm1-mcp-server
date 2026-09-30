@@ -7,7 +7,7 @@
  * 1000-line process that follows the same patterns as its 50 siblings.
  */
 
-export type VarType = "String" | "Numeric";
+type VarType = "String" | "Numeric";
 
 export interface ProcessVarInput {
   process: string;
@@ -110,7 +110,7 @@ export function findTypeInconsistencies(
 
 /** ── 3) Prefix-convention adherence ─────────────────────────────────────── */
 
-export type PrefixClass = "p" | "v" | "n" | "s" | "none";
+type PrefixClass = "p" | "v" | "n" | "s" | "none";
 
 export interface PrefixConventionReport {
   /** All non-"none" prefixes ranked by frequency. */

@@ -16,7 +16,7 @@ export type TiTab = "prolog" | "metadata" | "data" | "epilog";
  * fall back to the defaults below. Exposed so callers (e.g. tm1_audit_complexity)
  * can recalibrate without recompiling.
  */
-export interface ScoreWeights {
+interface ScoreWeights {
   /** Base cost of a single while loop (multiplied by nestMult^loopDepth). */
   loopBase: number;
   /** Geometric factor applied per enclosing loop — this is the "multiplication". */

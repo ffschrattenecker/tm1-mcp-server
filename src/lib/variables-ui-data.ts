@@ -26,7 +26,7 @@
 import type { IgnoredColumn } from "../schemas/processes.js";
 
 /** Field separator inside a VariablesUIData entry (form feed, 0x0C). */
-export const UI_DATA_SEPARATOR = "\f";
+const UI_DATA_SEPARATOR = "\f";
 
 const IGNORED_COL_TYPE = "1165";
 

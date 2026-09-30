@@ -389,38 +389,3 @@ export function diffAgainstShape(
 
   return problems;
 }
-
-/**
- * Assert a payload conforms to the recorded contract for an endpoint.
- *
- * Throws with every divergence listed, so one run shows the whole gap rather
- * than one field per iteration.
- */
-export function assertMatchesContract(
-  endpoint: string,
-  payload: unknown,
-  opts: CheckOptions = {},
-): void {
-  const { endpoints } = loadContracts();
-  const contract = endpoints[endpoint];
-  if (!contract) {
-    throw new Error(
-      `no wire contract recorded for "${endpoint}". Record one with ` +
-        `\`npm run contracts:record -- --connection=<name>\`, or fix the ` +
-        `endpoint key — see ` +
-        `tests/fixtures/README.md.`,
-    );
-  }
-  const problems = diffAgainstShape(payload, contract, opts);
-  if (problems.length > 0) {
-    throw new Error(
-      `payload does not match the wire contract for "${endpoint}":\n` +
-        problems.map((p) => `  - ${p}`).join("\n"),
-    );
-  }
-}
-
-/** True when a contract exists; for tests that skip rather than fail. */
-export function hasContract(endpoint: string): boolean {
-  return endpoint in loadContracts().endpoints;
-}

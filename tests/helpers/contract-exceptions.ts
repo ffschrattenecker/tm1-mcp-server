@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export interface ContractException {
+interface ContractException {
   endpoint: string;
   /** Payload path with array indices collapsed, e.g. `$.value[].Level`. */
   path: string;
@@ -21,10 +21,8 @@ const { exceptions } = JSON.parse(readFileSync(FILE, "utf8")) as {
   exceptions: ContractException[];
 };
 
-export { exceptions };
-
 /** `$.value[0].Parents[1].Name` → `$.value[].Parents[].Name` */
-export function collapseIndices(path: string): string {
+function collapseIndices(path: string): string {
   return path.replace(/\[\d+\]/g, "[]");
 }
 

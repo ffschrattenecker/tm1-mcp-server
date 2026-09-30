@@ -1,7 +1,7 @@
 // Subset domain.
 import { z } from "zod";
 
-export const SubsetSchema = z.object({
+const SubsetSchema = z.object({
   name: z.string(),
   dimensionName: z.string(),
   hierarchyName: z.string(),

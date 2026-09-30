@@ -28,7 +28,7 @@ export interface DataSourceEntry {
 
 export type Direction = "upstream" | "downstream" | "both";
 
-export interface UpstreamWriter {
+interface UpstreamWriter {
   process: string;
   /** Cubes this writer reads from (code reads + a TM1CubeView datasource cube). */
   sourceCubes: string[];
@@ -40,7 +40,7 @@ export interface UpstreamWriter {
   elements?: string[];
 }
 
-export interface DownstreamReader {
+interface DownstreamReader {
   process: string;
   /** Cubes this reader writes into. */
   targetCubes: string[];

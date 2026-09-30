@@ -39,8 +39,8 @@
 import { buildProcessEnv, type ProcessEnv } from "./callgraph/variableEnv.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
 
-export const TABS = ["prolog", "metadata", "data", "epilog"] as const;
-export type Tab = (typeof TABS)[number];
+const TABS = ["prolog", "metadata", "data", "epilog"] as const;
+type Tab = (typeof TABS)[number];
 export type ProcessCode = Partial<Record<Tab, string>>;
 
 export interface RefIssue {
@@ -284,8 +284,7 @@ const INSERT_ARGS: Record<string, [number, number]> = {
 };
 
 /** TM1 compares names ignoring case and spaces. */
-export const tm1Key = (s: string): string =>
-  s.toLowerCase().replace(/\s+/g, "");
+const tm1Key = (s: string): string => s.toLowerCase().replace(/\s+/g, "");
 
 interface CellCall {
   cube: string;
@@ -370,7 +369,7 @@ function scanInserts(code: string, env: ProcessEnv, into: Inserts): void {
 }
 
 /** Parse-time half: collect the references, no server round-trip. */
-export function scanProcessRefs(code: ProcessCode): {
+function scanProcessRefs(code: ProcessCode): {
   cubeRefs: Found;
   dimRefs: Found;
   createdCubes: Set<string>;

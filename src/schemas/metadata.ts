@@ -2,14 +2,14 @@
 import { z } from "zod";
 import { ELEMENT_TYPE } from "./common.js";
 
-export const CubeSchema = z.object({
+const CubeSchema = z.object({
   name: z.string(),
   dimensions: z.array(z.string()),
   hasRules: z.boolean().optional(),
 });
 export type Cube = z.infer<typeof CubeSchema>;
 
-export const ElementStatsSchema = z.object({
+const ElementStatsSchema = z.object({
   total: z.number().int(),
   numeric: z.number().int(),
   consolidated: z.number().int(),
@@ -17,7 +17,7 @@ export const ElementStatsSchema = z.object({
   maxLevel: z.number().int(),
 });
 
-export const DimensionSchema = z.object({
+const DimensionSchema = z.object({
   name: z.string(),
   hierarchies: z.array(z.string()),
   // Populated only when getDimensions({includeElementCount: true}) is called.
@@ -33,7 +33,7 @@ export const DimensionSchema = z.object({
 });
 export type Dimension = z.infer<typeof DimensionSchema>;
 
-export const HierarchyElementSchema = z.object({
+const HierarchyElementSchema = z.object({
   name: z.string(),
   type: ELEMENT_TYPE,
   level: z.number().int(),

@@ -13,7 +13,7 @@
 
 import { TI_VAR } from "../ti-identifier.js";
 
-export type TiVarType = "Numeric" | "String";
+type TiVarType = "Numeric" | "String";
 
 export type VarBinding =
   | { kind: "literal"; value: string } // resolved literal value (string content without quotes, or numeric text)
@@ -269,7 +269,7 @@ export function buildProcessEnv(
   return env;
 }
 
-export function bindingsEqual(a: VarBinding, b: VarBinding): boolean {
+function bindingsEqual(a: VarBinding, b: VarBinding): boolean {
   if (a.kind !== b.kind) {
     return false;
   }

@@ -1,4 +1,4 @@
-export interface ParsedRulesLine {
+interface ParsedRulesLine {
   lineIndex: number;
   raw: string;
   trimmed: string;

@@ -47,7 +47,7 @@ function computeEditScript(a: string[], b: string[]): EditOp[] {
   return ops;
 }
 
-export interface DiffHunk {
+interface DiffHunk {
   startA: number;
   countA: number;
   startB: number;

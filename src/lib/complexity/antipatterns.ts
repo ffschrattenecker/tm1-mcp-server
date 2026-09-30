@@ -11,7 +11,7 @@ import type { TiStatement } from "../callgraph/types.js";
 import type { ProcessCodeInput, TiTab } from "./process-metrics.js";
 import { TI_VAR } from "../ti-identifier.js";
 
-export type Severity = "error" | "warn" | "info";
+type Severity = "error" | "warn" | "info";
 
 export interface Finding {
   process: string;

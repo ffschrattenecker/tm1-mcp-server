@@ -3,7 +3,7 @@
 // Param-name regex: matches typical credential identifiers (case-insensitive).
 // Kept conservative — false positives turn legitimate parameter values into
 // "***" in audit reports, so we err on the side of obvious credential names.
-export const SECRET_NAME_RE =
+const SECRET_NAME_RE =
   /pass(?:wd|word)?|pwd|secret|token|api[_-]?key|^key$|credential|auth/i;
 
 export const MASK = "***";
@@ -22,7 +22,7 @@ export function isSecretName(name: string): boolean {
 //
 // Both branches are single linear quantifiers over a negated class, so there is
 // no nested backtracking to exploit.
-export const CONN_CREDENTIAL_RE =
+const CONN_CREDENTIAL_RE =
   /\b(pwd|password|uid|user\s*id)(\s*=\s*)(\{[^}]*\}|[^;'"\r\n]*)/gi;
 
 // Value-oriented sanitizer for arbitrary free text — error messages, server

@@ -1,7 +1,7 @@
 // Chore domain.
 import { z } from "zod";
 
-export const ChoreSchema = z.object({
+const ChoreSchema = z.object({
   name: z.string(),
   active: z.boolean(),
   startTime: z.string(),

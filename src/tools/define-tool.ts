@@ -113,7 +113,7 @@ interface ConnectionlessToolSpec<
 }
 
 /** One side of a two-connection comparison. */
-export interface PeerSide {
+interface PeerSide {
   /** Resolved connection name (the only one when the server has just one). */
   name: string;
   client: TM1Client;

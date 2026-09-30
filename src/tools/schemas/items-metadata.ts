@@ -28,7 +28,7 @@ export const CubeRulesSchema = z.object({
 // as typed fields (best-effort match) and the entire raw element-name → value
 // map under `raw` so callers can read whatever the server actually returned
 // — no version drift breaks the tool, only renames new well-known fields.
-export const CubeStatsItemSchema = z
+const CubeStatsItemSchema = z
   .object({
     cubeName: z.string(),
     // Cell counts
@@ -58,7 +58,7 @@ export const CubeStatsItemSchema = z
 // Set only when EVERY requested cube failed the same server- or account-wide
 // way: `absent` = no }Stats* control cubes here (TM1 v12 ships none),
 // `denied` = they exist but this account may not read them.
-export const StatsUnavailableSchema = z.object({
+const StatsUnavailableSchema = z.object({
   reason: z.enum(["absent", "denied"]),
   message: z.string(),
 });
@@ -73,7 +73,7 @@ export const CubeStatsResultSchema = z
 
 // ── Phase 2i: hierarchy navigation, server snapshots, diagnostics ────────────
 
-export const DefaultMemberResolutionSchema = z.object({
+const DefaultMemberResolutionSchema = z.object({
   dimension: z.string(),
   hierarchy: z.string(),
   resolved: z.object({ name: z.string(), level: z.number().int() }),
@@ -88,7 +88,7 @@ export const DefaultMemberResolutionSchema = z.object({
   warning: z.string().optional(),
 });
 
-export const DefaultMemberErrorSchema = z.object({
+const DefaultMemberErrorSchema = z.object({
   dimension: z.string(),
   hierarchy: z.string(),
   error: z.object({ code: z.string(), message: z.string() }),

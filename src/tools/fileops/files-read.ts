@@ -24,7 +24,7 @@ type Op = "list" | "search" | "get";
 // its own subset: list/search the page envelope plus echoed filters, get the
 // file-content fields. The key sets do not overlap.
 const page = pageShapeFor(FilenameItemSchema);
-export const FilesReadResultSchema = z.object({
+const FilesReadResultSchema = z.object({
   path: z.string().optional().describe("list/search: folder (echoes input)"),
   startswith: z.string().nullable().optional(),
   contains: z.array(z.string()).nullable().optional(),

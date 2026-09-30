@@ -69,8 +69,8 @@ const SKIP_VALIDATION_FUNCS = new Set([
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type RefTargetKind = "cube" | "dimension" | "process" | "element";
-export type RefSourceKind = "process" | "rule";
-export type RefSection =
+type RefSourceKind = "process" | "rule";
+type RefSection =
   "prolog" | "metadata" | "data" | "epilog" | "rules" | "feeders";
 
 /**
@@ -127,7 +127,7 @@ export interface UnresolvedCall {
 }
 
 /** A subset-membership element arg (SubsetElementInsert/Add/Delete) whose element name could not be resolved to a literal. */
-export interface UnresolvedElementRef {
+interface UnresolvedElementRef {
   section: RefSection;
   line: number;
   funcName: string; // SubsetElementInsert | SubsetElementAdd | SubsetElementDelete
@@ -527,7 +527,7 @@ const FEEDERS_MARKER_RE = /^\s*FEEDERS\s*;/i;
  * Extracts cube (from DB()) and dimension (from [...] refs) references
  * from a rules/feeders text. Pure function.
  */
-export function extractRulesReferences(text: string): RawRuleRef[] {
+function extractRulesReferences(text: string): RawRuleRef[] {
   const refs: RawRuleRef[] = [];
   const lines = text.split("\n");
   let section: "rules" | "feeders" = "rules";

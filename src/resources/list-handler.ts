@@ -27,12 +27,12 @@ export interface CatalogResource {
   mimeType?: string;
 }
 
-export interface StaticCatalogEntry {
+interface StaticCatalogEntry {
   kind: "static";
   resource: CatalogResource;
 }
 
-export interface TemplateCatalogEntry {
+interface TemplateCatalogEntry {
   kind: "template";
   templateMetadata: { title?: string; description?: string; mimeType?: string };
   list: () => Promise<{ resources: CatalogResource[] }>;

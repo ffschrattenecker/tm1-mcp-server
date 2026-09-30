@@ -33,7 +33,7 @@ export const SECRET_KEYS = [
 ] as const;
 export type SecretKey = (typeof SECRET_KEYS)[number];
 
-export const KEYCHAIN_SERVICE = "tm1-mcp-server";
+const KEYCHAIN_SERVICE = "tm1-mcp-server";
 
 export function isSecretKey(key: string): key is SecretKey {
   return (SECRET_KEYS as readonly string[]).includes(key);
