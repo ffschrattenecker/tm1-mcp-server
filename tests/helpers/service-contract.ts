@@ -47,7 +47,6 @@ export const SERVICE_NAMES = [
   "chores",
   "security",
   "server",
-  "monitoring",
   "files",
 ] as const;
 
