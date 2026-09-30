@@ -277,13 +277,9 @@ Done:
 
 Left to do, in this order:
 
-1. **Unit tests** (red now). Typecheck fails in 12 files that imported deleted tools
-   (`monitoring-tools-registration`, `odata-pushdown`, `hierarchy-default`, `rest-tools`, `delete-dry-run`,
-   `slim-json-schema`, `output-schema-roundtrip`, `get-server-info-masking`, `get-hierarchy-tool`,
-   `get-file-content-base64`, `get-descendants-tool`, `element-attribute-values-page`). Runtime failures in the
-   shared lists: `output-schema-map`, `output-schema-additional-properties`, `confirm-coverage`,
-   `markdown-structured`, `tool-registration`, `annotation-requires-version`. Delete handler-only tests; keep any
-   service-layer assertions; repoint shared lists to the surviving tools.
+1. ~~**Unit tests**~~ done (`cb26be9`). Green except the 4 symlink cases in `local-file.test.ts`, which fail
+   with EPERM on `main` too (Windows without Developer Mode cannot create symlinks). So `coverage:check` and
+   `npm run verify` cannot go fully green on this machine.
 2. **Stale names in `src/`**: hints, descriptions, `server-instructions.ts`, prompts, resources, services
    (e.g. `file-service.ts` hint names `tm1_list_files`), `http.ts` hints naming `tm1_list_threads`/`tm1_list_jobs`.
    Remove now-dead schemas in `src/tools/schemas/items-*.ts` and empty category comments in `src/tools/index.ts`.
@@ -302,6 +298,21 @@ Left to do, in this order:
 Known follow-ups from the build: `responseLimit()` in `src/tools/rest/shape.ts` reads `TM1_MAX_RESPONSE_CHARS`
 from env rather than the value passed to `withAnnotations()`; the secret-name check refuses `$filter`/`$orderby`
 on properties whose names contain `pass`/`auth`/`token`; a doubly-encoded `%XX` path is refused by design.
+
+Open question (needs a decision before 9.0.0): the deleted `tm1_delete_hierarchy` refused
+`hierarchyName = dimensionName` (case-insensitive) before calling TM1. The REST guard has no such refusal, so
+`DELETE Dimensions('X')/Hierarchies('X')` goes to the server with only `confirm` in front of it.
+
+Measured facts that lived in the deleted tools and tests; the step-5 cheat sheet has to carry them:
+
+- v12 deprecated `AuditLogEntries`, `MessageLogEntries` and `TransactionLogEntries` in 12.0.0. They still answer
+  200 but always empty (12.5.9: 0 rows; 11.8.02900.8 control: 37,655 message-log rows, 2026-08-21). An empty
+  result on v12 means "no data", not "nothing happened".
+- v12 answers `POST Cubes('x')/tm1.Unload` with "Demand load, loading and unloading of cubes is no longer
+  supported." Unload is v11 only.
+- What is running: v11 `Threads` + `POST Threads({id})/tm1.CancelOperation`; v12 `Jobs` +
+  `POST Jobs('{id}')/tm1.Cancel`. Each is absent on the other version.
+- Transaction-log scans run server-side and can take minutes to hours; always bound them with a time filter.
 
 The cleanup workflow script (steps 1–6 as parallel agents + verify loop) is saved at
 `~/.claude/projects/C--Users-franz-schrattenecker-repos-tm1-mcp-server/9215c3ef-2a08-45ea-8964-ad9d13e902a2/workflows/scripts/consolidation-cleanup-wf_1186b4a6-1d7.js`;
