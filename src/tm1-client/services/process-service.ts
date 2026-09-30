@@ -439,7 +439,7 @@ export class ProcessService {
    * `$select`; a server that rejects the query shape yields an empty result
    * rather than an error, since neither is required to use the process.
    */
-  async getUIData(processName: string): Promise<{
+  private async getUIData(processName: string): Promise<{
     uiData?: string;
     variablesUIData?: string[];
   }> {
