@@ -285,17 +285,10 @@ Left to do, in this order:
    rules; dead output schemas and the three empty `items-*.ts` files are gone. Scratch list of the 60 deleted names
    (for step 6): tools:list on `main` minus tools:list here, plus `tm1_list_jobs` / `tm1_cancel_job`.
 
-   **Open decision: service methods no longer called from `src/`.** Found by grep, so generic names such as
-   `list` or `delete` are missed and the list is a lower bound. `tests=N` counts test references; removing a method
-   also means dropping those tests and re-recording contracts.
-   - chore: `toggleActive` · cube: `unload` (tests 2) · dimension: `getLastUpdatedMap` (2)
-   - element: `createAttribute`, `getAttributeValues` (4) · file: `getContent`
-   - hierarchy: `getCounts`, `getDescendants` (8), `getAncestors` (6)
-   - monitoring: `getThreads`, `cancelThread`, `getSessions`, `getJobs` (4), `cancelJob` (4)
-   - security: `getClient`, `createClient`, `updateClient`, `deleteClient`, `listGroups`, `assignClientGroup`,
-     `removeClientGroup`
-   - server: `getMessageLog` (6), `getAuditLog` (3), `getTransactionLog` (12) · view: `createMdx`, `createNative` (8)
-   - unused on `main` too, not this branch's doing: `VariablesUIDataSchema` in `src/schemas/processes.ts`
+   Unused code removed on the user's call (2026-09-30: "remove them, same as everything else that is no
+   longer relevant"): 42 service methods and 3 client getters (found with the TypeScript language service, not grep), the empty
+   `MonitoringService`, and the types, schemas and helpers only they used (knip, iterated to a fixpoint). Two
+   language-service hits are structural uses and stay: `ElementService.exists`, `HierarchyService.getElementTypes`.
 
 3. **Live tests** (`tests/live/`): rewrite setup/teardown that used deleted tools to the REST tools; delete tests
    of deleted tools; add `rest.live.test.ts`. Run only via `npm run test:live:for -- tm1-plapp-franz`.
@@ -312,15 +305,17 @@ Known follow-ups from the build: `responseLimit()` in `src/tools/rest/shape.ts` 
 from env rather than the value passed to `withAnnotations()`; the secret-name check refuses `$filter`/`$orderby`
 on properties whose names contain `pass`/`auth`/`token`; a doubly-encoded `%XX` path is refused by design.
 
-Open question (needs a decision before 9.0.0): the deleted `tm1_delete_hierarchy` refused
-`hierarchyName = dimensionName` (case-insensitive) before calling TM1. The REST guard has no such refusal, so
-`DELETE Dimensions('X')/Hierarchies('X')` goes to the server with only `confirm` in front of it.
+Default hierarchy (resolved): on 11.8.03500 TM1 answers `DELETE Dimensions('X')/Hierarchies('X')` with success and
+leaves the dimension with no hierarchy at all. The REST guard now refuses it (case- and space-insensitive) and
+points at `DELETE Dimensions('X')`; `tests/live/rest.live.test.ts` pins it.
 
 Measured facts that lived in the deleted tools and tests; the step-5 cheat sheet has to carry them:
 
 - v12 deprecated `AuditLogEntries`, `MessageLogEntries` and `TransactionLogEntries` in 12.0.0. They still answer
   200 but always empty (12.5.9: 0 rows; 11.8.02900.8 control: 37,655 message-log rows, 2026-08-21). An empty
   result on v12 means "no data", not "nothing happened".
+- With sandboxing on, every cube lists the shared `Sandboxes` dimension first in `Cubes('C')/Dimensions`.
+- TM1 refuses to create a cube with fewer than two dimensions ("Not enough dimensions to create cube").
 - v12 answers `POST Cubes('x')/tm1.Unload` with "Demand load, loading and unloading of cubes is no longer
   supported." Unload is v11 only.
 - What is running: v11 `Threads` + `POST Threads({id})/tm1.CancelOperation`; v12 `Jobs` +
