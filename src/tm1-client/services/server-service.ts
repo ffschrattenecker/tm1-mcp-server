@@ -1,66 +1,10 @@
-// Server domain service. Owns server-level read endpoints — configuration,
-// message log, transaction log, error-log files. Stateless wrappers; nothing
-// here mutates server state.
+// Server domain service. Owns server-level read endpoints — configuration and
+// error-log files. Stateless wrappers; nothing here mutates server state.
 //
 // See docs/ARCHITECTURE.md for the layering.
-import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type { ErrorLogFile, ServerInfo } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
 import { odataKey } from "./odata-page.js";
-
-// TM1 references the per-run TI error file inside the free-text message, either
-// wrapped in angle brackets (e.g. German `Fehlerdatei: <…log>`) or bare
-// (`see TM1ProcessError_…log`). Both regexes are linear (no nested quantifiers,
-// delimiter excluded from the class) — no ReDoS guard needed for these literals.
-const ANGLE_WRAPPED_LOG = /<([^<>\s]+\.log)>/i;
-const BARE_PROCESS_ERROR_LOG = /TM1ProcessError_[^\s<>'"()]+\.log/i;
-
-/**
- * Pull the TM1 error log filename out of a message-log entry's free text, so it
- * can be fed straight into `tm1_get_error_log_content(filename=…)`. Returns the
- * exact filename (no surrounding brackets) or undefined when none is mentioned.
- */
-export function extractErrorFile(message: string): string | undefined {
-  const angle = message.match(ANGLE_WRAPPED_LOG);
-  if (angle) return angle[1];
-  const bare = message.match(BARE_PROCESS_ERROR_LOG);
-  return bare ? bare[0] : undefined;
-}
-
-/**
- * Normalize a user timestamp into an OData v4 DateTimeOffset literal for a
- * TM1 $filter. TM1 rejects a bare `2026-06-08T00:00:00` ("Syntax error … near
- * -06") — the value MUST carry a timezone. Verified against TM1 11.8: only the
- * `Z`-suffixed (or ±hh:mm-offset) form parses. Date-only input expands to
- * start-of-day UTC; a zoneless datetime gets a `Z`; an already-zoned value is
- * left untouched.
- */
-export function toOdataDateTime(input: string): string {
-  let t = input.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) t = `${t}T00:00:00`;
-  if (!/[zZ]$/.test(t) && !/[+-]\d{2}:\d{2}$/.test(t)) t = `${t}Z`;
-  // Validate before it reaches a $filter. Appending "Z" to whatever arrived
-  // turned "yesterday" into "yesterdayZ" and shipped it to TM1, which answers
-  // with an opaque OData parse error naming neither the parameter nor the bad
-  // value. Rejecting here names both.
-  //
-  // Shape check FIRST, then Date.parse — Date.parse alone is too permissive to
-  // be a gate. It accepts V8's legacy formats, so "08/06/2026" parses happily
-  // as 6 August; a caller who meant 8 June would silently get a different day
-  // and a plausible-looking, wrong result. Ambiguous input must fail loudly.
-  const ISO_DATETIME =
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
-  if (!ISO_DATETIME.test(t) || Number.isNaN(Date.parse(t))) {
-    throw new TM1Error({
-      code: TM1ErrorCode.VALIDATION_ERROR,
-      message:
-        `Not a usable timestamp: '${input}'. Expected ISO-8601 — ` +
-        `'2026-06-08', '2026-06-08T14:30:00', or with a zone ` +
-        `('...Z' / '...+02:00'). A value without a zone is read as UTC.`,
-    });
-  }
-  return t;
-}
 
 export class ServerService {
   constructor(private readonly http: TM1HttpClient) {}
