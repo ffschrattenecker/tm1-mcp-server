@@ -266,6 +266,9 @@ hid control objects by default (the REST filter must say `not startswith(Name,'}
 Branch `feat/tool-consolidation` here and the paired `feat/tool-consolidation` in spms-tools are complete
 and committed, neither pushed. Server is 9.0.0 (`package.json`, CHANGELOG), plugin `tm1-mcp` 6.0.0.
 Next is release, only when asked: push both branches, PR, tag `v9.0.0` (tag push publishes to npm).
+**Order matters:** npm 9.0.0 must be published before spms-tools `tm1-mcp` 6.0.0 reaches users. Its version
+floor reads `server.version` from `tm1_list_connections`, which 8.x lacks, so 6.0.0 against 8.x refuses every
+write.
 
 Built: `tm1_rest_read` / `tm1_rest_write`, `tm1_files_read` / `tm1_files_write`, `refresh` on
 `tm1_analyze_callgraph`, `usedInCubes` on `tm1_analyze_object_usage`, `server: {name, version}` on
