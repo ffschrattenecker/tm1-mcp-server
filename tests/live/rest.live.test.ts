@@ -106,24 +106,73 @@ describe.skipIf(!LIVE_ENABLED)("live: REST tools", () => {
       expect(Number(count.json.text ?? count.json.data)).toBe(3);
     });
 
-    it("reads threads (v11) or jobs (v12), sessions and the caller's groups", async () => {
-      const running = await restGet<unknown[]>(
-        h,
-        h.client.version === 12
-          ? "Jobs"
-          : "Threads?$select=ID,Type,Name,State,Function,ObjectName,ElapsedTime,WaitTime",
-      );
-      expect(Array.isArray(running)).toBe(true);
-      const sessions = await restGet<unknown[]>(
-        h,
-        "Sessions?$select=ID&$expand=User($select=Name)",
-      );
-      expect(sessions.length).toBeGreaterThan(0);
-      const groups = await restGet<Array<{ Name: string }>>(
-        h,
-        "ActiveUser/Groups?$select=Name",
-      );
-      expect(groups.length).toBeGreaterThan(0);
+    // The monitoring paths the prompts and hints name. Shape only, not
+    // non-emptiness, where an idle server legitimately returns nothing.
+    const monitoring: Array<{
+      what: string;
+      path: (version: 11 | 12) => string;
+      v11Only?: boolean;
+      check: (data: unknown) => void;
+    }> = [
+      {
+        what: "the product version from Configuration",
+        path: () => "Configuration?$select=ProductVersion",
+        check: (cfg) =>
+          expect((cfg as { ProductVersion?: string }).ProductVersion).toMatch(
+            /\d+\.\d+/,
+          ),
+      },
+      {
+        what: "threads (v11) or jobs (v12)",
+        path: (v) =>
+          v === 12
+            ? "Jobs"
+            : "Threads?$select=ID,Type,Name,State,Function,ObjectName,ElapsedTime,WaitTime",
+        check: (rows) => expect(rows).toBeInstanceOf(Array),
+      },
+      {
+        what: "sessions with their user",
+        path: () => "Sessions?$select=ID&$expand=User($select=Name)",
+        check: (rows) => expect((rows as unknown[]).length).toBeGreaterThan(0),
+      },
+      {
+        what: "the caller's groups",
+        path: () => "ActiveUser/Groups?$select=Name",
+        check: (rows) => expect((rows as unknown[]).length).toBeGreaterThan(0),
+      },
+      {
+        what: "the newest message-log entries",
+        path: () => "MessageLogEntries?$orderby=TimeStamp desc&$top=5",
+        v11Only: true,
+        check: (rows) =>
+          expect((rows as unknown[]).length).toBeLessThanOrEqual(5),
+      },
+      {
+        what: "the newest audit-log entries (empty if auditing is off)",
+        path: () => "AuditLogEntries?$orderby=TimeStamp desc&$top=5",
+        v11Only: true,
+        check: (rows) => expect(rows).toBeInstanceOf(Array),
+      },
+    ];
+
+    it.for(monitoring)("reads $what", async ({ path, v11Only, check }, ctx) => {
+      if (v11Only && h.client.version === 12)
+        ctx.skip("v12 serves the log empty");
+      check(await restGet(h, path(h.client.version)));
+    });
+
+    // v12 deprecated the log collections in 12.0.0: they still answer 200,
+    // always empty. An empty result there means "no data", not "nothing
+    // happened".
+    it("v12 answers the log collections empty", async (ctx) => {
+      if (h.client.version !== 12) ctx.skip("v11 serves the logs");
+      for (const coll of [
+        "MessageLogEntries",
+        "AuditLogEntries",
+        "TransactionLogEntries",
+      ]) {
+        expect(await restGet<unknown[]>(h, `${coll}?$top=1`), coll).toEqual([]);
+      }
     });
 
     it("reads the message log with a contains() filter, newest first (v11)", async (ctx) => {

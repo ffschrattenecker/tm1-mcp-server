@@ -190,9 +190,9 @@ another admin account). This is why the script never retries a failed login.
 | `view.live.test.ts` | native + MDX views / subsets |
 | `process.live.test.ts` | TI processes (upsert / compile / execute / diff / diagnose) |
 | `chore.live.test.ts` | chores (deactivated; create / toggle / execute / delete) |
-| `ops.live.test.ts` | server / monitoring / security / files |
+| `ops.live.test.ts` | server / security / files |
 | `analysis.live.test.ts` | read-only audits over the existing model |
-| `rest.live.test.ts` | `tm1_rest_read` / `tm1_rest_write`: cheat-sheet paths, guard refusals |
+| `rest.live.test.ts` | `tm1_rest_read` / `tm1_rest_write`: cheat-sheet and monitoring paths, guard refusals |
 
 ## Writing a new live test
 

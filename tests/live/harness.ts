@@ -59,8 +59,8 @@ export interface LiveHarness {
   /** Names of all registered (readwrite-mode) tools. */
   toolNames: () => string[];
   /** True when a tool is registered for the connected server version.
-   *  Version-gated tools (v11-only logs/threads, v12-only jobs) are absent by
-   *  design on the other version — see `enabled:` in their defineTool spec. */
+   *  Version-gated tools (tm1_save_data is v11-only) are absent by
+   *  design on the other version — see `version:` in their defineTool spec. */
   has: (name: string) => boolean;
 }
 
