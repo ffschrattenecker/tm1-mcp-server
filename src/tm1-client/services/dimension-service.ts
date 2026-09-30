@@ -31,43 +31,6 @@ export interface DefaultMemberResolution {
   warning?: string;
 }
 
-/**
- * Decode a TM1 `}DimensionProperties.LAST_TIME_UPDATED` cell — a 14-digit
- * `YYYYMMDDHHMMSS` stamp in server-local time — to a naive-local ISO string
- * (no trailing `Z`, because the value carries no timezone). Returns null for
- * blank or non-conforming values.
- */
-export function decodeTm1Timestamp(
-  raw: string | number | null | undefined,
-): string | null {
-  if (raw === null || raw === undefined) return null;
-  const s = String(raw).trim();
-  if (!/^\d{14}$/.test(s)) return null;
-  return (
-    `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` +
-    `T${s.slice(8, 10)}:${s.slice(10, 12)}:${s.slice(12, 14)}`
-  );
-}
-
-/**
- * Normalize a user `changedSince` filter (a date or datetime, interpreted as
- * server-local — same basis as LAST_TIME_UPDATED) into the 14-digit form so
- * the two compare by plain string ordering. Date-only pads to start-of-day;
- * partial times pad missing fields with zero. Throws on fewer than 8 date
- * digits (need at least a full YYYY-MM-DD).
- */
-export function normalizeChangedSince(input: string): string {
-  const digits = input.replace(/\D/g, "");
-  if (digits.length < 8) {
-    throw new TM1Error({
-      code: TM1ErrorCode.VALIDATION_ERROR,
-      message: `Invalid changedSince '${input}': need at least a full date (e.g. 2026-04-01).`,
-      details: input,
-    });
-  }
-  return digits.padEnd(14, "0").slice(0, 14);
-}
-
 export interface DimensionListOpts extends NameFilterOpts {
   includeElementCount?: boolean;
   includeElementStats?: boolean;
