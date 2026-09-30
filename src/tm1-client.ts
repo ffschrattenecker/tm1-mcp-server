@@ -19,7 +19,6 @@ import { ProcessService } from "./tm1-client/services/process-service.js";
 import { ChoreService } from "./tm1-client/services/chore-service.js";
 import { SecurityService } from "./tm1-client/services/security-service.js";
 import { ServerService } from "./tm1-client/services/server-service.js";
-import { MonitoringService } from "./tm1-client/services/monitoring-service.js";
 import { FileService } from "./tm1-client/services/file-service.js";
 import { RestService } from "./tm1-client/services/rest-service.js";
 import { registerCallgraphCacheInvalidation } from "./lib/callgraph/tm1-adapter.js";
@@ -52,7 +51,6 @@ export class TM1Client {
   readonly chores: ChoreService;
   readonly security: SecurityService;
   readonly server: ServerService;
-  readonly monitoring: MonitoringService;
   readonly files: FileService;
   // Guarded generic passthrough for tm1_rest_read / tm1_rest_write only.
   readonly rest: RestService;
@@ -100,7 +98,6 @@ export class TM1Client {
     this.chores = new ChoreService(this.http);
     this.security = new SecurityService(this.http);
     this.server = new ServerService(this.http);
-    this.monitoring = new MonitoringService(this.http);
     this.files = new FileService(this.http);
     this.rest = new RestService(this.http);
   }

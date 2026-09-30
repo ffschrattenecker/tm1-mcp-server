@@ -11,7 +11,7 @@ function mockServer() {
   return { server, names };
 }
 const clientWith = (version: 11 | 12) =>
-  ({ version, monitoring: {}, server: {} }) as unknown as TM1Client;
+  ({ version, server: {} }) as unknown as TM1Client;
 
 describe("version-gated tools", () => {
   it("registers tm1_save_data on v11 only (v12 removed SaveDataAll/CubeSaveData)", () => {
