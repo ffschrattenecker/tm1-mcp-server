@@ -1,5 +1,9 @@
 import { createServer, type Server } from "node:http";
-import { createServer as createTcp, connect, type Server as TcpServer } from "node:net";
+import {
+  createServer as createTcp,
+  connect,
+  type Server as TcpServer,
+} from "node:net";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { fetch } from "undici";
@@ -15,8 +19,8 @@ function startSocks(seen: string[]): Promise<TcpServer> {
         let host: string;
         let off: number;
         if (req[3] === 0x03) {
-          host = req.subarray(5, 5 + req[4]!).toString();
-          off = 5 + req[4]!;
+          host = req.subarray(5, 5 + req[4]).toString();
+          off = 5 + req[4];
         } else {
           host = [...req.subarray(4, 8)].join(".");
           off = 8;
@@ -61,8 +65,14 @@ describe("getTm1Dispatcher with a SOCKS5 proxy", () => {
   });
 
   it("caches one agent per verify+proxy pair", () => {
-    const a = getTm1Dispatcher({ ...baseTestConfig, proxy: "socks5://127.0.0.1:1" });
-    const b = getTm1Dispatcher({ ...baseTestConfig, proxy: "socks5://127.0.0.1:1" });
+    const a = getTm1Dispatcher({
+      ...baseTestConfig,
+      proxy: "socks5://127.0.0.1:1",
+    });
+    const b = getTm1Dispatcher({
+      ...baseTestConfig,
+      proxy: "socks5://127.0.0.1:1",
+    });
     const c = getTm1Dispatcher(baseTestConfig);
     expect(a).toBe(b);
     expect(a).not.toBe(c);

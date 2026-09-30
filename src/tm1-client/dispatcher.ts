@@ -7,7 +7,12 @@
 // The Agent is cached so connection-pooling stays effective across requests.
 import type { Socket } from "node:net";
 import { connect as tlsConnect } from "node:tls";
-import { Agent, Socks5ProxyAgent, fetch as undiciFetch, type buildConnector } from "undici";
+import {
+  Agent,
+  Socks5ProxyAgent,
+  fetch as undiciFetch,
+  type buildConnector,
+} from "undici";
 
 type connector = buildConnector.connector;
 import type { TM1Config } from "../config.js";
