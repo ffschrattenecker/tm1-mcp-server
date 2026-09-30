@@ -380,12 +380,17 @@ Credential hygiene, same as for stdio:
 ### autoApprove
 
 `mcp.json.example` ships an `autoApprove` list of **read-only** tools only —
-analyze/list/get/search/check/compile/diff, plus `tm1_execute_mdx` (a query, not
-a mutation) and `tm1_export_process_to_pro`. Destructive tools (`delete_*`,
-`clear_*`, `unload_*`, `cancel_*`, `execute_process`, `execute_chore`,
-`remove_*`, `invalidate_*`) and writes (`create_*`, `update_*`, `upsert_*`,
-`write_cells`, `import_pro_file`, …) deliberately stay **off** the allowlist and
-require manual approval per call.
+the analyze/audit/check/compare/diagnose/diff/get/list/resolve/sample/search/
+trace/validate tools, `tm1_rest_read`, `tm1_files_read`, `tm1_execute_mdx` (a
+query, not a mutation) and the `tm1_export_process_to_*` tools. Every tool that
+changes the server deliberately stays **off** the allowlist and requires manual
+approval per call: `tm1_rest_write`, `tm1_files_write`, `tm1_delete_elements`,
+`tm1_clear_cube`, `tm1_execute_process`, `tm1_execute_chore`, `tm1_write_cells`,
+`tm1_save_data`, `tm1_set_cube_rules`, the `upsert_*`/`update_*` tools
+(`tm1_upsert_process`, `tm1_bulk_upsert_elements`, `tm1_update_chore`,
+`tm1_update_element_attribute_value`), `tm1_copy_process`,
+`tm1_import_process_from_git`, `tm1_import_pro_file` and
+`tm1_install_pro_bundle`.
 
 Each tool also publishes MCP `readOnlyHint` / `destructiveHint` /
 `idempotentHint` annotations (declared per tool in its `defineTool()` spec) so clients that
