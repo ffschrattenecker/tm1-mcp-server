@@ -1,4 +1,4 @@
-import { KNOWN_SIGNATURES } from "./tiSignatures.js";
+import { TI_ARG_IDX } from "./tiArgIndex.js";
 import {
   extractDbCalls,
   extractBracketRefs,
@@ -16,28 +16,19 @@ import { rethrowIfSystemic } from "../../tm1-client/services/fallback.js";
 import { extractSubsetUsage, type SubsetUsage } from "./subsetUsage.js";
 import { TI_VAR } from "../ti-identifier.js";
 
-// ─── Argument-Index Auto-Derivation ──────────────────────────────────────────
+// ─── Argument-Index Tables ───────────────────────────────────────────────────
 
 type ArgIdxMap = Map<string, number>;
 
-function buildArgIdxMap(paramName: string): ArgIdxMap {
-  const map: ArgIdxMap = new Map();
-  for (const [key, sig] of KNOWN_SIGNATURES.entries()) {
-    for (let i = 0; i < sig.params.length; i++) {
-      if (sig.params[i]!.name.toLowerCase() === paramName && !map.has(key)) {
-        map.set(key, i);
-        break;
-      }
-    }
-  }
-  return map;
+function buildArgIdxMap(table: Record<string, number>): ArgIdxMap {
+  return new Map(Object.entries(table));
 }
 
-const CUBE_ARG_IDX = buildArgIdxMap("cubename");
-const DIM_ARG_IDX = buildArgIdxMap("dimensionname");
-const PROCESS_ARG_IDX = buildArgIdxMap("processname");
-const ELEM_ARG_IDX = buildArgIdxMap("elementname");
-const SUBSET_ARG_IDX = buildArgIdxMap("subsetname");
+const CUBE_ARG_IDX = buildArgIdxMap(TI_ARG_IDX.cube);
+const DIM_ARG_IDX = buildArgIdxMap(TI_ARG_IDX.dimension);
+const PROCESS_ARG_IDX = buildArgIdxMap(TI_ARG_IDX.process);
+const ELEM_ARG_IDX = buildArgIdxMap(TI_ARG_IDX.element);
+const SUBSET_ARG_IDX = buildArgIdxMap(TI_ARG_IDX.subset);
 
 /** Subset-membership calls whose ElementName arg is a real element-data-flow reference. */
 const SUBSET_ELEM_FUNCS = new Set([
