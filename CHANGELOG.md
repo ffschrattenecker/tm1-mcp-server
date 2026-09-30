@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same-named hierarchy is refused: TM1 11.8 accepts it and leaves the dimension with none.
 - **`tm1_files_read` / `tm1_files_write`** replace the five file tools (`op`: list, search, get /
   upload, delete).
+- **`tm1_list_connections` reports this MCP server's `server: { name, version }`**, which only
+  `tm1_get_server_info` carried before. It makes no TM1 call, so a client can check the version
+  before its first request to TM1.
 
 ### Changed
 

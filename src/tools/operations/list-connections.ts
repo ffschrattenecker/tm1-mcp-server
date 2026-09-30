@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineTool } from "../define-tool.js";
 import { READ_ONLY } from "../annotations.js";
+import { NAME, VERSION } from "../../version.js";
 
 const ConnectionSchema = z.object({
   name: z.string(),
@@ -15,9 +16,12 @@ const ConnectionSchema = z.object({
 export const registerListConnections = defineTool({
   name: "tm1_list_connections",
   description:
-    "List the TM1 connections this server can reach: name (the `connection` argument of every other tool), readonly/readwrite mode, TM1_ENVIRONMENT label (and why mode was forced), TM1 version, and whether a session is open. Makes no TM1 call.",
+    "List the TM1 connections this server can reach: name (the `connection` argument of every other tool), readonly/readwrite mode, TM1_ENVIRONMENT label (and why mode was forced), TM1 version, and whether a session is open; plus this MCP server's own name and version. Makes no TM1 call.",
   annotations: READ_ONLY,
-  output: z.object({ connections: z.array(ConnectionSchema) }),
+  output: z.object({
+    server: z.object({ name: z.string(), version: z.string() }),
+    connections: z.array(ConnectionSchema),
+  }),
   input: {},
   connectionless: true,
   handler: (_args, registry) => {
@@ -34,7 +38,13 @@ export const registerListConnections = defineTool({
     }));
     return {
       content: [
-        { type: "text" as const, text: JSON.stringify({ connections }) },
+        {
+          type: "text" as const,
+          text: JSON.stringify({
+            server: { name: NAME, version: VERSION },
+            connections,
+          }),
+        },
       ],
     };
   },

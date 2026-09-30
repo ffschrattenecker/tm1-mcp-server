@@ -77,7 +77,7 @@ datasource (562-589).
 
 - `tm1_check_feeders` — Check the feeders of a cell: verifies feeder coverage for the cells underlying this cell and returns the problematic ones with a fed flag — fed=false marks a br
 - `tm1_check_writable_coords` — Pre-flight check before CellPutN/CellPutS
-- `tm1_execute_mdx` — Execute an MDX query against the TM1 server and return structured cell data with axes (page-envelope shape consistent with list_*)
+- `tm1_execute_mdx` — Execute an MDX query against the TM1 server and return structured cell data with axes (page envelope: total, count, offset, has_more, next_offset, items)
 - `tm1_get_view` — Execute a named cube view and return structured cell data with axes (page-envelope shape consistent with tm1_execute_mdx)
 - `tm1_sample_cells` — Return up to maxCells populated cells from a cube without guessing coordinates — builds a NON EMPTY CROSSJOIN MDX over the cube's dimensions and HEAD-limits it
 - `tm1_trace_cell_calculation` — Trace how a cell value is calculated: recursive component tree with per-component type (Consolidation/Rule/Simple), status (Null/Data/Error), value, and the rul

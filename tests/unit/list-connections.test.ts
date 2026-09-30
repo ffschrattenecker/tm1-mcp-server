@@ -13,6 +13,7 @@ import { defineTool } from "../../src/tools/define-tool.js";
 import { DESTRUCTIVE } from "../../src/tools/annotations.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import { registerListConnections } from "../../src/tools/operations/list-connections.js";
+import { NAME, VERSION } from "../../src/version.js";
 
 const logger = pino({ level: "silent" });
 
@@ -85,6 +86,16 @@ describe("tm1_list_connections", () => {
         connected: false,
       },
     ]);
+  });
+
+  // The skills gate writes on a minimum server version; this is where they read it.
+  it("reports this MCP server's name and version", async () => {
+    const { wrapped, tools } = capture();
+    registerListConnections(wrapped, registry);
+    const { server } = JSON.parse(
+      text(await tools.get("tm1_list_connections")!({})),
+    );
+    expect(server).toEqual({ name: NAME, version: VERSION });
   });
 
   it("names the prod rule in a write tool's refusal", async () => {
