@@ -4,7 +4,12 @@
 // hierarchy structure with edges, process code, chores) against the real
 // server. Strictly read-only.
 import { describe, it, expect, beforeAll } from "vitest";
-import { getHarness, LIVE_ENABLED, type LiveHarness } from "./harness.js";
+import {
+  getHarness,
+  LIVE_ENABLED,
+  restGet,
+  type LiveHarness,
+} from "./harness.js";
 
 describe.skipIf(!LIVE_ENABLED)("live: cross-connection compare", () => {
   let h: LiveHarness;
@@ -15,25 +20,24 @@ describe.skipIf(!LIVE_ENABLED)("live: cross-connection compare", () => {
 
   beforeAll(async () => {
     h = await getHarness();
-    const cubes = await h.ok("tm1_list_cubes", {
-      fetchAll: true,
-      includeRules: true,
-      includeControl: false,
-    });
-    const items: Array<{ name: string; hasRules?: boolean }> =
-      cubes.json?.items ?? [];
-    ruleCube = items.find((c) => c.hasRules)?.name;
-    otherCube = items.find((c) => c.name !== ruleCube)?.name;
-    const dims = await h.ok("tm1_list_dimensions", { fetchAll: true });
-    dimension = (dims.json?.items ?? [])
-      .map((d: { name: string }) => d.name)
-      .find((n: string) => !n.startsWith("}"));
-    const procs = await h.ok("tm1_list_processes", { fetchAll: true });
-    processName = (procs.json?.items ?? [])
-      .map((p: string | { name: string }) =>
-        typeof p === "string" ? p : p.name,
+    const cubes = await restGet<Array<{ Name: string; Rules?: string }>>(
+      h,
+      "Cubes?$select=Name,Rules&$filter=not startswith(Name,'}')",
+    );
+    ruleCube = cubes.find((c) => c.Rules)?.Name;
+    otherCube = cubes.find((c) => c.Name !== ruleCube)?.Name;
+    dimension = (
+      await restGet<Array<{ Name: string }>>(
+        h,
+        "Dimensions?$select=Name&$filter=not startswith(Name,'}')&$top=1",
       )
-      .find((n: string) => !n.startsWith("}"));
+    )[0]?.Name;
+    processName = (
+      await restGet<Array<{ Name: string }>>(
+        h,
+        "Processes?$select=Name&$filter=not startswith(Name,'}')&$top=1",
+      )
+    )[0]?.Name;
   });
 
   it("tm1_compare_environments: the model equals itself", async () => {

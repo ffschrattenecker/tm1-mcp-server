@@ -3,15 +3,17 @@
 // a real TM1 server — the exact gap the review named as its own blind spot
 // ("no run had a TM1 server, so every v11/v12 statement is code-derived").
 //
-// Covers: M12 (truncation sentinel), S10 (timestamp validation), P12 (parallel
-// view scopes), P2 (invalidation narrowing), T1 (response wire shape).
+// Covers: M12 (truncation sentinel), P2 (invalidation narrowing), T1 (response
+// wire shape). S10 and P12 went with the log and view-list tools.
 // Creates exactly one sandbox process and deletes it again.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
+  restGet,
   SANDBOX,
-  skipUnlessRegistered,
+  seg,
   type LiveHarness,
 } from "./harness.js";
 import {
@@ -23,6 +25,15 @@ import {
 
 const PROBE_PROC = `${SANDBOX}_P2_PROBE`;
 
+/** Up to `top` non-control cube names. */
+const cubeNames = async (h: LiveHarness, top: number): Promise<string[]> =>
+  (
+    await restGet<Array<{ Name: string }>>(
+      h,
+      `Cubes?$select=Name&$filter=not startswith(Name,'}')&$top=${top}`,
+    )
+  ).map((c) => c.Name);
+
 describe.skipIf(!LIVE_ENABLED)("live: audit fixes 2026-08-05", () => {
   let h: LiveHarness;
   beforeAll(async () => {
@@ -30,19 +41,13 @@ describe.skipIf(!LIVE_ENABLED)("live: audit fixes 2026-08-05", () => {
   });
 
   afterAll(async () => {
-    await h.call("tm1_delete_process", {
-      processName: PROBE_PROC,
-      confirm: PROBE_PROC,
-    });
+    await dropIfExists(h, seg("Processes", PROBE_PROC));
   });
 
   // ---- M12: truncated must be evidence, not inference -------------------
   describe("M12 — sample_cells truncation sentinel", () => {
     it("reports truncated=false when the result is exactly the page size", async () => {
-      const cubes = await h.ok("tm1_list_cubes", { limit: 50 });
-      const names: string[] = (cubes.json.items ?? []).map(
-        (c: { name: string }) => c.name,
-      );
+      const names = await cubeNames(h, 50);
 
       // Find a cube with FEWER populated cells than the probe limit — that is
       // the case the old `cells.length >= maxCells` comparison could not tell
@@ -89,62 +94,6 @@ describe.skipIf(!LIVE_ENABLED)("live: audit fixes 2026-08-05", () => {
     });
   });
 
-  // ---- S10: reject bad timestamps before they reach OData ----------------
-  describe("S10 — timestamp validation", () => {
-    it("rejects a non-ISO timestamp with a named error instead of an OData parse failure", async (ctx) => {
-      skipUnlessRegistered(ctx, h, "tm1_get_message_log");
-      const r = await h.call("tm1_get_message_log", {
-        since: "yesterday",
-        top: 1,
-      });
-      expect(r.isError).toBe(true);
-      expect(r.text).toMatch(/Not a usable timestamp/);
-      expect(r.text).toMatch(/yesterday/);
-    });
-
-    it("rejects an ambiguous locale date rather than silently picking a day", async (ctx) => {
-      skipUnlessRegistered(ctx, h, "tm1_get_message_log");
-      const r = await h.call("tm1_get_message_log", {
-        since: "08/06/2026",
-        top: 1,
-      });
-      expect(r.isError).toBe(true);
-      expect(r.text).toMatch(/Not a usable timestamp/);
-    });
-
-    it("still accepts ISO-8601 and reaches the server", async (ctx) => {
-      skipUnlessRegistered(ctx, h, "tm1_get_message_log");
-      const since = new Date(Date.now() - 10 * 60_000).toISOString();
-      const r = await h.ok("tm1_get_message_log", { since, top: 5 });
-      expect(r.json).toBeTruthy();
-    });
-  });
-
-  // ---- P12: both view scopes still arrive, now in parallel ---------------
-  describe("P12 — parallel public/private view listing", () => {
-    it("returns both scopes with public entries first", async () => {
-      const cubes = await h.ok("tm1_list_cubes", { limit: 10 });
-      const names: string[] = (cubes.json.items ?? []).map(
-        (c: { name: string }) => c.name,
-      );
-      let sawAny = false;
-      for (const cube of names) {
-        const r = await h.call("tm1_list_views", { cubeName: cube, limit: 50 });
-        if (r.isError) continue;
-        const items: Array<{ private: boolean }> = r.json.items ?? [];
-        if (items.length === 0) continue;
-        sawAny = true;
-        // Order contract: every public entry precedes every private one.
-        const firstPrivate = items.findIndex((v) => v.private);
-        if (firstPrivate >= 0) {
-          expect(items.slice(firstPrivate).every((v) => v.private)).toBe(true);
-        }
-        break;
-      }
-      expect(sawAny).toBe(true);
-    });
-  });
-
   // ---- P2: only code-relevant mutations may drop the index ---------------
   describe("P2 — callgraph invalidation is narrowed", () => {
     it("an MDX read does NOT discard the index, a process write does", async () => {
@@ -154,8 +103,7 @@ describe.skipIf(!LIVE_ENABLED)("live: audit fixes 2026-08-05", () => {
       await buildIndexFromTM1(h.client);
       expect(getCallgraphCacheStats()).toHaveLength(1);
 
-      const cubes = await h.ok("tm1_list_cubes", { limit: 1 });
-      const cube: string | undefined = cubes.json.items?.[0]?.name;
+      const [cube] = await cubeNames(h, 1);
       expect(cube).toBeTruthy();
 
       // ExecuteMDX is a POST, so the HTTP layer emits a mutation event for it.
@@ -179,7 +127,7 @@ describe.skipIf(!LIVE_ENABLED)("live: audit fixes 2026-08-05", () => {
   // ---- T1: wire shape over a real payload --------------------------------
   describe("T1 — response mode", () => {
     it("legacy ships the body twice: text AND structuredContent", async () => {
-      const r = await h.ok("tm1_get_server_info");
+      const r = await h.ok("tm1_get_server_state");
       expect(r.text).toBeTruthy();
       expect(r.result.structuredContent).toBeTruthy();
       expect(JSON.parse(r.text as string)).toEqual(r.result.structuredContent);

@@ -16,7 +16,13 @@
 // Strictly read-only: safe to point at any server, including production.
 // Every call is discovery-driven; nothing is created, changed, or deleted.
 import { describe, it, expect, beforeAll } from "vitest";
-import { getHarness, LIVE_ENABLED, type LiveHarness } from "./harness.js";
+import {
+  getHarness,
+  LIVE_ENABLED,
+  restGet,
+  seg,
+  type LiveHarness,
+} from "./harness.js";
 
 describe.skipIf(!LIVE_ENABLED)("live: broad read sweep", () => {
   let h: LiveHarness;
@@ -26,23 +32,25 @@ describe.skipIf(!LIVE_ENABLED)("live: broad read sweep", () => {
 
   beforeAll(async () => {
     h = await getHarness();
-    const cubes = await h.ok("tm1_list_cubes", { limit: 5 });
-    cube = (cubes.json as { items?: Array<{ name: string }> }).items?.[0]?.name;
-    const dims = await h.ok("tm1_list_dimensions", { limit: 5 });
-    dimension = (dims.json as { items?: Array<{ name: string }> }).items?.[0]
-      ?.name;
-    const procs = await h.ok("tm1_list_processes", { limit: 5 });
-    process = (procs.json as { items?: Array<{ name: string }> }).items?.[0]
-      ?.name;
+    const first = async (coll: string) =>
+      (
+        await restGet<Array<{ Name: string }>>(
+          h,
+          `${coll}?$select=Name&$filter=not startswith(Name,'}')&$top=1`,
+        )
+      )[0]?.Name;
+    cube = await first("Cubes");
+    dimension = await first("Dimensions");
+    process = await first("Processes");
   });
 
-  it("renders client groups and group members as names in markdown", async () => {
-    const clients = await h.ok("tm1_list_clients", { format: "markdown" });
-    const groups = await h.ok("tm1_list_groups", { format: "markdown" });
-    expect(clients.text).not.toContain("[object Object]");
-    expect(groups.text).not.toContain("[object Object]");
+  it("reads the ADMIN group with its members", async () => {
     // Every server has the admin group, and someone is in it.
-    expect(groups.text).toMatch(/\| ADMIN \| \S/);
+    const admin = await restGet<{ Users: Array<{ Name: string }> }>(
+      h,
+      "Groups('ADMIN')?$select=Name&$expand=Users($select=Name)",
+    );
+    expect(admin.Users.length).toBeGreaterThan(0);
   });
 
   it("finds something to read", () => {
@@ -53,14 +61,14 @@ describe.skipIf(!LIVE_ENABLED)("live: broad read sweep", () => {
 
   it("reads a cube's views, definitions and rules", async () => {
     if (!cube) return;
-    const views = await h.ok("tm1_list_views", { cubeName: cube, limit: 5 });
-    const first = (views.json as { items?: Array<{ name: string }> }).items?.[0]
-      ?.name;
+    const first = (
+      await restGet<Array<{ Name: string }>>(
+        h,
+        `${seg("Cubes", cube)}/Views?$select=Name&$top=5`,
+      )
+    )[0]?.Name;
     if (first) {
-      await h.ok("tm1_get_view_definition", {
-        cubeName: cube,
-        viewName: first,
-      });
+      await restGet(h, `${seg("Cubes", cube)}/${seg("Views", first)}`);
       // Real cells: the sandbox cube is empty, so this is the only place a
       // populated Value/FormattedValue shape is ever observed.
       await h.call("tm1_get_view", {
@@ -77,38 +85,22 @@ describe.skipIf(!LIVE_ENABLED)("live: broad read sweep", () => {
     if (!dimension) return;
     // TM1's default hierarchy carries the dimension's own name.
     const hierarchyName = dimension;
-    await h.call("tm1_list_subsets", {
-      dimensionName: dimension,
-      hierarchyName,
-      limit: 5,
-    });
-    await h.call("tm1_list_element_attributes", {
-      dimensionName: dimension,
-      hierarchyName,
-    });
-    const hier = await h.ok("tm1_get_hierarchy", {
-      dimensionName: dimension,
-      hierarchyName,
-      limit: 50,
-    });
-    const el = (hier.json as { elements?: Array<{ name: string }> })
-      .elements?.[0]?.name;
+    const hier = `${seg("Dimensions", dimension)}/${seg("Hierarchies", hierarchyName)}`;
+    await restGet(h, `${hier}/Subsets?$select=Name&$top=5`);
+    await restGet(h, `${hier}/ElementAttributes`);
+    const els = await restGet<Array<{ Name: string }>>(
+      h,
+      `${hier}/Elements?$select=Name,Type,Level&$expand=Parents($select=Name),Components($select=Name)&$top=50`,
+    );
+    const el = els[0]?.Name;
     if (el) {
       // Consolidated elements are where Children/Parents actually appear.
-      await h.call("tm1_get_descendants", {
-        dimensionName: dimension,
-        hierarchyName,
-        elementName: el,
-      });
-      await h.call("tm1_get_ancestors", {
-        dimensionName: dimension,
-        hierarchyName,
-        elementName: el,
-      });
-      await h.call("tm1_get_element_attribute_values", {
-        dimensionName: dimension,
-        hierarchyName,
-        elementName: el,
+      await restGet(
+        h,
+        `${hier}/${seg("Elements", el)}?$expand=Parents,Components`,
+      );
+      await h.call("tm1_resolve_default_members", {
+        items: [{ dimensionName: dimension }],
       });
     }
   });
@@ -132,12 +124,12 @@ describe.skipIf(!LIVE_ENABLED)("live: broad read sweep", () => {
   });
 
   it("reads server-level collections", async () => {
-    await h.call("tm1_get_server_info");
-    await h.call("tm1_list_chores", { limit: 5 });
-    await h.call("tm1_list_clients", { limit: 5 });
-    await h.call("tm1_list_groups", { limit: 5 });
-    await h.call("tm1_list_sessions", { limit: 5 });
+    await h.call("tm1_get_server_state");
+    await restGet(h, "Chores?$select=Name&$expand=Tasks&$top=5");
+    await restGet(h, "Users?$select=Name&$expand=Groups($select=Name)&$top=5");
+    await restGet(h, "Groups?$select=Name&$top=5");
+    await restGet(h, "Sessions?$select=ID&$expand=User($select=Name)&$top=5");
     await h.call("tm1_list_error_logs", { limit: 5 });
-    await h.call("tm1_list_files", { limit: 5 });
+    await h.call("tm1_files_read", { op: "list" });
   });
 });

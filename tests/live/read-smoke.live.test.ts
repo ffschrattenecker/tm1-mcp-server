@@ -13,47 +13,36 @@ describe.skipIf(!LIVE_ENABLED)("live: read smoke", () => {
 
   it("registers the full readwrite tool set", () => {
     const names = h.toolNames();
-    expect(names.length).toBeGreaterThan(90);
-    expect(names).toContain("tm1_get_server_info");
+    expect(names.length).toBeGreaterThan(50);
+    expect(names).toContain("tm1_rest_read");
     expect(names).toContain("tm1_write_cells"); // readwrite-only tool present
   });
 
-  it("get_server_info returns version", async () => {
-    const r = await h.ok("tm1_get_server_info");
+  it("get_server_state returns version", async () => {
+    const r = await h.ok("tm1_get_server_state");
     expect(r.json).toBeTruthy();
     expect(JSON.stringify(r.json)).toMatch(/\d+\.\d+/);
   });
 
-  it("list_cubes returns a pagination envelope", async () => {
-    const r = await h.ok("tm1_list_cubes", { limit: 5 });
-    expect(r.json).toMatchObject({
-      total: expect.any(Number),
-      count: expect.any(Number),
-      items: expect.any(Array),
-    });
+  it("rest_read lists cubes, dimensions and processes", async () => {
+    for (const coll of ["Cubes", "Dimensions", "Processes"]) {
+      const r = await h.ok("tm1_rest_read", {
+        path: `${coll}?$select=Name&$top=5`,
+      });
+      expect(r.json.data.value, coll).toBeInstanceOf(Array);
+    }
   });
 
-  it("list_dimensions works", async () => {
-    const r = await h.ok("tm1_list_dimensions", { limit: 5 });
-    expect(r.json.items).toBeInstanceOf(Array);
-  });
-
-  it("list_processes works", async () => {
-    const r = await h.ok("tm1_list_processes", { limit: 5 });
-    expect(r.json.items).toBeInstanceOf(Array);
-  });
-
-  it("bad nameRegex yields canonical VALIDATION_ERROR envelope", async () => {
-    const r = await h.call("tm1_list_cubes", { nameRegex: "[unclosed" });
+  it("a refused REST path yields a canonical error envelope with a hint", async () => {
+    const r = await h.call("tm1_rest_read", { path: "$batch" });
     expect(r.isError).toBe(true);
-    expect(r.json).toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(r.json?.code).toBeTruthy();
     expect(r.json.hint).toBeTruthy();
   });
 
-  it("unknown element returns an error envelope, not a throw", async () => {
-    const r = await h.call("tm1_get_hierarchy", {
-      dimensionName: "ZZ_MCP_LIVE_DOES_NOT_EXIST",
-      hierarchyName: "ZZ_MCP_LIVE_DOES_NOT_EXIST",
+  it("unknown dimension returns an error envelope, not a throw", async () => {
+    const r = await h.call("tm1_rest_read", {
+      path: "Dimensions('ZZ_MCP_LIVE_DOES_NOT_EXIST')/Hierarchies('ZZ_MCP_LIVE_DOES_NOT_EXIST')",
     });
     expect(r.isError).toBe(true);
     expect(r.json?.code).toBeTruthy();

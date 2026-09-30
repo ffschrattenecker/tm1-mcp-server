@@ -5,11 +5,38 @@
 //
 // Strictly read-only: this suite creates and mutates NOTHING. Real object names
 // (cubes, processes, rule-bearing cubes, real cell coordinates) are discovered
-// dynamically via list_*/sample_cells, never hardcoded, so it adapts to whatever
+// dynamically via tm1_rest_read/sample_cells, never hardcoded, so it adapts to whatever
 // the live model contains. Slow/global tools (transaction log) are avoided and
 // every scope is kept small to finish well inside the 120s timeout.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { getHarness, LIVE_ENABLED, type LiveHarness } from "./harness.js";
+import {
+  getHarness,
+  LIVE_ENABLED,
+  restGet,
+  seg,
+  type LiveHarness,
+} from "./harness.js";
+
+/** Non-control cubes with their rules flag and dimension names (dim order). */
+async function cubesWithDimensions(
+  h: LiveHarness,
+): Promise<Array<{ name: string; hasRules: boolean; dimensions: string[] }>> {
+  const rows = await restGet<
+    Array<{
+      Name: string;
+      Rules?: string | null;
+      Dimensions: Array<{ Name: string }>;
+    }>
+  >(
+    h,
+    "Cubes?$select=Name,Rules&$filter=not startswith(Name,'}')&$expand=Dimensions($select=Name)",
+  );
+  return rows.map((c) => ({
+    name: c.Name,
+    hasRules: Boolean(c.Rules?.trim()),
+    dimensions: c.Dimensions.map((d) => d.Name),
+  }));
+}
 
 describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
   let h: LiveHarness;
@@ -25,25 +52,12 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
     h = await getHarness();
 
     // ── Discover real cubes (with hasRules) and processes ──────────────────
-    const cubes = await h.ok("tm1_list_cubes", {
-      fetchAll: true,
-      includeRules: true,
-      includeDimensions: true,
-      includeControl: false,
-    });
-    const cubeItems: Array<{
-      name: string;
-      hasRules?: boolean;
-      dimensions?: string[];
-    }> = cubes.json?.items ?? [];
+    const cubeItems = await cubesWithDimensions(h);
     cubeNames = cubeItems.map((c) => c.name);
 
-    const procs = await h.ok("tm1_list_processes", { fetchAll: true });
-    processNames = (procs.json?.items ?? [])
-      .map((p: unknown) =>
-        typeof p === "string" ? p : (p as { name?: string })?.name,
-      )
-      .filter((n: unknown): n is string => typeof n === "string");
+    processNames = (
+      await restGet<Array<{ Name: string }>>(h, "Processes?$select=Name")
+    ).map((p) => p.Name);
 
     // ── Find a rule-bearing cube and a real populated cell inside it ───────
     const ruleCubes = cubeItems.filter(
@@ -304,25 +318,16 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
     expect(r.json?.code).toBe("VALIDATION_ERROR");
   });
 
-  // ── find_orphan_dimensions ──────────────────────────────────────────────
-  it("tm1_find_orphan_dimensions: model hygiene check", async () => {
-    const r = await h.ok("tm1_find_orphan_dimensions", { fetchAll: true });
-    expect(r.isError).toBe(false);
-    expect(r.json).toMatchObject({
-      totalDimensions: expect.any(Number),
-      totalCubes: expect.any(Number),
-      orphanCount: expect.any(Number),
-      items: expect.any(Array),
+  // ── analyze_callgraph refresh ──────────────────────────────────────────
+  it("tm1_analyze_callgraph refresh:true rebuilds the index and answers", async () => {
+    if (processNames.length === 0) return;
+    const r = await h.ok("tm1_analyze_callgraph", {
+      start: processNames[0],
+      direction: "downstream",
+      mode: "compact",
+      refresh: true,
     });
-  });
-
-  // ── invalidate_callgraph_cache ──────────────────────────────────────────
-  it("tm1_invalidate_callgraph_cache: drops the index cache", async () => {
-    const r = await h.ok("tm1_invalidate_callgraph_cache");
     expect(r.isError).toBe(false);
-    // `cleared` is a count of dropped index entries (number).
-    expect(r.json).toHaveProperty("cleared");
-    expect(typeof r.json.cleared).toBe("number");
   });
 
   // ── check_feeders (v11 runtime, real cell) ──────────────────────────────
@@ -356,25 +361,14 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
   // against v12 while proving nothing). Needs only a cube one of whose
   // dimensions carries a second hierarchy.
   it("tm1_check_feeders: Hier:Elem addresses an alternate hierarchy", async () => {
-    const dimList = await h.ok("tm1_list_dimensions", { fetchAll: true });
+    const dimList = await restGet<
+      Array<{ Name: string; Hierarchies: Array<{ Name: string }> }>
+    >(h, "Dimensions?$select=Name&$expand=Hierarchies($select=Name)");
     const hierarchiesOf = new Map<string, string[]>(
-      (
-        (dimList.json?.items ?? []) as Array<{
-          name: string;
-          hierarchies?: string[];
-        }>
-      ).map((d) => [d.name, d.hierarchies ?? []]),
+      dimList.map((d) => [d.Name, d.Hierarchies.map((x) => x.Name)]),
     );
 
-    const cubes = await h.ok("tm1_list_cubes", {
-      fetchAll: true,
-      includeDimensions: true,
-      includeControl: false,
-    });
-    const cubeItems = (cubes.json?.items ?? []) as Array<{
-      name: string;
-      dimensions?: string[];
-    }>;
+    const cubeItems = await cubesWithDimensions(h);
 
     // One element per dimension, taken from its DEFAULT hierarchy. The cell
     // need not hold data — only the coordinate has to resolve.
@@ -382,13 +376,10 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
       dim: string,
       hier: string,
     ): Promise<string | undefined> => {
-      const r = await h.call("tm1_get_hierarchy", {
-        dimensionName: dim,
-        hierarchyName: hier,
-        compact: true,
-        topN: 1,
+      const r = await h.call("tm1_rest_read", {
+        path: `${seg("Dimensions", dim)}/${seg("Hierarchies", hier)}/Elements?$select=Name&$top=1`,
       });
-      return r.json?.elements?.[0]?.name;
+      return r.json?.data?.value?.[0]?.Name;
     };
 
     let probe:
