@@ -2,11 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TM1ErrorCode } from "../../src/types.js";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type { FnSpy } from "../helpers/spy-types.js";
-import { TM1Client } from "../../src/tm1-client.js";
-import { SessionManager } from "../../src/session-manager.js";
+import { type TM1Client } from "../../src/tm1-client.js";
 import { TM1Error } from "../../src/types.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
-import { mockLogger, mockResponse } from "../helpers/client-harness.js";
+import { mockResponse, stubbedClient } from "../helpers/client-harness.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -23,13 +22,7 @@ describe("TM1Client – Cell Data Methods", () => {
     stubContractCheckedFetch(fetchSpy);
 
     const config = makeConfig();
-    const sessionManager = new SessionManager(config, mockLogger);
-    vi.spyOn(sessionManager, "ensureSession").mockResolvedValue("session123");
-    vi.spyOn(sessionManager, "authenticate").mockResolvedValue("session123");
-    vi.spyOn(sessionManager, "startKeepAlive").mockImplementation(() => {});
-    vi.spyOn(sessionManager, "stopKeepAlive").mockImplementation(() => {});
-
-    client = new TM1Client(config, sessionManager, mockLogger);
+    client = stubbedClient(config);
   });
 
   afterEach(() => {
@@ -743,10 +736,7 @@ describe("TM1Client – Cell Data Methods", () => {
         version: numericVersion,
         tm1Version: version,
       };
-      const sm = new SessionManager(cfg, mockLogger);
-      vi.spyOn(sm, "ensureSession").mockResolvedValue("s");
-      vi.spyOn(sm, "authenticate").mockResolvedValue("s");
-      return new TM1Client(cfg, sm, mockLogger);
+      return stubbedClient(cfg, "s");
     }
 
     function mock204(): Response {

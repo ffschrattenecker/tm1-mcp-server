@@ -20,10 +20,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type { FnSpy } from "../helpers/spy-types.js";
-import { TM1Client } from "../../src/tm1-client.js";
-import { SessionManager } from "../../src/session-manager.js";
+import { type TM1Client } from "../../src/tm1-client.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
-import { mockLogger, mockResponse } from "../helpers/client-harness.js";
+import { mockResponse, stubbedClient } from "../helpers/client-harness.js";
 
 const makeConfig = () => makeTestConfig({ requestTimeoutMs: 5000 });
 
@@ -67,12 +66,7 @@ describe("ProcessService.fetchForCallgraph — fallback discipline (P7/K6/T-9)",
     fetchSpy = vi.fn();
     stubContractCheckedFetch(fetchSpy);
     const config = makeConfig();
-    const sessionManager = new SessionManager(config, mockLogger);
-    vi.spyOn(sessionManager, "ensureSession").mockResolvedValue("session123");
-    vi.spyOn(sessionManager, "authenticate").mockResolvedValue("session123");
-    vi.spyOn(sessionManager, "startKeepAlive").mockImplementation(() => {});
-    vi.spyOn(sessionManager, "stopKeepAlive").mockImplementation(() => {});
-    client = new TM1Client(config, sessionManager, mockLogger);
+    client = stubbedClient(config);
   });
 
   afterEach(() => {
@@ -195,12 +189,7 @@ describe("ViewService.list — permission denial must not read as 'no views' (T-
     fetchSpy = vi.fn();
     stubContractCheckedFetch(fetchSpy);
     const config = makeConfig();
-    const sessionManager = new SessionManager(config, mockLogger);
-    vi.spyOn(sessionManager, "ensureSession").mockResolvedValue("session123");
-    vi.spyOn(sessionManager, "authenticate").mockResolvedValue("session123");
-    vi.spyOn(sessionManager, "startKeepAlive").mockImplementation(() => {});
-    vi.spyOn(sessionManager, "stopKeepAlive").mockImplementation(() => {});
-    client = new TM1Client(config, sessionManager, mockLogger);
+    client = stubbedClient(config);
   });
 
   afterEach(() => {

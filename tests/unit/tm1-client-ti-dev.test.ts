@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type { FnSpy } from "../helpers/spy-types.js";
-import { TM1Client } from "../../src/tm1-client.js";
-import { SessionManager } from "../../src/session-manager.js";
+import { type TM1Client } from "../../src/tm1-client.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
 import type { TM1Config } from "../../src/config.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
-import { mockLogger, mockResponse } from "../helpers/client-harness.js";
+import { mockResponse, stubbedClient } from "../helpers/client-harness.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,13 +45,7 @@ describe("TM1Client – TI Development Methods", () => {
     stubContractCheckedFetch(fetchSpy);
 
     const config = makeConfig();
-    const sessionManager = new SessionManager(config, mockLogger);
-    vi.spyOn(sessionManager, "ensureSession").mockResolvedValue("session123");
-    vi.spyOn(sessionManager, "authenticate").mockResolvedValue("session123");
-    vi.spyOn(sessionManager, "startKeepAlive").mockImplementation(() => {});
-    vi.spyOn(sessionManager, "stopKeepAlive").mockImplementation(() => {});
-
-    client = new TM1Client(config, sessionManager, mockLogger);
+    client = stubbedClient(config);
   });
 
   afterEach(() => {
@@ -381,10 +374,7 @@ describe("TM1Client – TI Development Methods", () => {
       "%s: sends usesUnicode for an ODBC source",
       async (tm1Version, version) => {
         const cfg = { ...makeConfig(), version, tm1Version } as TM1Config;
-        const sm = new SessionManager(cfg, mockLogger);
-        vi.spyOn(sm, "ensureSession").mockResolvedValue("sess");
-        vi.spyOn(sm, "authenticate").mockResolvedValue("sess");
-        const c = new TM1Client(cfg, sm, mockLogger);
+        const c = stubbedClient(cfg, "sess");
         fetchSpy.mockResolvedValueOnce(mock204Response());
 
         await c.processes.updateDataSource("ImportODBC", {
@@ -406,10 +396,7 @@ describe("TM1Client – TI Development Methods", () => {
       "%s: drops usesUnicode for a non-ODBC source",
       async (tm1Version, version) => {
         const cfg = { ...makeConfig(), version, tm1Version } as TM1Config;
-        const sm = new SessionManager(cfg, mockLogger);
-        vi.spyOn(sm, "ensureSession").mockResolvedValue("sess");
-        vi.spyOn(sm, "authenticate").mockResolvedValue("sess");
-        const c = new TM1Client(cfg, sm, mockLogger);
+        const c = stubbedClient(cfg, "sess");
         fetchSpy.mockResolvedValueOnce(mock204Response());
 
         await c.processes.updateDataSource("ImportCSV", {

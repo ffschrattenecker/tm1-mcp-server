@@ -6,18 +6,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { FnSpy } from "../helpers/spy-types.js";
 import * as fc from "fast-check";
-import { TM1Client } from "../../src/tm1-client.js";
-import { SessionManager } from "../../src/session-manager.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
-import { mockLogger } from "../helpers/client-harness.js";
+import { stubbedClient } from "../helpers/client-harness.js";
 const originalFetch = globalThis.fetch;
 function makeClient(f: FnSpy) {
   globalThis.fetch = f as typeof fetch;
   const c = makeTestConfig({ requestTimeoutMs: 5000 });
-  const sm = new SessionManager(c, mockLogger);
-  vi.spyOn(sm, "ensureSession").mockResolvedValue("s");
-  vi.spyOn(sm, "authenticate").mockResolvedValue("s");
-  return new TM1Client(c, sm, mockLogger);
+  return stubbedClient(c, "s");
 }
 
 describe("Property 7: Prozessausführungs-Ergebnis", () => {

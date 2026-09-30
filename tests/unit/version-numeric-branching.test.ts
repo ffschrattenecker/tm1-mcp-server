@@ -2,10 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createConnectionProfile } from "../../src/tm1-client/connection/profile.js";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type { FnSpy } from "../helpers/spy-types.js";
-import { TM1Client } from "../../src/tm1-client.js";
-import { SessionManager } from "../../src/session-manager.js";
+import { type TM1Client } from "../../src/tm1-client.js";
 import type { TM1Config } from "../../src/config.js";
-import { mockLogger } from "../helpers/client-harness.js";
+import { stubbedClient } from "../helpers/client-harness.js";
 
 // A3 regression: service version-gating must branch on the NUMERIC
 // config.version (single source of truth), never on the tm1Version display
@@ -30,10 +29,7 @@ function makeConfig(over: Partial<TM1Config>): TM1Config {
 }
 
 function makeClient(config: TM1Config): TM1Client {
-  const sessionManager = new SessionManager(config, mockLogger);
-  vi.spyOn(sessionManager, "ensureSession").mockResolvedValue("session123");
-  vi.spyOn(sessionManager, "authenticate").mockResolvedValue("session123");
-  return new TM1Client(config, sessionManager, mockLogger);
+  return stubbedClient(config);
 }
 
 describe("A3 — service version-gating uses numeric config.version", () => {

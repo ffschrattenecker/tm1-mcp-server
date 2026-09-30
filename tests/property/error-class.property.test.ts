@@ -10,10 +10,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import * as fc from "fast-check";
 import { TM1HttpClient } from "../../src/tm1-client/http.js";
-import { SessionManager } from "../../src/session-manager.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
-import { mockLogger } from "../helpers/client-harness.js";
+import { mockLogger, stubSession } from "../helpers/client-harness.js";
 
 const makeConfig = () => makeTestConfig({ requestTimeoutMs: 5000 });
 
@@ -75,10 +74,11 @@ describe("Property 15: API-Fehlerantwort-Struktur", () => {
           globalThis.fetch = localFetch as typeof fetch;
 
           const config = makeConfig();
-          const sm = new SessionManager(config, mockLogger);
-          vi.spyOn(sm, "ensureSession").mockResolvedValue("session123");
-          vi.spyOn(sm, "authenticate").mockResolvedValue("newSession");
-          const client = new TestTM1Client(config, sm, mockLogger);
+          const client = new TestTM1Client(
+            config,
+            stubSession(config, "session123", "newSession"),
+            mockLogger,
+          );
 
           try {
             await client.testRequest("GET", endpoint);
@@ -123,10 +123,11 @@ describe("Property 16: Netzwerkfehler-Klassifizierung", () => {
           globalThis.fetch = localFetch as typeof fetch;
 
           const config = makeConfig();
-          const sm = new SessionManager(config, mockLogger);
-          vi.spyOn(sm, "ensureSession").mockResolvedValue("session123");
-          vi.spyOn(sm, "authenticate").mockResolvedValue("newSession");
-          const client = new TestTM1Client(config, sm, mockLogger);
+          const client = new TestTM1Client(
+            config,
+            stubSession(config, "session123", "newSession"),
+            mockLogger,
+          );
 
           try {
             await client.testRequest("GET", endpoint);
@@ -180,10 +181,11 @@ describe("Property 12: Berechtigungsfehler-Klassifizierung", () => {
           globalThis.fetch = localFetch as typeof fetch;
 
           const config = makeConfig();
-          const sm = new SessionManager(config, mockLogger);
-          vi.spyOn(sm, "ensureSession").mockResolvedValue("session123");
-          vi.spyOn(sm, "authenticate").mockResolvedValue("newSession");
-          const client = new TestTM1Client(config, sm, mockLogger);
+          const client = new TestTM1Client(
+            config,
+            stubSession(config, "session123", "newSession"),
+            mockLogger,
+          );
 
           try {
             await client.testRequest("GET", endpoint);

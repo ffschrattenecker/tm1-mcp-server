@@ -2,6 +2,9 @@
 // layers) against a stubbed fetch.
 import { vi } from "vitest";
 import type pino from "pino";
+import type { TM1Config } from "../../src/config.js";
+import { SessionManager } from "../../src/session-manager.js";
+import { TM1Client } from "../../src/tm1-client.js";
 
 /**
  * A silent pino stand-in. Module state is per test file (vitest isolates
@@ -29,4 +32,27 @@ export function mockResponse(body: unknown, status = 200): Response {
     text: vi.fn().mockResolvedValue(JSON.stringify(body)),
     json: vi.fn().mockResolvedValue(body),
   } as unknown as Response;
+}
+
+/**
+ * A SessionManager that never reaches the network: `ensureSession` resolves
+ * to `cookie`, the 401 re-login (`authenticate`) to `reauth`, and keep-alive
+ * is a no-op.
+ */
+export function stubSession(
+  config: TM1Config,
+  cookie = "session123",
+  reauth = cookie,
+): SessionManager {
+  const sm = new SessionManager(config, mockLogger);
+  vi.spyOn(sm, "ensureSession").mockResolvedValue(cookie);
+  vi.spyOn(sm, "authenticate").mockResolvedValue(reauth);
+  vi.spyOn(sm, "startKeepAlive").mockImplementation(() => {});
+  vi.spyOn(sm, "stopKeepAlive").mockImplementation(() => {});
+  return sm;
+}
+
+/** A TM1Client over {@link stubSession}, talking to whatever fetch is stubbed. */
+export function stubbedClient(config: TM1Config, cookie?: string): TM1Client {
+  return new TM1Client(config, stubSession(config, cookie), mockLogger);
 }

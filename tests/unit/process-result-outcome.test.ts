@@ -14,13 +14,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type { FnSpy } from "../helpers/spy-types.js";
-import { TM1Client } from "../../src/tm1-client.js";
-import { SessionManager } from "../../src/session-manager.js";
+import { type TM1Client } from "../../src/tm1-client.js";
 import type { ProcessResult } from "../../src/types.js";
 import { ProcessResultSchema } from "../../src/tools/schemas/items-processes.js";
 import { classifyExecution } from "../../src/tm1-client/services/process-status.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
-import { mockLogger, mockResponse } from "../helpers/client-harness.js";
+import { mockResponse, stubbedClient } from "../helpers/client-harness.js";
 
 function mockEmptyBody(status = 200): Response {
   return {
@@ -41,12 +40,7 @@ describe("ProcessResult — a missing status code is not success (T-4)", () => {
     fetchSpy = vi.fn();
     stubContractCheckedFetch(fetchSpy);
     const config = makeTestConfig({ requestTimeoutMs: 5000 });
-    const sessionManager = new SessionManager(config, mockLogger);
-    vi.spyOn(sessionManager, "ensureSession").mockResolvedValue("session123");
-    vi.spyOn(sessionManager, "authenticate").mockResolvedValue("session123");
-    vi.spyOn(sessionManager, "startKeepAlive").mockImplementation(() => {});
-    vi.spyOn(sessionManager, "stopKeepAlive").mockImplementation(() => {});
-    client = new TM1Client(config, sessionManager, mockLogger);
+    client = stubbedClient(config);
   });
 
   afterEach(() => {

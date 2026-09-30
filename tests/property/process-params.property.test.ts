@@ -5,11 +5,9 @@
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import * as fc from "fast-check";
-import { TM1Client } from "../../src/tm1-client.js";
-import { SessionManager } from "../../src/session-manager.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
 import type { ProcessParameter } from "../../src/types.js";
-import { mockLogger } from "../helpers/client-harness.js";
+import { stubbedClient } from "../helpers/client-harness.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -66,10 +64,7 @@ describe("Property 8: Prozessparameter-Roundtrip", () => {
             });
           globalThis.fetch = f as typeof fetch;
           const c = makeTestConfig({ requestTimeoutMs: 5000 });
-          const sm = new SessionManager(c, mockLogger);
-          vi.spyOn(sm, "ensureSession").mockResolvedValue("s");
-          vi.spyOn(sm, "authenticate").mockResolvedValue("s");
-          const client = new TM1Client(c, sm, mockLogger);
+          const client = stubbedClient(c, "s");
 
           // Write
           await client.processes.updateParameters("TestProcess", params);

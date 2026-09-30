@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type { FnSpy } from "../helpers/spy-types.js";
-import { TM1Client } from "../../src/tm1-client.js";
-import { SessionManager } from "../../src/session-manager.js";
+import { type TM1Client } from "../../src/tm1-client.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
-import { mockLogger } from "../helpers/client-harness.js";
+import { stubbedClient } from "../helpers/client-harness.js";
 
 function ok(body?: unknown): Response {
   const bodyText = body !== undefined ? JSON.stringify(body) : "";
@@ -39,12 +38,7 @@ describe("DimensionService.resolveDefaultMember", () => {
     fetchSpy = vi.fn();
     stubContractCheckedFetch(fetchSpy);
     const config = makeTestConfig({ requestTimeoutMs: 5000 });
-    const sm = new SessionManager(config, mockLogger);
-    vi.spyOn(sm, "ensureSession").mockResolvedValue("s");
-    vi.spyOn(sm, "authenticate").mockResolvedValue("s");
-    vi.spyOn(sm, "startKeepAlive").mockImplementation(() => {});
-    vi.spyOn(sm, "stopKeepAlive").mockImplementation(() => {});
-    client = new TM1Client(config, sm, mockLogger);
+    client = stubbedClient(config, "s");
   });
 
   afterEach(() => {

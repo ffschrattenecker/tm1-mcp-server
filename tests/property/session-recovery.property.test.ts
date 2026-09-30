@@ -9,9 +9,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import * as fc from "fast-check";
 import { TM1HttpClient } from "../../src/tm1-client/http.js";
-import { SessionManager } from "../../src/session-manager.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
-import { mockLogger } from "../helpers/client-harness.js";
+import { mockLogger, stubSession } from "../helpers/client-harness.js";
 
 class TestTM1Client extends TM1HttpClient {
   async testRequest<T = unknown>(
@@ -74,9 +73,7 @@ describe("Property 3: Session-Wiederherstellung bei 401", () => {
           globalThis.fetch = localFetch as typeof fetch;
 
           const config = makeTestConfig();
-          const sm = new SessionManager(config, mockLogger);
-          vi.spyOn(sm, "ensureSession").mockResolvedValue("oldSession");
-          vi.spyOn(sm, "authenticate").mockResolvedValue("newSession");
+          const sm = stubSession(config, "oldSession", "newSession");
           const client = new TestTM1Client(config, sm, mockLogger);
 
           const result = await client.testRequest("GET", endpoint);
