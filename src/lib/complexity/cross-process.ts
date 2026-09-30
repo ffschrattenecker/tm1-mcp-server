@@ -6,7 +6,6 @@
  * raw counts. A 200-line process with idiosyncratic naming hurts more than a
  * 1000-line process that follows the same patterns as its 50 siblings.
  */
-import type { TiTab } from "./process-metrics.js";
 
 export type VarType = "String" | "Numeric";
 
@@ -153,14 +152,6 @@ export function reportPrefixConvention(
   const prefixed = total - counts.none;
   const adherence = total === 0 ? 0 : prefixed / total;
   return { distribution, adherence, total, unprefixed: counts.none };
-}
-
-/** ── 4) Cohort grouping by name suffix ──────────────────────────────────── */
-
-export interface CohortInput {
-  process: string;
-  /** Optional pre-computed per-tab LOC for structural comparison (future use). */
-  tabLoc?: Record<TiTab, number>;
 }
 
 export interface Cohort {

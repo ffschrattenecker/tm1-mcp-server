@@ -1,6 +1,5 @@
 // Metadata-domain result schemas: cube rules, cube stats and default members.
 import { z } from "zod";
-export { ElementStatsSchema } from "../../schemas/metadata.js";
 
 export const CubeRulesSchema = z.object({
   cubeName: z.string(),

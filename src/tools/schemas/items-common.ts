@@ -5,11 +5,7 @@ import { z } from "zod";
 
 // Canonical domain primitives — defined once in src/schemas/ and re-exported
 // here so the per-category item schemas keep their existing import path.
-export {
-  CellValueSchema,
-  ELEMENT_TYPE,
-  PARAM_TYPE,
-} from "../../schemas/common.js";
+export { CellValueSchema } from "../../schemas/common.js";
 
 // Outcome axis of a TI run — mirrors `ProcessOutcome` in src/types.ts, where
 // the measured status-code mapping is documented. All three non-success values

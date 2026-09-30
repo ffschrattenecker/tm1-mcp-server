@@ -1,6 +1,6 @@
 // Metadata domain: element statistics and per-element attribute values.
 import { z } from "zod";
-import { CellValueSchema, ELEMENT_TYPE } from "./common.js";
+import { ELEMENT_TYPE } from "./common.js";
 
 export const CubeSchema = z.object({
   name: z.string(),
@@ -16,14 +16,6 @@ export const ElementStatsSchema = z.object({
   string: z.number().int(),
   maxLevel: z.number().int(),
 });
-export type ElementStats = z.infer<typeof ElementStatsSchema>;
-
-export const ElementAttributeValueSchema = z.object({
-  elementName: z.string(),
-  attributeName: z.string(),
-  value: CellValueSchema,
-});
-export type ElementAttributeValue = z.infer<typeof ElementAttributeValueSchema>;
 
 export const DimensionSchema = z.object({
   name: z.string(),

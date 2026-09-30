@@ -33,17 +33,6 @@ export const CONFIRM_SCHEMA = {
     ),
 };
 
-// For a destructive tool with a dryRun: a dry run needs no confirm, so the
-// field is optional in the schema and required at runtime on the real call.
-export const DRY_RUN_CONFIRM_SCHEMA = {
-  confirm: z
-    .string()
-    .optional()
-    .describe(
-      "Required unless dryRun=true: repeat the target identifier verbatim to confirm this irreversible action. A dry run is not a confirmation.",
-    ),
-};
-
 export function requireConfirm(
   provided: string | undefined,
   target: string,

@@ -188,18 +188,6 @@ export class FileService {
   }
 
   /**
-   * Get the content of a file from TM1 server's blob/file storage.
-   * Returns raw text (CSV/TXT/etc).
-   * Tries v12 'Files' first, falls back to v11 'Blobs'.
-   */
-  async getContent(
-    fileName: string,
-    container: FileContainer = "files",
-  ): Promise<string> {
-    return (await this.getContentBytes(fileName, container)).toString("utf8");
-  }
-
-  /**
    * The same read, byte-for-byte. The Applications tree holds spreadsheets and
    * other binaries, which a UTF-8 decode would quietly destroy.
    */

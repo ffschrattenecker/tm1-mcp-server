@@ -128,30 +128,6 @@ export class CubeService {
   }
 
   /**
-   * Create a new cube with the given dimensions (in order).
-   * POST /api/v1/Cubes
-   */
-  async create(name: string, dimensionNames: string[]): Promise<void> {
-    await this.http.request<void>("POST", "/api/v1/Cubes", {
-      Name: name,
-      Dimensions: dimensionNames.map((d) => ({
-        "@odata.id": `Dimensions('${odataKey(d)}')`,
-      })),
-    });
-  }
-
-  /**
-   * Delete a cube.
-   * DELETE /api/v1/Cubes('{name}')
-   */
-  async delete(name: string): Promise<void> {
-    await this.http.request<void>(
-      "DELETE",
-      `/api/v1/Cubes('${odataKey(name)}')`,
-    );
-  }
-
-  /**
    * Get the rules text for a cube.
    * GET /api/v1/Cubes('{name}')/Rules
    */
@@ -320,20 +296,6 @@ export class CubeService {
     opts?: Pick<RequestOptions, "timeoutMs">,
   ): Promise<void> {
     await this.clearViaTI(cubeName, opts);
-  }
-
-  /**
-   * Unload a cube from memory. Forces TM1 to discard the in-memory fed-cell
-   * index and reload from disk on next access. Required for feeder corrections
-   * to take effect — the fed-cell index is cumulative, so changes to existing
-   * feeders only become visible after an unload.
-   * POST /api/v1/Cubes('{cube}')/tm1.Unload
-   */
-  async unload(cubeName: string): Promise<void> {
-    await this.http.request<void>(
-      "POST",
-      `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.Unload`,
-    );
   }
 
   // 11.x fallback: deploy ephemeral TI with CubeClearData(), execute, delete.

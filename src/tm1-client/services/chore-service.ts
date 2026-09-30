@@ -64,15 +64,6 @@ export class ChoreService {
   }
 
   /**
-   * Activate or deactivate a chore.
-   * PATCH /api/v1/Chores('{name}') with { Active: bool }
-   */
-  async toggleActive(choreName: string, active: boolean): Promise<void> {
-    const path = `/api/v1/Chores('${odataKey(choreName)}')`;
-    await this.http.request<void>("PATCH", path, { Active: active });
-  }
-
-  /**
    * Execute a chore immediately (bypass its schedule), and report how it ended.
    *
    * Both actions run as TM1 async operations: the POST is accepted at once
@@ -161,30 +152,6 @@ export class ChoreService {
   }
 
   /**
-   * Create a new chore.
-   * POST /api/v1/Chores
-   */
-  async create(chore: ChoreCreate): Promise<void> {
-    const body = {
-      Name: chore.name,
-      StartTime: chore.startTime,
-      DSTSensitive: chore.dstSensitive,
-      Active: chore.active,
-      ExecutionMode: chore.executionMode,
-      Frequency: frequencyDuration(chore.frequency),
-      Tasks: chore.steps.map((step, idx) => ({
-        Step: idx,
-        "Process@odata.bind": `Processes('${odataKey(step.process)}')`,
-        Parameters: step.parameters.map((p) => ({
-          Name: p.name,
-          Value: p.value,
-        })),
-      })),
-    };
-    await this.http.request<void>("POST", "/api/v1/Chores", body);
-  }
-
-  /**
    * Update an existing chore (partial update).
    * PATCH /api/v1/Chores('{name}')
    */
@@ -221,16 +188,5 @@ export class ChoreService {
       }));
     }
     await this.http.request<void>("PATCH", path, body);
-  }
-
-  /**
-   * Delete a chore.
-   * DELETE /api/v1/Chores('{name}')
-   */
-  async delete(choreName: string): Promise<void> {
-    await this.http.request<void>(
-      "DELETE",
-      `/api/v1/Chores('${odataKey(choreName)}')`,
-    );
   }
 }

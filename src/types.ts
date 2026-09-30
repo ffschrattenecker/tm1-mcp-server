@@ -104,65 +104,45 @@ export function hintForCode(code: TM1ErrorCode | string): string {
 // are imported here (other declarations below build on them) and re-exported,
 // because every consumer already imports them from this module.
 import type {
-  AuditLogDetail,
   CellValue,
   Chore,
   Client,
   Cube,
   DataSource,
   Dimension,
-  ElementAttributeValue,
-  ElementStats,
   ErrorLogFile,
   FedCellDescriptor,
-  Group,
   Hierarchy,
   HierarchyElement,
   IgnoredColumn,
-  Job,
-  JobSession,
-  JobWaitingOn,
   MdxAxis,
-  MessageLogEntry,
   Process,
   ProcessCode,
   ProcessParameter,
   ProcessVariable,
-  Session,
   Subset,
-  Thread,
   TransactionLogEntry,
   ViewAxisSubsetRef,
 } from "./schemas/index.js";
 
 export type {
-  AuditLogDetail,
   CellValue,
   Chore,
   Client,
   Cube,
   DataSource,
   Dimension,
-  ElementAttributeValue,
-  ElementStats,
   ErrorLogFile,
   FedCellDescriptor,
-  Group,
   Hierarchy,
   HierarchyElement,
   IgnoredColumn,
-  Job,
-  JobSession,
-  JobWaitingOn,
   MdxAxis,
-  MessageLogEntry,
   Process,
   ProcessCode,
   ProcessParameter,
   ProcessVariable,
-  Session,
   Subset,
-  Thread,
   TransactionLogEntry,
   ViewAxisSubsetRef,
 };
@@ -225,37 +205,6 @@ export interface NativeViewDefinition {
   rows: ViewAxisSubsetRef[];
 }
 
-/**
- * Axis spec for creating a native view. Exactly one subset source per axis:
- * a registered subset name, an MDX expression, or an explicit element list.
- */
-export interface NativeViewAxisSpec {
-  dimension: string;
-  /** Defaults to the dimension name (same-named hierarchy). */
-  hierarchy?: string | undefined;
-  subset?: string | undefined;
-  expression?: string | undefined;
-  elements?: string[] | undefined;
-}
-
-export interface NativeViewTitleSpec extends NativeViewAxisSpec {
-  /**
-   * Title element shown as selected; must be in the subset. Required by TM1 —
-   * createNative() rejects title specs without it (optional here only so the
-   * validation is reachable).
-   */
-  selected?: string | undefined;
-}
-
-export interface NativeViewCreate {
-  columns: NativeViewAxisSpec[];
-  rows: NativeViewAxisSpec[];
-  titles?: NativeViewTitleSpec[] | undefined;
-  suppressEmptyColumns?: boolean | undefined;
-  suppressEmptyRows?: boolean | undefined;
-  formatString?: string | undefined;
-}
-
 export interface ViewDefinition {
   cubeName: string;
   viewName: string;
@@ -264,46 +213,6 @@ export interface ViewDefinition {
   mdx?: string;
   native?: NativeViewDefinition;
 }
-
-/**
- * What a TI run is known to have done. The axis that matters to a caller is not
- * "did TM1 like it" but **was anything committed** — TM1's
- * `tm1.ExecuteWithReturn` answers HTTP 200 for every one of these.
- *
- * `ProcessExecuteStatusCode` has exactly six members (read from the `$metadata`
- * of both a v11 11.8 and a v12 12.5.9 server — identical, no version drift):
- * `CompletedSuccessfully`=0, `Aborted`=1, `HasMinorErrors`=2, `QuitCalled`=3,
- * `CompletedWithMessages`=4, `RollbackCalled`=5. They fall into three groups,
- * measured live on 11.8 through `ExecuteWithReturn` by writing a marker cell in
- * the Prolog, taking each exit path, and reading the cell back:
- *
- * - `succeeded`             — `CompletedSuccessfully`. Marker written.
- * - `completed_with_errors` — `CompletedWithMessages` (`ItemReject`),
- *   `QuitCalled` (`ProcessQuit`) and `HasMinorErrors` all left the marker cell
- *   **written**: the process ran and **its changes WERE COMMITTED**. Treat a
- *   blind retry as UNSAFE — the run already wrote data, so re-running can
- *   double-post it. All three are measured; on `HasMinorErrors` note that the
- *   DOCUMENTED path to it is per-record failures in the Metadata/Data tabs,
- *   which need a data source. It was reached here without one, from a pure
- *   Prolog, by writing to a consolidated element — same status code, and the
- *   earlier leaf write committed.
- * - `rolled_back`           — `Aborted` (`ProcessError`, or a `CellPutN` into a
- *   cube that does not exist) and `RollbackCalled` (`ProcessRollback`) both
- *   left the marker cell **rolled back**: the process ran, nothing was
- *   committed. Retrying is safe as far as commit state goes.
- * - `indeterminate`         — no `ProcessExecuteStatusCode` at all, a status
- *   code THIS BUILD DOES NOT KNOW (a seventh member added by a future TM1 must
- *   not be silently absorbed into a group whose commit semantics we never
- *   measured), or a call that errored before any status was reported. The run
- *   may have completed, partially completed, or never started. Defaulting this
- *   to `CompletedSuccessfully` (T-4) reported unverified runs as clean ones.
- *
- * Everything but `succeeded` travels with `success: false`, so the fail-closed
- * `isError` flags on `tm1_execute_process` / `tm1_save_data` keep firing;
- * `outcome` is what tells the three apart.
- */
-export type ProcessOutcome =
-  "succeeded" | "completed_with_errors" | "rolled_back" | "indeterminate";
 
 /**
  * Result of a TI execution. A discriminated union rather than a flat record so
@@ -363,20 +272,6 @@ export type ProcessResult =
  */
 export const PROCESS_STATUS_UNKNOWN =
   "Unknown: TM1 returned no ProcessExecuteStatusCode — the run may have completed, partially completed, or never started. Verify server state (error logs, target cube) before re-running.";
-
-/**
- * Outcome of a CHORE run. Deliberately the same four words as
- * `ProcessOutcome`, because the question is the same one — was anything
- * committed — but the mapping behind them is NOT the process mapping and must
- * never be reused across the two. Measured on 12.5.9; see
- * `tm1-client/services/chore-status.ts` for the table.
- *
- * The headline: a step that calls `ProcessError` COMMITS its writes when it
- * runs inside a chore, while the identical process run on its own rolls them
- * back. Anyone who assumes the process semantics carry over gets that backwards.
- */
-export type ChoreOutcome =
-  "succeeded" | "completed_with_errors" | "rolled_back" | "indeterminate";
 
 /**
  * Result of a chore run. Same discriminated-union shape as `ProcessResult` so
@@ -462,22 +357,11 @@ export interface ElementCreate {
   components?: Array<{ name: string; weight: number }> | undefined;
 }
 
-export interface ElementUpdate {
-  newName?: string | undefined;
-  type?: "Numeric" | "String" | "Consolidated" | undefined;
-  components?: Array<{ name: string; weight: number }> | undefined;
-}
-
 // ── New domain models (Phase 1) ───────────────────────────────────────────────
 
 export interface RuleSyntaxError {
   message: string;
   lineNumber?: number;
-}
-
-/** One /AuditLogEntries row; details present only when expanded. */
-export interface AuditLogEntry extends AuditLogDetail {
-  details?: AuditLogDetail[] | undefined;
 }
 
 export interface CubeRules {
@@ -510,14 +394,6 @@ export interface ChoreCreate {
     seconds: number;
   };
   steps: ChoreStep[];
-}
-
-export interface ToolResult {
-  content: Array<{
-    type: "text";
-    text: string;
-  }>;
-  isError?: boolean;
 }
 
 export interface ServerInfo {
@@ -555,34 +431,4 @@ export interface CubeView {
   name: string;
   mdx?: string | undefined;
   private: boolean;
-}
-
-export interface TransactionLogResult {
-  entries: TransactionLogEntry[];
-  /** partial = stopped because `top` filled (older rows may exist); complete = span exhausted. */
-  coverage: "complete" | "partial";
-  /** Earliest timestamp actually scanned (floor of the walk / the `since` bound). */
-  scannedFrom: string;
-}
-
-export interface SubsetCreate {
-  name: string;
-  expression?: string | undefined;
-  elements?: string[] | undefined;
-  alias?: string | undefined;
-}
-
-// Security: Clients and Groups
-
-export interface ClientCreate {
-  name: string;
-  password?: string | undefined;
-  friendlyName?: string | undefined;
-  groups?: string[] | undefined;
-}
-
-export interface ClientUpdate {
-  password?: string | undefined;
-  friendlyName?: string | undefined;
-  enabled?: boolean | undefined;
 }

@@ -11,9 +11,3 @@ export const ClientSchema = z.object({
   Groups: z.array(z.object({ Name: z.string() })).optional(),
 });
 export type Client = z.infer<typeof ClientSchema>;
-
-export const GroupSchema = z.object({
-  Name: z.string(),
-  Clients: z.array(z.object({ Name: z.string() })).optional(),
-});
-export type Group = z.infer<typeof GroupSchema>;

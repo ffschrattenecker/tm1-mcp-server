@@ -925,40 +925,6 @@ describe("TM1Client – Cell Data Methods", () => {
     });
   });
 
-  // ── unloadCube() ───────────────────────────────────────────────────────────
-
-  describe("unloadCube()", () => {
-    function mock204(): Response {
-      return {
-        ok: true,
-        status: 204,
-        statusText: "No Content",
-        headers: new Headers(),
-        text: vi.fn().mockResolvedValue(""),
-        json: vi.fn().mockRejectedValue(new Error("No content")),
-      } as unknown as Response;
-    }
-
-    it("POSTs to /api/v1/Cubes('X')/tm1.Unload", async () => {
-      fetchSpy.mockResolvedValueOnce(mock204());
-
-      await client.cubes.unload("Sales");
-
-      const [url, opts] = fetchSpy.mock.calls[0];
-      expect(url).toContain("/api/v1/Cubes('Sales')/tm1.Unload");
-      expect(opts.method).toBe("POST");
-    });
-
-    it("URL-encodes special characters in cube name", async () => {
-      fetchSpy.mockResolvedValueOnce(mock204());
-
-      await client.cubes.unload("Sales Data");
-
-      const [url] = fetchSpy.mock.calls[0];
-      expect(url).toContain("/api/v1/Cubes('Sales%20Data')/tm1.Unload");
-    });
-  });
-
   // ── feeder / calculation tracing ───────────────────────────────────────────
 
   describe("cell tracing", () => {

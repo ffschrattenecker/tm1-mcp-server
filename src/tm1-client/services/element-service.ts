@@ -8,12 +8,7 @@
 // See docs/ARCHITECTURE.md for the layering.
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
-import type {
-  CellValue,
-  ElementAttributeValue,
-  ElementCreate,
-  ElementUpdate,
-} from "../../types.js";
+import type { CellValue, ElementCreate } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
 import { BatchUnsupportedError } from "./batch-service.js";
 import type {
@@ -150,131 +145,6 @@ export class ElementService {
         { Weight: c.weight },
       );
     }
-  }
-
-  /**
-   * Does an element resolve in a hierarchy the way TI would resolve it?
-   * The key lookup is TM1's own name resolution: case- and space-insensitive,
-   * and it accepts an alias (verified on 11.8.03500: 'northamerica' and the
-   * alias 'NA' both resolve 'North America'). 404 → false; anything else,
-   * including a denial, is rethrown — "you may not look" is not "missing".
-   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements('{e}')?$select=Name
-   */
-  async exists(
-    dimensionName: string,
-    hierarchyName: string,
-    elementName: string,
-  ): Promise<boolean> {
-    try {
-      await this.http.request<{ Name: string }>(
-        "GET",
-        `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(elementName)}')?$select=Name`,
-      );
-      return true;
-    } catch (e) {
-      if (e instanceof TM1Error && e.code === TM1ErrorCode.NOT_FOUND)
-        return false;
-      throw e;
-    }
-  }
-
-  async create(
-    dimensionName: string,
-    hierarchyName: string,
-    element: ElementCreate,
-  ): Promise<void> {
-    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements`;
-    const body: Record<string, unknown> = {
-      Name: element.name,
-      Type: element.type,
-    };
-    if (
-      element.type === "Consolidated" &&
-      element.components &&
-      element.components.length > 0
-    ) {
-      body.Components = element.components.map((c) => ({
-        "@odata.id": `Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(c.name)}')`,
-      }));
-    }
-    await this.http.request<void>("POST", path, body);
-    if (element.components && element.components.length > 0) {
-      await this.applyEdgeWeights(
-        dimensionName,
-        hierarchyName,
-        element.name,
-        element.components,
-      );
-    }
-  }
-
-  /**
-   * Update an existing element (rename, type change, replace components).
-   * PATCH /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements('{name}')
-   */
-  async update(
-    dimensionName: string,
-    hierarchyName: string,
-    elementName: string,
-    update: ElementUpdate,
-  ): Promise<{ typeChange: { from: string; to: string } | null }> {
-    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(elementName)}')`;
-    // Read the prior type so an in-place conversion is reported: turning a
-    // Numeric element into Consolidated/String discards its leaf cell values.
-    // Same probe and outage guard as bulkUpsert; an unreadable type reports
-    // nothing rather than guessing.
-    let from: string | null = null;
-    if (update.type !== undefined) {
-      const existing = await this.http
-        .request<{ Type: number | string }>("GET", `${path}?$select=Type`)
-        .catch((e: unknown): null => {
-          rethrowIfSystemic(e);
-          return null;
-        });
-      from = existing ? normalizeElementType(existing.Type) : null;
-    }
-    const body: Record<string, unknown> = {};
-    if (update.newName !== undefined) {
-      body.Name = update.newName;
-    }
-    if (update.type !== undefined) {
-      body.Type = update.type;
-    }
-    if (update.components !== undefined) {
-      body.Components = update.components.map((c) => ({
-        "@odata.id": `Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(c.name)}')`,
-      }));
-    }
-    await this.http.request<void>("PATCH", path, body);
-    if (update.components !== undefined) {
-      await this.applyEdgeWeights(
-        dimensionName,
-        hierarchyName,
-        // A rename in the same PATCH takes effect immediately, so the edge
-        // key must use the NEW parent name.
-        update.newName ?? elementName,
-        update.components,
-      );
-    }
-    return {
-      typeChange:
-        from !== null && update.type !== undefined && from !== update.type
-          ? { from, to: update.type }
-          : null,
-    };
-  }
-
-  /**
-   * Delete an element. May fail if the element is referenced in rules.
-   * DELETE /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements('{name}')
-   */
-  async delete(
-    dimensionName: string,
-    hierarchyName: string,
-    elementName: string,
-  ): Promise<void> {
-    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(elementName)}')`;
-    await this.http.request<void>("DELETE", path);
   }
 
   /**
@@ -955,70 +825,6 @@ export class ElementService {
   }
 
   /**
-   * Define a new element attribute on a hierarchy. Prefer TI prolog
-   * (DimensionElementInsert on `}ElementAttributes_{dim}`) for reproducible
-   * deployments — this REST path is for ad-hoc / debugging use.
-   * POST /api/v1/Dimensions('{d}')/Hierarchies('{h}')/ElementAttributes
-   */
-  async createAttribute(
-    dimensionName: string,
-    hierarchyName: string,
-    attributeName: string,
-    attributeType: "Numeric" | "String" | "Alias",
-  ): Promise<void> {
-    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/ElementAttributes`;
-    await this.http.request<void>("POST", path, {
-      Name: attributeName,
-      Type: attributeType,
-    });
-  }
-
-  /**
-   * Read all attribute values for one element via MDX on
-   * `}ElementAttributes_{Dim}`. Routes through CellService.executeMdx for the
-   * cellset round-trip.
-   */
-  async getAttributeValues(
-    dimensionName: string,
-    elementName: string,
-    hierarchyName: string = dimensionName,
-  ): Promise<ElementAttributeValue[]> {
-    // No attribute defined means no }ElementAttributes_ cube, and the MDX
-    // below would fail with a raw syntax error. Nothing to read is the answer.
-    if ((await this.listAttributes(dimensionName, hierarchyName)).length === 0)
-      return [];
-    // Escape `]` → `]]` in every bracketed identifier: an element or dimension
-    // named e.g. `Foo]` would otherwise break out of its MDX identifier and
-    // shift the read onto arbitrary members (MDX injection).
-    const esc = (s: string): string => s.replace(/]/g, "]]");
-    const dim = esc(dimensionName);
-    const elem = esc(elementName);
-    const hier = esc(hierarchyName);
-    const ctrlCube = `}ElementAttributes_${dim}`;
-    const mdx =
-      `SELECT {[}ElementAttributes_${dim}].MEMBERS} ON COLUMNS ` +
-      `FROM [${ctrlCube}] ` +
-      // Always name the hierarchy: the attribute cube spans every hierarchy of
-      // the dimension, and v12 refuses a bare name another hierarchy shares
-      // ("Member name A is ambiguous"), while v11 finds a bare name only in
-      // the default hierarchy.
-      `WHERE ([${dim}].[${hier}].[${elem}])`;
-    const result = await this.cells.executeMdx(mdx);
-    const out: ElementAttributeValue[] = [];
-    const tuples = result.axes[0]?.tuples ?? [];
-    for (let i = 0; i < tuples.length; i++) {
-      const attrName = tuples[i]!.members[0]?.name ?? "";
-      const cell = result.cells[i];
-      out.push({
-        elementName,
-        attributeName: attrName,
-        value: cell?.value ?? null,
-      });
-    }
-    return out;
-  }
-
-  /**
    * Attribute values for a window of elements — every element of the
    * dimension's default hierarchy, name-sorted, `limit` at a time. One MDX
    * against `}ElementAttributes_{Dim}` with the window pushed into the row set
@@ -1150,5 +956,31 @@ export class ElementService {
       [dimensionName, `}ElementAttributes_${dimensionName}`],
       cells,
     );
+  }
+
+  /**
+   * Does an element resolve in a hierarchy the way TI would resolve it?
+   * The key lookup is TM1's own name resolution: case- and space-insensitive,
+   * and it accepts an alias (verified on 11.8.03500: 'northamerica' and the
+   * alias 'NA' both resolve 'North America'). 404 → false; anything else,
+   * including a denial, is rethrown — "you may not look" is not "missing".
+   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements('{e}')?$select=Name
+   */
+  async exists(
+    dimensionName: string,
+    hierarchyName: string,
+    elementName: string,
+  ): Promise<boolean> {
+    try {
+      await this.http.request<{ Name: string }>(
+        "GET",
+        `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(elementName)}')?$select=Name`,
+      );
+      return true;
+    } catch (e) {
+      if (e instanceof TM1Error && e.code === TM1ErrorCode.NOT_FOUND)
+        return false;
+      throw e;
+    }
   }
 }

@@ -13,26 +13,12 @@ import {
   readNestedCount,
 } from "./odata-page.js";
 
-// How many levels one nested $expand reaches. TM1 answered 20 on 11.8 and
-// 12.5; a hierarchy deeper than that falls back to the full load.
-const NEST_LEVELS = 20;
-
 interface NestedElement {
   Name: string;
   Type?: string;
   Level: number;
   Components?: NestedElement[];
   Parents?: NestedElement[];
-}
-
-interface DescendantsResult {
-  element: string;
-  descendants: Array<{
-    name: string;
-    type: HierarchyElement["type"];
-    level: number;
-    depth: number;
-  }>;
 }
 
 /**
@@ -66,15 +52,6 @@ export interface ElementFilterOpts {
   nameContains?: string;
   nameStartsWith?: string;
   nameRegex?: string;
-}
-
-/** Element totals of a (filtered) hierarchy, without the elements. */
-export interface HierarchyCounts {
-  total: number;
-  byType: { Numeric: number; String: number; Consolidated: number };
-  /** Level → element count. Keys are the level as a string ("0" = leaves). */
-  byLevel: Record<string, number>;
-  maxLevel: number;
 }
 
 // elementType pushes down as the ORDINAL, not the name: `Type eq
@@ -314,148 +291,6 @@ export class HierarchyService {
     }
   }
 
-  /**
-   * Element totals by type and level for a (filtered) hierarchy — no element
-   * rows. Reads the Elements collection with `$select=Type,Level` (plus Name
-   * only when a regex has to run client-side), so a count over a 200k-element
-   * dimension costs a few MB of wire traffic and a few hundred bytes of reply,
-   * where probing with growing `topN` returned the elements themselves.
-   *
-   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Type,Level
-   */
-  async getCounts(
-    dimensionName: string,
-    hierarchyName: string,
-    opts?: ElementFilterOpts,
-  ): Promise<HierarchyCounts> {
-    const { filters, regex } = elementFilters(opts);
-    const clauses = [regex ? "$select=Name,Type,Level" : "$select=Type,Level"];
-    if (filters.length > 0) clauses.push(`$filter=${filters.join(" and ")}`);
-    const path =
-      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')` +
-      `/Elements?${clauses.join("&")}`;
-    const response = await this.http.request<{
-      value?: Array<{ Name?: string; Type: string; Level: number }>;
-    }>("GET", path);
-    let rows = response.value ?? [];
-    if (regex !== undefined)
-      rows = rows.filter((e) => regex.test(e.Name ?? ""));
-    const counts: HierarchyCounts = {
-      total: rows.length,
-      byType: { Numeric: 0, String: 0, Consolidated: 0 },
-      byLevel: {},
-      maxLevel: 0,
-    };
-    for (const e of rows) {
-      if (
-        e.Type === "Numeric" ||
-        e.Type === "String" ||
-        e.Type === "Consolidated"
-      )
-        counts.byType[e.Type]++;
-      const lvl = String(e.Level);
-      counts.byLevel[lvl] = (counts.byLevel[lvl] ?? 0) + 1;
-      if (e.Level > counts.maxLevel) counts.maxLevel = e.Level;
-    }
-    return counts;
-  }
-
-  /**
-   * Element name + type for a whole hierarchy — nothing else.
-   *
-   * `get()` is the wrong tool for a type lookup: it expands `Parents` and
-   * `Edges` on every element to build the tree and weight the children. This
-   * reads the Elements collection directly with `$select=Name,Type` — no
-   * expand at all — which is the minimum payload for name → type resolution.
-   *
-   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Name,Type
-   */
-  async getElementTypes(
-    dimensionName: string,
-    hierarchyName: string,
-  ): Promise<Array<{ name: string; type: HierarchyElement["type"] }>> {
-    const path =
-      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')` +
-      `/Elements?$select=Name,Type`;
-    const response = await this.http.request<{
-      value?: Array<{ Name: string; Type: string }>;
-    }>("GET", path);
-    return (response.value ?? []).map((e) => ({
-      name: e.Name,
-      type: e.Type as HierarchyElement["type"],
-    }));
-  }
-
-  /**
-   * Resolve descendants of a consolidation element via client-side BFS over
-   * the full hierarchy. Returns a flat list with depth from the start element.
-   * Reuses get() — REST traffic identical, but the LLM-facing payload is a
-   * focused subtree, not the whole dimension.
-   */
-  async getDescendants(
-    dimensionName: string,
-    hierarchyName: string,
-    element: string,
-    opts?: { depth?: number; leavesOnly?: boolean },
-  ): Promise<DescendantsResult> {
-    // Fetch only the subtree: Components expanded level by level from the
-    // start element. Measured on a 11,111-element, 5-level dimension (11.8):
-    // 14 KB for a mid-level subtree and 1.4 MB from the top, against 3 MB for
-    // the whole hierarchy with Parents+Edges on every call. TM1 served 20
-    // nested levels on 11.8 and 12.5. Deeper hierarchies fall back below.
-    if ((opts?.depth ?? 0) > NEST_LEVELS) {
-      return this.getDescendantsFromFull(
-        dimensionName,
-        hierarchyName,
-        element,
-        opts,
-      );
-    }
-    const levels = opts?.depth ?? NEST_LEVELS;
-    const root = await this.getNested(
-      dimensionName,
-      hierarchyName,
-      element,
-      "Components",
-      "Name,Type,Level",
-      levels,
-    );
-    const out: DescendantsResult["descendants"] = [];
-    const seen = new Set<string>([element]);
-    let frontier: NestedElement[] = [root];
-    for (let depth = 1; depth <= levels && frontier.length > 0; depth++) {
-      const next: NestedElement[] = [];
-      for (const node of frontier) {
-        for (const child of node.Components ?? []) {
-          if (seen.has(child.Name)) continue;
-          seen.add(child.Name);
-          const type = child.Type as HierarchyElement["type"];
-          // Only a consolidation has children, so type alone decides; an
-          // empty consolidation is not a leaf either (nothing can be written).
-          if (!opts?.leavesOnly || type !== "Consolidated") {
-            out.push({ name: child.Name, type, level: child.Level, depth });
-          }
-          next.push(child);
-        }
-      }
-      frontier = next;
-    }
-    // The last expanded level carries no Components. A consolidation there
-    // means the tree goes deeper than the request reached.
-    if (
-      opts?.depth === undefined &&
-      frontier.some((n) => n.Type === "Consolidated")
-    ) {
-      return this.getDescendantsFromFull(
-        dimensionName,
-        hierarchyName,
-        element,
-        opts,
-      );
-    }
-    return { element, descendants: out };
-  }
-
   private async getDescendantsFromFull(
     dimensionName: string,
     hierarchyName: string,
@@ -517,60 +352,6 @@ export class HierarchyService {
       }
     }
     return { element, descendants: out };
-  }
-
-  /**
-   * Resolve ancestors of an element via parent-walk. Handles multi-parent
-   * hierarchies — returns the unique flat ancestor set AND every distinct
-   * root-to-element path so consumers can see consolidation alternatives.
-   */
-  async getAncestors(
-    dimensionName: string,
-    hierarchyName: string,
-    element: string,
-  ): Promise<{
-    element: string;
-    ancestors: Array<{ name: string; level: number }>;
-    paths: string[][];
-  }> {
-    // Parents expanded upward from the element: 1 KB on the 11,111-element
-    // test dimension where the full load was 3 MB. A path that reaches the
-    // nesting limit without ending at a root falls back to the full load.
-    const root = await this.getNested(
-      dimensionName,
-      hierarchyName,
-      element,
-      "Parents",
-      "Name,Level",
-      NEST_LEVELS,
-    );
-    const ancestorMap = new Map<string, number>();
-    const paths: string[][] = [];
-    let truncated = false;
-    const walk = (node: NestedElement, path: string[]) => {
-      const parents = node.Parents;
-      if (parents === undefined) {
-        truncated = true;
-        return;
-      }
-      if (parents.length === 0) {
-        paths.push(path);
-        return;
-      }
-      for (const p of parents) {
-        if (path.includes(p.Name)) continue;
-        ancestorMap.set(p.Name, p.Level);
-        walk(p, [...path, p.Name]);
-      }
-    };
-    walk(root, [element]);
-    if (truncated) {
-      return this.getAncestorsFromFull(dimensionName, hierarchyName, element);
-    }
-    const ancestors = [...ancestorMap.entries()]
-      .map(([name, level]) => ({ name, level }))
-      .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
-    return { element, ancestors, paths };
   }
 
   /**
@@ -660,25 +441,28 @@ export class HierarchyService {
   }
 
   /**
-   * Create a new hierarchy inside an existing dimension.
-   * POST /api/v1/Dimensions('{d}')/Hierarchies
+   * Element name + type for a whole hierarchy — nothing else.
+   *
+   * `get()` is the wrong tool for a type lookup: it expands `Parents` and
+   * `Edges` on every element to build the tree and weight the children. This
+   * reads the Elements collection directly with `$select=Name,Type` — no
+   * expand at all — which is the minimum payload for name → type resolution.
+   *
+   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Name,Type
    */
-  async create(dimensionName: string, hierarchyName: string): Promise<void> {
-    await this.http.request<void>(
-      "POST",
-      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies`,
-      { Name: hierarchyName },
-    );
-  }
-
-  /**
-   * Delete a hierarchy from a dimension.
-   * DELETE /api/v1/Dimensions('{d}')/Hierarchies('{h}')
-   */
-  async delete(dimensionName: string, hierarchyName: string): Promise<void> {
-    await this.http.request<void>(
-      "DELETE",
-      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')`,
-    );
+  async getElementTypes(
+    dimensionName: string,
+    hierarchyName: string,
+  ): Promise<Array<{ name: string; type: HierarchyElement["type"] }>> {
+    const path =
+      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')` +
+      `/Elements?$select=Name,Type`;
+    const response = await this.http.request<{
+      value?: Array<{ Name: string; Type: string }>;
+    }>("GET", path);
+    return (response.value ?? []).map((e) => ({
+      name: e.Name,
+      type: e.Type as HierarchyElement["type"],
+    }));
   }
 }

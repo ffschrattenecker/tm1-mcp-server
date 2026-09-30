@@ -28,10 +28,6 @@ export const IgnoredColumnSchema = z.object({
 });
 export type IgnoredColumn = z.infer<typeof IgnoredColumnSchema>;
 
-// Raw `Process.VariablesUIData`: one entry per datasource column, ignored ones
-// included. Carried verbatim so nothing measured-but-unmodelled is dropped.
-export const VariablesUIDataSchema = z.array(z.string());
-
 export const ProcessSchema = z.object({
   name: z.string(),
   parameters: z.array(ProcessParameterSchema),

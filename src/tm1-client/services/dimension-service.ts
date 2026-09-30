@@ -4,7 +4,6 @@
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type { Dimension } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
-import { freeCellset } from "./cellset-transform.js";
 import {
   filterClause,
   nameFilterPredicates,
@@ -182,78 +181,6 @@ export class DimensionService {
     return opts.page === undefined
       ? items
       : { items, total: readCount(response) };
-  }
-
-  /**
-   * Create a new dimension. TM1 11.8 does not auto-create the default
-   * hierarchy from the POST body — we issue an explicit follow-up POST
-   * and tolerate 409 (some versions create it automatically).
-   * POST /api/v1/Dimensions
-   */
-  async create(name: string): Promise<void> {
-    await this.http.request<void>("POST", "/api/v1/Dimensions", { Name: name });
-    try {
-      await this.http.request<void>(
-        "POST",
-        `/api/v1/Dimensions('${odataKey(name)}')/Hierarchies`,
-        { Name: name },
-      );
-    } catch (err) {
-      if (err instanceof TM1Error && err.httpStatus === 409) {
-        return;
-      }
-      throw err;
-    }
-  }
-
-  /**
-   * Delete a dimension and all its hierarchies.
-   * DELETE /api/v1/Dimensions('{name}')
-   */
-  async delete(name: string): Promise<void> {
-    await this.http.request<void>(
-      "DELETE",
-      `/api/v1/Dimensions('${odataKey(name)}')`,
-    );
-  }
-
-  /**
-   * Read per-dimension last-modified timestamps from the `}DimensionProperties`
-   * control cube (`LAST_TIME_UPDATED` measure) in a single MDX round-trip.
-   * Returns a Map of dimension name → raw `YYYYMMDDHHMMSS` string (server-local);
-   * decode with decodeTm1Timestamp(). Dimensions with a blank stamp are absent
-   * from the map. This is a schema-change stamp (structure), bumped on element /
-   * hierarchy / attribute edits — not a data-write stamp.
-   */
-  async getLastUpdatedMap(): Promise<Map<string, string>> {
-    const mdx =
-      "SELECT {[}DimensionProperties].[LAST_TIME_UPDATED]} ON 0, " +
-      "NON EMPTY [}Dimensions].MEMBERS ON 1 FROM [}DimensionProperties]";
-    const res = await this.http.request<{
-      ID: string;
-      Cells: Array<{ Value: string | number | null }>;
-      Axes: Array<{ Tuples: Array<{ Members: Array<{ Name: string }> }> }>;
-    }>(
-      "POST",
-      "/api/v1/ExecuteMDX?$expand=Cells($select=Value),Axes($expand=Tuples($expand=Members($select=Name)))",
-      { MDX: mdx },
-    );
-    try {
-      const map = new Map<string, string>();
-      const rows = res.Axes?.[1]?.Tuples ?? [];
-      rows.forEach((tuple, i) => {
-        const name = tuple.Members[0]?.Name;
-        const value = res.Cells[i]?.Value;
-        if (name && value != null && String(value).trim() !== "") {
-          map.set(name, String(value));
-        }
-      });
-      return map;
-    } finally {
-      // Free the session-scoped cellset best-effort so this metadata read doesn't
-      // leak TM1 server memory while keep-alive holds the session open.
-      await freeCellset(this.http, res.ID);
-    }
   }
 
   /**

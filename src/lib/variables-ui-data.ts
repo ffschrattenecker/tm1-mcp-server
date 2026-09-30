@@ -88,8 +88,3 @@ export function ignoredColumnsOf(
       ...(c.ignoredName !== undefined ? { name: c.ignoredName } : {}),
     }));
 }
-
-/** Stable key for comparing two ignored-column sets (diff tools). */
-export function ignoredColumnKey(column: IgnoredColumn): string {
-  return `${column.position}:${column.name ?? ""}`;
-}

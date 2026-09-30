@@ -123,25 +123,6 @@ export class TM1HttpClient {
   }
 
   /**
-   * TM1 major version (11 | 12) — the single numeric source of truth for
-   * version-conditional service code. Branch on this, never on the display
-   * string (`tm1Version`): a v12 connection can carry a "11.x"-looking
-   * TM1_VERSION string, but `version` is always authoritative.
-   */
-  get version(): 11 | 12 {
-    return this.config.version;
-  }
-
-  /**
-   * TM1 server version STRING (e.g. "11.8.…") — DISPLAY ONLY (server_info
-   * output, log fields, user-facing error messages). Do NOT branch on this;
-   * use the numeric `version` getter instead.
-   */
-  get tm1Version(): string {
-    return this.config.tm1Version;
-  }
-
-  /**
    * Make an authenticated HTTP request to the TM1 REST API.
    *
    * - Ensures an active session via SessionManager

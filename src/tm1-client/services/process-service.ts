@@ -1073,15 +1073,6 @@ export class ProcessService {
   }
 
   /**
-   * Delete a TI process.
-   * DELETE /api/v1/Processes('{name}')
-   */
-  async delete(processName: string): Promise<void> {
-    const path = `/api/v1/Processes('${odataKey(processName)}')`;
-    await this.http.request<void>("DELETE", path);
-  }
-
-  /**
    * Compile a saved TI process to check syntax without executing it.
    * POST /api/v1/Processes('{name}')/tm1.Compile
    */

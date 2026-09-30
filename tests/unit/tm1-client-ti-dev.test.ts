@@ -522,44 +522,4 @@ describe("TM1Client – TI Development Methods", () => {
       expect(body.Parameters[0]).not.toHaveProperty("Prompt");
     });
   });
-
-  // ── deleteProcess() ──────────────────────────────────────────────────────
-
-  describe("deleteProcess()", () => {
-    it("should DELETE the process by name", async () => {
-      fetchSpy.mockResolvedValueOnce(mock204Response());
-
-      await client.processes.delete("OldProcess");
-
-      const [url, opts] = fetchSpy.mock.calls[0];
-      expect(url).toContain("/api/v1/Processes('OldProcess')");
-      expect(opts.method).toBe("DELETE");
-    });
-
-    it("should throw NOT_FOUND when process does not exist", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({ error: { message: "Process 'Ghost' not found" } }, 404),
-      );
-
-      await expect(client.processes.delete("Ghost")).rejects.toThrow(TM1Error);
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({ error: { message: "Process 'Ghost' not found" } }, 404),
-      );
-      try {
-        await client.processes.delete("Ghost");
-      } catch (e) {
-        expect((e as TM1Error).code).toBe(TM1ErrorCode.NOT_FOUND);
-        expect((e as TM1Error).httpStatus).toBe(404);
-      }
-    });
-
-    it("should encode special characters in process name", async () => {
-      fetchSpy.mockResolvedValueOnce(mock204Response());
-
-      await client.processes.delete("My Process");
-
-      const [url] = fetchSpy.mock.calls[0];
-      expect(url).toContain("Processes('My%20Process')");
-    });
-  });
 });
