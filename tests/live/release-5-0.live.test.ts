@@ -8,9 +8,13 @@
 // Opt-in: requires TM1_BASE_URL + TM1_USER (see harness.ts). Skips otherwise.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  createDimension,
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
+  names,
   SANDBOX,
+  seg,
   type LiveHarness,
 } from "./harness.js";
 
@@ -23,18 +27,10 @@ describe.skipIf(!LIVE_ENABLED)("live: 5.0.0 deploy safety", () => {
   let h: LiveHarness;
 
   const cleanup = async () => {
-    for (const [tool, args] of [
-      ["tm1_delete_process", { processName: PROC, confirm: PROC }],
-      ["tm1_delete_process", { processName: GUARDED, confirm: GUARDED }],
-      ["tm1_delete_dimension", { dimensionName: NEW_DIM, confirm: NEW_DIM }],
-      ["tm1_delete_dimension", { dimensionName: DIM, confirm: DIM }],
-    ] as const) {
-      try {
-        await h.call(tool, args);
-      } catch {
-        /* already gone */
-      }
-    }
+    await dropIfExists(h, seg("Processes", PROC));
+    await dropIfExists(h, seg("Processes", GUARDED));
+    await dropIfExists(h, seg("Dimensions", NEW_DIM));
+    await dropIfExists(h, seg("Dimensions", DIM));
   };
 
   beforeAll(async () => {
@@ -127,7 +123,7 @@ describe.skipIf(!LIVE_ENABLED)("live: 5.0.0 deploy safety", () => {
   });
 
   it("bulk_upsert refuses to drop children without confirm; dryRun shows it", async () => {
-    await h.ok("tm1_create_dimension", { dimensionName: DIM });
+    await createDimension(h, DIM);
     await h.ok("tm1_bulk_upsert_elements", {
       dimensionName: DIM,
       elements: [
@@ -159,11 +155,11 @@ describe.skipIf(!LIVE_ENABLED)("live: 5.0.0 deploy safety", () => {
     const refused = await h.call("tm1_bulk_upsert_elements", onlyA);
     expect(refused.isError).toBe(true);
     expect(refused.json.message).toContain("would remove 1 existing child");
-    const still = await h.ok("tm1_get_descendants", {
-      dimensionName: DIM,
-      elementName: "Total",
-    });
-    expect(JSON.stringify(still.json)).toContain('"B"');
+    const still = await names(
+      h,
+      `${seg("Dimensions", DIM)}/${seg("Hierarchies", DIM)}/Elements('Total')/Components`,
+    );
+    expect(still).toContain("B");
 
     await h.ok("tm1_bulk_upsert_elements", { ...onlyA, confirm: DIM });
     const after = await h.ok("tm1_bulk_upsert_elements", {

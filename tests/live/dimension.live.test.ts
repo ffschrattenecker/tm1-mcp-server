@@ -1,15 +1,23 @@
 // Live lifecycle test for the DIMENSION / ELEMENT / ATTRIBUTE domain. Drives
 // the real MCP tool layer against a running TM1 server through a full
-// create → read → update → move → attribute → delete cycle. Every object is
-// prefixed with SANDBOX so it can never collide with real model objects, and
-// afterAll cascades a dimension delete so a mid-test failure still cleans up.
+// create → read → update → attribute → delete cycle: the object CRUD goes
+// through tm1_rest_read / tm1_rest_write, the element and attribute writes
+// through the dedicated tools. Every object is prefixed with SANDBOX so it can
+// never collide with real model objects, and afterAll drops the dimension so a
+// mid-test failure still cleans up.
 //
 // Opt-in: requires TM1_BASE_URL + TM1_USER (see harness.ts). Skips otherwise.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  createDimension,
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
+  names,
+  restGet,
+  restWrite,
   SANDBOX,
+  seg,
   type LiveHarness,
 } from "./harness.js";
 
@@ -23,92 +31,58 @@ const NONEXISTENT = `${SANDBOX}_DIM_DOES_NOT_EXIST`;
 const TOP = "Total"; // consolidated root
 const SUB = "Region_North"; // intermediate consolidation
 const LEAF1 = "City_A"; // leaf under SUB
-const LEAF2 = "City_B"; // leaf created standalone, then attached under SUB
+const LEAF2 = "City_B"; // leaf added by the bulk upsert
 const LEAF3 = "City_C"; // leaf for attribute values
 const TC = "TypeChangeLeaf"; // standalone leaf for the upsert idempotency / type-change test
+
+const HIER_PATH = `${seg("Dimensions", DIM)}/${seg("Hierarchies", HIER)}`;
 
 describe.skipIf(!LIVE_ENABLED)(
   "live: dimension / element / attribute lifecycle",
   () => {
     let h: LiveHarness;
 
+    // The weight TM1 stores on the edge parent → child.
+    const edgeWeight = async (parent: string, child: string) => {
+      const edges = await restGet<
+        Array<{ ParentName: string; ComponentName: string; Weight: number }>
+      >(h, `${HIER_PATH}/Edges`);
+      return edges.find(
+        (e) => e.ParentName === parent && e.ComponentName === child,
+      )?.Weight;
+    };
+
     beforeAll(async () => {
       h = await getHarness();
       // Defensive: drop a stale sandbox dim from a crashed prior run.
-      await h.call("tm1_delete_dimension", {
-        dimensionName: DIM,
-        confirm: DIM,
-      });
+      await dropIfExists(h, seg("Dimensions", DIM));
     });
 
     afterAll(async () => {
-      // delete_dimension cascades all hierarchies + elements + attributes.
+      // Deleting the dimension cascades hierarchies, elements and attributes.
       try {
-        await h.call("tm1_delete_dimension", {
-          dimensionName: DIM,
-          confirm: DIM,
-        });
+        await dropIfExists(h, seg("Dimensions", DIM));
       } catch {
         /* best-effort teardown */
       }
     });
 
-    it("creates a dimension", async () => {
-      const r = await h.ok("tm1_create_dimension", { dimensionName: DIM });
-      expect(r.json).toMatchObject({ success: true, dimensionName: DIM });
+    it("creates a dimension with leaf, quoted and weighted elements", async () => {
+      await createDimension(h, DIM, [
+        LEAF1,
+        // Element whose name contains a single quote — OData escaping path.
+        QUOTE_EL,
+        // Weight deliberately NOT 1: 1 is what a missing edge falls back to,
+        // so a test built on it cannot tell a real weight from a lost one.
+        { name: SUB, children: [{ name: LEAF1, weight: -1 }] },
+      ]);
+      expect(await names(h, "Dimensions", DIM)).toContain(DIM);
     });
 
-    it("creates leaf + consolidated elements", async () => {
-      // Leaf first (single create path).
-      await h.ok("tm1_create_element", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        element: { name: LEAF1, type: "Numeric" },
-      });
-      // Element whose name contains a single quote — OData escaping path.
-      await h.ok("tm1_create_element", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        element: { name: QUOTE_EL, type: "Numeric" },
-      });
-      // Consolidation rolling up LEAF1 (component must already exist).
-      await h.ok("tm1_create_element", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        element: {
-          name: SUB,
-          type: "Consolidated",
-          // Weight deliberately NOT 1: 1 is what a missing edge falls back to,
-          // so a test built on it cannot tell a real weight from a lost one.
-          components: [{ name: LEAF1, weight: -1 }],
-        },
-      });
-    });
-
-    it("reports the real edge weight, not the fallback", async () => {
-      // get_hierarchy reads child weights from the Edges the element carries.
-      // A missing edge silently falls back to 1, so a consolidation weighted
-      // -1 is the only way to tell "weight read" from "weight invented" — and
+    it("stores the real edge weight, not the fallback", async () => {
       // -1 is the case that matters in practice (P&L dimensions that net
       // costs against revenue).
-      const r = await h.ok("tm1_get_hierarchy", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        limit: 200,
-      });
-      const elements = (
-        r.json as {
-          elements?: Array<{
-            name: string;
-            children?: Array<{ name: string; weight: number }>;
-          }>;
-        }
-      ).elements;
-      const parent = elements?.find((e) => e.name === SUB);
-      expect(parent, `expected ${SUB} in the hierarchy`).toBeDefined();
-      const child = parent!.children?.find((c) => c.name === LEAF1);
-      expect(child, `expected ${LEAF1} as a child of ${SUB}`).toBeDefined();
-      expect(child!.weight).toBe(-1);
+      expect(await edgeWeight(SUB, LEAF1)).toBe(-1);
     });
 
     it("bulk_upsert_elements keeps a weight that is not 1", async () => {
@@ -135,27 +109,9 @@ describe.skipIf(!LIVE_ENABLED)(
         ],
       });
 
-      const r = await h.ok("tm1_get_hierarchy", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        limit: 200,
-      });
-      const elements = (
-        r.json as {
-          elements?: Array<{
-            name: string;
-            children?: Array<{ name: string; weight: number }>;
-          }>;
-        }
-      ).elements;
-      const parent = elements?.find((e) => e.name === BULK_C);
-      expect(parent, `expected ${BULK_C} in the hierarchy`).toBeDefined();
-      const kept = parent!.children?.find((c) => c.name === LEAF2);
-      expect(kept, `expected ${LEAF2} as a child of ${BULK_C}`).toBeDefined();
-      expect(kept!.weight).toBe(-1);
+      expect(await edgeWeight(BULK_C, LEAF2)).toBe(-1);
       // The 1s are left alone on purpose — no request is spent on them.
-      const unchanged = parent!.children?.find((c) => c.name === LEAF1);
-      expect(unchanged!.weight).toBe(1);
+      expect(await edgeWeight(BULK_C, LEAF1)).toBe(1);
     });
 
     it("the naming audit finds a violating element name on this server", async () => {
@@ -241,119 +197,23 @@ describe.skipIf(!LIVE_ENABLED)(
       expect(typeof c.json.warning).toBe("string");
     });
 
-    it("get_hierarchy returns the created elements (incl. quoted name)", async () => {
-      const r = await h.ok("tm1_get_hierarchy", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-      });
-      expect(Array.isArray(r.json.elements)).toBe(true);
-      const names: string[] = r.json.elements.map(
-        (e: { name: string }) => e.name,
+    it("reads the created elements back, the quoted one by its key", async () => {
+      const all = await names(h, `${HIER_PATH}/Elements`);
+      expect(all).toEqual(expect.arrayContaining([LEAF1, QUOTE_EL, SUB, TOP]));
+      const quoted = await restGet<{ Name: string }>(
+        h,
+        `${HIER_PATH}/${seg("Elements", QUOTE_EL)}?$select=Name`,
       );
-      expect(names).toContain(LEAF1);
-      expect(names).toContain(QUOTE_EL);
-      expect(names).toContain(SUB);
-      expect(names).toContain(TOP);
-    });
-
-    it("attaches a standalone leaf under SUB", async () => {
-      await h.ok("tm1_update_element", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        elementName: SUB,
-        update: {
-          type: "Consolidated",
-          components: [
-            { name: LEAF1, weight: -1 },
-            { name: LEAF2, weight: 1 },
-          ],
-        },
-      });
-    });
-
-    it("get_descendants returns the subtree under SUB", async () => {
-      const r = await h.ok("tm1_get_descendants", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        elementName: SUB,
-      });
-      const names: string[] = r.json.descendants.map(
-        (d: { name: string }) => d.name,
-      );
-      expect(names).toContain(LEAF1);
-      expect(names).toContain(LEAF2); // the attached element now rolls up under SUB
-    });
-
-    it("get_descendants leavesOnly drops consolidations", async () => {
-      const r = await h.ok("tm1_get_descendants", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        elementName: TOP,
-        leavesOnly: true,
-      });
-      const types: string[] = r.json.descendants.map(
-        (d: { type: string }) => d.type,
-      );
-      expect(types.length).toBeGreaterThan(0);
-      expect(types).not.toContain("Consolidated");
-    });
-
-    it("get_ancestors walks the roll-up path from a leaf", async () => {
-      const r = await h.ok("tm1_get_ancestors", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        elementName: LEAF1,
-      });
-      const names: string[] = r.json.ancestors.map(
-        (a: { name: string }) => a.name,
-      );
-      expect(names).toContain(SUB);
-      expect(names).toContain(TOP);
-    });
-
-    it("updates a consolidation's components", async () => {
-      // Element rename via OData PATCH(Name) is a no-op in TM1; the supported
-      // mutation through this path is changing a consolidation's Components.
-      // Add LEAF3 directly under SUB and verify it becomes a descendant.
-      await h.ok("tm1_update_element", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        elementName: SUB,
-        update: {
-          type: "Consolidated",
-          components: [
-            { name: LEAF1, weight: 1 },
-            { name: LEAF2, weight: 1 },
-            { name: LEAF3, weight: 1 },
-          ],
-        },
-      });
-      const r = await h.ok("tm1_get_descendants", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        elementName: SUB,
-      });
-      const names: string[] = r.json.descendants.map(
-        (d: { name: string }) => d.name,
-      );
-      expect(names).toContain(LEAF3);
-    });
-
-    it("find_orphan_dimensions lists our unused dimension", async () => {
-      // Must run BEFORE attribute creation: creating an element attribute spawns
-      // a }ElementAttributes_{DIM} control cube that references DIM, which would
-      // make DIM count as "used" and drop it from the orphan set.
-      const r = await h.ok("tm1_find_orphan_dimensions", { fetchAll: true });
-      const names: string[] = r.json.items.map((o: { name: string }) => o.name);
-      expect(names).toContain(DIM);
+      expect(quoted.Name).toBe(QUOTE_EL);
     });
 
     it("creates an alternate hierarchy", async () => {
-      const r = await h.ok("tm1_create_hierarchy", {
-        dimensionName: DIM,
-        hierarchyName: ALT_HIER,
+      await restWrite(h, "POST", `${seg("Dimensions", DIM)}/Hierarchies`, {
+        Name: ALT_HIER,
       });
-      expect(r.json).toMatchObject({ success: true, hierarchyName: ALT_HIER });
+      expect(await names(h, `${seg("Dimensions", DIM)}/Hierarchies`)).toContain(
+        ALT_HIER,
+      );
     });
 
     it("resolves a single default member via the bulk tool (1-item array)", async () => {
@@ -377,26 +237,17 @@ describe.skipIf(!LIVE_ENABLED)(
     });
 
     it("creates string + numeric attributes and lists them", async () => {
-      await h.ok("tm1_create_element_attribute", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        attributeName: "Caption",
-        attributeType: "String",
+      await restWrite(h, "POST", `${HIER_PATH}/ElementAttributes`, {
+        Name: "Caption",
+        Type: "String",
       });
-      await h.ok("tm1_create_element_attribute", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        attributeName: "SortOrder",
-        attributeType: "Numeric",
+      await restWrite(h, "POST", `${HIER_PATH}/ElementAttributes`, {
+        Name: "SortOrder",
+        Type: "Numeric",
       });
-      const r = await h.ok("tm1_list_element_attributes", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        fetchAll: true,
-      });
-      const names: string[] = r.json.items.map((a: { name: string }) => a.name);
-      expect(names).toContain("Caption");
-      expect(names).toContain("SortOrder");
+      const attrs = await names(h, `${HIER_PATH}/ElementAttributes`);
+      expect(attrs).toContain("Caption");
+      expect(attrs).toContain("SortOrder");
     });
 
     it("sets and reads back attribute values", async () => {
@@ -412,64 +263,42 @@ describe.skipIf(!LIVE_ENABLED)(
         attributeName: "SortOrder",
         value: 42,
       });
-      const r = await h.ok("tm1_get_element_attribute_values", {
-        dimensionName: DIM,
-        elementName: LEAF1,
-      });
-      const byName = new Map<string, unknown>(
-        r.json.attributes.map(
-          (a: { attributeName: string; value: unknown }) => [
-            a.attributeName,
-            a.value,
-          ],
-        ),
+      const el = await restGet<{ Attributes: Record<string, unknown> }>(
+        h,
+        `${HIER_PATH}/${seg("Elements", LEAF1)}?$select=Name,Attributes`,
       );
-      expect(String(byName.get("Caption"))).toBe("North City A");
-      expect(Number(byName.get("SortOrder"))).toBe(42);
+      expect(String(el.Attributes.Caption)).toBe("North City A");
+      expect(Number(el.Attributes.SortOrder)).toBe(42);
     });
 
-    it("deletes an element", async () => {
-      await h.ok("tm1_delete_element", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-        elementName: QUOTE_EL,
-        confirm: QUOTE_EL,
-      });
-      const r = await h.ok("tm1_get_hierarchy", {
-        dimensionName: DIM,
-        hierarchyName: HIER,
-      });
-      const names: string[] = r.json.elements.map(
-        (e: { name: string }) => e.name,
-      );
-      expect(names).not.toContain(QUOTE_EL);
+    it("deletes the quoted element", async () => {
+      await restWrite(h, "DELETE", `${HIER_PATH}/${seg("Elements", QUOTE_EL)}`);
+      expect(await names(h, `${HIER_PATH}/Elements`)).not.toContain(QUOTE_EL);
     });
 
     it("deletes the alternate hierarchy", async () => {
-      const r = await h.ok("tm1_delete_hierarchy", {
-        dimensionName: DIM,
-        hierarchyName: ALT_HIER,
-        confirm: ALT_HIER,
-      });
-      expect(r.json).toMatchObject({ success: true, hierarchyName: ALT_HIER });
+      await restWrite(
+        h,
+        "DELETE",
+        `${seg("Dimensions", DIM)}/${seg("Hierarchies", ALT_HIER)}`,
+      );
+      expect(
+        await names(h, `${seg("Dimensions", DIM)}/Hierarchies`),
+      ).not.toContain(ALT_HIER);
     });
 
     // ── Negative path ──────────────────────────────────────────────────────
-    it("get_hierarchy on a nonexistent dimension errors with a code", async () => {
-      const r = await h.call("tm1_get_hierarchy", {
-        dimensionName: NONEXISTENT,
-        hierarchyName: NONEXISTENT,
+    it("reading a nonexistent dimension errors with a code", async () => {
+      const r = await h.call("tm1_rest_read", {
+        path: `${seg("Dimensions", NONEXISTENT)}/${seg("Hierarchies", NONEXISTENT)}`,
       });
       expect(r.isError).toBe(true);
       expect(r.json?.code).toBeTruthy();
     });
 
     it("deletes the dimension (cascade)", async () => {
-      const r = await h.ok("tm1_delete_dimension", {
-        dimensionName: DIM,
-        confirm: DIM,
-      });
-      expect(r.json).toMatchObject({ success: true, dimensionName: DIM });
+      await restWrite(h, "DELETE", seg("Dimensions", DIM));
+      expect(await names(h, "Dimensions", DIM)).not.toContain(DIM);
     });
   },
 );

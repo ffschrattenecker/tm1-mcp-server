@@ -11,9 +11,14 @@
 // Opt-in: requires TM1_BASE_URL + TM1_USER (see harness.ts). Skips otherwise.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  createCube,
+  createDimension,
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
+  restWrite,
   SANDBOX,
+  seg,
   type LiveHarness,
 } from "./harness.js";
 
@@ -26,48 +31,30 @@ describe.skipIf(!LIVE_ENABLED)("live: element reference check", () => {
   let h: LiveHarness;
 
   const cleanup = async () => {
-    for (const [tool, args] of [
-      ["tm1_delete_process", { processName: PROC, confirm: PROC }],
-      ["tm1_delete_cube", { cubeName: CUBE, confirm: CUBE }],
-      ["tm1_delete_dimension", { dimensionName: REGION, confirm: REGION }],
-      ["tm1_delete_dimension", { dimensionName: MEAS, confirm: MEAS }],
-    ] as const) {
-      try {
-        await h.call(tool, args);
-      } catch {
-        /* already gone */
-      }
-    }
+    await dropIfExists(h, seg("Processes", PROC));
+    await dropIfExists(h, seg("Cubes", CUBE));
+    await dropIfExists(h, seg("Dimensions", REGION));
+    await dropIfExists(h, seg("Dimensions", MEAS));
   };
 
   beforeAll(async () => {
     h = await getHarness();
     await cleanup();
-    await h.ok("tm1_create_dimension", { dimensionName: REGION });
-    await h.ok("tm1_create_dimension", { dimensionName: MEAS });
-    await h.ok("tm1_bulk_upsert_elements", {
-      dimensionName: REGION,
-      elements: [{ name: "North America", type: "Numeric" }],
-    });
-    await h.ok("tm1_bulk_upsert_elements", {
-      dimensionName: MEAS,
-      elements: [{ name: "Amount", type: "Numeric" }],
-    });
-    await h.ok("tm1_create_element_attribute", {
-      dimensionName: REGION,
-      attributeName: "Code",
-      attributeType: "Alias",
-    });
+    await createDimension(h, REGION, ["North America"]);
+    await createDimension(h, MEAS, ["Amount"]);
+    await restWrite(
+      h,
+      "POST",
+      `${seg("Dimensions", REGION)}/${seg("Hierarchies", REGION)}/ElementAttributes`,
+      { Name: "Code", Type: "Alias" },
+    );
     await h.ok("tm1_update_element_attribute_value", {
       dimensionName: REGION,
       elementName: "North America",
       attributeName: "Code",
       value: "NA",
     });
-    await h.ok("tm1_create_cube", {
-      cubeName: CUBE,
-      dimensions: [REGION, MEAS],
-    });
+    await createCube(h, CUBE, [REGION, MEAS]);
   });
 
   afterAll(cleanup);

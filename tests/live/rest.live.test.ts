@@ -189,7 +189,7 @@ describe.skipIf(!LIVE_ENABLED)("live: REST tools", () => {
         confirm: "wrong",
       });
       expect(r.isError).toBe(true);
-      expect(await names(h, "Cubes", CUBE)).toEqual([CUBE]);
+      expect(await names(h, "Cubes", CUBE)).toContain(CUBE);
     });
 
     it("refuses what a kept tool owns: rules, process bodies, cell writes", async () => {

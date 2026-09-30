@@ -14,9 +14,13 @@
 // self-skip because another file will have marked the connection supported.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  createDimension,
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
+  restGet,
   SANDBOX,
+  seg,
   type LiveHarness,
 } from "./harness.js";
 import { BatchUnsupportedError } from "../../src/tm1-client/services/batch-service.js";
@@ -29,11 +33,17 @@ describe.skipIf(!LIVE_ENABLED)("live: perf fixes 2026-08-09", () => {
     h = await getHarness();
   });
 
+  // Non-control names in a collection, first `top` of them.
+  const userNames = async (collection: string, top: number) =>
+    (
+      await restGet<Array<{ Name: string }>>(
+        h,
+        `${collection}?$select=Name&$filter=not startswith(Name,'}')&$top=${top}`,
+      )
+    ).map((r) => r.Name);
+
   afterAll(async () => {
-    await h.call("tm1_delete_dimension", {
-      dimensionName: PROBE_DIM,
-      confirm: PROBE_DIM,
-    });
+    await dropIfExists(h, seg("Dimensions", PROBE_DIM));
   });
 
   // ---- $batch counter-probe: must run FIRST (needs an undecided tri-state) --
@@ -106,10 +116,7 @@ describe.skipIf(!LIVE_ENABLED)("live: perf fixes 2026-08-09", () => {
   // ---- P10: narrow element-type read ---------------------------------------
   describe("P10 — getElementTypes reads Name,Type only", () => {
     it("returns name/type pairs for a real hierarchy", async () => {
-      const dims = await h.ok("tm1_list_dimensions", { limit: 25 });
-      const names: string[] = (dims.json.items ?? []).map(
-        (d: { name: string }) => d.name,
-      );
+      const names = await userNames("Dimensions", 25);
       if (names.length === 0) {
         // A bare v12 database has no user dimensions. Nothing to read types
         // from — the P8 block below still exercises getElementTypes against the
@@ -142,10 +149,7 @@ describe.skipIf(!LIVE_ENABLED)("live: perf fixes 2026-08-09", () => {
   // ---- P5: consistency fan-out ---------------------------------------------
   describe("P5 — audit_complexity consistency scope fans out", () => {
     it("beats a serial walk of the same per-process reads", async () => {
-      const list = await h.ok("tm1_list_processes", { limit: 500 });
-      const procs: string[] = (list.json.items ?? []).map(
-        (p: { name: string }) => p.name,
-      );
+      const procs = await userNames("Processes", 500);
       if (procs.length < 8) {
         console.log(`[P5] only ${procs.length} processes — timing not telling`);
         return;
@@ -177,10 +181,8 @@ describe.skipIf(!LIVE_ENABLED)("live: perf fixes 2026-08-09", () => {
   // ---- P8: byte-capped chunking still upserts correctly --------------------
   describe("P8 — byte-capped $batch chunking", () => {
     it("bulk-upserts across chunk boundaries without loss", async () => {
-      await h.ok("tm1_create_dimension", {
-        dimensionName: PROBE_DIM,
-        elements: [{ name: "Seed", type: "Numeric" }],
-      });
+      await dropIfExists(h, seg("Dimensions", PROBE_DIM));
+      await createDimension(h, PROBE_DIM, ["Seed"]);
 
       // Long names inflate per-sub-request bytes; 250 elements also crosses the
       // 200-request count cap, so both bounds are exercised in one call.

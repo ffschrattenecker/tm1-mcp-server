@@ -1,19 +1,26 @@
-// Live VIEW + SUBSET lifecycle against a real TM1 server. Exercises every tool
-// in the views/ and subsets/ tool domains end-to-end through the MCP tool layer
-// (zod schema → withAnnotations → handler → TM1Client → OData), plus the
-// celldata view tools (get_view / get_view_definition).
+// Live VIEW + SUBSET lifecycle against a real TM1 server. Subsets and views are
+// created, read and deleted through tm1_rest_read / tm1_rest_write; the cell
+// read of a named view goes through tm1_get_view.
 //
 // Scaffold: two dimensions + a cube live under the SANDBOX prefix. One D1
 // element deliberately contains a single quote to exercise OData literal
-// escaping in createNative's Elements@odata.bind path (the P1.1 fix) — the
-// native-view create over that element MUST succeed.
+// escaping in the Elements@odata.bind path — the subset and native-view
+// creates over that element MUST succeed.
 //
 // Everything created is SANDBOX-prefixed; afterAll tears it down idempotently.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  createCube,
+  createDimension,
+  dropIfExists,
   getHarness,
+  key,
   LIVE_ENABLED,
+  names,
+  restGet,
+  restWrite,
   SANDBOX,
+  seg,
   type LiveHarness,
 } from "./harness.js";
 
@@ -31,238 +38,129 @@ const SUBSET = `${PFX}_SUB1`;
 const NATIVE_VIEW = `${PFX}_NV1`;
 const MDX_VIEW = `${PFX}_MV1`;
 
+// Unencoded hierarchy path, as @odata.bind values carry it.
+const bindHier = (d: string) =>
+  `Dimensions('${key(d)}')/Hierarchies('${key(d)}')`;
+const bindEls = (d: string, els: string[]) =>
+  els.map((e) => `${bindHier(d)}/Elements('${key(e)}')`);
+
+const D1_PATH = `${seg("Dimensions", D1)}/${seg("Hierarchies", D1)}`;
+const VIEWS = `${seg("Cubes", C1)}/Views`;
+const view = (v: string) => `${seg("Cubes", C1)}/${seg("Views", v)}`;
+
 describe.skipIf(!LIVE_ENABLED)("live: view + subset lifecycle", () => {
   let h: LiveHarness;
 
+  const subset = (collection: "Subsets" | "PrivateSubsets") =>
+    restGet<{
+      Name: string;
+      Expression?: string | null;
+      Elements: Array<{ Name: string }>;
+    }>(
+      h,
+      `${D1_PATH}/${seg(collection, SUBSET)}?$select=Name,Expression&$expand=Elements($select=Name)`,
+    );
+
+  const cleanup = async () => {
+    await dropIfExists(h, view(NATIVE_VIEW));
+    await dropIfExists(h, view(MDX_VIEW));
+    await dropIfExists(h, `${D1_PATH}/${seg("PrivateSubsets", SUBSET)}`);
+    await dropIfExists(h, `${D1_PATH}/${seg("Subsets", SUBSET)}`);
+    await dropIfExists(h, seg("Cubes", C1));
+    await dropIfExists(h, seg("Dimensions", D1));
+    await dropIfExists(h, seg("Dimensions", D2));
+  };
+
   beforeAll(async () => {
     h = await getHarness();
-
-    // Clean any leftovers from a crashed prior run so create() calls don't 400.
-    await h.call("tm1_delete_view", {
-      cubeName: C1,
-      viewName: NATIVE_VIEW,
-      confirm: NATIVE_VIEW,
-    });
-    await h.call("tm1_delete_view", {
-      cubeName: C1,
-      viewName: MDX_VIEW,
-      confirm: MDX_VIEW,
-    });
-    await h.call("tm1_delete_cube", { cubeName: C1, confirm: C1 });
-    await h.call("tm1_delete_dimension", { dimensionName: D1, confirm: D1 });
-    await h.call("tm1_delete_dimension", { dimensionName: D2, confirm: D2 });
-
-    // Scaffold: dims + elements + cube.
-    await h.ok("tm1_create_dimension", { dimensionName: D1 });
-    await h.ok("tm1_create_dimension", { dimensionName: D2 });
-    for (const name of D1_ELEMENTS) {
-      await h.ok("tm1_create_element", {
-        dimensionName: D1,
-        hierarchyName: D1,
-        element: { name, type: "Numeric" },
-      });
-    }
-    for (const name of D2_ELEMENTS) {
-      await h.ok("tm1_create_element", {
-        dimensionName: D2,
-        hierarchyName: D2,
-        element: { name, type: "Numeric" },
-      });
-    }
-    await h.ok("tm1_create_cube", { cubeName: C1, dimensions: [D1, D2] });
+    // Clean any leftovers from a crashed prior run so the creates don't 400.
+    await cleanup();
+    await createDimension(h, D1, D1_ELEMENTS);
+    await createDimension(h, D2, D2_ELEMENTS);
+    await createCube(h, C1, [D1, D2]);
   });
 
   afterAll(async () => {
-    const swallow = async (p: Promise<unknown>) => {
-      try {
-        await p;
-      } catch {
-        /* already gone */
-      }
-    };
-    await swallow(
-      h.call("tm1_delete_view", {
-        cubeName: C1,
-        viewName: NATIVE_VIEW,
-        confirm: NATIVE_VIEW,
-      }),
-    );
-    await swallow(
-      h.call("tm1_delete_view", {
-        cubeName: C1,
-        viewName: MDX_VIEW,
-        confirm: MDX_VIEW,
-      }),
-    );
-    await swallow(
-      h.call("tm1_delete_subset", {
-        dimensionName: D1,
-        hierarchyName: D1,
-        subsetName: SUBSET,
-        confirm: SUBSET,
-      }),
-    );
-    await swallow(h.call("tm1_delete_cube", { cubeName: C1, confirm: C1 }));
-    await swallow(
-      h.call("tm1_delete_dimension", { dimensionName: D1, confirm: D1 }),
-    );
-    await swallow(
-      h.call("tm1_delete_dimension", { dimensionName: D2, confirm: D2 }),
-    );
+    try {
+      await cleanup();
+    } catch {
+      /* best-effort teardown */
+    }
   });
 
-  // ---- Subset lifecycle (static element-based) ----
+  // ---- Subset lifecycle ----
 
-  it("create_subset (static) creates a public subset on D1", async () => {
-    const r = await h.ok("tm1_create_subset", {
-      dimensionName: D1,
-      hierarchyName: D1,
-      subsetName: SUBSET,
-      elements: ["E1", "E2"],
+  it("creates a static public subset over the quoted element", async () => {
+    await restWrite(h, "POST", `${D1_PATH}/Subsets`, {
+      Name: SUBSET,
+      "Elements@odata.bind": bindEls(D1, ["E1", QUOTE_EL]),
     });
-    expect(r.json).toMatchObject({ success: true, kind: "static" });
+    const s = await subset("Subsets");
+    expect(s.Elements.map((e) => e.Name)).toEqual(["E1", QUOTE_EL]);
+    expect(await names(h, `${D1_PATH}/Subsets`)).toContain(SUBSET);
   });
 
-  it("get_subset returns the static members", async () => {
-    const r = await h.ok("tm1_get_subset", {
-      dimensionName: D1,
-      hierarchyName: D1,
-      subsetName: SUBSET,
+  it("switches it to an MDX expression that resolves every element", async () => {
+    await restWrite(h, "PATCH", `${D1_PATH}/${seg("Subsets", SUBSET)}`, {
+      Expression: `{TM1SUBSETALL([${D1}])}`,
     });
-    expect(r.json.name).toBe(SUBSET);
-    expect(r.json.elements).toEqual(expect.arrayContaining(["E1", "E2"]));
-  });
-
-  it("list_subsets shows the created subset", async () => {
-    const r = await h.ok("tm1_list_subsets", {
-      dimensionName: D1,
-      hierarchyName: D1,
-      fetchAll: true,
-      format: "json",
-    });
-    const names = (r.json.items ?? []).map((s: any) => s.name);
-    expect(names).toContain(SUBSET);
-  });
-
-  it("update_subset replaces the static list, in the order given", async () => {
-    await h.ok("tm1_update_subset", {
-      dimensionName: D1,
-      hierarchyName: D1,
-      subsetName: SUBSET,
-      elements: [QUOTE_EL, "E1"],
-    });
-    const r = await h.ok("tm1_get_subset", {
-      dimensionName: D1,
-      hierarchyName: D1,
-      subsetName: SUBSET,
-    });
-    expect(r.json.elements).toEqual([QUOTE_EL, "E1"]);
-  });
-
-  it("update_subset keeps the old list when the new one names an unknown element", async () => {
-    await h.call("tm1_update_subset", {
-      dimensionName: D1,
-      hierarchyName: D1,
-      subsetName: SUBSET,
-      elements: ["E2", `${SANDBOX}_NO_SUCH_ELEMENT`],
-    });
-    const r = await h.ok("tm1_get_subset", {
-      dimensionName: D1,
-      hierarchyName: D1,
-      subsetName: SUBSET,
-    });
-    expect(r.json.elements).toEqual([QUOTE_EL, "E1"]);
-  });
-
-  it("update_subset switches it to an MDX expression", async () => {
-    // The MDX resolves the full hierarchy (all 3 elements incl. the quote one).
-    const u = await h.ok("tm1_update_subset", {
-      dimensionName: D1,
-      hierarchyName: D1,
-      subsetName: SUBSET,
-      expression: `{TM1SUBSETALL([${D1}])}`,
-    });
-    expect(u.json).toMatchObject({ success: true });
-
-    const r = await h.ok("tm1_get_subset", {
-      dimensionName: D1,
-      hierarchyName: D1,
-      subsetName: SUBSET,
-    });
-    expect(r.json.expression).toBeTruthy();
-    // The dynamic set now resolves every D1 element, including the quote one.
-    expect(r.json.elements).toEqual(
+    const s = await subset("Subsets");
+    expect(s.Expression).toBeTruthy();
+    expect(s.Elements.map((e) => e.Name)).toEqual(
       expect.arrayContaining(["E1", "E2", QUOTE_EL]),
     );
   });
 
-  it("update_subset turns the MDX subset static again", async () => {
-    await h.ok("tm1_update_subset", {
-      dimensionName: D1,
-      hierarchyName: D1,
-      subsetName: SUBSET,
-      elements: ["E2"],
-    });
-    const r = await h.ok("tm1_get_subset", {
-      dimensionName: D1,
-      hierarchyName: D1,
-      subsetName: SUBSET,
-    });
-    expect(r.json.expression).toBeUndefined();
-    expect(r.json.elements).toEqual(["E2"]);
-  });
-
   it("a private subset lives beside the public one of the same name", async () => {
-    const key = { dimensionName: D1, hierarchyName: D1, subsetName: SUBSET };
-    await h.ok("tm1_create_subset", {
-      ...key,
-      elements: ["E1"],
-      isPrivate: true,
+    await restWrite(h, "POST", `${D1_PATH}/PrivateSubsets`, {
+      Name: SUBSET,
+      "Elements@odata.bind": bindEls(D1, [QUOTE_EL]),
     });
-    await h.ok("tm1_update_subset", {
-      ...key,
-      elements: [QUOTE_EL],
-      isPrivate: true,
+    const priv = await subset("PrivateSubsets");
+    const pub = await subset("Subsets");
+    expect(priv.Elements.map((e) => e.Name)).toEqual([QUOTE_EL]);
+    expect(pub.Expression).toBeTruthy();
+    await restWrite(h, "DELETE", `${D1_PATH}/${seg("PrivateSubsets", SUBSET)}`);
+    const gone = await h.call("tm1_rest_read", {
+      path: `${D1_PATH}/${seg("PrivateSubsets", SUBSET)}`,
     });
-    const priv = await h.ok("tm1_get_subset", { ...key, isPrivate: true });
-    const pub = await h.ok("tm1_get_subset", key);
-    expect(priv.json.elements).toEqual([QUOTE_EL]);
-    expect(pub.json.elements).toEqual(["E2"]);
-    await h.ok("tm1_delete_subset", {
-      ...key,
-      isPrivate: true,
-      confirm: SUBSET,
-    });
-    const gone = await h.call("tm1_get_subset", { ...key, isPrivate: true });
     expect(gone.isError).toBe(true);
   });
 
-  it("delete_subset removes it", async () => {
-    const r = await h.ok("tm1_delete_subset", {
-      dimensionName: D1,
-      hierarchyName: D1,
-      subsetName: SUBSET,
-      confirm: SUBSET,
-    });
-    expect(r.json).toMatchObject({ success: true });
+  it("deletes the public subset", async () => {
+    await restWrite(h, "DELETE", `${D1_PATH}/${seg("Subsets", SUBSET)}`);
+    expect(await names(h, `${D1_PATH}/Subsets`)).not.toContain(SUBSET);
   });
 
-  // ---- Native view (exercises OData quote-escaping on Elements@odata.bind) ----
+  // ---- Native view (OData quote-escaping on Elements@odata.bind) ----
 
-  it("create_native_view over a quote-containing element succeeds (P1.1 escaping)", async () => {
-    const r = await h.ok("tm1_create_native_view", {
-      cubeName: C1,
-      viewName: NATIVE_VIEW,
-      // Rows reference the single-quote element via explicit element list →
-      // Elements@odata.bind path. If OData escaping were wrong, TM1 would 400.
-      rows: [{ dimension: D1, elements: [QUOTE_EL, "E1"] }],
-      columns: [{ dimension: D2, elements: ["M1", "M2"] }],
+  it("creates a native view over a quote-containing element", async () => {
+    // Rows reference the single-quote element via an explicit element list →
+    // Elements@odata.bind path. If OData escaping were wrong, TM1 would 400.
+    await restWrite(h, "POST", VIEWS, {
+      "@odata.type": "#ibm.tm1.api.v1.NativeView",
+      Name: NATIVE_VIEW,
+      Rows: [
+        {
+          Subset: {
+            "Hierarchy@odata.bind": bindHier(D1),
+            "Elements@odata.bind": bindEls(D1, [QUOTE_EL, "E1"]),
+          },
+        },
+      ],
+      Columns: [
+        {
+          Subset: {
+            "Hierarchy@odata.bind": bindHier(D2),
+            "Elements@odata.bind": bindEls(D2, ["M1", "M2"]),
+          },
+        },
+      ],
+      Titles: [],
+      SuppressEmptyColumns: false,
+      SuppressEmptyRows: false,
     });
-    expect(r.json).toMatchObject({
-      success: true,
-      cubeName: C1,
-      viewName: NATIVE_VIEW,
-    });
+    expect(await names(h, VIEWS)).toContain(NATIVE_VIEW);
   });
 
   it("get_view executes the native view and returns cells + axes", async () => {
@@ -278,77 +176,34 @@ describe.skipIf(!LIVE_ENABLED)("live: view + subset lifecycle", () => {
     expect(Array.isArray(r.json.axes)).toBe(true);
   });
 
-  it("get_view_definition returns the native structure with columns + rows", async () => {
-    const r = await h.ok("tm1_get_view_definition", {
-      cubeName: C1,
-      viewName: NATIVE_VIEW,
-    });
-    expect(r.json.type).toBe("Native");
-    expect(r.json.native).toBeTruthy();
-    expect(Array.isArray(r.json.native.columns)).toBe(true);
-    expect(Array.isArray(r.json.native.rows)).toBe(true);
-    expect(r.json.native.columns.length).toBeGreaterThanOrEqual(1);
-    expect(r.json.native.rows.length).toBeGreaterThanOrEqual(1);
-    // Dimension wiring round-trips through the NativeView expand.
-    const dims = [
-      ...r.json.native.columns.map((a: any) => a.dimensionName),
-      ...r.json.native.rows.map((a: any) => a.dimensionName),
-    ];
-    expect(dims).toEqual(expect.arrayContaining([D1, D2]));
-  });
-
-  it("list_views shows the native view", async () => {
-    const r = await h.ok("tm1_list_views", {
-      cubeName: C1,
-      fetchAll: true,
-      format: "json",
-    });
-    const names = (r.json.items ?? []).map((v: any) => v.name);
-    expect(names).toContain(NATIVE_VIEW);
-  });
-
-  it("delete_view removes the native view", async () => {
-    const r = await h.ok("tm1_delete_view", {
-      cubeName: C1,
-      viewName: NATIVE_VIEW,
-      confirm: NATIVE_VIEW,
-    });
-    expect(r.json).toMatchObject({ success: true });
+  it("deletes the native view", async () => {
+    await restWrite(h, "DELETE", view(NATIVE_VIEW));
+    expect(await names(h, VIEWS)).not.toContain(NATIVE_VIEW);
   });
 
   // ---- MDX view ----
 
-  it("create_mdx_view + get_view_definition reports type MDX, then delete", async () => {
+  it("creates an MDX view, reads its MDX back, then deletes it", async () => {
     const mdx = `SELECT {[${D2}].[M1]} ON COLUMNS, {[${D1}].[E1]} ON ROWS FROM [${C1}]`;
-    const c = await h.ok("tm1_create_mdx_view", {
-      cubeName: C1,
-      viewName: MDX_VIEW,
-      mdx,
+    await restWrite(h, "POST", VIEWS, {
+      "@odata.type": "#ibm.tm1.api.v1.MDXView",
+      Name: MDX_VIEW,
+      MDX: mdx,
     });
-    expect(c.json).toMatchObject({ success: true, viewName: MDX_VIEW });
+    const path = view(MDX_VIEW);
+    const def = await restGet<{ Name: string; MDX?: string }>(h, path);
+    expect(typeof def.MDX).toBe("string");
+    expect(def.MDX!.length).toBeGreaterThan(0);
 
-    const def = await h.ok("tm1_get_view_definition", {
-      cubeName: C1,
-      viewName: MDX_VIEW,
-    });
-    expect(def.json.type).toBe("MDX");
-    expect(typeof def.json.mdx).toBe("string");
-    expect(def.json.mdx.length).toBeGreaterThan(0);
-
-    const d = await h.ok("tm1_delete_view", {
-      cubeName: C1,
-      viewName: MDX_VIEW,
-      confirm: MDX_VIEW,
-    });
-    expect(d.json).toMatchObject({ success: true });
+    await restWrite(h, "DELETE", path);
+    expect(await names(h, VIEWS)).not.toContain(MDX_VIEW);
   });
 
   // ---- Negative path ----
 
-  it("get_view_definition on a nonexistent view returns an error envelope", async () => {
-    const r = await h.call("tm1_get_view_definition", {
-      cubeName: C1,
-      viewName: `${PFX}_DOES_NOT_EXIST`,
+  it("reading a nonexistent view returns an error envelope", async () => {
+    const r = await h.call("tm1_rest_read", {
+      path: view(`${PFX}_DOES_NOT_EXIST`),
     });
     expect(r.isError).toBe(true);
     expect(r.json?.code).toBeTruthy();
