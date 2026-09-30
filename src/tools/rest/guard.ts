@@ -17,8 +17,6 @@
 // literal text `%27` for TM1, moving where quoted keys start and end, and a
 // blocked segment could hide inside what the guard took for one key. A path
 // that still holds an escape after one decode is refused instead.
-//
-// See docs/TOOL-CONSOLIDATION.md, "tm1_rest_read / tm1_rest_write".
 import { isSecretName } from "../../lib/mask-secrets.js";
 import { tm1NameEquals } from "../../lib/tm1-name.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
