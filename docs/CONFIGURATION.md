@@ -107,7 +107,7 @@ connection without a word. An explicit dir wins over `TM1_BASE_URL`:
 }
 ```
 
-Tool names no longer carry the connection (`mcp__tm1__tm1_delete_cube` for all of
+Tool names no longer carry the connection (`mcp__tm1__tm1_clear_cube` for all of
 them), so a client permission granted for one connection applies to every
 connection. Keep production folders `TM1_MODE=readonly` unless writes there are
 intended: the per-call refusal is then the barrier, not the approval prompt.
