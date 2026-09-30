@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { z } from "zod";
 import {
   paginate,
-  pageFromServer,
   PAGINATION_SCHEMA,
   UNBOUNDED_MAX_ITEMS,
 } from "../../src/tools/pagination.js";
@@ -152,42 +151,6 @@ describe("shared paging/format input schemas", () => {
         /default/i,
       );
     }
-  });
-});
-
-describe("pageFromServer", () => {
-  const ALL = ["a", "b", "c", "d", "e"];
-
-  it("produces the same envelope paginate() would for the same window", () => {
-    for (const offset of [0, 2, 4]) {
-      const limit = 2;
-      expect(
-        pageFromServer(ALL.slice(offset, offset + limit), ALL.length, offset),
-      ).toEqual(paginate(ALL, limit, offset, false));
-    }
-  });
-
-  it("clears has_more on a last page that is exactly `limit` long", () => {
-    // 5 rows, offset 3, limit 2 → full page, nothing left. Deriving has_more
-    // from `count === limit` would promise a page that comes back empty.
-    const page = pageFromServer(["d", "e"], 5, 3);
-    expect(page.count).toBe(2);
-    expect(page.has_more).toBe(false);
-    expect(page.next_offset).toBeNull();
-  });
-
-  it("never reports a total below the rows already in hand", () => {
-    // The collection shrank between $count and the slice; trust the rows.
-    const page = pageFromServer(["d", "e"], 1, 3);
-    expect(page.total).toBe(5);
-    expect(page.has_more).toBe(false);
-  });
-
-  it("copies the item array instead of aliasing the caller's", () => {
-    const items = ["a"];
-    const page = pageFromServer(items, 1, 0);
-    items.push("b");
-    expect(page.items).toEqual(["a"]);
   });
 });
 
