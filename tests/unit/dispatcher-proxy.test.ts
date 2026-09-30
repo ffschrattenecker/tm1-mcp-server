@@ -15,12 +15,13 @@ function startSocks(seen: string[]): Promise<TcpServer> {
   const server = createTcp((client) => {
     client.once("data", () => {
       client.write(Buffer.from([0x05, 0x00]));
-      client.once("data", (req) => {
+      client.once("data", (req: Buffer) => {
         let host: string;
         let off: number;
         if (req[3] === 0x03) {
-          host = req.subarray(5, 5 + req[4]).toString();
-          off = 5 + req[4];
+          const len = req[4] ?? 0;
+          host = req.subarray(5, 5 + len).toString();
+          off = 5 + len;
         } else {
           host = [...req.subarray(4, 8)].join(".");
           off = 8;
