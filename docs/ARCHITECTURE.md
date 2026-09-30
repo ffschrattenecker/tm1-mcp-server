@@ -117,9 +117,9 @@ class holds a single `TM1HttpClient` reference and exposes domain methods
 as plain async functions. The pattern follows TM1py's `RestService` +
 domain services (`CubeService`, `DimensionService`, `ProcessService`, …).
 
-The 14 services wired into `TM1Client`: `batch`, `cubes`, `dimensions`,
+The 13 services wired into `TM1Client`: `batch`, `cubes`, `dimensions`,
 `hierarchies`, `cells`, `views`, `subsets`, `elements`, `processes`, `chores`,
-`security`, `server`, `monitoring`, `files`.
+`security`, `server`, `files`.
 
 `batch` is the one service not scoped to a TM1 object type: it owns the OData
 `$batch` endpoint, so other services can fold many independent calls into one
