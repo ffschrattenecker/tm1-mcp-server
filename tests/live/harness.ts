@@ -203,11 +203,6 @@ export function skipUnlessRegistered(
 }
 
 /**
- * Best-effort teardown: delete any sandbox-prefixed objects left behind by a
- * crashed or interrupted suite. Idempotent — missing objects are ignored.
- * Call from a global afterAll or the last suite.
- */
-/**
  * A raw REST call for fixtures no tool covers (e.g. TM1 sandboxes). The
  * transport is private on TM1Client by design; tests reach it deliberately.
  */
@@ -225,6 +220,150 @@ export function rawRequest<T = unknown>(
   return http.request(method, path, body);
 }
 
+// ── REST fixtures ────────────────────────────────────────────────────────────
+// Setup and teardown go through tm1_rest_read / tm1_rest_write, the tools that
+// replaced the per-object CRUD tools, so every suite exercises them too.
+
+/** An OData key literal: single quotes doubled. */
+export const key = (name: string): string => name.replace(/'/g, "''");
+
+/** A path segment `Coll('name')` with the name OData-quoted and URL-encoded. */
+export const seg = (coll: string, name: string): string =>
+  `${coll}('${encodeURIComponent(key(name))}')`;
+
+/** GET through tm1_rest_read; returns `data` (collections: the value[] array). */
+export async function restGet<T = any>(
+  h: LiveHarness,
+  path: string,
+): Promise<T> {
+  const r = await h.ok("tm1_rest_read", { path });
+  const data = r.json?.data;
+  return (
+    data && typeof data === "object" && "value" in data ? data.value : data
+  ) as T;
+}
+
+/** POST/PATCH/PUT/DELETE through tm1_rest_write. `confirm` defaults to the last key. */
+export async function restWrite(
+  h: LiveHarness,
+  method: "POST" | "PATCH" | "PUT" | "DELETE",
+  path: string,
+  body?: unknown,
+  confirm?: string,
+): Promise<CallResult> {
+  const last = [...path.matchAll(/\('((?:[^']|'')*)'\)|\((\d+)\)/g)].pop();
+  const target =
+    confirm ??
+    (last
+      ? decodeURIComponent(last[1] ?? last[2]!).replace(/''/g, "'")
+      : undefined);
+  return h.ok("tm1_rest_write", {
+    method,
+    path,
+    ...(body === undefined ? {} : { body }),
+    ...(target === undefined ? {} : { confirm: target }),
+  });
+}
+
+/** Names in a collection, e.g. names(h, "Cubes", SANDBOX) — `contains` filter. */
+export async function names(
+  h: LiveHarness,
+  collection: string,
+  contains?: string,
+): Promise<string[]> {
+  const filter = contains ? `&$filter=contains(Name,'${key(contains)}')` : "";
+  const rows = await restGet<Array<{ Name: string }>>(
+    h,
+    `${collection}?$select=Name${filter}`,
+  );
+  return rows.map((r) => r.Name);
+}
+
+export interface ElementSpec {
+  name: string;
+  type?: "Numeric" | "String" | "Consolidated";
+  /** Children of a consolidation, weight 1 unless given. */
+  children?: Array<string | { name: string; weight: number }>;
+}
+
+/** Create a dimension with a same-named hierarchy and these elements. */
+export async function createDimension(
+  h: LiveHarness,
+  name: string,
+  elements: Array<string | ElementSpec> = [],
+): Promise<void> {
+  const specs = elements.map((e) => (typeof e === "string" ? { name: e } : e));
+  const edges = specs.flatMap((p) =>
+    (p.children ?? []).map((c) => ({
+      ParentName: p.name,
+      ComponentName: typeof c === "string" ? c : c.name,
+      Weight: typeof c === "string" ? 1 : c.weight,
+    })),
+  );
+  await restWrite(h, "POST", "Dimensions", {
+    Name: name,
+    Hierarchies: [
+      {
+        Name: name,
+        Elements: specs.map((e) => ({
+          Name: e.name,
+          Type: e.type ?? (e.children?.length ? "Consolidated" : "Numeric"),
+        })),
+        ...(edges.length ? { Edges: edges } : {}),
+      },
+    ],
+  });
+}
+
+/** Create a cube over existing dimensions (rules: use tm1_set_cube_rules). */
+export async function createCube(
+  h: LiveHarness,
+  name: string,
+  dimensions: string[],
+): Promise<void> {
+  await restWrite(h, "POST", "Cubes", {
+    Name: name,
+    "Dimensions@odata.bind": dimensions.map((d) => seg("Dimensions", d)),
+  });
+}
+
+/** DELETE `path`, ignoring an object that is already gone. */
+export async function dropIfExists(
+  h: LiveHarness,
+  path: string,
+): Promise<void> {
+  try {
+    await restWrite(h, "DELETE", path);
+  } catch (e) {
+    if (!/NOT_FOUND|404|not found/i.test((e as Error).message)) throw e;
+  }
+}
+
+const mdxName = (n: string) => n.replace(/]/g, "]]");
+
+/** One cell's value, read with tm1_execute_mdx. */
+export async function cellValue(
+  h: LiveHarness,
+  cube: string,
+  dimensions: string[],
+  elements: string[],
+): Promise<unknown> {
+  const tuple = elements
+    .map((e, i) => {
+      const d = mdxName(dimensions[i]!);
+      return `[${d}].[${d}].[${mdxName(e)}]`;
+    })
+    .join(",");
+  const r = await h.ok("tm1_execute_mdx", {
+    mdx: `SELECT {(${tuple})} ON 0 FROM [${mdxName(cube)}]`,
+  });
+  return r.json.cells[0]?.value ?? null;
+}
+
+/**
+ * Best-effort teardown: delete any sandbox-prefixed objects left behind by a
+ * crashed or interrupted suite. Idempotent — missing objects are ignored.
+ */
 export async function sweepSandbox(h: LiveHarness): Promise<void> {
   const swallow = async (p: Promise<unknown>) => {
     try {
@@ -239,91 +378,38 @@ export async function sweepSandbox(h: LiveHarness): Promise<void> {
   // bound object never blocks its dependency's removal.
 
   // 1. Chores (free the processes they bind).
-  const chores = await h.call("tm1_list_chores", { fetchAll: true });
-  for (const c of chores.json?.items ?? []) {
-    const name = typeof c === "string" ? c : c?.name;
-    if (typeof name === "string" && name.startsWith(SANDBOX)) {
-      await swallow(
-        h.call("tm1_delete_chore", { choreName: name, confirm: name }),
-      );
-    }
+  for (const n of await names(h, "Chores", SANDBOX)) {
+    await swallow(restWrite(h, "DELETE", seg("Chores", n)));
   }
 
   // 2. Processes.
-  const procs = await h.call("tm1_list_processes", {
-    fetchAll: true,
-    nameContains: SANDBOX,
-  });
-  for (const p of procs.json?.items ?? []) {
-    const name = typeof p === "string" ? p : p?.name;
-    if (typeof name === "string" && name.startsWith(SANDBOX)) {
-      await swallow(
-        h.call("tm1_delete_process", { processName: name, confirm: name }),
-      );
-    }
+  for (const n of await names(h, "Processes", SANDBOX)) {
+    await swallow(restWrite(h, "DELETE", seg("Processes", n)));
   }
 
   // 2b. TM1 sandboxes. One left behind with IncludeInSandboxDimension=true is
   // a member of the shared Sandboxes dimension of every cube on the server.
   try {
-    const sbs = await rawRequest<{ value?: Array<{ Name: string }> }>(
-      h,
-      "GET",
-      "/api/v1/Sandboxes?$select=Name",
-    );
-    for (const sb of sbs.value ?? []) {
-      if (sb.Name.includes(SANDBOX)) {
-        await swallow(
-          rawRequest(
-            h,
-            "DELETE",
-            `/api/v1/Sandboxes('${encodeURIComponent(sb.Name)}')`,
-          ),
-        );
-      }
+    for (const n of await names(h, "Sandboxes", SANDBOX)) {
+      await swallow(restWrite(h, "DELETE", seg("Sandboxes", n)));
     }
   } catch {
     /* sandboxing disabled on this server */
   }
 
-  // 3. Cubes (drops their views with them; frees the dimensions). includeControl
-  // so sandbox control cubes (}ElementAttributes_…, }Views_…) are caught too;
-  // match by `includes` since control names carry the prefix mid-string.
-  const cubes = await h.call("tm1_list_cubes", {
-    fetchAll: true,
-    includeControl: true,
-  });
-  for (const c of cubes.json?.items ?? []) {
-    if (typeof c?.name === "string" && c.name.includes(SANDBOX)) {
-      await swallow(
-        h.call("tm1_delete_cube", { cubeName: c.name, confirm: c.name }),
-      );
-    }
+  // 3. Cubes (drops their views with them; frees the dimensions). `contains`
+  // also catches sandbox control cubes (}ElementAttributes_…, }Views_…).
+  for (const n of await names(h, "Cubes", SANDBOX)) {
+    await swallow(restWrite(h, "DELETE", seg("Cubes", n)));
   }
 
-  // 4. Dimensions (now unreferenced). list_dimensions has no nameContains
-  // filter — fetch all and match the prefix client-side. Two passes: base
-  // dimensions first, then sandbox control dimensions (}Subsets_… lingers
-  // after its base dim on TM1 11.8 and is skipped by a startsWith filter).
-  const dims = await h.call("tm1_list_dimensions", {
-    fetchAll: true,
-    includeControl: true,
-  });
-  const dimNames = (dims.json?.items ?? [])
-    .map((d: unknown) =>
-      typeof d === "string" ? d : (d as { name?: string })?.name,
-    )
-    .filter(
-      (n: unknown): n is string => typeof n === "string" && n.includes(SANDBOX),
-    );
-  for (const name of dimNames.filter((n: string) => !n.startsWith("}"))) {
-    await swallow(
-      h.call("tm1_delete_dimension", { dimensionName: name, confirm: name }),
-    );
+  // 4. Dimensions (now unreferenced). Base dimensions first, then control
+  // dimensions (}Subsets_… lingers after its base dim on TM1 11.8).
+  const dimNames = await names(h, "Dimensions", SANDBOX);
+  for (const n of dimNames.filter((d) => !d.startsWith("}"))) {
+    await swallow(restWrite(h, "DELETE", seg("Dimensions", n)));
   }
-  for (const name of dimNames.filter((n: string) => n.startsWith("}"))) {
-    await swallow(
-      h.call("tm1_delete_dimension", { dimensionName: name, confirm: name }),
-    );
+  for (const n of dimNames.filter((d) => d.startsWith("}"))) {
+    await swallow(restWrite(h, "DELETE", seg("Dimensions", n)));
   }
 }

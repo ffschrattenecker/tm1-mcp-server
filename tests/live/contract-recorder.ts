@@ -66,7 +66,15 @@ function record(base: string, status: number, body: string) {
 // shape, so a required key going missing is drift, not a narrower $select.
 const drift: string[] = [];
 
-function checkDrift(base: string, status: number, body: string) {
+// Unless the request carries its own $select: tm1_rest_read sends whatever
+// projection the caller asks for, so there a missing key is the narrower
+// $select and only the keys that do arrive are checked.
+function checkDrift(
+  base: string,
+  status: number,
+  body: string,
+  selected: boolean,
+) {
   const trimmed = body.trim();
   if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return;
   const key = status >= 200 && status < 300 ? base : `${base} !${status}`;
@@ -74,7 +82,7 @@ function checkDrift(base: string, status: number, body: string) {
   // No contract simply means the recording never covered this endpoint.
   if (!contract) return;
   const problems = diffAgainstShape(JSON.parse(trimmed), contract, {
-    mode: "exact",
+    mode: selected ? "subset" : "exact",
   }).filter((p) => !isExcused(key, p));
   if (problems.length > 0) drift.push(`${key}\n    ${problems.join("\n    ")}`);
 }
@@ -103,7 +111,10 @@ globalThis.fetch = async (input: unknown, init?: RequestInit) => {
       res.headers,
     );
     if (RECORDING) record(base, status, text);
-    else checkDrift(base, status, text);
+    else {
+      const query = decodeURIComponent(new URL(href).search);
+      checkDrift(base, status, text, /[$]select=/i.test(query));
+    }
   } catch {
     // Observing must never break the run it observes.
   }
