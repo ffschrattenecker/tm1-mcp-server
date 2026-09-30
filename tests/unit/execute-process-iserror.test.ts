@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import { contractCheckedClient } from "../helpers/service-contract.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
-import { registerExecuteProcess } from "../../src/tools/ti-development/execute-process.js";
+import {
+  abortHint,
+  registerExecuteProcess,
+} from "../../src/tools/ti-development/execute-process.js";
 import { captureTool } from "../helpers/client-harness.js";
 
 // Capture the handler the tool registers, then invoke it directly with a
@@ -231,5 +234,20 @@ describe("tm1_execute_process transport hints", () => {
       (e: unknown) => e,
     );
     expect((err as TM1Error).hint).toContain("tm1_diagnose_process_error");
+  });
+});
+
+describe("abortHint", () => {
+  it("points jobs on v12", () => {
+    const h = abortHint(12);
+    expect(h).toContain("tm1_rest_read Jobs");
+    expect(h).toContain("Jobs('id')/tm1.Cancel");
+    expect(h).not.toContain("Threads");
+  });
+  it("points threads on v11", () => {
+    const h = abortHint(11);
+    expect(h).toContain("tm1_rest_read Threads");
+    expect(h).toContain("Threads(id)/tm1.CancelOperation");
+    expect(h).not.toContain("Jobs");
   });
 });
