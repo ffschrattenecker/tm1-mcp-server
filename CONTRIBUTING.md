@@ -39,12 +39,13 @@ This chains:
 
 | Step             | Command                             | Checks                                                                      |
 | ---------------- | ----------------------------------- | --------------------------------------------------------------------------- |
+| Audit            | `npm run audit:prod`                | no high-severity advisories in production dependencies                      |
 | Types            | `npm run typecheck`                 | `tsc --noEmit`, strict flags on                                             |
 | Types (tests)    | `npm run typecheck:tests`           | `tests/` under the same strict flags (`tsconfig.test.json`)                 |
 | Schema budget    | `npm run lint:output-schema-budget` | serialized output schemas stay within the byte budget                       |
 | Conventions      | `npm run lint:conventions`          | registrars wired, `<entity>Name` inputs, `actionResponse()`, shared escaper |
 | Tool docs        | `npm run lint:tool-docs`            | the generated tool lists in `README.md` / `docs/TOOLS.md` are current       |
-| Wire contracts   | `npm run contracts:verify`\*        | the live server still matches the recorded response shapes                  |
+| Format           | `npm run lint:format`               | `prettier --check .`                                                        |
 | Lint             | `npm run lint:eslint`               | ESLint over `src/` and `tests/`                                             |
 | Tests + coverage | `npm run coverage:check`            | full `vitest` suite under coverage, then the coverage ratchet gate          |
 
@@ -109,24 +110,10 @@ Rules:
 There is deliberately **no coverage badge** — a badge needs an external service
 and a token, and a failing build is a stronger signal than a green shield.
 
-## Architecture Notes
+## Architecture
 
-- **Service composition.** TM1 REST calls live in a service under
-  `src/tm1-client/services/`, not directly on a flat client. Tools only see
-  `TM1Client`, which does not expose the transport, so `tsc` enforces this —
-  add new calls to the appropriate service.
-- **Tools** are registered under `src/tools/<category>/` and wired in
-  `src/tools/index.ts`. Each tool declares `readOnlyHint` / `destructiveHint` /
-  `idempotentHint` annotations. Every tool is built with `defineTool()`
-  (`src/tools/define-tool.ts`), which keeps name, description, input, output
-  schema, annotations and handler in a single literal. There are no name-keyed
-  metadata maps: `markdownCapable()` and `asOutputSchema()` are applied from the
-  spec, and the TypeScript type is what makes annotations mandatory.
-- **Output schemas** are strict (`additionalProperties: false`) — when a handler
-  returns a new field, add it to the matching schema in `src/tools/schemas/`, or
-  the SDK rejects the payload.
-- **Secrets** are masked in tool output (`src/lib/mask-secrets.ts`); never log
-  raw credentials.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the layering, the
+service pattern, and the tool-authoring rules.
 
 ## Tests
 
@@ -195,10 +182,7 @@ Conventions for new tests, so the class is self-evident:
 
 ## Releasing
 
-See [`RELEASING.md`](RELEASING.md). In short: work lands on `main` continuously
-and each change adds a `CHANGELOG.md` entry under `[Unreleased]`; the version is
-picked and tagged only at publish time via `npm version` — never bump
-`package.json` or tag mid-stream.
+See [`RELEASING.md`](RELEASING.md).
 
 ## License
 

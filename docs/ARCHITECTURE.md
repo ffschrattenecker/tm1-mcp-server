@@ -110,6 +110,21 @@ Process-global state is keyed by `connectionIdOf(config)` (host, port, v12
 instance/database): the callgraph cache, mutation events, and the
 resource-subscription routing.
 
+## Tools
+
+- Tools are registered under `src/tools/<category>/` and wired in
+  `src/tools/index.ts`. Every tool is built with `defineTool()`
+  (`src/tools/define-tool.ts`), which keeps name, description, input, output
+  schema, annotations and handler in a single literal. There are no name-keyed
+  metadata maps: `markdownCapable()` and `asOutputSchema()` are applied from the
+  spec, and the TypeScript type is what makes the `readOnlyHint` /
+  `destructiveHint` / `idempotentHint` annotations mandatory.
+- Output schemas are strict (`additionalProperties: false`) — when a handler
+  returns a new field, add it to the matching schema in `src/tools/schemas/`, or
+  the SDK rejects the payload.
+- Secrets are masked in tool output (`src/lib/mask-secrets.ts`); never log raw
+  credentials.
+
 ## Service-class pattern (TM1py-style)
 
 Each domain owns one service class under `src/tm1-client/services/`. The
