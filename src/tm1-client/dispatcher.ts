@@ -5,7 +5,7 @@
 // scope `rejectUnauthorized: false` to TM1 fetches only.
 //
 // The Agent is cached so connection-pooling stays effective across requests.
-import type { Socket } from "node:net";
+import { isIP, type Socket } from "node:net";
 import { connect as tlsConnect } from "node:tls";
 import {
   Agent,
@@ -48,7 +48,8 @@ function proxiedConnect(proxy: string, verify: boolean) {
       if (opts.protocol !== "https:") return callback(null, socket);
       const tls = tlsConnect({
         socket,
-        servername: opts.hostname,
+        // SNI must not carry an IP address (RFC 6066).
+        ...(isIP(opts.hostname) ? {} : { servername: opts.hostname }),
         rejectUnauthorized: verify,
       });
       tls.once("secureConnect", () => callback(null, tls));
