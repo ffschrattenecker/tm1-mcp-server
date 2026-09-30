@@ -68,7 +68,7 @@ export const registerUpsertProcess = defineTool({
       .array(z.string())
       .optional()
       .describe(
-        "Raw per-column layout (VariablesUIData), one entry per source column including ignored ones, sent verbatim. Take it from tm1_get_process_variables or an export; do not construct entries. Omitted: the server keeps its current layout.",
+        "Raw per-column layout (VariablesUIData), one entry per source column including ignored ones, sent verbatim. Take it from tm1_rest_read Processes('P')?$select=VariablesUIData or an export; do not construct entries. Omitted: the server keeps its current layout.",
       ),
     dataSource: dataSourceSchema.optional(),
     hasSecurityAccess: z
