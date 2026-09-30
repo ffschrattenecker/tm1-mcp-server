@@ -13,7 +13,7 @@ truth for any contributor adding TM1 calls or new tools.
                        │ tools call
                        ▼
 ┌──────────────────────────────────────────────┐
-│  src/tools/**            MCP tool surface     │  111 tools, one file each
+│  src/tools/**            MCP tool surface     │  one file per tool
 │  (Zod schemas, MCP envelopes, validation)     │  (+ prompts, resources)
 └──────────────────────┬───────────────────────┘
                        │ uses
@@ -22,7 +22,7 @@ truth for any contributor adding TM1 calls or new tools.
 │  src/tm1-client.ts       TM1Client facade     │  connection lifecycle only
 │  - readonly cubes:     CubeService            │  (connect / disconnect)
 │  - readonly dimensions:DimensionService …     │  everything else delegated
-│  - 13 domain services (see below)             │  to a service
+│  - 14 services (see below)                    │  to a service
 └──────────────────────┬───────────────────────┘
                        │ delegates to
                        ▼
@@ -117,11 +117,16 @@ class holds a single `TM1HttpClient` reference and exposes domain methods
 as plain async functions. The pattern follows TM1py's `RestService` +
 domain services (`CubeService`, `DimensionService`, `ProcessService`, …).
 
-The 13 services wired into `TM1Client`: `batch`, `cubes`, `dimensions`,
+The 14 services wired into `TM1Client`: `batch`, `cubes`, `dimensions`,
 `hierarchies`, `cells`, `views`, `subsets`, `elements`, `processes`, `chores`,
-`security`, `server`, `files`.
+`security`, `server`, `files`, `rest`.
 
-`batch` is the one service not scoped to a TM1 object type: it owns the OData
+`rest` is the guarded generic passthrough behind `tm1_rest_read` /
+`tm1_rest_write`: it carries a caller-supplied path to the transport and does
+no checking of its own — `src/tools/rest/guard.ts` decides what may be sent and
+must run first.
+
+`batch` is not scoped to a TM1 object type either: it owns the OData
 `$batch` endpoint, so other services can fold many independent calls into one
 round-trip. Its sub-requests are **not** atomic (TM1 rejects `atomicityGroup`
 outright) and continue-on-error is the server default, so it reports each
@@ -196,8 +201,9 @@ export class TM1Client {
 extending it. That is a load-bearing type boundary: because `TM1Client` does
 not `extend TM1HttpClient`, its public type does **not** expose
 `request()/requestRaw()/requestBinary()`, so a tool typed on `TM1Client`
-cannot call raw REST — that is a `tsc` compile error. Services that
-legitimately need transport receive `this.http` explicitly
+cannot call raw REST — that is a `tsc` compile error (`client.rest` is the
+one route to an arbitrary path, and only behind the REST tools' guard).
+Services that legitimately need transport receive `this.http` explicitly
 (`new CubeService(this.http)`), so they see the HTTP surface while tools never
 do.
 
