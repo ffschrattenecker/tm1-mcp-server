@@ -280,10 +280,23 @@ Left to do, in this order:
 1. ~~**Unit tests**~~ done (`cb26be9`). Green except the 4 symlink cases in `local-file.test.ts`, which fail
    with EPERM on `main` too (Windows without Developer Mode cannot create symlinks). So `coverage:check` and
    `npm run verify` cannot go fully green on this machine.
-2. **Stale names in `src/`**: hints, descriptions, `server-instructions.ts`, prompts, resources, services
-   (e.g. `file-service.ts` hint names `tm1_list_files`), `http.ts` hints naming `tm1_list_threads`/`tm1_list_jobs`.
-   Remove now-dead schemas in `src/tools/schemas/items-*.ts` and empty category comments in `src/tools/index.ts`.
-   Service methods left unused by tools: list them, decide separately.
+2. ~~**Stale names in `src/`**~~ done (`4c0371c`..`5e8d885`). No deleted name is left in `src/`. Hints,
+   descriptions and prompts now name REST paths; server instructions carry the `$select`/control-object/`tolower()`
+   rules; dead output schemas and the three empty `items-*.ts` files are gone. Scratch list of the 60 deleted names
+   (for step 6): tools:list on `main` minus tools:list here, plus `tm1_list_jobs` / `tm1_cancel_job`.
+
+   **Open decision: service methods no longer called from `src/`.** Found by grep, so generic names such as
+   `list` or `delete` are missed and the list is a lower bound. `tests=N` counts test references; removing a method
+   also means dropping those tests and re-recording contracts.
+   - chore: `toggleActive` · cube: `unload` (tests 2) · dimension: `getLastUpdatedMap` (2)
+   - element: `createAttribute`, `getAttributeValues` (4) · file: `getContent`
+   - hierarchy: `getCounts`, `getDescendants` (8), `getAncestors` (6)
+   - monitoring: `getThreads`, `cancelThread`, `getSessions`, `getJobs` (4), `cancelJob` (4)
+   - security: `getClient`, `createClient`, `updateClient`, `deleteClient`, `listGroups`, `assignClientGroup`,
+     `removeClientGroup`
+   - server: `getMessageLog` (6), `getAuditLog` (3), `getTransactionLog` (12) · view: `createMdx`, `createNative` (8)
+   - unused on `main` too, not this branch's doing: `VariablesUIDataSchema` in `src/schemas/processes.ts`
+
 3. **Live tests** (`tests/live/`): rewrite setup/teardown that used deleted tools to the REST tools; delete tests
    of deleted tools; add `rest.live.test.ts`. Run only via `npm run test:live:for -- tm1-plapp-franz`.
 4. **Docs**: `npm run tools:list` / `tools:update-readme`, `docs/EXAMPLES.md`, `ARCHITECTURE.md`, `evals/`,
