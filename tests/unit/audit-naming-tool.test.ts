@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matchesElementViolationFilter } from "../../src/lib/naming/odata-filter.js";
+import { matchesElementViolationFilter } from "../helpers/element-violation-filter.js";
 import { z, type ZodRawShape } from "zod";
 import { registerAuditNaming } from "../../src/tools/analysis/audit-naming.js";
 import { ElementService } from "../../src/tm1-client/services/element-service.js";

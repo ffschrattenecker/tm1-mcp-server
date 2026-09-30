@@ -5,10 +5,8 @@
 // a prefilter, `checkName` stays the authority.
 import { describe, it, expect } from "vitest";
 import { checkName } from "../../src/lib/naming/rules.js";
-import {
-  elementViolationFilter,
-  matchesElementViolationFilter,
-} from "../../src/lib/naming/odata-filter.js";
+import { elementViolationFilter } from "../../src/lib/naming/odata-filter.js";
+import { matchesElementViolationFilter } from "../helpers/element-violation-filter.js";
 
 // Names that violate at least one element rule, one per rule class plus the
 // awkward cases (quote doubling, unicode whitespace, tab).

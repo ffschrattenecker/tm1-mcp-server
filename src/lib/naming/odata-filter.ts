@@ -17,10 +17,10 @@
 //
 // A filter that also matches innocent names costs a few extra rows and nothing
 // else, because `checkName` still decides. A filter that misses a violator
-// turns the audit into a lie. `matchesElementViolationFilter` mirrors the
-// emitted expression in TypeScript so the property can be tested directly;
-// tests/unit/naming-odata-filter.test.ts asserts it over every rule class,
-// and the live suite asserts that TM1 agrees.
+// turns the audit into a lie. `matchesElementViolationFilter` in
+// tests/helpers/element-violation-filter.ts mirrors the emitted expression in
+// TypeScript; tests/unit/naming-odata-filter.test.ts asserts soundness over
+// every rule class, and the live suite asserts that TM1 agrees.
 import { escapeOdataLiteral } from "../../tm1-client/services/odata-page.js";
 import { SERVER_RESERVED_CHARS } from "./rules.js";
 
@@ -61,19 +61,4 @@ export function elementViolationFilter(): string {
   clauses.push("indexof(Name,'\t') ge 0");
 
   return clauses.join(" or ");
-}
-
-/**
- * The same predicate in TypeScript, for testing soundness against `checkName`
- * without a server. Kept beside the builder so the two cannot drift: a rule
- * added to one and forgotten in the other fails the unit test.
- */
-export function matchesElementViolationFilter(name: string): boolean {
-  if (name.trim().length === 0) return true;
-  if (name !== name.trim()) return true;
-  if (name.startsWith("}")) return true;
-  if (name.startsWith("+") || name.startsWith("-")) return true;
-  for (const ch of SERVER_RESERVED_CHARS) if (name.includes(ch)) return true;
-  if (name.includes("\t")) return true;
-  return false;
 }
