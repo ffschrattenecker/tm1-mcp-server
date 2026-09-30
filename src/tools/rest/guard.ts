@@ -20,6 +20,7 @@
 //
 // See docs/TOOL-CONSOLIDATION.md, "tm1_rest_read / tm1_rest_write".
 import { isSecretName } from "../../lib/mask-secrets.js";
+import { tm1NameEquals } from "../../lib/tm1-name.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 
 export type WriteMethod = "POST" | "PATCH" | "PUT" | "DELETE";
@@ -543,6 +544,23 @@ export function planWrite(
   }
   if (method === "DELETE" && body !== undefined) {
     throw invalid("DELETE takes no body.", "Drop body.");
+  }
+  // TM1 11.8 accepts this DELETE and leaves the dimension with no hierarchy at
+  // all (measured in tests/live/rest.live.test.ts).
+  const [dim, hier] = p.segments;
+  if (
+    method === "DELETE" &&
+    p.segments.length === 2 &&
+    dim!.name === "dimensions" &&
+    hier!.name === "hierarchies" &&
+    dim!.key !== undefined &&
+    hier!.key !== undefined &&
+    tm1NameEquals(dim!.key, hier!.key)
+  ) {
+    throw refuse(
+      `Hierarchy '${hier!.key}' is the default hierarchy of '${dim!.key}'; deleting it leaves the dimension without one.`,
+      `Delete the whole dimension instead: DELETE Dimensions('${dim!.key}').`,
+    );
   }
 
   const last = p.segments[p.segments.length - 1]!;

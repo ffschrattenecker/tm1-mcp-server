@@ -246,7 +246,27 @@ describe("planWrite: blocklist", () => {
     ],
     ["POST", "Chores", { Processes: [{ Name: "P" }] }, "tm1_upsert_process"],
     ["PATCH", "Chores('c')", { epilogprocedure: "x" }, "tm1_upsert_process"],
+    // The default hierarchy: TM1 would leave the dimension without one.
+    [
+      "DELETE",
+      "Dimensions('Region')/Hierarchies('Region')",
+      undefined,
+      "DELETE Dimensions('Region')",
+    ],
+    [
+      "DELETE",
+      "Dimensions('Total Year')/Hierarchies('totalyear')",
+      undefined,
+      "DELETE Dimensions('Total Year')",
+    ],
   ];
+
+  it("still deletes an alternate hierarchy", () => {
+    expect(
+      planWrite("DELETE", "Dimensions('Region')/Hierarchies('Alt')")
+        .confirmTarget,
+    ).toBe("Alt");
+  });
 
   it.each(cases)("%s %s → %s", (method, path, body, hint) => {
     const err = errorOf(() => planWrite(method, path, body));
