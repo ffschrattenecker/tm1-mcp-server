@@ -72,7 +72,6 @@ export interface BuildIndexOpts {
 interface CacheEntry {
   index: ReferenceIndex;
   ts: number;
-  buildMs: number;
 }
 
 const CACHE_TTL_MS = 60_000;
@@ -121,20 +120,8 @@ export function invalidateCallgraphCache(connectionId?: string): {
   return { cleared: n };
 }
 
-export function getCallgraphCacheStats(): Array<{
-  key: string;
-  ageMs: number;
-  ttlRemainingMs: number;
-  buildMs: number;
-}> {
-  const now = Date.now();
-  return Array.from(cache.entries()).map(([key, e]) => ({
-    key,
-    ageMs: now - e.ts,
-    ttlRemainingMs: Math.max(0, CACHE_TTL_MS - (now - e.ts)),
-    buildMs: e.buildMs,
-  }));
-}
+/** Test hook: the keys of the currently cached indexes. */
+export const __testing = { cachedKeys: (): string[] => [...cache.keys()] };
 
 /**
  * Build a full ReferenceIndex from a connected TM1 server.
@@ -158,16 +145,11 @@ export async function buildIndexFromTM1(
   }
 
   const promise = (async (): Promise<ReferenceIndex> => {
-    const start = Date.now();
     const startGeneration = generationOf(tm1Client.connectionId);
     const idx = await buildIndexInternal(tm1Client, includeControl);
     // Only publish if no invalidation happened while we were building.
     if (generationOf(tm1Client.connectionId) === startGeneration) {
-      cache.set(key, {
-        index: idx,
-        ts: Date.now(),
-        buildMs: Date.now() - start,
-      });
+      cache.set(key, { index: idx, ts: Date.now() });
     }
     return idx;
   })();

@@ -18,7 +18,7 @@ import {
 } from "./harness.js";
 import {
   buildIndexFromTM1,
-  getCallgraphCacheStats,
+  __testing,
   invalidateCallgraphCache,
   registerCallgraphCacheInvalidation,
 } from "../../src/lib/callgraph/tm1-adapter.js";
@@ -101,7 +101,7 @@ describe.skipIf(!LIVE_ENABLED)("live: audit fixes 2026-08-05", () => {
       invalidateCallgraphCache();
 
       await buildIndexFromTM1(h.client);
-      expect(getCallgraphCacheStats()).toHaveLength(1);
+      expect(__testing.cachedKeys()).toHaveLength(1);
 
       const [cube] = await cubeNames(h, 1);
       expect(cube).toBeTruthy();
@@ -113,14 +113,14 @@ describe.skipIf(!LIVE_ENABLED)("live: audit fixes 2026-08-05", () => {
         mdx: `SELECT {} ON COLUMNS FROM [${cube}]`,
         limit: 1,
       });
-      expect(getCallgraphCacheStats()).toHaveLength(1);
+      expect(__testing.cachedKeys()).toHaveLength(1);
 
       // A process write genuinely changes the reference graph: must invalidate.
       await h.ok("tm1_upsert_process", {
         processName: PROBE_PROC,
         prolog: "# audit live probe",
       });
-      expect(getCallgraphCacheStats()).toHaveLength(0);
+      expect(__testing.cachedKeys()).toHaveLength(0);
     });
   });
 

@@ -3,7 +3,7 @@ import { z, type ZodRawShape } from "zod";
 import type { TM1Client } from "../../src/tm1-client.js";
 import {
   buildIndexFromTM1,
-  getCallgraphCacheStats,
+  __testing,
   invalidateCallgraphCache,
 } from "../../src/lib/callgraph/tm1-adapter.js";
 import { registerAnalyzeCallgraph } from "../../src/tools/analysis/analyze-callgraph.js";
@@ -74,7 +74,7 @@ describe("tm1_analyze_callgraph refresh", () => {
     // The rebuilt index is cached for the next (non-refresh) caller.
     await call({});
     expect(fetches()).toBe(2);
-    expect(getCallgraphCacheStats().map((e) => e.key)).toEqual(["a|inc=false"]);
+    expect(__testing.cachedKeys()).toEqual(["a|inc=false"]);
   });
 
   it("refresh on one connection leaves another connection's cache alone", async () => {
@@ -82,11 +82,10 @@ describe("tm1_analyze_callgraph refresh", () => {
     const b = stubClient("b");
     await buildIndexFromTM1(b.client);
     await register(a.client)({ refresh: true });
-    expect(
-      getCallgraphCacheStats()
-        .map((e) => e.key)
-        .sort(),
-    ).toEqual(["a|inc=false", "b|inc=false"]);
+    expect(__testing.cachedKeys().sort()).toEqual([
+      "a|inc=false",
+      "b|inc=false",
+    ]);
     await buildIndexFromTM1(b.client);
     expect(b.fetches()).toBe(1);
   });

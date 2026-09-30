@@ -4,7 +4,7 @@ import { tm1Events } from "../../src/lib/tm1-events.js";
 import {
   registerCallgraphCacheInvalidation,
   buildIndexFromTM1,
-  getCallgraphCacheStats,
+  __testing,
   invalidateCallgraphCache,
 } from "../../src/lib/callgraph/tm1-adapter.js";
 import type { TM1Client } from "../../src/tm1-client.js";
@@ -32,11 +32,11 @@ describe("A4 — callgraph cache-invalidation wiring is explicit", () => {
   it("without wiring, a mutation does NOT invalidate the cache", async () => {
     expect(tm1Events.listeners("mutation")).toHaveLength(0);
     await buildIndexFromTM1(stubClient);
-    expect(getCallgraphCacheStats()).toHaveLength(1);
+    expect(__testing.cachedKeys()).toHaveLength(1);
 
     tm1Events.emit("mutation", { method: "POST", path: "/x" });
     // No listener → cache survives.
-    expect(getCallgraphCacheStats()).toHaveLength(1);
+    expect(__testing.cachedKeys()).toHaveLength(1);
   });
 
   it("after explicit wiring, a mutation invalidates the cache (idempotent)", async () => {
@@ -47,7 +47,7 @@ describe("A4 — callgraph cache-invalidation wiring is explicit", () => {
     expect(tm1Events.listeners("mutation")).toHaveLength(1);
 
     await buildIndexFromTM1(stubClient);
-    expect(getCallgraphCacheStats()).toHaveLength(1);
+    expect(__testing.cachedKeys()).toHaveLength(1);
 
     // A code-relevant path: writing a process definition really does change the
     // reference graph. (This assertion used to use /Cubes('c')/tm1.Update —
@@ -57,7 +57,7 @@ describe("A4 — callgraph cache-invalidation wiring is explicit", () => {
       method: "PATCH",
       path: "/api/v1/Processes('p')",
     });
-    expect(getCallgraphCacheStats()).toHaveLength(0);
+    expect(__testing.cachedKeys()).toHaveLength(0);
   });
 });
 
@@ -77,11 +77,11 @@ describe("P2 — invalidation is precise and cannot publish a stale index", () =
   ])("data-plane path %s does NOT invalidate", async (path, method) => {
     registerCallgraphCacheInvalidation();
     await buildIndexFromTM1(stubClient);
-    expect(getCallgraphCacheStats()).toHaveLength(1);
+    expect(__testing.cachedKeys()).toHaveLength(1);
 
     tm1Events.emit("mutation", { method, path });
 
-    expect(getCallgraphCacheStats()).toHaveLength(1);
+    expect(__testing.cachedKeys()).toHaveLength(1);
   });
 
   // Unrecognised paths must stay stale-safe: a new mutating endpoint added
@@ -95,7 +95,7 @@ describe("P2 — invalidation is precise and cannot publish a stale index", () =
       path: "/api/v1/SomethingNew",
     });
 
-    expect(getCallgraphCacheStats()).toHaveLength(0);
+    expect(__testing.cachedKeys()).toHaveLength(0);
   });
 
   // The actual correctness defect: clearing the map does not reach a build that
@@ -126,12 +126,12 @@ describe("P2 — invalidation is precise and cannot publish a stale index", () =
     release();
     await pending;
 
-    expect(getCallgraphCacheStats()).toHaveLength(0);
+    expect(__testing.cachedKeys()).toHaveLength(0);
   });
 
   it("a build with no concurrent invalidation still publishes", async () => {
     await buildIndexFromTM1(stubClient);
-    expect(getCallgraphCacheStats()).toHaveLength(1);
+    expect(__testing.cachedKeys()).toHaveLength(1);
   });
 });
 
@@ -165,7 +165,7 @@ describe("the callgraph cache is scoped per connection", () => {
     const b = await buildIndexFromTM1(clientFor("host-b_1", "OnlyOnB"));
 
     expect(a).not.toBe(b);
-    expect(getCallgraphCacheStats().map((s) => s.key)).toEqual([
+    expect(__testing.cachedKeys()).toEqual([
       "host-a_1|inc=false",
       "host-b_1|inc=false",
     ]);
@@ -196,9 +196,7 @@ describe("invalidation is scoped to the mutating connection", () => {
       connectionId: "host-a_1",
     });
 
-    expect(getCallgraphCacheStats().map((s) => s.key)).toEqual([
-      "host-b_1|inc=false",
-    ]);
+    expect(__testing.cachedKeys()).toEqual(["host-b_1|inc=false"]);
   });
 
   it("an in-flight build on another connection still publishes", async () => {
@@ -221,9 +219,7 @@ describe("invalidation is scoped to the mutating connection", () => {
     release();
     await pending;
 
-    expect(getCallgraphCacheStats().map((s) => s.key)).toEqual([
-      "host-b_1|inc=false",
-    ]);
+    expect(__testing.cachedKeys()).toEqual(["host-b_1|inc=false"]);
   });
 
   it.each([
@@ -241,7 +237,7 @@ describe("invalidation is scoped to the mutating connection", () => {
       path,
       connectionId: "host-a_1",
     });
-    expect(getCallgraphCacheStats()).toHaveLength(1);
+    expect(__testing.cachedKeys()).toHaveLength(1);
   });
 
   it.each([
@@ -256,6 +252,6 @@ describe("invalidation is scoped to the mutating connection", () => {
       path,
       connectionId: "host-a_1",
     });
-    expect(getCallgraphCacheStats()).toHaveLength(0);
+    expect(__testing.cachedKeys()).toHaveLength(0);
   });
 });
