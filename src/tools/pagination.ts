@@ -1,4 +1,4 @@
-// Pagination helpers for list_* MCP tools. Two shapes of one envelope:
+// Pagination helpers for paged MCP tools. Two shapes of one envelope:
 //
 //   paginate()       — slices an in-memory array. Used when the handler had to
 //                      fetch the whole collection anyway (a filter TM1 cannot

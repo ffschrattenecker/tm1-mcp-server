@@ -26,7 +26,7 @@ describe("formatTm1ErrorResult", () => {
     expect(payload.message).toBe("Cube not found");
     expect(payload.httpStatus).toBe(404);
     expect(payload.endpoint).toBe("/api/v1/Cubes('Sales')");
-    expect(payload.hint).toContain("list_");
+    expect(payload.hint).toContain("tm1_rest_read");
   });
 
   it("wraps a generic Error with the default TM1_ERROR code and hint", () => {

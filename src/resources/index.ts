@@ -5,7 +5,7 @@
 //   - subscribe to updates without polling
 //
 // Each resource maps to an existing TM1 service call — same backend logic
-// as the get_* tools, different MCP entry point.
+// as the read tools, different MCP entry point.
 import {
   type McpServer,
   ResourceTemplate,

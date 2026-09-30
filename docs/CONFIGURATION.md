@@ -297,10 +297,10 @@ with its own env vars:
 
 ### Tools that differ by version
 
-`tm1_list_threads`, `tm1_cancel_thread` and `tm1_save_data` are registered on
-v11 only; `tm1_list_jobs` and `tm1_cancel_job` on v12 only. v12 removed
-`SaveDataAll`/`CubeSaveData` because the cloud engine persists automatically,
-and replaced threads with jobs. The file service auto-falls back from the v12
+`tm1_save_data` is registered on v11 only: v12 removed
+`SaveDataAll`/`CubeSaveData` because the cloud engine persists automatically.
+v12 also replaced threads with jobs — read `Threads` (v11) or `Jobs` (v12) with
+`tm1_rest_read`. The file service auto-falls back from the v12
 `Files` root to the v11 `Blobs` root.
 
 ## CAM (Cognos Access Manager) / LDAP
@@ -332,18 +332,18 @@ servers allow a blank admin password — an empty `TM1_PASSWORD` is accepted and
 the server logs a warning rather than blocking, so the real TM1 `401` surfaces
 with context. For CAM/LDAP servers a `401` usually means the wrong
 `TM1_NAMESPACE` (or an interactive account on PA Cloud — use a non-interactive
-service account); confirm the server's `IntegratedSecurityMode` via
-`tm1_get_server_info`.
+service account); confirm the server's `IntegratedSecurityMode` with
+`tm1_rest_read ActiveConfiguration/Access/IntegratedSecurityMode/$value`.
 
 **v11 vs v12 feature errors** (`DataSource.usesUnicode`, hierarchy/`Files`
 endpoints): set `TM1_VERSION=11.8` (or your `11.x`) so v12-only paths are
 disabled. The file service auto-falls back from the v12 `Files` root to the v11
 `Blobs` root.
 
-**`tm1_get_transaction_log` is slow or times out:** the TM1 transaction log is a
-full scan. Always pass a tight `since` window; broad queries can hit the query
-timeout. `since`/`until` are validated as ISO-8601, so ambiguous locale formats
-like `08/06/2026` are rejected rather than silently read as 6 August.
+**Transaction-log reads are slow or time out:** the TM1 transaction log is a
+full scan. Always bound `TransactionLogEntries` with a tight TimeStamp filter
+(`$filter=TimeStamp ge 2026-09-23T00:00:00Z`, a zoned ISO literal); broad
+queries can hit the query timeout.
 
 **Startup error `Invalid TM1_…: expected a positive integer`:** a numeric env
 var (`TM1_KEEP_ALIVE_INTERVAL`, `TM1_REQUEST_TIMEOUT`, `TM1_MCP_HTTP_PORT`) has a

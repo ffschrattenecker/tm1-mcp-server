@@ -77,9 +77,9 @@ export function hintForCode(code: TM1ErrorCode | string): string {
     case TM1ErrorCode.PERMISSION_DENIED:
       return `Caller lacks rights for this object/operation. Inspect membership with tm1_rest_read ActiveUser/Groups?$select=Name; assign with tm1_rest_write POST Users('<user>')/Groups/$ref and body {"@odata.id":"Groups('<group>')"}.`;
     case TM1ErrorCode.NOT_FOUND:
-      return "Object does not exist. Use the matching list_* or get_* tool to enumerate available names before retrying.";
+      return "Object does not exist. List the available names with tm1_rest_read (e.g. Cubes?$select=Name) before retrying; names are case- and space-insensitive in TM1.";
     case TM1ErrorCode.CONFLICT:
-      return "Object already exists or version mismatch. Fetch current state with the matching get_* tool, then retry.";
+      return "Object already exists or version mismatch. Read its current state with tm1_rest_read, then retry.";
     case TM1ErrorCode.VALIDATION_ERROR:
       return "Input failed validation. Inspect the `details` field for the offending value and correct it.";
     case TM1ErrorCode.UNSUPPORTED_OPERATION:

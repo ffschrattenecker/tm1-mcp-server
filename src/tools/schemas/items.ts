@@ -1,4 +1,4 @@
-// Zod schemas for the per-item types returned by the paginated list_* tools and
+// Zod schemas for the per-item types returned by the paginated tools and
 // the result payloads of the other tools. Mirrors the TypeScript interfaces in
 // src/types.ts so the runtime outputSchema and the static type cannot drift.
 //

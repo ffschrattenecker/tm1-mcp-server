@@ -1,5 +1,5 @@
 // Reusable Zod schema fragments for MCP tool outputSchema declarations.
-// Centralized so every paginated list_* tool emits the same wire shape and
+// Centralized so every paginated tool emits the same wire shape and
 // the SDK can validate `structuredContent` for clients that consume it.
 import { z, type ZodTypeAny } from "zod";
 

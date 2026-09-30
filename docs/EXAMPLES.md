@@ -2,27 +2,42 @@
 
 Working examples for every major feature. Snippets are JSON tool-call payloads â€” paste into any MCP-aware client (Claude Code, Claude Desktop, etc.). Defaults assume server name `tm1`.
 
-> Tip: every list__/get__ tool now accepts `format: "json"|"markdown"`. Default is `json` (parsed into `structuredContent` by the server); use `"markdown"` when you want a readable table dropped straight into chat.
+> Tip: the list/search tools and a few readers accept `format: "json"|"markdown"` (see [Markdown vs. JSON output](#markdown-vs-json-output)). Default is `json` (parsed into `structuredContent` by the server); use `"markdown"` when you want a readable table dropped straight into chat.
+
+Objects without a dedicated tool â€” cubes, dimensions, hierarchies, elements, subsets, views, chores, users, groups, logs â€” are read with `tm1_rest_read` and changed with `tm1_rest_write`. `path` is relative to `/api/v1/`.
 
 ---
 
 ## 1. Metadata listing
 
-### 1.1 List user-defined cubes only, dimension-projection off
+> **REST tool traps**
+>
+> - Collections include `}` control objects. Add `$filter=not startswith(Name,'}')` to leave them out.
+> - OData string comparisons are case-sensitive: wrap the name in `tolower()` for a name search.
+> - With sandboxing on, every cube lists the shared `Sandboxes` dimension first in its dimensions.
+> - TM1 refuses to create a cube with fewer than two dimensions.
+> - v12 serves `MessageLogEntries`, `AuditLogEntries` and `TransactionLogEntries` empty â€” an empty result there means no data, not "nothing happened".
+> - A transaction-log read is a server-side scan: always bound it with a `TimeStamp ge` filter.
+
+### 1.1 List user-defined cubes only
 
 ```json
 {
-  "tool": "tm1_list_cubes",
-  "args": { "includeControl": false, "includeDimensions": false, "limit": 100 }
+  "tool": "tm1_rest_read",
+  "args": {
+    "path": "Cubes?$select=Name&$filter=not startswith(Name,'}')&$top=100"
+  }
 }
 ```
 
-### 1.2 Find all cubes whose name matches a pattern
+### 1.2 Find all cubes whose name contains a word, with their dimensions
 
 ```json
 {
-  "tool": "tm1_list_cubes",
-  "args": { "nameRegex": "^Sales_", "includeRules": true }
+  "tool": "tm1_rest_read",
+  "args": {
+    "path": "Cubes?$select=Name&$filter=contains(tolower(Name),'sales')&$expand=Dimensions($select=Name)"
+  }
 }
 ```
 
@@ -30,11 +45,9 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
 
 ```json
 {
-  "tool": "tm1_list_dimensions",
+  "tool": "tm1_rest_read",
   "args": {
-    "includeElementCount": true,
-    "includeControl": false,
-    "format": "markdown"
+    "path": "Dimensions?$select=Name&$filter=not startswith(Name,'}')&$expand=Hierarchies($select=Name,Cardinality)"
   }
 }
 ```
@@ -51,6 +64,25 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
   }
 }
 ```
+
+### 1.5 Elements of a hierarchy, and its parent/child edges
+
+```json
+[
+  {
+    "tool": "tm1_rest_read",
+    "args": {
+      "path": "Dimensions('Region')/Hierarchies('Region')/Elements?$select=Name,Type&$filter=Type eq 'Consolidated'&$top=50"
+    }
+  },
+  {
+    "tool": "tm1_rest_read",
+    "args": { "path": "Dimensions('Region')/Hierarchies('Region')/Edges" }
+  }
+]
+```
+
+`â€¦/Elements/$count` returns the element count alone.
 
 ---
 
@@ -72,10 +104,9 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
 
 ```json
 {
-  "tool": "tm1_get_cell_value",
+  "tool": "tm1_execute_mdx",
   "args": {
-    "cubeName": "Sales",
-    "elements": ["2024", "DE", "P001", "Actual", "Amount"]
+    "mdx": "SELECT {([Year].[Year].[2024], [Region].[Region].[DE], [Product].[Product].[P001], [Versions].[Versions].[Actual], [Measures].[Measures].[Amount])} ON 0 FROM [Sales]"
   }
 }
 ```
@@ -101,9 +132,7 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
   "args": {
     "cubeName": "Sales",
     "dimensions": ["Year", "Region", "Product", "Versions", "Measures"],
-    "cells": [
-      { "elements": ["2024", "DE", "P001", "Budget", "Amount"], "value": 100 }
-    ]
+    "coords": ["2024", "DE", "P001", "Budget", "Amount"]
   }
 }
 ```
@@ -118,7 +147,8 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
     "dimensions": ["Year", "Region", "Product", "Versions", "Measures"],
     "cells": [
       { "elements": ["2024", "DE", "P001", "Budget", "Amount"], "value": 100 }
-    ]
+    ],
+    "confirm": "Sales"
   }
 }
 ```
@@ -135,7 +165,8 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
       { "elements": ["2024", "DE", "P001", "Budget", "Amount"], "value": 100 },
       { "elements": ["2024", "DE", "P002", "Budget", "Amount"], "value": 250 },
       { "elements": ["2024", "FR", "P001", "Budget", "Amount"], "value": 80 }
-    ]
+    ],
+    "confirm": "Sales"
   }
 }
 ```
@@ -150,11 +181,15 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
 {
   "tool": "tm1_check_process_code",
   "args": {
-    "name": "Load_Sales",
+    "processName": "Load_Sales",
     "prolog": "DatasourceNameForServer = '|filename|';",
     "data": "CellPutN(NValue, 'Sales', vYear, vRegion, vProduct, 'Actual', 'Amount');",
     "parameters": [
-      { "name": "filename", "type": "String", "defaultValue": "sales_2024.csv" }
+      {
+        "name": "filename",
+        "type": "String",
+        "defaultValue": "sales_2024.csv"
+      }
     ]
   }
 }
@@ -166,7 +201,8 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
 {
   "tool": "tm1_upsert_process",
   "args": {
-    "name": "Load_Sales",
+    "processName": "Load_Sales",
+    "mode": "create",
     "parameters": [
       { "name": "filename", "type": "String", "defaultValue": "sales.csv" }
     ],
@@ -187,7 +223,7 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
   "tool": "tm1_diff_process_with_file",
   "args": {
     "processName": "Load_Sales",
-    "proFilePath": "/path/to/Load_Sales.pro"
+    "filePath": "/path/to/Load_Sales.pro"
   }
 }
 ```
@@ -199,11 +235,23 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
   "tool": "tm1_search_code",
   "args": {
     "pattern": "ExecuteProcess.*Bedrock",
-    "regex": true,
-    "maxResults": 100
+    "maxTotalMatches": 100
   }
 }
 ```
+
+### 4.5 Compile an installed process
+
+```json
+{
+  "tool": "tm1_rest_read",
+  "args": { "path": "Processes('Load_Sales')/tm1.Compile" }
+}
+```
+
+An empty result means it compiles. Delete a process with
+`tm1_rest_write` `DELETE Processes('Load_Sales')` and `confirm: "Load_Sales"`;
+creating or changing one goes through `tm1_upsert_process`.
 
 ---
 
@@ -214,16 +262,22 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
 ```json
 {
   "tool": "tm1_import_pro_file",
-  "args": { "proFilePath": "/path/to/Load_Sales.pro", "overwrite": true }
+  "args": {
+    "filePath": "/path/to/Load_Sales.pro",
+    "mode": "upsert",
+    "confirm": "Load_Sales"
+  }
 }
 ```
+
+`confirm` is only needed when the process already exists.
 
 ### 5.2 Install a directory of .pro files
 
 ```json
 {
   "tool": "tm1_install_pro_bundle",
-  "args": { "directory": "/path/to/processes", "overwrite": false }
+  "args": { "directory": "/path/to/processes", "mode": "create" }
 }
 ```
 
@@ -232,23 +286,26 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
 ```json
 {
   "tool": "tm1_export_process_to_pro",
-  "args": { "processName": "Load_Sales", "outputPath": "/tmp/Load_Sales.pro" }
+  "args": {
+    "processName": "Load_Sales",
+    "writeToFile": "/tmp/Load_Sales.pro"
+  }
 }
 ```
+
+`writeToFile` needs `TM1_LOCAL_FILE_ROOT`; without it the `.pro` content comes back inline.
 
 ---
 
 ## 6. Subsets / Views
 
-### 6.1 List subsets in markdown
+### 6.1 List subsets of a hierarchy
 
 ```json
 {
-  "tool": "tm1_list_subsets",
+  "tool": "tm1_rest_read",
   "args": {
-    "dimensionName": "Region",
-    "hierarchyName": "Region",
-    "format": "markdown"
+    "path": "Dimensions('Region')/Hierarchies('Region')/Subsets?$select=Name,Expression"
   }
 }
 ```
@@ -257,59 +314,86 @@ Working examples for every major feature. Snippets are JSON tool-call payloads â
 
 ```json
 {
-  "tool": "tm1_create_mdx_view",
+  "tool": "tm1_rest_write",
   "args": {
-    "cubeName": "Sales",
-    "viewName": "v_Sales_2024_DE",
-    "mdx": "SELECT {[Year].[2024]} ON 0, {[Region].[DE].Children} ON 1 FROM [Sales]",
-    "isPrivate": false
+    "method": "POST",
+    "path": "Cubes('Sales')/Views",
+    "body": {
+      "@odata.type": "#ibm.tm1.api.v1.MDXView",
+      "Name": "v_Sales_2024_DE",
+      "MDX": "SELECT {[Year].[2024]} ON 0, {[Region].[DE].Children} ON 1 FROM [Sales]"
+    }
   }
 }
 ```
+
+Private views live under `Cubes('Sales')/PrivateViews`. Read the definition back with `tm1_rest_read Cubes('Sales')/Views('v_Sales_2024_DE')`; run it with `tm1_get_view`.
 
 ### 6.2b Create a native (subset-based) view â€” TI datasource / suppressed export
 
 ```json
 {
-  "tool": "tm1_create_native_view",
+  "tool": "tm1_rest_write",
   "args": {
-    "cubeName": "Sales",
-    "viewName": "v_Sales_Export",
-    "rows": [{ "dimension": "Region", "subset": "EU_Countries" }],
-    "columns": [
-      { "dimension": "Month", "expression": "{TM1SUBSETALL([Month])}" }
-    ],
-    "titles": [
-      { "dimension": "Version", "elements": ["Actual"], "selected": "Actual" },
-      {
-        "dimension": "Year",
-        "expression": "{TM1SUBSETALL([Year])}",
-        "selected": "2026"
-      }
-    ],
-    "suppressEmptyRows": true
+    "method": "POST",
+    "path": "Cubes('Sales')/Views",
+    "body": {
+      "@odata.type": "#ibm.tm1.api.v1.NativeView",
+      "Name": "v_Sales_Export",
+      "Rows": [
+        {
+          "Subset@odata.bind": "Dimensions('Region')/Hierarchies('Region')/Subsets('EU_Countries')"
+        }
+      ],
+      "Columns": [
+        {
+          "Subset": {
+            "Hierarchy@odata.bind": "Dimensions('Month')/Hierarchies('Month')",
+            "Expression": "{TM1SUBSETALL([Month])}"
+          }
+        }
+      ],
+      "Titles": [
+        {
+          "Subset": {
+            "Hierarchy@odata.bind": "Dimensions('Version')/Hierarchies('Version')",
+            "Elements@odata.bind": [
+              "Dimensions('Version')/Hierarchies('Version')/Elements('Actual')"
+            ]
+          },
+          "Selected@odata.bind": "Dimensions('Version')/Hierarchies('Version')/Elements('Actual')"
+        }
+      ],
+      "SuppressEmptyRows": true,
+      "SuppressEmptyColumns": false
+    }
   }
 }
 ```
 
-Every cube dimension must appear in exactly one of rows/columns/titles. Per
-axis entry exactly one subset source: registered `subset`, MDX `expression`,
-or explicit `elements` (the latter two create anonymous subsets). Titles
-require `selected` â€” TM1 rejects title subsets without a selected element.
+Every cube dimension must appear in exactly one of Rows/Columns/Titles. Per
+axis entry one subset source: a registered subset (`Subset@odata.bind`), or an
+anonymous `Subset` built from an MDX `Expression` or explicit
+`Elements@odata.bind`. Titles need a selected element â€” TM1 rejects title
+subsets without one.
 
 ### 6.3 Create a subset from an MDX expression
 
 ```json
 {
-  "tool": "tm1_create_subset",
+  "tool": "tm1_rest_write",
   "args": {
-    "dimensionName": "Region",
-    "hierarchyName": "Region",
-    "subsetName": "EU_Countries",
-    "expression": "{TM1FILTERBYLEVEL({TM1SUBSETALL([Region])}, 0)}"
+    "method": "POST",
+    "path": "Dimensions('Region')/Hierarchies('Region')/Subsets",
+    "body": {
+      "Name": "EU_Countries",
+      "Expression": "{TM1FILTERBYLEVEL({TM1SUBSETALL([Region])}, 0)}"
+    }
   }
 }
 ```
+
+A static subset takes `"Elements@odata.bind": ["Dimensions('Region')/Hierarchies('Region')/Elements('DE')", â€¦]` instead of `Expression`.
 
 ---
 
@@ -319,39 +403,57 @@ require `selected` â€” TM1 rejects title subsets without a selected element.
 
 ```json
 {
-  "tool": "tm1_create_chore",
+  "tool": "tm1_rest_write",
   "args": {
-    "name": "DailyLoad",
-    "startTime": "2026-05-10T06:00:00Z",
-    "active": true,
-    "executionMode": "MultipleCommit",
-    "frequency": { "days": 1, "hours": 0, "minutes": 0, "seconds": 0 },
-    "steps": [
-      {
-        "process": "Load_Sales",
-        "parameters": [{ "name": "filename", "value": "sales.csv" }]
-      },
-      { "process": "Calc_KPIs", "parameters": [] }
-    ]
+    "method": "POST",
+    "path": "Chores",
+    "body": {
+      "Name": "DailyLoad",
+      "StartTime": "2026-05-10T06:00:00Z",
+      "DSTSensitive": false,
+      "Active": false,
+      "ExecutionMode": "MultipleCommit",
+      "Frequency": "P1DT00H00M00S",
+      "Tasks": [
+        {
+          "Step": 0,
+          "Process@odata.bind": "Processes('Load_Sales')",
+          "Parameters": [{ "Name": "filename", "Value": "sales.csv" }]
+        },
+        {
+          "Step": 1,
+          "Process@odata.bind": "Processes('Calc_KPIs')",
+          "Parameters": []
+        }
+      ]
+    }
   }
 }
 ```
+
+Change schedule or steps later with `tm1_update_chore`.
 
 ### 7.2 Activate or deactivate an existing chore
 
 ```json
 {
-  "tool": "tm1_toggle_chore",
-  "args": { "name": "DailyLoad", "active": false }
+  "tool": "tm1_rest_write",
+  "args": {
+    "method": "POST",
+    "path": "Chores('DailyLoad')/tm1.Deactivate",
+    "body": {}
+  }
 }
 ```
+
+`tm1.Activate` turns it back on.
 
 ### 7.3 Run a chore on demand
 
 ```json
 {
   "tool": "tm1_execute_chore",
-  "args": { "name": "DailyLoad" }
+  "args": { "choreName": "DailyLoad", "confirm": "DailyLoad" }
 }
 ```
 
@@ -359,34 +461,46 @@ require `selected` â€” TM1 rejects title subsets without a selected element.
 
 ## 8. Security
 
-### 8.1 List clients in markdown with group counts
+### 8.1 List users with their groups
 
 ```json
 {
-  "tool": "tm1_list_clients",
-  "args": { "groupCount": true, "format": "markdown" }
+  "tool": "tm1_rest_read",
+  "args": { "path": "Users?$select=Name&$expand=Groups($select=Name)" }
 }
 ```
 
-### 8.2 Create a new client and assign a group
+### 8.2 Assign a user to a group
+
+```json
+{
+  "tool": "tm1_rest_write",
+  "args": {
+    "method": "POST",
+    "path": "Users('alice')/Groups/$ref",
+    "body": { "@odata.id": "Groups('Finance')" }
+  }
+}
+```
+
+Removing the membership is `DELETE Users('alice')/Groups('Finance')/$ref` with
+`confirm: "Finance"`.
+
+### 8.3 Look up a single user's groups, or your own
 
 ```json
 [
   {
-    "tool": "tm1_create_client",
-    "args": { "name": "alice", "password": "..." }
+    "tool": "tm1_rest_read",
+    "args": {
+      "path": "Users('alice')?$select=Name&$expand=Groups($select=Name)"
+    }
   },
   {
-    "tool": "tm1_assign_client_group",
-    "args": { "client": "alice", "group": "ADMIN" }
+    "tool": "tm1_rest_read",
+    "args": { "path": "ActiveUser/Groups?$select=Name" }
   }
 ]
-```
-
-### 8.3 Look up a single client's groups
-
-```json
-{ "tool": "tm1_get_client", "args": { "name": "alice", "format": "markdown" } }
 ```
 
 ---
@@ -413,20 +527,19 @@ require `selected` â€” TM1 rejects title subsets without a selected element.
 }
 ```
 
-### 9.3 Recent transaction-log writes for one cube/user
+### 9.3 Recent transaction-log writes for one cube/user (v11)
 
 ```json
 {
-  "tool": "tm1_get_transaction_log",
+  "tool": "tm1_rest_read",
   "args": {
-    "top": 50,
-    "cubeName": "Sales",
-    "user": "alice",
-    "since": "2026-05-09T00:00:00",
-    "format": "markdown"
+    "path": "TransactionLogEntries?$filter=Cube eq 'Sales' and User eq 'alice' and TimeStamp ge 2026-05-09T00:00:00Z&$orderby=TimeStamp desc&$top=50"
   }
 }
 ```
+
+The `TimeStamp ge` bound matters: the transaction log is scanned server-side,
+and an open query can run for minutes. Use a zoned ISO literal (`â€¦Z`).
 
 ### 9.4 Why is this cell X / empty? (calculation trace, v11)
 
@@ -490,20 +603,30 @@ not clear or truncate the transaction log.
 
 ```json
 {
-  "tool": "tm1_get_audit_log",
+  "tool": "tm1_rest_read",
   "args": {
-    "objectType": "Dimension",
-    "since": "2026-06-01T00:00:00Z",
-    "includeDetails": true,
-    "format": "markdown"
+    "path": "AuditLogEntries?$filter=ObjectType eq 'Dimension' and TimeStamp ge 2026-06-01T00:00:00Z&$orderby=TimeStamp desc&$top=50&$expand=AuditDetails"
   }
 }
 ```
 
 Metadata/security changes (logins, object edits, chore runs) â€” complements the
 transaction log (cell writes). Requires `AuditLogOn=T` in tm1s.cfg; an empty
-result on an active server usually means auditing is disabled (check
-`auditLogEnabled` in `tm1_get_server_info`).
+result on an active server usually means auditing is disabled.
+
+### 9.8 What is running right now?
+
+```json
+{
+  "tool": "tm1_rest_read",
+  "args": {
+    "path": "Threads?$select=ID,Type,Name,State,Function,ObjectName,ElapsedTime,WaitTime"
+  }
+}
+```
+
+v12 has `Jobs` instead. Cancel with `tm1_rest_write` `POST Threads(42)/tm1.CancelOperation`
+(v11) or `POST Jobs('id')/tm1.Cancel` (v12), `confirm` = the id.
 
 ---
 
@@ -514,16 +637,18 @@ result on an active server usually means auditing is disabled (check
 ```json
 {
   "tool": "tm1_analyze_callgraph",
-  "args": { "processName": "Load_Sales", "summary": false }
+  "args": { "start": "Load_Sales", "mode": "full" }
 }
 ```
+
+Add `refresh: true` to rebuild the cached index first (after deploying processes outside this server).
 
 ### 10.2 Find every TI / chore / view that references a cube
 
 ```json
 {
   "tool": "tm1_analyze_object_usage",
-  "args": { "objectType": "cube", "objectName": "Sales" }
+  "args": { "kind": "cube", "objectName": "Sales" }
 }
 ```
 
@@ -540,9 +665,9 @@ result on an active server usually means auditing is disabled (check
 
 ## Markdown vs. JSON output
 
-Add `format: "markdown"` to any list_* tool or to these get_* tools for human-readable output:
+Add `format: "markdown"` to these tools for human-readable output:
 
-`tm1_get_server_info`, `tm1_get_server_state`, `tm1_get_cube_stats`, `tm1_get_message_log`, `tm1_get_transaction_log`, `tm1_get_ancestors`, `tm1_get_descendants`, `tm1_get_element_attribute_values`, `tm1_get_client`.
+`tm1_execute_mdx`, `tm1_get_view`, `tm1_files_read`, `tm1_get_cube_stats`, `tm1_get_server_state`, `tm1_list_error_logs`, `tm1_list_processes_grouped`, `tm1_search_code`, `tm1_search_rules`.
 
 Default `json` is preferred for agent consumption â€” the server parses it into `structuredContent` so typed clients can consume the payload directly.
 
@@ -560,10 +685,10 @@ Returns 2 static + N process-code templates (one per non-control TI) + M cube-ru
 
 ### Static resources
 
-| URI                  | Mime             | Content                                                |
-| -------------------- | ---------------- | ------------------------------------------------------ |
-| `tm1://server/info`  | application/json | full TM1 server config (matches `tm1_get_server_info`) |
-| `tm1://server/state` | application/json | health snapshot: connected, version, object counts     |
+| URI                  | Mime             | Content                                                                                                   |
+| -------------------- | ---------------- | --------------------------------------------------------------------------------------------------------- |
+| `tm1://server/info`  | application/json | identity only: server name, product version/edition, admin host, data directory, time zone, security mode |
+| `tm1://server/state` | application/json | health snapshot: connected, version, object counts                                                        |
 
 ### Resource templates (dynamic)
 
@@ -621,7 +746,7 @@ Failures return uniform JSON:
   "message": "Cube 'Saless' does not exist",
   "httpStatus": 404,
   "endpoint": "/api/v1/Cubes('Saless')",
-  "hint": "Object does not exist. Use the matching list_* or get_* tool to enumerate available names before retrying."
+  "hint": "Object does not exist. List the available names with tm1_rest_read (e.g. Cubes?$select=Name) before retrying; names are case- and space-insensitive in TM1."
 }
 ```
 

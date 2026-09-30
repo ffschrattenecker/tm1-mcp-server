@@ -61,7 +61,7 @@ export const WritableCoordsResultSchema = z
   })
   .passthrough();
 
-// Page-envelope shape consistent with list_* tools (Page<T>).
+// Page-envelope shape shared by the paginated tools (Page<T>).
 // `total` derives from axes (product of tuple counts) — null only when
 // axes are absent and we cannot infer cell count cheaply.
 export const MdxResultSchema = z.object({

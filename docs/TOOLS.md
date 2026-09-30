@@ -12,14 +12,19 @@ the model sees. Working JSON payloads for the main flows are in
 Two things the raw list does not show:
 
 - **No single server exposes all of them.** `TM1_MODE=readonly` (the default)
-  registers read tools only. Version also gates a few: `tm1_list_threads`,
-  `tm1_cancel_thread`, `tm1_save_data`, `tm1_unload_cube`, `tm1_get_message_log`,
-  `tm1_get_audit_log` and `tm1_get_transaction_log` are v11-only, `tm1_list_jobs`
-  and `tm1_cancel_job` are v12-only.
-- **Seventeen tools require a `confirm` argument** that repeats the target name
-  verbatim — every `delete_*` and `clear_*`, plus `tm1_execute_process`,
-  `tm1_execute_chore`, `tm1_write_cells`, `tm1_set_cube_rules` and
-  `tm1_upload_file`. It is misuse protection against a mis-fired call, not
+  registers read tools only. `tm1_save_data` is v11-only.
+- **Object CRUD goes through `tm1_rest_read` / `tm1_rest_write`**: any path
+  relative to `/api/v1/`, narrowed with `$select`/`$filter`/`$top`. Collections
+  include `}` control objects (`$filter=not startswith(Name,'}')`) and OData
+  string comparison is case-sensitive (`tolower()`). The write tool refuses what
+  a dedicated tool owns — process bodies, rules, cell writes, files, `$batch`,
+  Execute actions — and names the tool to use.
+- **Destructive tools require a `confirm` argument** that repeats the target
+  name verbatim — `tm1_rest_write` (DELETE and cancel actions),
+  `tm1_files_write`, `tm1_delete_elements`, `tm1_clear_cube`,
+  `tm1_execute_process`, `tm1_execute_chore`, `tm1_write_cells`,
+  `tm1_set_cube_rules`, and the create-or-update tools once the target exists.
+  It is misuse protection against a mis-fired call, not
   access control.
 - **With several connections, every tool takes `connection`**, and the comparison
   tools (`tm1_compare_environments`, `tm1_diff_cube_rules`, `tm1_diff_hierarchy`,
@@ -52,9 +57,9 @@ datasource (562-589).
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (114)
+## Tools (58)
 
-### analysis (13)
+### analysis (11)
 
 - `tm1_analyze_callgraph` — Build a process call graph (ExecuteProcess/RunProcess) for a TI process
 - `tm1_analyze_chore_graph` — Build downstream call graphs for every task of a TM1 chore
@@ -66,123 +71,68 @@ datasource (562-589).
 - `tm1_compare_environments` — Drift overview of connection vs connectionB (e.g
 - `tm1_diff_cube_rules` — Diff a cube's rules across connections (connectionB) or against cubeB, as unified hunks; also compares the dimension lists and SKIPCHECK/FEEDERS presence.
 - `tm1_diff_hierarchy` — Diff a hierarchy across connections (connectionB) or against dimensionB: elements, edges, weights, reparented children, attributes
-- `tm1_find_orphan_dimensions` — Identify dimensions not referenced by any cube — a model-hygiene check
-- `tm1_invalidate_callgraph_cache` — Drop the in-memory ReferenceIndex cache used by tm1_analyze_callgraph / tm1_analyze_object_usage / tm1_analyze_chore_graph
 - `tm1_trace_data_flow` — Trace data flow into and out of a cube in one call, instead of analyze_object_usage + N× get_process
 
-### celldata (10)
+### celldata (8)
 
 - `tm1_check_feeders` — Check the feeders of a cell: verifies feeder coverage for the cells underlying this cell and returns the problematic ones with a fed flag — fed=false marks a br
 - `tm1_check_writable_coords` — Pre-flight check before CellPutN/CellPutS
 - `tm1_execute_mdx` — Execute an MDX query against the TM1 server and return structured cell data with axes (page-envelope shape consistent with list_*)
-- `tm1_get_cell_value` — Get a single cell value from a TM1 cube by specifying element coordinates
 - `tm1_get_view` — Execute a named cube view and return structured cell data with axes (page-envelope shape consistent with tm1_execute_mdx)
-- `tm1_get_view_definition` — Return the structural definition of a cube view (MDX expression OR NativeView axes) WITHOUT executing it
 - `tm1_sample_cells` — Return up to maxCells populated cells from a cube without guessing coordinates — builds a NON EMPTY CROSSJOIN MDX over the cube's dimensions and HEAD-limits it
 - `tm1_trace_cell_calculation` — Trace how a cell value is calculated: recursive component tree with per-component type (Consolidation/Rule/Simple), status (Null/Data/Error), value, and the rul
 - `tm1_trace_feeders` — Trace the feeders of a cell: returns the cells this cell feeds plus the feeder statements involved — answers 'which feeder statement fires from this cell, and w
 - `tm1_write_cells` — Write one or more cell values directly to a TM1 cube via REST
 
-### dimension-management (13)
+### dimension-management (3)
 
 - `tm1_bulk_upsert_elements` — Create or update multiple elements in a TM1 hierarchy in bulk (two-pass: leafs first, then consolidations)
-- `tm1_create_dimension` — Create a new TM1 dimension with a default hierarchy of the same name
-- `tm1_create_element` — Create a new element in a TM1 dimension hierarchy
-- `tm1_create_element_attribute` — Create an element attribute definition (schema) on a TM1 dimension
-- `tm1_create_hierarchy` — Create a new (alternate) hierarchy inside an existing dimension
-- `tm1_delete_dimension` — Delete a TM1 dimension and all its hierarchies
-- `tm1_delete_element` — Delete an element from a TM1 dimension hierarchy
 - `tm1_delete_elements` — Delete many elements from one TM1 dimension hierarchy in a single call ($batch where the server supports it)
-- `tm1_delete_hierarchy` — Delete a hierarchy from a dimension
-- `tm1_get_element_attribute_values` — Read attribute values (Numeric/String/Alias) via MDX on the }ElementAttributes_{Dim} control cube
-- `tm1_list_element_attributes` — List element attribute definitions of a TM1 dimension with their types (Numeric/String/Alias); every hierarchy returns the same dimension-wide list
-- `tm1_update_element` — Update an existing element in a TM1 dimension hierarchy (name, type, or components)
 - `tm1_update_element_attribute_value` — Set attribute values on elements by writing to the }ElementAttributes_{Dim} control cube
 
-### fileops (5)
+### fileops (2)
 
-- `tm1_delete_file` — Delete a file from the TM1 server's blob/file storage
-- `tm1_get_file_content` — Read the content of a file from the TM1 server's data directory
-- `tm1_list_files` — List files in the TM1 server's data directory (blob/file storage)
-- `tm1_search_files` — Search file names in the TM1 server's blob/file storage by prefix and/or substring
-- `tm1_upload_file` — Upload (create or update) a file in the TM1 server's blob/file storage
+- `tm1_files_read` — Read the TM1 server's file storage (TI data directory: Files on v12, Blobs on v11; auto-fallback)
+- `tm1_files_write` — Change the TM1 server's file storage (TI data directory: Files on v12, Blobs on v11; auto-fallback)
 
-### metadata (9)
+### metadata (2)
 
-- `tm1_get_ancestors` — Get all ancestors of an element via parent-walk
-- `tm1_get_descendants` — Get descendants of a consolidation element
-- `tm1_get_hierarchy` — Get hierarchy elements with parent-child relationships for a dimension
-- `tm1_list_chores` — List chores in the TM1 server with schedule and assigned processes
-- `tm1_list_cubes` — List cubes in the TM1 server
-- `tm1_list_dimensions` — List dimensions (with their hierarchy names) in the TM1 server
-- `tm1_list_processes` — List TurboIntegrator process names in the TM1 server; fields=['name','parameters'] adds each process's parameters
 - `tm1_list_processes_grouped` — Group TI processes by name prefix to give a structural overview without listing every process
 - `tm1_resolve_default_members` — Resolve N hierarchies' effective default members in parallel from one tool call; pass items:[{dimensionName}] with a single entry for a one-off lookup
 
-### model-building (9)
+### model-building (6)
 
 - `tm1_check_cube_rule` — Validate the syntax of a TM1 cube rule WITHOUT applying it
 - `tm1_clear_cube` — Wipe every cell in a cube
-- `tm1_create_cube` — Create a new TM1 cube with the specified dimensions
-- `tm1_delete_cube` — Delete a TM1 cube and all its data
 - `tm1_get_all_cube_rules` — Bulk-load rules text for every cube in one call
 - `tm1_get_cube_rules` — Get the current rules text for a TM1 cube
 - `tm1_search_rules` — Regex search across cube rules text
 - `tm1_set_cube_rules` — Create or replace the rules for a TM1 cube
-- `tm1_unload_cube` — Unload a cube from memory
 
-### operations (16)
+### operations (7)
 
-- `tm1_cancel_job` — Cancel a running TM1 v12 job by its ID
-- `tm1_cancel_thread` — Cancel a running TM1 server thread by its ID
 - `tm1_diagnose_process_error` — One-call error diagnosis for a failed TI process: lists matching error logs, fetches their content, and optionally includes cascade-related sibling logs (same t
-- `tm1_get_audit_log` — Fetch recent TM1 audit log entries (metadata/security changes: who changed what, when), newest first
 - `tm1_get_cube_stats` — Read }StatsByCube metrics for one or more cubes (memory, populated cells, fed cells, feeder efficiency)
 - `tm1_get_error_log_content` — Fetch the raw text of one TI error log file produced by a failed process run
-- `tm1_get_message_log` — Fetch recent TM1 server message log entries, newest first
-- `tm1_get_server_info` — Return TM1 server identity + curated configuration (TI, Rules, MTQ, JobQueuing, Memory, Logging, HTTP, Security) from /Configuration + /ActiveConfiguration
 - `tm1_get_server_state` — Health-check style snapshot of the TM1 server in one call
-- `tm1_get_transaction_log` — Fetch recent TM1 transaction log entries (cell writes), newest first
 - `tm1_list_connections` — List the TM1 connections this server can reach: name (the `connection` argument of every other tool), readonly/readwrite mode, TM1_ENVIRONMENT label (and why mo
 - `tm1_list_error_logs` — List TI process error log files on the TM1 server, newest first
-- `tm1_list_jobs` — List active jobs (Activity) on a TM1 v12 database — the running tasks that replaced v11 threads
-- `tm1_list_sessions` — List active sessions on the TM1 server with their associated user and threads
-- `tm1_list_threads` — List active threads on the TM1 server (running processes, chores, MDX queries, etc.)
 - `tm1_save_data` — Persist in-memory cube data to disk: SaveDataAll (all cubes) or CubeSaveData when `cube` is given
 
-### scheduling (5)
+### rest (2)
 
-- `tm1_create_chore` — Create a new TM1 chore with a schedule and list of TI processes to run
-- `tm1_delete_chore` — Delete a TM1 chore permanently
+- `tm1_rest_read` — GET any TM1 REST path (relative to /api/v1/), plus POST Processes('P')/tm1.Compile
+- `tm1_rest_write` — POST/PATCH/PUT/DELETE a TM1 REST path (relative to /api/v1/), e.g
+
+### scheduling (2)
+
 - `tm1_execute_chore` — Execute a TM1 chore immediately, bypassing its schedule
-- `tm1_toggle_chore` — Activate or deactivate a TM1 chore (enable/disable its schedule).
 - `tm1_update_chore` — Update an existing TM1 chore
 
-### security (8)
-
-- `tm1_assign_client_group` — Assign a TM1 client to a group
-- `tm1_create_client` — Create a new TM1 client (user)
-- `tm1_delete_client` — Delete a TM1 client (user)
-- `tm1_get_client` — Get details for a single TM1 client (user) including group memberships.
-- `tm1_list_clients` — List TM1 clients (users)
-- `tm1_list_groups` — List TM1 groups
-- `tm1_remove_client_group` — Remove a TM1 client from a group
-- `tm1_update_client` — Update a TM1 client
-
-### subsets (5)
-
-- `tm1_create_subset` — Create a TM1 subset, public by default or private with isPrivate=true (private subsets belong to the signed-in user and are invisible to others; the same name m
-- `tm1_delete_subset` — Delete a TM1 subset, public by default or private with isPrivate=true
-- `tm1_get_subset` — Get a single TM1 subset with its MDX expression (if any) and resolved element list
-- `tm1_list_subsets` — List public + private subsets of a TM1 hierarchy
-- `tm1_update_subset` — Update an existing TM1 subset in place, public by default or private with isPrivate=true
-
-### ti-development (17)
+### ti-development (15)
 
 - `tm1_check_process_code` — Validate TI process code WITHOUT saving it on the server (POST /api/v1/CompileProcess unbound)
-- `tm1_compile_process` — Compile a TI process to validate its syntax without executing it
 - `tm1_copy_process` — Copy a TI process to a new name
-- `tm1_delete_process` — Delete a TurboIntegrator process from the TM1 server
 - `tm1_diff_process_with_file` — Compare an installed TI process on the server against a local .pro file
 - `tm1_diff_processes` — Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog), on one connection or across two (connectionB, e.g
 - `tm1_execute_process` — Execute a TurboIntegrator process on the TM1 server with optional parameters
@@ -196,12 +146,5 @@ datasource (562-589).
 - `tm1_search_code` — Regex search across all TI process code (Prolog/Metadata/Data/Epilog)
 - `tm1_upsert_process` — Atomic-style create-or-update for a TI process
 - `tm1_validate_process_refs` — Scan a TI process (live, by name, or from .pro) for cube/dimension references in well-known TI functions (CellGetN/S, CellPutN/S, ViewCreate, DimensionElementIn
-
-### views (4)
-
-- `tm1_create_mdx_view` — Create a public MDX-based view on a cube
-- `tm1_create_native_view` — Create a public native (subset-based) view on a cube — the classic view type used as TI process datasource
-- `tm1_delete_view` — Delete a public view from a cube
-- `tm1_list_views` — List public and private views defined on a cube
 
 <!-- TOOLS-AUTOGEN:END -->

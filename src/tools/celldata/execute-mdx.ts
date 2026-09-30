@@ -102,7 +102,7 @@ export function renderMdxMarkdown(env: MdxEnvelope): string {
 export const registerExecuteMdx = defineTool({
   name: "tm1_execute_mdx",
   description: [
-    "Execute an MDX query against the TM1 server and return structured cell data with axes (page-envelope shape consistent with list_*).",
+    "Execute an MDX query against the TM1 server and return structured cell data with axes (page envelope: total, count, offset, has_more, next_offset, items).",
     "format='markdown' renders a pivot grid (2 axes; set fetchAll=true to get up to 5000 cells in one grid) or a flat coordinate table; 'json' (default) returns the structured envelope.",
     "Related: tm1_sample_cells for a cheap sparsity probe; save a query as a view with tm1_rest_write POST Cubes('C')/Views (MDXView).",
   ],

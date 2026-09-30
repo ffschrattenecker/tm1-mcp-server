@@ -1,4 +1,4 @@
-// Shared response-format helper for list_* tools (G1 from MCP best-practices
+// Shared response-format helper for paged tools (G1 from MCP best-practices
 // review). Adds a `format: "json"|"markdown"` param so agents get structured
 // JSON (default, parsed by Proxy into structuredContent) while humans get a
 // readable Markdown table when piped to chat output.

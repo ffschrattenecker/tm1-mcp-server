@@ -7,7 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **BREAKING: 60 tools that wrapped one REST call are gone**, replaced by the generic REST and
+  file tools below: `tm1_assign_client_group`, `tm1_cancel_job`, `tm1_cancel_thread`,
+  `tm1_compile_process`, `tm1_create_chore`, `tm1_create_client`, `tm1_create_cube`,
+  `tm1_create_dimension`, `tm1_create_element`, `tm1_create_element_attribute`,
+  `tm1_create_hierarchy`, `tm1_create_mdx_view`, `tm1_create_native_view`, `tm1_create_subset`,
+  `tm1_delete_chore`, `tm1_delete_client`, `tm1_delete_cube`, `tm1_delete_dimension`,
+  `tm1_delete_element`, `tm1_delete_file`, `tm1_delete_hierarchy`, `tm1_delete_process`,
+  `tm1_delete_subset`, `tm1_delete_view`, `tm1_find_orphan_dimensions`, `tm1_get_ancestors`,
+  `tm1_get_audit_log`, `tm1_get_cell_value`, `tm1_get_client`, `tm1_get_descendants`,
+  `tm1_get_element_attribute_values`, `tm1_get_file_content`, `tm1_get_hierarchy`,
+  `tm1_get_message_log`, `tm1_get_server_info`, `tm1_get_subset`, `tm1_get_transaction_log`,
+  `tm1_get_view_definition`, `tm1_invalidate_callgraph_cache`, `tm1_list_chores`,
+  `tm1_list_clients`, `tm1_list_cubes`, `tm1_list_dimensions`, `tm1_list_element_attributes`,
+  `tm1_list_files`, `tm1_list_groups`, `tm1_list_jobs`, `tm1_list_processes`, `tm1_list_sessions`,
+  `tm1_list_subsets`, `tm1_list_threads`, `tm1_list_views`, `tm1_remove_client_group`,
+  `tm1_search_files`, `tm1_toggle_chore`, `tm1_unload_cube`, `tm1_update_client`,
+  `tm1_update_element`, `tm1_update_subset`, `tm1_upload_file`. What a model cannot redo in one
+  call moved into kept tools: the cache reset is `refresh: true` on `tm1_analyze_callgraph`, and
+  the impact check before deleting a cube or dimension is `tm1_analyze_object_usage` (now with
+  `usedInCubes`). The service methods, types and schemas only these tools used are gone too.
+
+### Added
+
+- **`tm1_rest_read` / `tm1_rest_write`**: any TM1 REST path relative to `/api/v1/`. The read
+  tool issues GET (plus the read-only `Processes('P')/tm1.Compile`), drops `@odata.*`, masks
+  secrets, and cuts `value[]` to a character budget (`truncated`, `kept`/`total`). The write
+  tool refuses what a kept tool owns (process bodies, rules, cell writes, SaveData, clears,
+  files, Execute actions, `$batch`, `$entity`) and names the tool to use. DELETE and cancel
+  actions need `confirm` set to the key of the object they hit. Deleting a dimension's
+  same-named hierarchy is refused: TM1 11.8 accepts it and leaves the dimension with none.
+- **`tm1_files_read` / `tm1_files_write`** replace the five file tools (`op`: list, search, get /
+  upload, delete).
+
 ### Changed
+
+- Hints, tool descriptions, prompts and the server instructions name REST paths instead of the
+  removed tools. The instructions carry the `$select`, control-object
+  (`not startswith(Name,'}')`) and `tolower()` rules.
+- The live suite builds its fixtures through the REST tools; `tests/live/rest.live.test.ts`
+  checks the paths the hints name. Wire contracts were re-recorded on 11.8.03500.4, and a request
+  with its own `$select` is checked in subset mode.
 
 - **`tm1_trace_cell_calculation` lists each rule statement once.** Nodes carry `statementRefs`
   into a top-level `statementTable` instead of repeating the full rule text; one quarter of a

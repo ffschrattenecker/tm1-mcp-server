@@ -31,7 +31,7 @@ Everything below describes this fork's state. For the real project, read the
 
 ## Features
 
-114 tools across 12 categories — every one listed in
+58 tools across 10 categories — every one listed in
 [docs/TOOLS.md](docs/TOOLS.md), with working JSON payloads in
 [docs/EXAMPLES.md](docs/EXAMPLES.md). Past plain CRUD over the REST API:
 
@@ -165,10 +165,12 @@ worth stating plainly:
   whose TM1 rights already match what the agent should be able to do — the
   server enforces no per-caller authorization of its own.
 - **The confirmation guards are misuse protection, not access control.**
-  Seventeen tools require a `confirm` argument repeating the target name
-  verbatim: every `delete_*` and `clear_*`, plus `tm1_execute_process`,
-  `tm1_execute_chore`, `tm1_write_cells`, `tm1_set_cube_rules` and
-  `tm1_upload_file`. Anything that can call such a tool can also supply its
+  Destructive tools require a `confirm` argument repeating the target name
+  verbatim: `tm1_rest_write` (every DELETE and cancel action),
+  `tm1_files_write`, `tm1_delete_elements`, `tm1_clear_cube`,
+  `tm1_execute_process`, `tm1_execute_chore`, `tm1_write_cells` and
+  `tm1_set_cube_rules`; the create-or-update tools ask for it once the target
+  exists. Anything that can call such a tool can also supply its
   `confirm` value — the guard only stops an auto-approving client firing an
   irreversible action without naming the target.
 
@@ -228,36 +230,34 @@ security notes and the `autoApprove` allowlist:
   paths assume 11.x semantics, and v12-only fields (e.g.
   `DataSource.usesUnicode`) are dropped when `TM1_VERSION` says `11.x`
 - TM1 12.5 / Planning Analytics Engine — via `TM1_INSTANCE` + `TM1_DATABASE`,
-  live-validated with `s2s` auth only. `tm1_list_threads`, `tm1_cancel_thread`,
-  `tm1_save_data`, `tm1_unload_cube` and the three log readers
-  (`tm1_get_message_log`, `tm1_get_audit_log`, `tm1_get_transaction_log`) are
-  v11-only; `tm1_list_jobs` and `tm1_cancel_job` v12-only; v12 dropped demand
-  load, so unloading a cube has no successor endpoint there;
+  live-validated with `s2s` auth only. `tm1_save_data` is v11-only. Through
+  `tm1_rest_read`/`tm1_rest_write`: running work is `Threads` on v11 and `Jobs`
+  on v12; v12 serves `MessageLogEntries`, `AuditLogEntries` and
+  `TransactionLogEntries` empty; v12 dropped demand load, so `tm1.Unload` has no
+  successor there;
   v12 ships no `}Stats*` control cubes, so `tm1_get_cube_stats` and
   `tm1_audit_feeders` in `mode` `runtime`/`both` report the statistics as
   unavailable instead of returning metrics (static feeder analysis is unaffected)
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (114)
+## Tools (58)
 
 Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 
 | Category | Tools |
 |---|---|
-| analysis | 13 |
-| celldata | 10 |
-| dimension-management | 13 |
-| fileops | 5 |
-| metadata | 9 |
-| model-building | 9 |
-| operations | 16 |
-| scheduling | 5 |
-| security | 8 |
-| subsets | 5 |
-| ti-development | 17 |
-| views | 4 |
-| **Total** | **114** |
+| analysis | 11 |
+| celldata | 8 |
+| dimension-management | 3 |
+| fileops | 2 |
+| metadata | 2 |
+| model-building | 6 |
+| operations | 7 |
+| rest | 2 |
+| scheduling | 2 |
+| ti-development | 15 |
+| **Total** | **58** |
 
 <!-- TOOLS-AUTOGEN:END -->
 
