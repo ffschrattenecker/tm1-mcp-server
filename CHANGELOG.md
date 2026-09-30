@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.1.0] - 2026-09-30
+
 ### Added
 
 - **`TM1_PROXY`** routes all TM1 requests through a SOCKS5 proxy (`socks5://` or `socks5h://`),
@@ -275,7 +277,9 @@ response-size guard, the per-connection caches) are unchanged.
 Older history (before 8.0.0): see the git tags and the upstream repository,
 https://github.com/flameY3T1/tm1-mcp-server.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.3.1...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.1.0...HEAD
+[9.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.0.0...v9.1.0
+[9.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.3.1...v9.0.0
 [8.3.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.3.0...v8.3.1
 [8.3.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.2.0...v8.3.0
 [8.2.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.1.0...v8.2.0
