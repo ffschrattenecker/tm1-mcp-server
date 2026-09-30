@@ -57,9 +57,10 @@
     "lint:format": "prettier --check .",
     "format": "prettier --write .",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
-    "verify": "npm run audit:prod && npm run typecheck && npm run typecheck:tests && npm run lint:output-schema-budget && npm run lint:conventions && npm run lint:format && npm run lint:eslint && npm run coverage:check",
+    "verify": "npm run audit:prod && npm run typecheck && npm run typecheck:tests && npm run lint:output-schema-budget && npm run lint:conventions && npm run lint:tool-docs && npm run lint:format && npm run lint:eslint && npm run coverage:check",
     "tools:list": "node scripts/gen-tool-list.mjs",
     "tools:update-readme": "node scripts/gen-tool-list.mjs --write-readme",
+    "lint:tool-docs": "node scripts/gen-tool-list.mjs --check",
     "lint:eslint": "eslint ."
   },
   "keywords": [

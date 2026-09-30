@@ -1,18 +1,20 @@
 #!/usr/bin/env node
-// Scan src/tools/**/*.ts for `server.tool("name", "desc", ...)` calls and emit
-// a markdown list.
+// Scan src/tools/**/*.ts for `defineTool({...})` declarations and emit a
+// markdown list.
 //
 //   npm run tools:list           -> print the full list to stdout
 //   npm run tools:update-readme  -> write BOTH generated blocks in one run:
 //                                     docs/TOOLS.md  full list, grouped
 //                                     README.md      compact category table
+//   npm run lint:tool-docs       -> --check: fail if either block is stale
 //
 // Both files carry the same sentinels; only the text between them is replaced,
 // so hand-written prose around the block survives:
 //   <!-- TOOLS-AUTOGEN:START -->
 //   <!-- TOOLS-AUTOGEN:END -->
 //
-// This is manual — no CI gate. Run it after adding, removing or renaming a tool.
+// `npm run verify` runs the --check mode, so a tool added, removed or renamed
+// without regenerating fails CI.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,18 +70,23 @@ function renderCompact() {
 }
 
 const writeFiles = process.argv.includes("--write-readme");
+const checkOnly = process.argv.includes("--check");
 
-if (!writeFiles) {
+if (!writeFiles && !checkOnly) {
   process.stdout.write(render("#") + "\n");
   process.exit(0);
 }
 
+const stale = [];
+
 /**
- * Replace the text between the sentinels in `file` with `block`.
- * Returns true when the file changed.
+ * Replace the text between the sentinels in `file` with `block` (or, with
+ * --check, only record that it would change).
  */
 function writeBlock(path, label, block, extra = (s) => s) {
-  const before = readFileSync(path, "utf8");
+  // LF-normalize: a Windows checkout with core.autocrlf has CRLF on disk, and
+  // the generated block is LF.
+  const before = readFileSync(path, "utf8").replace(/\r\n/g, "\n");
   const startIdx = before.indexOf(START);
   const endIdx = before.indexOf(END);
   if (startIdx === -1 || endIdx === -1 || endIdx < startIdx) {
@@ -95,11 +102,14 @@ function writeBlock(path, label, block, extra = (s) => s) {
   const next = extra(`${head}\n\n${block}\n${tail}`);
   if (next === before) {
     console.log(`${label} already in sync.`);
-    return false;
+    return;
+  }
+  if (checkOnly) {
+    stale.push(label);
+    return;
   }
   writeFileSync(path, next);
   console.log(`${label} updated (${total} tools).`);
-  return true;
 }
 
 writeBlock(join(root, "docs", "TOOLS.md"), "docs/TOOLS.md", render("##"));
@@ -115,3 +125,10 @@ writeBlock(
       `${total} tools across ${sorted.length} categories`,
     ),
 );
+
+if (stale.length > 0) {
+  console.error(
+    `gen-tool-list: out of date: ${stale.join(", ")}. Run \`npm run tools:update-readme\`.`,
+  );
+  process.exit(1);
+}

@@ -43,6 +43,7 @@ This chains:
 | Types (tests)    | `npm run typecheck:tests`           | `tests/` under the same strict flags (`tsconfig.test.json`)                 |
 | Schema budget    | `npm run lint:output-schema-budget` | serialized output schemas stay within the byte budget                       |
 | Conventions      | `npm run lint:conventions`          | registrars wired, `<entity>Name` inputs, `actionResponse()`, shared escaper |
+| Tool docs        | `npm run lint:tool-docs`            | the generated tool lists in `README.md` / `docs/TOOLS.md` are current       |
 | Wire contracts   | `npm run contracts:verify`\*        | the live server still matches the recorded response shapes                  |
 | Lint             | `npm run lint:eslint`               | ESLint over `src/` and `tests/`                                             |
 | Tests + coverage | `npm run coverage:check`            | full `vitest` suite under coverage, then the coverage ratchet gate          |
@@ -55,7 +56,7 @@ command, two generated blocks (`docs/TOOLS.md` and the category table in
 npm run tools:update-readme
 ```
 
-There is no CI gate on that list; it is on you to run it.
+`lint:tool-docs` fails `verify` until you do.
 
 ## Coverage Policy
 
