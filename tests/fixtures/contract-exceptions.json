@@ -19,11 +19,6 @@
   ],
   "exceptions": [
     {
-      "endpoint": "GET /api/v1/AuditLogEntries",
-      "path": "$.value[].AuditDetails",
-      "reason": "Present only on entries that carry detail rows. The test server's audit log had none during recording; TM1 expands AuditDetails whenever the entry has them."
-    },
-    {
       "endpoint": "GET /api/v1/Cubes('*')/Views",
       "path": "$.value[].MDX",
       "reason": "ViewService.list requests $select=Name,MDX; the recording's list calls selected Name only, so the column never appeared. MDX is a real View property."
