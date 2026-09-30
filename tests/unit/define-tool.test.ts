@@ -8,7 +8,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type pino from "pino";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { defineTool, specFor } from "../../src/tools/define-tool.js";
 import { READ_ONLY, DESTRUCTIVE } from "../../src/tools/annotations.js";
@@ -16,18 +15,7 @@ import { strictVariants } from "../../src/tools/schemas/markdown-capable.js";
 import { FORMAT_SCHEMA } from "../../src/tools/format.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import { ConnectionRegistry } from "../../src/connections.js";
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
+import { mockLogger } from "../helpers/client-harness.js";
 
 const fakeClient = {} as TM1Client;
 const ok = () => ({ content: [{ type: "text" as const, text: "{}" }] });

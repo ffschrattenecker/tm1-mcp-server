@@ -1,31 +1,19 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { z } from "zod";
-import type pino from "pino";
 import {
   slimJsonSchema,
   stripDefaultPhrase,
 } from "../../src/lib/slim-json-schema.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import "../../src/tools/fileops/files-read.js";
+import { mockLogger } from "../helpers/client-harness.js";
 
 const SAFE_INT_MIN = -9007199254740991;
 const SAFE_INT_MAX = 9007199254740991;
 const DRAFT_07 = "http://json-schema.org/draft-07/schema#";
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
 
 describe("slimJsonSchema", () => {
   it("drops the sentinel int bounds emitted by Zod's .int()", () => {

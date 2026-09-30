@@ -1,14 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { contractCheckedClient } from "../helpers/service-contract.js";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type pino from "pino";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerAllTools } from "../../src/tools/index.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 // Output schemas come from the defineTool() specs; registerAllTools is
 // imported above, so every spec has been defined.
 import { allSpecs } from "../../src/tools/define-tool.js";
+import { mockLogger } from "../helpers/client-harness.js";
 
 const OUTPUT_SCHEMAS = new Map(
   [...allSpecs()].flatMap(([name, meta]) =>
@@ -35,18 +35,6 @@ function schemaOf(toolName: string): ZodTypeAny {
   }
   return asSchema(entry);
 }
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
 
 // Version-gated tools (tm1_save_data, v11 only) register under one version at
 // a time — union both so "registered" reflects full coverage.

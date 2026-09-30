@@ -1,7 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type pino from "pino";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { defineTool } from "../../src/tools/define-tool.js";
 import { READ_ONLY } from "../../src/tools/annotations.js";
@@ -11,18 +10,7 @@ import {
   withAnnotations,
 } from "../../src/tools/with-annotations.js";
 import { PAGINATION_SCHEMA } from "../../src/tools/pagination.js";
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
+import { mockLogger } from "../helpers/client-harness.js";
 
 type Result = {
   isError?: boolean;

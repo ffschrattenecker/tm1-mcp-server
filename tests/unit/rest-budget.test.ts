@@ -1,6 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type pino from "pino";
 import type { TM1Client } from "../../src/tm1-client.js";
 import type { RestBody } from "../../src/tm1-client/services/rest-service.js";
 import { ConnectionRegistry } from "../../src/connections.js";
@@ -9,22 +8,11 @@ import { registerRestWrite } from "../../src/tools/rest/rest-write.js";
 import { dataBudget, responseLimit } from "../../src/tools/rest/shape.js";
 import type { ToolRegistrar } from "../../src/tools/define-tool.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
+import { mockLogger } from "../helpers/client-harness.js";
 
 // The REST tools cut their own payload so the response guard never has to
 // refuse it. That only works if the cut honours the CONFIGURED limit
 // (TM1_MAX_RESPONSE_CHARS), not the 80k default.
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
 
 type Result = { isError?: boolean; content: Array<{ text: string }> };
 

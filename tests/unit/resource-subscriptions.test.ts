@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type pino from "pino";
 import type { FnSpy } from "../helpers/spy-types.js";
 import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
@@ -8,18 +7,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { SubscriptionRegistry } from "../../src/resources/subscriptions.js";
 import { tm1Events } from "../../src/lib/tm1-events.js";
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
+import { mockLogger } from "../helpers/client-harness.js";
 
 function makeServer(): {
   server: McpServer;

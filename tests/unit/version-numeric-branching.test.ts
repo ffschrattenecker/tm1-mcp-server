@@ -1,28 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createConnectionProfile } from "../../src/tm1-client/connection/profile.js";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
-import type pino from "pino";
 import type { FnSpy } from "../helpers/spy-types.js";
 import { TM1Client } from "../../src/tm1-client.js";
 import { SessionManager } from "../../src/session-manager.js";
 import type { TM1Config } from "../../src/config.js";
+import { mockLogger } from "../helpers/client-harness.js";
 
 // A3 regression: service version-gating must branch on the NUMERIC
 // config.version (single source of truth), never on the tm1Version display
 // string. The decisive case is the split-brain: version === 12 while the
 // display string still reads "11.8" — the numeric must win.
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
 
 function makeConfig(over: Partial<TM1Config>): TM1Config {
   return {

@@ -1,23 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
-import type pino from "pino";
 import type { FnSpy } from "../helpers/spy-types.js";
 import { SessionManager } from "../../src/session-manager.js";
 import type { TM1Config } from "../../src/config.js";
 import { baseTestConfig } from "../helpers/tm1-config.js";
+import { mockLogger } from "../helpers/client-harness.js";
 
 // Silence logger in tests
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
 
 function makeConfig(overrides?: Partial<TM1Config>): TM1Config {
   return {

@@ -2,27 +2,15 @@
 // allow only fail at the protocol boundary: the SDK (and our drift guard)
 // rejects the payload and the client sees isError. A schema-only test cannot
 // catch that, so these calls go through a real in-memory MCP client.
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import type pino from "pino";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import type { ToolRegistrar } from "../../src/tools/define-tool.js";
 import { registerListErrorLogs } from "../../src/tools/operations/list-error-logs.js";
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
+import { mockLogger } from "../helpers/client-harness.js";
 
 async function call(
   register: ToolRegistrar,

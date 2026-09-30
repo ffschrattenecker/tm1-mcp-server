@@ -1,23 +1,11 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ZodTypeAny } from "zod";
-import type pino from "pino";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerAllTools } from "../../src/tools/index.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import { resolveHierarchy } from "../../src/tools/hierarchy.js";
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
+import { mockLogger } from "../helpers/client-harness.js";
 
 function collectInputSchemas(): Map<string, Record<string, ZodTypeAny>> {
   const server = new McpServer({ name: "test", version: "0.0.0" });

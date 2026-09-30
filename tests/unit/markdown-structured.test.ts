@@ -11,12 +11,11 @@
 // outputSchema and then publishes no outputSchema at all. So the SDK-facing
 // schema is the loosened one, and the strict shapes are re-applied by our own
 // guard in with-annotations.ts.
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { z } from "zod";
-import type pino from "pino";
 import {
   markdownCapable,
   strictVariants,
@@ -33,6 +32,7 @@ import "../../src/tools/index.js";
 import { allSpecs, defineTool } from "../../src/tools/define-tool.js";
 import { pageShapeFor } from "../../src/tools/schemas/common.js";
 import { READ_ONLY } from "../../src/tools/annotations.js";
+import { mockLogger } from "../helpers/client-harness.js";
 
 // A paged, markdown-capable fixture tool, so the end-to-end cases do not
 // depend on which real tools happen to return a page.
@@ -47,18 +47,6 @@ defineTool({
   input: { ...FORMAT_SCHEMA },
   handler: () => ({ content: [{ type: "text" as const, text: "{}" }] }),
 });
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
 
 const PAGE = {
   total: 1,

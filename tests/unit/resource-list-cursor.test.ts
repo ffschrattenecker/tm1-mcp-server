@@ -1,5 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
-import type pino from "pino";
+import { describe, it, expect } from "vitest";
 import { ListResourcesRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import {
   installPaginatedListHandler,
@@ -9,18 +8,7 @@ import {
   type CatalogResource,
 } from "../../src/resources/list-handler.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
+import { mockLogger } from "../helpers/client-harness.js";
 
 function staticEntry(uri: string, name: string): CatalogResource {
   return { uri, name, mimeType: "application/json" };

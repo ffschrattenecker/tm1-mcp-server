@@ -13,7 +13,6 @@
 // `processErrorStatus` to the one status that can accompany it.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
-import type pino from "pino";
 import type { FnSpy } from "../helpers/spy-types.js";
 import { TM1Client } from "../../src/tm1-client.js";
 import { SessionManager } from "../../src/session-manager.js";
@@ -22,18 +21,7 @@ import type { ProcessResult } from "../../src/types.js";
 import { ProcessResultSchema } from "../../src/tools/schemas/items-processes.js";
 import { classifyExecution } from "../../src/tm1-client/services/process-status.js";
 import { baseTestConfig } from "../helpers/tm1-config.js";
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
+import { mockLogger } from "../helpers/client-harness.js";
 
 function makeConfig(): TM1Config {
   return {

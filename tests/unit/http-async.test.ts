@@ -1,7 +1,6 @@
 // RequestOptions.async: Prefer: respond-async, then poll /_async('id').
 // Wire shapes are the ones measured on 11.8 (see awaitAsync in http.ts).
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type pino from "pino";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type { FnSpy } from "../helpers/spy-types.js";
 import { TM1HttpClient } from "../../src/tm1-client/http.js";
@@ -9,18 +8,7 @@ import { SessionManager } from "../../src/session-manager.js";
 import type { TM1Config } from "../../src/config.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
 import { baseTestConfig } from "../helpers/tm1-config.js";
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
+import { mockLogger } from "../helpers/client-harness.js";
 
 const EXEC = "/api/v1/Processes('p')/tm1.ExecuteWithReturn";
 

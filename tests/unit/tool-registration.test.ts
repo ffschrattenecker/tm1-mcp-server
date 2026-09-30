@@ -1,7 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { contractCheckedClient } from "../helpers/service-contract.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type pino from "pino";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerAllTools } from "../../src/tools/index.js";
 // Every tool declares its annotation and output schema in its defineTool()
@@ -11,6 +10,7 @@ import {
   withAnnotations,
   deriveTitle,
 } from "../../src/tools/with-annotations.js";
+import { mockLogger } from "../helpers/client-harness.js";
 
 const TOOL_META = allSpecs();
 const ANNOTATIONS = new Map(
@@ -21,18 +21,6 @@ const OUTPUT_SCHEMAS = new Map(
     meta.outputSchema === undefined ? [] : [[name, meta.outputSchema]],
   ),
 );
-
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
 
 function makeServer(): McpServer {
   return new McpServer({ name: "test", version: "0.0.0" });
