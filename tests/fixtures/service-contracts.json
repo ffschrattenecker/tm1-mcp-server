@@ -1,6 +1,6 @@
 {
   "recordedAgainst": ["11.8.02900.8", "11.8.03500.4"],
-  "recordedAt": "2026-09-29",
+  "recordedAt": "2026-09-30",
   "methods": {
     "batch.execute": {
       "[]": {
@@ -168,13 +168,6 @@
       }
     },
     "elements.exists": "boolean",
-    "elements.getAttributeValues": {
-      "[]": {
-        "attributeName": "string",
-        "elementName": "string",
-        "value": "null|number|string"
-      }
-    },
     "elements.getAttributeValuesPage": {
       "items[]": {
         "elementName": "string",
@@ -210,10 +203,6 @@
       "total": "number",
       "truncated": "boolean"
     },
-    "elements.update": {
-      "typeChange": "null"
-    },
-    "files.getContent": "string",
     "files.getContentBytes": {
       "*": "number"
     },
@@ -242,38 +231,6 @@
       "name": "string",
       "totalElements": "number"
     },
-    "hierarchies.getAncestors": {
-      "ancestors[]": {
-        "level": "number",
-        "name": "string"
-      },
-      "element": "string",
-      "paths[]": {
-        "[]": "string"
-      }
-    },
-    "hierarchies.getCounts": {
-      "byLevel": {
-        "0": "number",
-        "1?": "number"
-      },
-      "byType": {
-        "Consolidated": "number",
-        "Numeric": "number",
-        "String": "number"
-      },
-      "maxLevel": "number",
-      "total": "number"
-    },
-    "hierarchies.getDescendants": {
-      "descendants[]": {
-        "depth": "number",
-        "level": "number",
-        "name": "string",
-        "type": "string"
-      },
-      "element": "string"
-    },
     "hierarchies.getElementTypes": {
       "[]": {
         "name": "string",
@@ -288,37 +245,6 @@
       },
       "elements[]": {
         "name": "string",
-        "type": "string"
-      }
-    },
-    "monitoring.getSessions": {
-      "[]": {
-        "active": "boolean",
-        "id": "string",
-        "threads[]": {
-          "elapsedTime": "string",
-          "function": "string",
-          "id": "number",
-          "info": "string",
-          "name": "string",
-          "objectName": "string",
-          "objectType": "string",
-          "state": "string",
-          "type": "string",
-          "waitTime": "string"
-        },
-        "user": "string"
-      }
-    },
-    "monitoring.getThreads": {
-      "[]": {
-        "context": "string",
-        "elapsedTime": "string",
-        "function": "string",
-        "id": "number",
-        "name": "string",
-        "objectName": "string",
-        "state": "string",
         "type": "string"
       }
     },
@@ -459,16 +385,6 @@
         "view?": "string"
       }
     },
-    "security.getClient": {
-      "@odata.context": "string",
-      "Enabled": "boolean",
-      "FriendlyName": "string",
-      "Groups[]": {
-        "Name": "string"
-      },
-      "Name": "string",
-      "Type": "string"
-    },
     "security.listClients": {
       "[]": {
         "Enabled": "boolean",
@@ -478,24 +394,6 @@
         },
         "Name": "string",
         "Type": "string"
-      }
-    },
-    "security.listGroups": {
-      "[]": {
-        "Clients[]": {
-          "Name": "string"
-        },
-        "Name": "string"
-      }
-    },
-    "server.getAuditLog": {
-      "[]": {
-        "description": "string",
-        "id": "number",
-        "objectName": "string",
-        "objectType": "string",
-        "timestamp": "string",
-        "user": "string"
       }
     },
     "server.getErrorLogContent": "string",
@@ -755,14 +653,6 @@
       "integratedSecurityMode": "string",
       "productVersion": "string",
       "serverName": "string"
-    },
-    "server.getMessageLog": {
-      "[]": {
-        "errorFile?": "string",
-        "level": "string",
-        "message": "string",
-        "timestamp": "string"
-      }
     },
     "server.listErrorLogFiles": {
       "[]": {

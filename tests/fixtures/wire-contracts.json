@@ -1,6 +1,6 @@
 {
   "recordedAgainst": ["11.8.02900.8", "11.8.03500.4"],
-  "recordedAt": "2026-09-29",
+  "recordedAt": "2026-09-30",
   "endpoints": {
     "DELETE /api/v1/Chores('*') !404": {
       "error": {
@@ -27,6 +27,12 @@
       }
     },
     "DELETE /api/v1/Dimensions('*') !404": {
+      "error": {
+        "code": "string",
+        "message": "string"
+      }
+    },
+    "DELETE /api/v1/Dimensions('*')/Hierarchies('*')/PrivateSubsets('*') !404": {
       "error": {
         "code": "string",
         "message": "string"
@@ -281,6 +287,12 @@
       },
       "ServerName": "string"
     },
+    "GET /api/v1/ActiveUser/Groups": {
+      "@odata.context": "string",
+      "value[]": {
+        "Name": "string"
+      }
+    },
     "GET /api/v1/AuditLogEntries": {
       "@odata.context": "string",
       "value[]": {
@@ -296,21 +308,21 @@
       "@odata.context": "string",
       "value[]": {
         "@odata.etag": "string",
-        "Active": "boolean",
-        "Attributes": {
+        "Active?": "boolean",
+        "Attributes?": {
           "Caption": "string"
         },
-        "DSTSensitive": "boolean",
-        "ExecutionMode": "string",
-        "Frequency": "string",
+        "DSTSensitive?": "boolean",
+        "ExecutionMode?": "string",
+        "Frequency?": "string",
         "Name": "string",
-        "StartTime": "string",
+        "StartTime?": "string",
         "Tasks[]": {
           "Parameters[]": {
             "Name": "string",
             "Value": "number"
           },
-          "Process": {
+          "Process?": {
             "@odata.etag": "string",
             "Name": "string"
           },
@@ -318,29 +330,45 @@
         }
       }
     },
+    "GET /api/v1/Chores('*')": {
+      "@odata.context": "string",
+      "@odata.etag": "string",
+      "Active": "boolean",
+      "Name": "string",
+      "StartTime": "string",
+      "Tasks[]": {
+        "Parameters[]": "unknown",
+        "Process": {
+          "@odata.etag": "string",
+          "Name": "string"
+        },
+        "Step": "number"
+      }
+    },
     "GET /api/v1/Configuration": {
       "@odata.context": "string",
-      "AdminHost": "string",
-      "AllowSeparateNandCRules": "boolean",
-      "ClientCAMURIs[]": "unknown",
-      "ClientMessagePortNumber": "number",
-      "ClientPingCAMPassport": "number",
-      "DataBaseDirectory": "string",
-      "DisableSandboxing": "boolean",
-      "DistributedOutputDir": "string",
-      "ForceReevaluationOfFeedersForFedCellsOnDataChange": "boolean",
-      "HTTPPortNumber": "number",
-      "IntegratedSecurityMode": "boolean",
-      "JobQueuing": "boolean",
-      "PortNumber": "number",
-      "PrincipalName": "string",
+      "@odata.id?": "string",
+      "AdminHost?": "string",
+      "AllowSeparateNandCRules?": "boolean",
+      "ClientCAMURIs[]?": "unknown",
+      "ClientMessagePortNumber?": "number",
+      "ClientPingCAMPassport?": "number",
+      "DataBaseDirectory?": "string",
+      "DisableSandboxing?": "boolean",
+      "DistributedOutputDir?": "string",
+      "ForceReevaluationOfFeedersForFedCellsOnDataChange?": "boolean",
+      "HTTPPortNumber?": "number",
+      "IntegratedSecurityMode?": "boolean",
+      "JobQueuing?": "boolean",
+      "PortNumber?": "number",
+      "PrincipalName?": "string",
       "ProductVersion": "string",
-      "SecurityMode": "string",
-      "SecurityPackageName": "string",
-      "ServerCAMURI": "string",
-      "ServerName": "string",
-      "UnicodeUpperLowerCase": "boolean",
-      "WebCAMURI": "string"
+      "SecurityMode?": "string",
+      "SecurityPackageName?": "string",
+      "ServerCAMURI?": "string",
+      "ServerName?": "string",
+      "UnicodeUpperLowerCase?": "boolean",
+      "WebCAMURI?": "string"
     },
     "GET /api/v1/Configuration/ProductVersion": {
       "@odata.context": "string",
@@ -426,6 +454,9 @@
       "@odata.context": "string",
       "@odata.etag": "string",
       "@odata.type": "string",
+      "Attributes?": {
+        "Caption": "string"
+      },
       "MDX?": "string",
       "Name": "string"
     },
@@ -515,18 +546,25 @@
       "@odata.count?": "number",
       "value[]": {
         "@odata.etag": "string",
-        "AllLeavesHierarchyName": "string",
-        "Attributes": {
+        "AllLeavesHierarchyName?": "string",
+        "Attributes?": {
           "Caption": "string"
         },
-        "Hierarchies[]": {
+        "Hierarchies[]?": {
           "@odata.etag": "string",
           "Elements[]?": "unknown",
           "Elements@odata.count?": "number",
           "Name": "string"
         },
         "Name": "string",
-        "UniqueName": "string"
+        "UniqueName?": "string"
+      }
+    },
+    "GET /api/v1/Dimensions('*')/Hierarchies": {
+      "@odata.context": "string",
+      "value[]": {
+        "@odata.etag": "string",
+        "Name": "string"
       }
     },
     "GET /api/v1/Dimensions('*')/Hierarchies('*')": {
@@ -568,11 +606,19 @@
       "Level@odata.navigationLink": "string",
       "Name": "string"
     },
+    "GET /api/v1/Dimensions('*')/Hierarchies('*')/Edges": {
+      "@odata.context": "string",
+      "value[]": {
+        "ComponentName": "string",
+        "ParentName": "string",
+        "Weight": "number"
+      }
+    },
     "GET /api/v1/Dimensions('*')/Hierarchies('*')/ElementAttributes": {
       "@odata.context": "string",
       "value[]": {
         "Name": "string",
-        "Type": "string"
+        "Type?": "string"
       }
     },
     "GET /api/v1/Dimensions('*')/Hierarchies('*')/Elements": {
@@ -581,6 +627,7 @@
       "value[]": {
         "@odata.etag": "string",
         "@odata.id?": "string",
+        "Components[]?": "unknown",
         "Edges[]?": {
           "@odata.id": "string",
           "ComponentName": "string",
@@ -588,6 +635,7 @@
         },
         "Level?": "number",
         "Name?": "string",
+        "Parents[]?": "unknown",
         "Type?": "string"
       }
     },
@@ -595,6 +643,11 @@
       "@odata.context": "string",
       "@odata.etag": "string",
       "@odata.id?": "string",
+      "Attributes?": {
+        "Caption": "string",
+        "SortOrder?": "number",
+        "Weight?": "number"
+      },
       "Components[]?": {
         "@odata.etag": "string",
         "Components[]": {
@@ -608,6 +661,7 @@
         "Name": "string",
         "Type": "string"
       },
+      "Index?": "number",
       "Level?": "number",
       "Name?": "string",
       "Parents[]?": {
@@ -621,13 +675,26 @@
           "Parents[]": "unknown"
         }
       },
-      "Type?": "string"
+      "Type?": "string",
+      "UniqueName?": "string"
     },
     "GET /api/v1/Dimensions('*')/Hierarchies('*')/Elements('*') !404": {
       "error": {
         "code": "string",
         "message": "string"
       }
+    },
+    "GET /api/v1/Dimensions('*')/Hierarchies('*')/Elements('*')/Components": {
+      "@odata.context": "string",
+      "value[]": {
+        "@odata.etag": "string",
+        "Name": "string"
+      }
+    },
+    "GET /api/v1/Dimensions('*')/Hierarchies('*')/Elements('ZZ_MCP_LIVE_DIM_A_X''Y')": {
+      "@odata.context": "string",
+      "@odata.etag": "string",
+      "Name": "string"
     },
     "GET /api/v1/Dimensions('*')/Hierarchies('*')/PrivateSubsets": {
       "@odata.context": "string",
@@ -636,7 +703,7 @@
     "GET /api/v1/Dimensions('*')/Hierarchies('*')/PrivateSubsets('*')": {
       "@odata.context": "string",
       "@odata.etag": "string",
-      "Alias": "string",
+      "Alias?": "string",
       "Elements[]": {
         "@odata.etag": "string",
         "Name": "string"
@@ -654,15 +721,15 @@
       "@odata.context": "string",
       "value[]": {
         "@odata.etag": "string",
-        "Alias": "string",
-        "Expression": "null",
+        "Alias?": "string",
+        "Expression?": "null",
         "Name": "string"
       }
     },
     "GET /api/v1/Dimensions('*')/Hierarchies('*')/Subsets('*')": {
       "@odata.context": "string",
       "@odata.etag": "string",
-      "Alias": "string",
+      "Alias?": "string",
       "Elements[]": {
         "@odata.etag": "string",
         "Name": "string"
@@ -686,9 +753,16 @@
       "@odata.context": "string",
       "value[]": {
         "Name": "string",
-        "Users[]": {
+        "Users[]?": {
           "Name": "string"
         }
+      }
+    },
+    "GET /api/v1/Groups('*')": {
+      "@odata.context": "string",
+      "Name": "string",
+      "Users[]": {
+        "Name": "string"
       }
     },
     "GET /api/v1/MessageLogEntries": {
@@ -820,10 +894,10 @@
     "GET /api/v1/Sessions": {
       "@odata.context": "string",
       "value[]": {
-        "Active": "boolean",
-        "Context": "string",
+        "Active?": "boolean",
+        "Context?": "string",
         "ID": "number",
-        "Threads[]": {
+        "Threads[]?": {
           "Context": "string",
           "ElapsedTime": "string",
           "Function": "string",
@@ -845,37 +919,48 @@
     "GET /api/v1/Threads": {
       "@odata.context": "string",
       "value[]": {
-        "Context": "string",
+        "Context?": "string",
         "ElapsedTime": "string",
         "Function": "string",
         "ID": "number",
+        "Info?": "string",
+        "IXLocks?": "number",
         "Name": "string",
         "ObjectName": "string",
+        "ObjectType?": "string",
+        "RLocks?": "number",
         "State": "string",
-        "Type": "string"
+        "Type": "string",
+        "WaitTime?": "string",
+        "WLocks?": "number"
       }
+    },
+    "GET /api/v1/TransactionLogEntries": {
+      "@odata.context": "string",
+      "@odata.count": "number",
+      "value[]": "unknown"
     },
     "GET /api/v1/Users": {
       "@odata.context": "string",
       "value[]": {
-        "Enabled": "boolean",
-        "FriendlyName": "string",
-        "Groups[]": {
+        "Enabled?": "boolean",
+        "FriendlyName?": "string",
+        "Groups[]?": {
           "Name": "string"
         },
         "Name": "string",
-        "Type": "string"
+        "Type?": "string"
       }
     },
     "GET /api/v1/Users('*')": {
       "@odata.context": "string",
-      "Enabled": "boolean",
-      "FriendlyName": "string",
-      "Groups[]": {
+      "Enabled?": "boolean",
+      "FriendlyName?": "string",
+      "Groups[]?": {
         "Name": "string"
       },
       "Name": "string",
-      "Type": "string"
+      "Type?": "string"
     },
     "PATCH /api/v1/Chores('*')": {
       "@odata.context": "string",
@@ -920,16 +1005,6 @@
       "Type": "string",
       "UniqueName": "string"
     },
-    "PATCH /api/v1/Dimensions('*')/Hierarchies('*')/PrivateSubsets('*')": {
-      "@odata.context": "string",
-      "@odata.etag": "string",
-      "Attributes": {
-        "Caption": "string"
-      },
-      "Expression": "null",
-      "Name": "string",
-      "UniqueName": "string"
-    },
     "PATCH /api/v1/Dimensions('*')/Hierarchies('*')/Subsets('*')": {
       "@odata.context": "string",
       "@odata.etag": "string",
@@ -939,12 +1014,6 @@
       "Expression": "null|string",
       "Name": "string",
       "UniqueName": "string"
-    },
-    "PATCH /api/v1/Dimensions('*')/Hierarchies('*')/Subsets('*') !404": {
-      "error": {
-        "code": "string",
-        "message": "string"
-      }
     },
     "PATCH /api/v1/Processes('*')": {
       "@odata.context": "string",
@@ -991,15 +1060,6 @@
         "code": "string",
         "message": "string"
       }
-    },
-    "PATCH /api/v1/Users('*')": {
-      "@odata.context": "string",
-      "Enabled": "boolean",
-      "FriendlyName": "string",
-      "IsActive": "boolean",
-      "Name": "string",
-      "Password": "null",
-      "Type": "string"
     },
     "POST /api/v1/$batch": {
       "responses[]": {
@@ -1186,18 +1246,6 @@
       "Type": "string",
       "UniqueName": "string"
     },
-    "POST /api/v1/Dimensions('*')/Hierarchies('*')/Elements('*')/Components": {
-      "@odata.context": "string",
-      "@odata.etag": "string",
-      "Attributes": {
-        "Caption": "string"
-      },
-      "Index": "number",
-      "Level": "number",
-      "Name": "string",
-      "Type": "string",
-      "UniqueName": "string"
-    },
     "POST /api/v1/Dimensions('*')/Hierarchies('*')/PrivateSubsets": {
       "@odata.context": "string",
       "@odata.etag": "string",
@@ -1310,15 +1358,6 @@
         "code": "string",
         "message": "string"
       }
-    },
-    "POST /api/v1/Users": {
-      "@odata.context": "string",
-      "Enabled": "boolean",
-      "FriendlyName": "string",
-      "IsActive": "boolean",
-      "Name": "string",
-      "Password": "null",
-      "Type": "string"
     }
   }
 }
