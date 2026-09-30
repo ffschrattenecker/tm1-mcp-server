@@ -1,17 +1,18 @@
 // Live coverage for the remaining TI-development + ops tools not exercised
 // by the other live suites: .pro export/import/diff/bundle roundtrip, bulk
 // code dump, grouped listing, v12 readiness scan, error-log content fetch,
-// and thread cancel. Everything mutating stays under the SANDBOX prefix and
+// and thread cancel through tm1_rest_write. Everything mutating stays under the SANDBOX prefix and
 // is torn down in afterAll; read-only tools assert shape only.
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
   SANDBOX,
-  skipUnlessRegistered,
+  seg,
   type LiveHarness,
 } from "./harness.js";
 
@@ -43,10 +44,7 @@ describe.skipIf(!LIVE_ENABLED)(
       process.env.TM1_LOCAL_FILE_ROOT = os.tmpdir();
       // Idempotent pre-clean.
       for (const name of [PROC_SRC, PROC_IMPORT]) {
-        await h.call("tm1_delete_process", {
-          processName: name,
-          confirm: name,
-        });
+        await dropIfExists(h, seg("Processes", name));
       }
       await h.ok("tm1_upsert_process", {
         processName: PROC_SRC,
@@ -66,10 +64,7 @@ describe.skipIf(!LIVE_ENABLED)(
     afterAll(async () => {
       for (const name of [PROC_SRC, PROC_IMPORT]) {
         try {
-          await h.call("tm1_delete_process", {
-            processName: name,
-            confirm: name,
-          });
+          await dropIfExists(h, seg("Processes", name));
         } catch {
           /* idempotent teardown */
         }
@@ -183,10 +178,14 @@ describe.skipIf(!LIVE_ENABLED)(
       }
     });
 
-    it("cancel_thread on a non-existent id returns a result without throwing", async (ctx) => {
-      skipUnlessRegistered(ctx, h, "tm1_cancel_thread");
+    it("cancelling a non-existent thread returns a result without throwing", async (ctx) => {
+      if (h.client.version === 12) ctx.skip("v12 has Jobs, not Threads");
       // Never targets a real thread; 999999999 is effectively unassignable.
-      const r = await h.call("tm1_cancel_thread", { id: 999999999 });
+      const r = await h.call("tm1_rest_write", {
+        method: "POST",
+        path: "Threads(999999999)/tm1.CancelOperation",
+        confirm: "999999999",
+      });
       expect(typeof r.isError).toBe("boolean");
     });
   },

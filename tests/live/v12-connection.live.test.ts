@@ -48,15 +48,22 @@ describe.skipIf(!isV12)("v12 S2S live connection", () => {
     const client = new TM1Client(config, sessionManager, logger);
     try {
       await client.connect();
-      const jobs = await client.monitoring.getJobs();
+      // What tm1_rest_read / tm1_rest_write send for "Jobs" and a job cancel.
+      const res = await client.rest.get("Jobs");
+      expect(res.kind).toBe("json");
+      const jobs =
+        (res as { json: { value?: Array<Record<string, unknown>> } }).json
+          .value ?? [];
       expect(Array.isArray(jobs)).toBe(true);
       // An idle server has no jobs; if any exist, they must be shape-valid.
       for (const j of jobs) {
-        expect(typeof j.id).toBe("string");
-        expect(typeof j.state).toBe("string");
+        expect(["string", "number"]).toContain(typeof j.ID);
       }
       await expect(
-        client.monitoring.cancelJob("definitely-not-a-real-job-id"),
+        client.rest.send(
+          "POST",
+          "Jobs('definitely-not-a-real-job-id')/tm1.Cancel",
+        ),
       ).rejects.toBeDefined();
     } finally {
       await client.disconnect();

@@ -6,9 +6,14 @@
 // assignment so compile + execute are guaranteed safe.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
+  names,
+  restGet,
+  restWrite,
   SANDBOX,
+  seg,
   type LiveHarness,
 } from "./harness.js";
 
@@ -28,26 +33,37 @@ const PROLOG_A = [
   "sMsg = 'mcp-live-' | NumberToString( nBar );",
 ].join("\r\n");
 
+/** Delete a sandbox process through tm1_rest_write; a missing one is fine. */
+async function dropProcess(h: LiveHarness, name: string): Promise<void> {
+  try {
+    await dropIfExists(h, seg("Processes", name));
+  } catch {
+    /* idempotent teardown */
+  }
+}
+
+/** TM1's compile errors for a process (empty when it compiles cleanly). */
+async function compileErrors(h: LiveHarness, name: string): Promise<unknown[]> {
+  const out = await restGet<unknown[] | undefined>(
+    h,
+    `${seg("Processes", name)}/tm1.Compile`,
+  );
+  return out ?? [];
+}
+
 describe.skipIf(!LIVE_ENABLED)("live: process (TI development)", () => {
   let h: LiveHarness;
   beforeAll(async () => {
     h = await getHarness();
     // Clean any leftovers from a previous interrupted run (idempotent).
     for (const name of [PROC_A, PROC_B, PROC_BAD, PROC_GIT_SRC, PROC_GIT_DST]) {
-      await h.call("tm1_delete_process", { processName: name, confirm: name });
+      await dropProcess(h, name);
     }
   });
 
   afterAll(async () => {
     for (const name of [PROC_A, PROC_B, PROC_BAD, PROC_GIT_SRC, PROC_GIT_DST]) {
-      try {
-        await h.call("tm1_delete_process", {
-          processName: name,
-          confirm: name,
-        });
-      } catch {
-        /* idempotent teardown — ignore missing */
-      }
+      await dropProcess(h, name);
     }
   });
 
@@ -80,13 +96,8 @@ describe.skipIf(!LIVE_ENABLED)("live: process (TI development)", () => {
     expect(r.json.appliedSteps).toContain("updateProcessParameters");
   });
 
-  it("compile_process reports success for PROC_A", async () => {
-    const r = await h.ok("tm1_compile_process", { processName: PROC_A });
-    expect(r.json).toMatchObject({
-      ok: true,
-      processName: PROC_A,
-      errorCount: 0,
-    });
+  it("tm1.Compile through tm1_rest_read reports no errors for PROC_A", async () => {
+    expect(await compileErrors(h, PROC_A)).toEqual([]);
   });
 
   it("get_process returns the four tabs and the prolog back", async () => {
@@ -200,12 +211,7 @@ describe.skipIf(!LIVE_ENABLED)("live: process (TI development)", () => {
       // Broken on purpose — the install preflight would refuse it.
       preflight: false,
     });
-    const compiled = await h.call("tm1_compile_process", {
-      processName: PROC_BAD,
-    });
-    expect(compiled.isError).toBe(true);
-    expect(compiled.json).toMatchObject({ ok: false });
-    expect(compiled.json.errorCount).toBeGreaterThan(0);
+    expect((await compileErrors(h, PROC_BAD)).length).toBeGreaterThan(0);
 
     // diagnose accepts a process name and returns a structured envelope
     // regardless of whether a runtime error log exists.
@@ -227,12 +233,15 @@ describe.skipIf(!LIVE_ENABLED)("live: process (TI development)", () => {
     expect(r.json?.code).toBeTruthy();
   });
 
-  it("delete_process removes PROC_B (confirm gate)", async () => {
-    const r = await h.ok("tm1_delete_process", {
-      processName: PROC_B,
-      confirm: PROC_B,
+  it("tm1_rest_write DELETE removes PROC_B (confirm gate)", async () => {
+    const refused = await h.call("tm1_rest_write", {
+      method: "DELETE",
+      path: seg("Processes", PROC_B),
+      confirm: "wrong",
     });
-    expect(r.json ?? r.text).toBeTruthy();
+    expect(refused.isError).toBe(true);
+    expect(await names(h, "Processes", PROC_B)).toContain(PROC_B);
+    await restWrite(h, "DELETE", seg("Processes", PROC_B));
     // Gone now: get_process should error.
     const gone = await h.call("tm1_get_process", { processName: PROC_B });
     expect(gone.isError).toBe(true);
@@ -277,14 +286,7 @@ describe.skipIf(!LIVE_ENABLED)("live: process (TI development)", () => {
       expect(exp2.json.hasSecurityAccess).toBe(true);
     } finally {
       for (const name of [PROC_GIT_SRC, PROC_GIT_DST]) {
-        try {
-          await h.call("tm1_delete_process", {
-            processName: name,
-            confirm: name,
-          });
-        } catch {
-          /* idempotent teardown — ignore missing */
-        }
+        await dropProcess(h, name);
       }
     }
   });
@@ -305,14 +307,7 @@ describe.skipIf(!LIVE_ENABLED)("HasSecurityAccess read paths (live)", () => {
   });
 
   afterAll(async () => {
-    try {
-      await h.call("tm1_delete_process", {
-        processName: PROC_SEC,
-        confirm: PROC_SEC,
-      });
-    } catch {
-      /* idempotent teardown — ignore missing */
-    }
+    await dropProcess(h, PROC_SEC);
   });
 
   it("getAllCode(false) returns hasSecurityAccess as a boolean on every row", async () => {
@@ -336,15 +331,11 @@ describe.skipIf(!LIVE_ENABLED)("native #region blob round-trip (live)", () => {
   beforeAll(async () => {
     h = await getHarness();
     // Clean any leftover from a previous interrupted run (idempotent).
-    await h.client.processes.delete(PROC_GIT_NATIVE).catch(() => {
-      /* idempotent — ignore missing */
-    });
+    await dropProcess(h, PROC_GIT_NATIVE);
   });
 
   afterAll(async () => {
-    await h.client.processes.delete(PROC_GIT_NATIVE).catch(() => {
-      /* idempotent teardown — ignore missing */
-    });
+    await dropProcess(h, PROC_GIT_NATIVE);
   });
 
   it("process code round-trips via the native #region blob (getCodeBlob/updateCodeBlob), empty tab cleared", async () => {
@@ -374,9 +365,7 @@ describe.skipIf(!LIVE_ENABLED)("native #region blob round-trip (live)", () => {
       expect(code.epilog).toContain("sE='e';");
       expect(code.metadata).toBe("");
     } finally {
-      await h.client.processes.delete(PROC_GIT_NATIVE).catch(() => {
-        /* idempotent teardown — ignore missing */
-      });
+      await dropProcess(h, PROC_GIT_NATIVE);
     }
   });
 });
@@ -396,20 +385,13 @@ describe.skipIf(!LIVE_ENABLED)("live: process data sources", () => {
   beforeAll(async () => {
     h = await getHarness();
     for (const name of [PROC_DS_ASCII, PROC_DS_ODBC]) {
-      await h.call("tm1_delete_process", { processName: name, confirm: name });
+      await dropProcess(h, name);
     }
   });
 
   afterAll(async () => {
     for (const name of [PROC_DS_ASCII, PROC_DS_ODBC]) {
-      try {
-        await h.call("tm1_delete_process", {
-          processName: name,
-          confirm: name,
-        });
-      } catch {
-        /* idempotent teardown — ignore missing */
-      }
+      await dropProcess(h, name);
     }
   });
 

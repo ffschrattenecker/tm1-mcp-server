@@ -9,9 +9,11 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
   SANDBOX,
+  seg,
   type LiveHarness,
 } from "./harness.js";
 
@@ -24,10 +26,7 @@ describe.skipIf(!LIVE_ENABLED)("live: process backup before overwrite", () => {
   const cleanup = async () => {
     for (const name of [WITH_PARAM, BARE]) {
       try {
-        await h.call("tm1_delete_process", {
-          processName: name,
-          confirm: name,
-        });
+        await dropIfExists(h, seg("Processes", name));
       } catch {
         /* already gone */
       }
