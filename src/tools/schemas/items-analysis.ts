@@ -2,7 +2,6 @@
 // feeder/calc tracing, code/rule search, audits, v12-readiness and the
 // callgraph-cache invalidation result.
 import { z } from "zod";
-export { FedCellDescriptorSchema } from "../../schemas/cells.js";
 import { FedCellDescriptorSchema } from "../../schemas/cells.js";
 
 import { CellValueSchema } from "./items-common.js";

@@ -1,11 +1,6 @@
 // Process/TI-domain schemas: parameters, variables, code tabs, datasource,
 // get/execute/diff/upsert/copy results plus .pro & git import/export shapes.
 import { z } from "zod";
-export {
-  IgnoredColumnSchema,
-  ProcessParameterSchema,
-  ProcessVariableSchema,
-} from "../../schemas/processes.js";
 import {
   DataSourceSchema as DataSourceBase,
   IgnoredColumnSchema,

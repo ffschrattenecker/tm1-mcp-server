@@ -3,7 +3,6 @@
 import { z } from "zod";
 
 import { CellValueSchema } from "./items-common.js";
-export { MdxAxisSchema } from "../../schemas/cells.js";
 import { MdxAxisSchema } from "../../schemas/cells.js";
 
 // tm1_get_view returns the same page-envelope shape as tm1_execute_mdx
