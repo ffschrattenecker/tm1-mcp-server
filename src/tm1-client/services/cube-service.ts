@@ -383,7 +383,7 @@ export class CubeService {
             timedOut = true;
             throw new TM1Error({
               code: TM1ErrorCode.LOCK_TIMEOUT,
-              message: `Cube clear for '${cubeName}' did not answer within the request timeout, but the clear keeps running on the server — expect the cube to end up empty. Do not retry; check it with tm1_get_cube_stats once the server is idle. The temporary process '${procName}' was left in place so the clear can finish; delete it afterwards with tm1_delete_process.`,
+              message: `Cube clear for '${cubeName}' did not answer within the request timeout, but the clear keeps running on the server — expect the cube to end up empty. Do not retry; check it with tm1_get_cube_stats once the server is idle. The temporary process '${procName}' was left in place so the clear can finish; delete it afterwards with tm1_rest_write DELETE Processes('${procName}').`,
               endpoint: err.endpoint,
               hint: "Pass a larger timeoutMs for big cubes or a busy server so the call waits for the clear to finish.",
             });

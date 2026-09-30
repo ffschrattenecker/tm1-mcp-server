@@ -28,7 +28,7 @@ import type { ServerSettings } from "./config.js";
 // Cap on a single /mcp request body. Without one the whole request is buffered
 // and then copied again by Buffer.concat().toString(), so a large enough POST
 // can take the process down before any tool-level limit applies. Sized above
-// the biggest legitimate payload: tm1_upload_file accepts 32 MB of bytes, which
+// the biggest legitimate payload: tm1_files_write accepts 32 MB of bytes, which
 // is ~43 MB base64 plus JSON framing.
 // ponytail: fixed constant, make it configurable if a deployment needs more.
 const MAX_BODY_BYTES = 64 * 1024 * 1024;

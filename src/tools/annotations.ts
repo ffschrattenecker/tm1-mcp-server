@@ -81,9 +81,7 @@ export const IDEMPOTENT_DESTRUCTIVE: ToolAnnotations = {
 //      execute_chore) — process runs and writes through to cubes; output is
 //      not recoverable by undoing the tool call.
 // Both surface to the client as a single destructiveHint=true so prompts
-// before invocation warn either way. tm1_invalidate_callgraph_cache was
-// previously here but is in fact recoverable (cache rebuilds on next read)
-// and is now classified IDEMPOTENT_WRITE.
+// before invocation warn either way.
 export const DESTRUCTIVE: ToolAnnotations = {
   readOnlyHint: false,
   destructiveHint: true,

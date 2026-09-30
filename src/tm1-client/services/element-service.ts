@@ -1124,7 +1124,7 @@ export class ElementService {
           code: TM1ErrorCode.NOT_FOUND,
           message:
             attrs.length === 0
-              ? `Dimension '${dimensionName}' has no attributes; create '${u.attributeName}' with tm1_create_element_attribute first.`
+              ? `Dimension '${dimensionName}' has no attributes; create '${u.attributeName}' first with tm1_rest_write POST Dimensions('${dimensionName}')/Hierarchies('${dimensionName}')/ElementAttributes.`
               : `Attribute '${u.attributeName}' does not exist on dimension '${dimensionName}'. Existing: ${attrs.map((a) => a.name).join(", ")}.`,
         });
       }

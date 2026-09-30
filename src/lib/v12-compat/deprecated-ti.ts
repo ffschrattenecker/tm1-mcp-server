@@ -160,7 +160,7 @@ export const V12_DEPRECATED_TI: ReadonlyMap<string, DeprecatedTiEntry> =
         severity: "error",
         issue: "Cube unload via TI removed in v12",
         suggestion:
-          "Use tm1_unload_cube via REST or remove without replacement",
+          "Remove without replacement: v12 has no demand load, so cubes cannot be unloaded",
       },
       {
         name: "DisableBulkLoadMode",

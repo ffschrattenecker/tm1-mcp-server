@@ -258,7 +258,7 @@ export class DimensionService {
 
   /**
    * Resolve a hierarchy's effective default member via a tiered cascade.
-   * Designed for view/slicer construction where iterating tm1_get_hierarchy
+   * Designed for view/slicer construction where reading each hierarchy separately
    * across levels costs 3-8 round-trips per dimension.
    *
    * Tier 1: DefaultMember attribute (high confidence — explicitly maintained).

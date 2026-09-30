@@ -76,7 +76,7 @@ export const registerGetServerState = defineTool({
       if (counts.cubes.count === 0) {
         securityWarnings.push(
           `0 cubes visible despite ${dimCount} dimensions — TM1 security is likely filtering cubes (user lacks READ rights). ` +
-            `Use tm1_list_cubes(includeControl: true) to verify, or check group membership with tm1_list_groups.`,
+            `Verify with tm1_rest_read Cubes?$select=Name, or check group membership with tm1_rest_read ActiveUser/Groups?$select=Name.`,
         );
       }
       if (counts.processes.count === 0) {

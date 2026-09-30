@@ -99,7 +99,7 @@ const generationOf = (connectionId: string): string =>
 
 /**
  * Drop cached indexes for one connection, or for all of them when
- * `connectionId` is omitted (the explicit tm1_invalidate_callgraph_cache tool).
+ * `connectionId` is omitted.
  */
 export function invalidateCallgraphCache(connectionId?: string): {
   cleared: number;

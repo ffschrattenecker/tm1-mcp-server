@@ -102,8 +102,8 @@ function registerConnectionResources(
     async (uri) => {
       // Project to the documented identity fields only. getInfo().extra
       // carries the full merged /Configuration body, which can include
-      // sensitive settings — resources have no params, so unlike the
-      // curated tm1_get_server_info tool there is no place to opt in.
+      // sensitive settings — resources have no params, so unlike a
+      // tool call there is no place to opt in.
       const info = await (await ctx.client()).server.getInfo();
       return asJsonContent(uri, {
         serverName: info.serverName,

@@ -9,7 +9,7 @@ export const registerCheckFeeders = defineTool({
   description: [
     "Check the feeders of a cell: verifies feeder coverage for the cells underlying this cell and returns the problematic ones with a fed flag — fed=false marks a broken or missing feeder (the classic cause of empty consolidated/rule cells). An empty result means no feeder problems were detected (live-verified on 11.8: fully-fed areas return []).",
     "Per-cell runtime check; complements tm1_audit_feeders (static rule analysis).",
-    "Elements are given in cube dimension order (discover with tm1_list_cubes). Write Hierarchy:Element for an alternate hierarchy; the first colon splits, so in dimension Region 'Region:A:B' is element 'A:B' of the default one.",
+    "Elements are given in cube dimension order (read them with tm1_rest_read Cubes('C')/Dimensions?$select=Name). Write Hierarchy:Element for an alternate hierarchy; the first colon splits, so in dimension Region 'Region:A:B' is element 'A:B' of the default one.",
     "Related: tm1_trace_feeders (statements involved), tm1_trace_cell_calculation (why has this cell value X).",
   ],
   annotations: READ_ONLY,
@@ -37,7 +37,7 @@ export const registerCheckFeeders = defineTool({
         signal: extra?.signal,
         ...(timeoutMs ? { timeoutMs } : {}),
       }),
-      `CheckFeeders failed for cube '${cubeName}'. Verify dimension order/elements via tm1_list_cubes.`,
+      `CheckFeeders failed for cube '${cubeName}'. Verify dimension order/elements via tm1_rest_read Cubes('${cubeName}')/Dimensions?$select=Name.`,
     );
     return {
       content: [

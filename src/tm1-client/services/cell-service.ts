@@ -128,7 +128,7 @@ export class CellService {
       // coordinate that does not exist. Both versions now fail the same way.
       throw new TM1Error({
         code: TM1ErrorCode.NOT_FOUND,
-        message: `No cell resolved for cube '${cubeName}' at (${elements.join(", ")}). At least one element name does not exist in its dimension — check spelling and case with tm1_get_descendants or tm1_list_element_attributes.`,
+        message: `No cell resolved for cube '${cubeName}' at (${elements.join(", ")}). At least one element name does not exist in its dimension — check spelling and case with tm1_rest_read Dimensions('D')/Hierarchies('D')/Elements?$select=Name.`,
         endpoint: "/api/v1/ExecuteMDX",
       });
     } finally {
@@ -357,7 +357,7 @@ export class CellService {
     elements: string[],
   ): Promise<string[]> {
     const dims = await this.dimOrder.get(cubeName);
-    // Sandboxes left out → Base, as tm1_get_cell_value does.
+    // Sandboxes left out → Base, as tm1_write_cells does.
     elements = bindLeftOutSandbox(dims, elements) ?? elements;
     if (elements.length !== dims.length) {
       throw new TM1Error({

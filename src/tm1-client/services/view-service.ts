@@ -34,7 +34,7 @@ export class ViewService {
     // rethrow/swallow behaviour, and the results are concatenated in the
     // original order (public first), so callers see no change but the wait.
     //
-    // MDX stays in the $select: tm1_list_views advertises it as part of the
+    // MDX stays in the $select: callers read it from the
     // response, so dropping it to save bytes would be a breaking output change,
     // not an optimisation.
     const fetchScope = async (

@@ -75,7 +75,7 @@ export function hintForCode(code: TM1ErrorCode | string): string {
     case TM1ErrorCode.AUTH_FAILED:
       return "TM1 rejected the credentials. Fix TM1_USER and the password: in the connection's .env, or in the OS keychain (`npx -y @ffschrattenecker/tm1-mcp-server secrets set <connection>`) when it sets TM1_SECRETS=keychain. A rejected login is not retried, so restart the MCP server afterwards.";
     case TM1ErrorCode.PERMISSION_DENIED:
-      return "Caller lacks rights for this object/operation. Inspect membership via tm1_list_groups and assign with tm1_assign_client_group.";
+      return "Caller lacks rights for this object/operation. Inspect membership with tm1_rest_read ActiveUser/Groups?$select=Name; assign with tm1_rest_write POST Users('<user>')/Groups/$ref.";
     case TM1ErrorCode.NOT_FOUND:
       return "Object does not exist. Use the matching list_* or get_* tool to enumerate available names before retrying.";
     case TM1ErrorCode.CONFLICT:
@@ -83,11 +83,11 @@ export function hintForCode(code: TM1ErrorCode | string): string {
     case TM1ErrorCode.VALIDATION_ERROR:
       return "Input failed validation. Inspect the `details` field for the offending value and correct it.";
     case TM1ErrorCode.UNSUPPORTED_OPERATION:
-      return "TM1 server version may not support this. Call tm1_get_server_info to check the version.";
+      return "TM1 server version may not support this. Call tm1_get_server_state to check the version.";
     case TM1ErrorCode.CONNECTION_FAILED:
       return "TM1 server unreachable. Verify TM1_BASE_URL/TM1_HOST/TM1_PORT and that the service is running.";
     case TM1ErrorCode.LOCK_TIMEOUT:
-      return "Request timed out — TM1 server may be waiting on an exclusive lock held by another session. Use tm1_list_threads to diagnose. Retry after the blocking operation completes.";
+      return "Request timed out — TM1 server may be waiting on an exclusive lock held by another session. Read Threads (v11) or Jobs (v12) with tm1_rest_read to diagnose. Retry after the blocking operation completes.";
     case TM1ErrorCode.RESPONSE_TOO_LARGE:
       return "The result exceeds the response limit (TM1_MAX_RESPONSE_CHARS). Re-issue a narrower call: page with offset/limit, filter, or use the tool's summary mode.";
     case TM1ErrorCode.TM1_ERROR:
@@ -447,7 +447,7 @@ export type ChoreResult =
  * Status text for a chore that ran on a server which cannot report back.
  */
 export const CHORE_STATUS_UNAVAILABLE =
-  "Unknown: this TM1 build has no tm1.ExecuteWithReturn on Chore (v11, and v12 before 12.5.0), so the chore was started and no status was returned. It may have completed, partially completed, or failed. Check the chore's steps with tm1_get_message_log (v11) or the target cubes before re-running.";
+  "Unknown: this TM1 build has no tm1.ExecuteWithReturn on Chore (v11, and v12 before 12.5.0), so the chore was started and no status was returned. It may have completed, partially completed, or failed. Check the chore's steps with tm1_rest_read MessageLogEntries (v11) or the target cubes before re-running.";
 
 /**
  * Status text used when a server that DOES support the action answers without

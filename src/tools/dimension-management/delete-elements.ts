@@ -11,7 +11,6 @@ export const registerDeleteElements = defineTool({
   description: [
     "Delete many elements from one TM1 dimension hierarchy in a single call ($batch where the server supports it).",
     "Not all-or-nothing: each element reports deleted or its error, and success is true only when every one was deleted. Irreversible — pass confirm=<dimension name verbatim>.",
-    "For one element tm1_delete_element works too.",
   ],
   annotations: DESTRUCTIVE,
   output: MutationResultSchema,

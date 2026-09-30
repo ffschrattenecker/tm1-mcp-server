@@ -134,7 +134,7 @@ export const registerImportProFile = defineTool({
     if (!exists) {
       await withToolHint(
         tm1Client.processes.create(processName),
-        `Process create failed mid-import. Name '${processName}' may already exist (mode=create would have caught — likely race) or contain invalid characters. tm1_list_processes to verify state before retry.`,
+        `Process create failed mid-import. Name '${processName}' may already exist (mode=create would have caught — likely race) or contain invalid characters. Verify state with tm1_rest_read Processes('${processName}')?$select=Name before retry.`,
       );
     }
 
@@ -145,7 +145,7 @@ export const registerImportProFile = defineTool({
         data: parsed.data,
         epilog: parsed.epilog,
       }),
-      `Code update failed after process '${processName}' was ${exists ? "located" : "created"}. PARTIAL APPLY: the process shell exists but tabs are stale/empty. Re-run tm1_import_pro_file with mode=update once root cause fixed, or tm1_delete_process to roll back.`,
+      `Code update failed after process '${processName}' was ${exists ? "located" : "created"}. PARTIAL APPLY: the process shell exists but tabs are stale/empty. Re-run tm1_import_pro_file with mode=update once root cause fixed, or tm1_rest_write DELETE Processes('${processName}') to roll back.`,
     );
 
     // The file is the whole truth: an empty list or a None source is sent as

@@ -177,7 +177,7 @@ export const registerImportProcessFromGit = defineTool({
     if (!exists) {
       await withToolHint(
         tm1Client.processes.create(processName),
-        `Process create failed mid-import. Name '${processName}' may already exist (race) or contain invalid characters. tm1_list_processes to verify state before retry.`,
+        `Process create failed mid-import. Name '${processName}' may already exist (race) or contain invalid characters. Verify state with tm1_rest_read Processes('${processName}')?$select=Name before retry.`,
       );
     }
 
@@ -192,7 +192,7 @@ export const registerImportProcessFromGit = defineTool({
         processName,
         ti.replace(/\r?\n/g, "\r\n"),
       ),
-      `Code update failed after process '${processName}' was ${exists ? "located" : "created"}. PARTIAL APPLY: shell exists but tabs are stale/empty. Re-run with mode=update once root cause fixed, or tm1_delete_process to roll back.`,
+      `Code update failed after process '${processName}' was ${exists ? "located" : "created"}. PARTIAL APPLY: shell exists but tabs are stale/empty. Re-run with mode=update once root cause fixed, or tm1_rest_write DELETE Processes('${processName}') to roll back.`,
     );
 
     // The file is the whole truth: an empty list or a None source is sent as

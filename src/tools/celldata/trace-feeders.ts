@@ -9,7 +9,7 @@ export const registerTraceFeeders = defineTool({
   description: [
     "Trace the feeders of a cell: returns the cells this cell feeds plus the feeder statements involved — answers 'which feeder statement fires from this cell, and where to'.",
     "Use when a rule cell stays empty under SKIPCHECK: trace the source cell to see whether its feeder reaches the target.",
-    "Elements are given in cube dimension order (discover with tm1_list_cubes). Write Hierarchy:Element for an alternate hierarchy; the first colon splits, so in dimension Region 'Region:A:B' is element 'A:B' of the default one.",
+    "Elements are given in cube dimension order (read them with tm1_rest_read Cubes('C')/Dimensions?$select=Name). Write Hierarchy:Element for an alternate hierarchy; the first colon splits, so in dimension Region 'Region:A:B' is element 'A:B' of the default one.",
     "Related: tm1_check_feeders (fed/unfed flags), tm1_audit_feeders (static analysis).",
   ],
   annotations: READ_ONLY,
@@ -37,7 +37,7 @@ export const registerTraceFeeders = defineTool({
         signal: extra?.signal,
         ...(timeoutMs ? { timeoutMs } : {}),
       }),
-      `TraceFeeders failed for cube '${cubeName}'. Verify dimension order/elements via tm1_list_cubes.`,
+      `TraceFeeders failed for cube '${cubeName}'. Verify dimension order/elements via tm1_rest_read Cubes('${cubeName}')/Dimensions?$select=Name.`,
     );
     return {
       content: [

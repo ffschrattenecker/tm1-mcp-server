@@ -140,7 +140,7 @@ export class FileService {
         message: `'${entry.name}' is a ${entry.kind}, which carries no file content`,
         hint:
           entry.kind === "Folder"
-            ? "List it instead — tm1_list_files with container='applications' and this path."
+            ? "List it instead — tm1_files_read op='list' with container='applications' and this path."
             : "Only documents hold bytes. A ViewReference points at a cube view; read it with tm1_get_view.",
         endpoint: url,
       });
@@ -365,7 +365,7 @@ export class FileService {
           hint:
             entry.kind === "Folder"
               ? "Deleting a folder would delete everything inside it, which this tool does not do. Delete the entries individually, or remove the folder in Architect/PAW."
-              : "Only documents can be deleted here. A ViewReference points at a cube view; remove it with tm1_delete_view.",
+              : "Only documents can be deleted here. A ViewReference points at a cube view; remove it with tm1_rest_write DELETE Cubes('C')/Views('V').",
           endpoint: url,
         });
       }

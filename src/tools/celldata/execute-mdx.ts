@@ -104,7 +104,7 @@ export const registerExecuteMdx = defineTool({
   description: [
     "Execute an MDX query against the TM1 server and return structured cell data with axes (page-envelope shape consistent with list_*).",
     "format='markdown' renders a pivot grid (2 axes; set fetchAll=true to get up to 5000 cells in one grid) or a flat coordinate table; 'json' (default) returns the structured envelope.",
-    "Related: tm1_create_mdx_view to persist a query as a public view, tm1_sample_cells for cheap sparsity probe, tm1_get_cell_value for a single coordinate.",
+    "Related: tm1_sample_cells for a cheap sparsity probe; save a query as a view with tm1_rest_write POST Cubes('C')/Views (MDXView).",
   ],
   annotations: READ_ONLY,
   output: MdxResultSchema,
@@ -138,7 +138,7 @@ export const registerExecuteMdx = defineTool({
         signal: extra?.signal,
         ...(timeoutMs ? { timeoutMs } : {}),
       }),
-      "MDX execution failed. Common causes: missing brackets around member names ([Dim].[Hier].[Member]), unbalanced FROM/SELECT, unknown cube. Inspect details; cross-check member names with tm1_get_hierarchy or tm1_list_cubes.",
+      "MDX execution failed. Common causes: missing brackets around member names ([Dim].[Hier].[Member]), unbalanced FROM/SELECT, unknown cube. Inspect details; cross-check member names with tm1_rest_read (Cubes('C')/Dimensions, Dimensions('D')/Hierarchies('D')/Elements).",
     );
 
     const total = result.totalCellCount;

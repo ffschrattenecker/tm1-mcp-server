@@ -101,7 +101,7 @@ export const registerBulkUpsertElements = defineTool({
     }
     const { typeChanges } = await withToolHint(
       tm1Client.elements.bulkUpsert(dimensionName, hier, elements),
-      "Bulk upsert failed. Common causes: Consolidated element references a child that is not in this batch and does not exist yet (list leafs first), dimension/hierarchy name mismatch (tm1_list_dimensions to verify), or attempt to change an element's type (delete + recreate instead).",
+      "Bulk upsert failed. Common causes: Consolidated element references a child that is not in this batch and does not exist yet (list leafs first), dimension/hierarchy name mismatch (verify with tm1_rest_read Dimensions('D')/Hierarchies?$select=Name), or attempt to change an element's type (delete + recreate instead).",
     );
     const counts = {
       N: elements.filter((e) => e.type === "Numeric").length,

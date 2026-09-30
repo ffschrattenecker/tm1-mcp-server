@@ -24,7 +24,7 @@ export const registerWriteCells = defineTool({
     "Leaf (N-level) coordinates only. Every coordinate is checked before anything is sent and a consolidated one aborts the whole call: writing to a C element is not how TM1 data is loaded, and whether the server would even accept it depends on the account's rights. Aggregate values come from the consolidation, not from a write.",
     "Name every cube dimension, in any order: a dimension left out would land on its default member, so the call is refused. Only Sandboxes may be left out; it is then bound to Base and reported as sandboxDefaulted. A named sandbox is addressable only once its IncludeInSandboxDimension is true.",
     "Before: tm1_check_writable_coords to validate that target coordinates are leaf-level and addressable.",
-    "The written cells are read back (up to 20; verified.mismatches lists any that differ, e.g. a rule or spread overriding the value), so no separate tm1_get_cell_value is needed.",
+    "The written cells are read back (up to 20; verified.mismatches lists any that differ, e.g. a rule or spread overriding the value), so no separate read is needed.",
     "Related: tm1_clear_cube for bulk wipe, tm1_execute_process for production data loads.",
   ],
   annotations: DESTRUCTIVE,

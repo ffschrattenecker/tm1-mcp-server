@@ -15,7 +15,7 @@ export const registerListProcessesGrouped = defineTool({
   name: "tm1_list_processes_grouped",
   description: [
     "Group TI processes by name prefix to give a structural overview without listing every process.",
-    "Returns groups sorted by count descending. Use tm1_list_processes(nameContains=...) to drill into a group.",
+    "Returns groups sorted by count descending. Drill into a group with tm1_rest_read Processes?$select=Name&$filter=startswith(Name,'<prefix>').",
     "prefixSegments controls how many '_'-delimited segments form the group key (default 1: '020_Parameter_...' → '020').",
     "Set includeNames=true to get the full process list per group for targeted follow-up.",
   ],
