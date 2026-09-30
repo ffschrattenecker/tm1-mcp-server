@@ -14,6 +14,9 @@ export interface TM1Config {
   ssl: {
     rejectUnauthorized: boolean;
   };
+  // Optional SOCKS5 proxy URL (`socks5://host:port`, optional user:pass@) that every
+  // TM1 request is tunnelled through. baseUrl then names the real TM1 host.
+  proxy?: string | undefined;
   keepAliveIntervalMs: number;
   requestTimeoutMs: number;
   logLevel: "debug" | "info" | "warn" | "error";
@@ -332,6 +335,22 @@ export function loadConfig(
     );
   }
 
+  const proxyRaw = env.TM1_PROXY?.trim();
+  if (proxyRaw) {
+    let proxyProtocol: string | undefined;
+    try {
+      proxyProtocol = new URL(proxyRaw).protocol;
+    } catch {
+      // falls through to the error below
+    }
+    if (proxyProtocol !== "socks5:" && proxyProtocol !== "socks5h:") {
+      throw new Error(
+        "TM1_PROXY must be a socks5:// or socks5h:// URL (e.g. socks5://proxy.example.com:1080); " +
+          "other proxy types are not supported.",
+      );
+    }
+  }
+
   const sslRaw = env.TM1_SSL_REJECT_UNAUTHORIZED;
   const rejectUnauthorized = sslRaw === undefined ? true : sslRaw !== "false";
 
@@ -461,6 +480,7 @@ export function loadConfig(
     namespace,
     camPassport,
     ssl: { rejectUnauthorized },
+    ...(proxyRaw ? { proxy: proxyRaw } : {}),
     keepAliveIntervalMs,
     requestTimeoutMs,
     tm1Version: effectiveTm1Version,

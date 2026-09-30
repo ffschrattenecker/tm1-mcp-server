@@ -22,6 +22,19 @@ describe("loadConfig", () => {
     process.env.TM1_PASSWORD = "secret";
   }
 
+  it("reads TM1_PROXY and rejects non-SOCKS5 schemes", () => {
+    setRequiredEnv();
+    expect(loadConfig().proxy).toBeUndefined();
+    process.env.TM1_PROXY = "socks5://proxy.example.com:1080";
+    expect(loadConfig().proxy).toBe("socks5://proxy.example.com:1080");
+    process.env.TM1_PROXY = "socks5h://proxy.example.com:1080";
+    expect(loadConfig().proxy).toBe("socks5h://proxy.example.com:1080");
+    process.env.TM1_PROXY = "http://proxy.example.com:8080";
+    expect(() => loadConfig()).toThrow(/TM1_PROXY must be a socks5/);
+    process.env.TM1_PROXY = "not a url";
+    expect(() => loadConfig()).toThrow(/TM1_PROXY must be a socks5/);
+  });
+
   it("should load config with all required env vars and defaults", () => {
     setRequiredEnv();
     const config = loadConfig();

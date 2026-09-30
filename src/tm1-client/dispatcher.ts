@@ -5,7 +5,11 @@
 // scope `rejectUnauthorized: false` to TM1 fetches only.
 //
 // The Agent is cached so connection-pooling stays effective across requests.
-import { Agent, fetch as undiciFetch } from "undici";
+import type { Socket } from "node:net";
+import { connect as tlsConnect } from "node:tls";
+import { Agent, Socks5ProxyAgent, fetch as undiciFetch, type buildConnector } from "undici";
+
+type connector = buildConnector.connector;
 import type { TM1Config } from "../config.js";
 
 //
@@ -15,18 +19,52 @@ import type { TM1Config } from "../config.js";
 // fetch paths. A TI process runs as long as it runs and TM1 has no timeout
 // for it, so the only limit is our own per-request AbortSignal (timeoutMs),
 // which http.ts maps to LOCK_TIMEOUT.
-const agents = new Map<boolean, Agent>();
+const agents = new Map<string, Agent>();
+
+// A proxied connection cannot use undici's Socks5ProxyAgent as the dispatcher:
+// the Pool it builds per origin ignores headersTimeout/bodyTimeout, so a long TI
+// run would die at the 300 s default. Instead a plain Agent (timeouts off) gets a
+// custom `connect` that opens the SOCKS5 tunnel through a Socks5ProxyAgent and, for
+// https targets, layers TLS on top. socks5h:// is accepted as an alias: undici
+// always hands the proxy the hostname and lets it resolve.
+function proxiedConnect(proxy: string, verify: boolean) {
+  const url = new URL(proxy);
+  if (url.protocol === "socks5h:") url.protocol = "socks5:";
+  // createSocks5Connection is a public method missing from undici's typings.
+  const socks = new Socks5ProxyAgent(url) as unknown as {
+    createSocks5Connection(host: string, port: number): Promise<Socket>;
+  };
+  return (
+    opts: { hostname: string; port: string; protocol: string },
+    callback: (err: Error | null, socket?: Socket) => void,
+  ) => {
+    const port = Number(opts.port) || (opts.protocol === "https:" ? 443 : 80);
+    socks.createSocks5Connection(opts.hostname, port).then((socket) => {
+      if (opts.protocol !== "https:") return callback(null, socket);
+      const tls = tlsConnect({
+        socket,
+        servername: opts.hostname,
+        rejectUnauthorized: verify,
+      });
+      tls.once("secureConnect", () => callback(null, tls));
+      tls.once("error", (err) => callback(err));
+    }, callback);
+  };
+}
 
 export function getTm1Dispatcher(config: TM1Config): Agent {
   const verify = config.ssl.rejectUnauthorized;
-  let agent = agents.get(verify);
+  const key = `${verify}|${config.proxy ?? ""}`;
+  let agent = agents.get(key);
   if (!agent) {
     agent = new Agent({
-      connect: { rejectUnauthorized: verify },
+      connect: config.proxy
+        ? (proxiedConnect(config.proxy, verify) as connector)
+        : { rejectUnauthorized: verify },
       headersTimeout: 0,
       bodyTimeout: 0,
     });
-    agents.set(verify, agent);
+    agents.set(key, agent);
   }
   return agent;
 }

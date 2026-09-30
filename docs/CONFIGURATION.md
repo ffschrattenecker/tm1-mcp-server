@@ -326,6 +326,12 @@ certificate`, `self-signed certificate`): TM1 dev servers often use self-signed
 certs. Set `TM1_SSL_REJECT_UNAUTHORIZED=false` for those — but only for dev,
 never against production.
 
+**TM1 only reachable through a SOCKS5 proxy:** set
+`TM1_PROXY=socks5://proxy.example.com:1080` (optionally `user:pass@` for proxies
+that require auth) and point `TM1_BASE_URL` at the TM1 host as the proxy sees it.
+Every TM1 request is tunnelled; no local bridge process is needed. SOCKS4 and HTTP
+proxies are rejected at startup.
+
 **`401` / authentication failed:** verify `TM1_USER` / `TM1_PASSWORD` and that
 `TM1_BASE_URL` points at the REST API port (e.g. `https://host:8010`). Some test
 servers allow a blank admin password — an empty `TM1_PASSWORD` is accepted and

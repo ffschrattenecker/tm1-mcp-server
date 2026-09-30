@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`TM1_PROXY`** routes all TM1 requests through a SOCKS5 proxy (`socks5://` or `socks5h://`),
+  so servers reachable only via a proxy no longer need a local forwarding bridge. `TM1_BASE_URL`
+  names the real target. The request timeouts stay switched off, and TLS verification still
+  follows `TM1_SSL_REJECT_UNAUTHORIZED`. Other schemes fail at startup.
+
 ## [9.0.0] - 2026-09-30
 
 ### Removed
