@@ -221,7 +221,7 @@ remote or multi-client setups, `TM1_MCP_TRANSPORT=http` switches to MCP
 Streamable HTTP (stateless, single `POST /mcp` endpoint). It is single-tenant:
 its optional bearer token authenticates the endpoint, not the caller. Setup,
 security notes and the `autoApprove` allowlist:
-[docs/HTTP-TRANSPORT.md](docs/HTTP-TRANSPORT.md).
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md#http-transport).
 
 ## Compatibility
 
@@ -272,8 +272,8 @@ The first connection usually fails on a self-signed dev certificate (set
 `TM1_SSL_REJECT_UNAUTHORIZED=false` — dev only) or a `401` from the wrong
 credentials, port or CAM namespace. Those, plus v11/v12 feature errors, slow
 transaction-log queries and startup validation errors, are in
-[docs/CONFIGURATION.md](docs/CONFIGURATION.md#troubleshooting); HTTP-transport
-specifics in [docs/HTTP-TRANSPORT.md](docs/HTTP-TRANSPORT.md#troubleshooting).
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md#troubleshooting), HTTP-transport
+specifics included.
 
 ## Development
 
@@ -294,8 +294,7 @@ how to add a tool or service.
 
 - [docs/TOOLS.md](docs/TOOLS.md) — every tool, grouped, with one-line descriptions
 - [docs/EXAMPLES.md](docs/EXAMPLES.md) — working JSON tool-call payloads for every major feature
-- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — CAM login, TM1 v12 connection, host-disk file access
-- [docs/HTTP-TRANSPORT.md](docs/HTTP-TRANSPORT.md) — Streamable HTTP setup, security, `autoApprove`
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — CAM login, TM1 v12 connection, host-disk file access, Streamable HTTP setup and `autoApprove`
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — layering, service-class pattern, transports, the readonly/readwrite gate
 - [CONTRIBUTING.md](CONTRIBUTING.md) — workflow, lint gates, coverage policy, how to add a tool
 - [CHANGELOG.md](CHANGELOG.md) · [SECURITY.md](SECURITY.md) · [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
