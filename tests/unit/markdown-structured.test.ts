@@ -198,10 +198,8 @@ describe("end-to-end over the SDK", () => {
 });
 
 describe("markdown-capable schema coverage", () => {
-  // WHICH tools are markdown-capable is policed against the source by
-  // scripts/check-markdown-schema-coverage.mjs (legacy registrations) and by
-  // defineTool itself (migrated ones derive it from `format` in the input).
-  // What neither can see is whether the resulting schema actually validates a
+  // WHICH tools are markdown-capable is derived by defineTool from `format`
+  // in the input schema. What it cannot see is whether the resulting schema actually validates a
   // markdown response — that needs the built Zod object, so it is checked here.
   const markdownCapableTools = [...allSpecs()]
     .filter(([, meta]) => strictVariants(meta.outputSchema as object))
