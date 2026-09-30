@@ -18,9 +18,7 @@
   "files": [
     "dist",
     "!dist/**/*.map",
-    "docs",
     "NOTICE",
-    "CHANGELOG.md",
     "npm-shrinkwrap.json"
   ],
   "prettier": {

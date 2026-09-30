@@ -77,8 +77,10 @@ tag publishes.
 - `npm-shrinkwrap.json` (not `package-lock.json`) — it is published and
   pins the whole dependency tree for consumers, so lockfile security fixes
   actually reach `npx` users. Keep it committed; `npm install` updates it.
-- `files: ["dist", "!dist/**/*.map"]` — only compiled output ships; source,
-  tests, and secrets never do. `smoke:tarball` asserts this held by listing the
+- `files: ["dist", "!dist/**/*.map", "NOTICE", "npm-shrinkwrap.json"]` — only
+  compiled output (no source maps or typings; this is a bin-only package) plus
+  the licence notice and the shrinkwrap ship; source, tests, docs, and secrets
+  never do. `smoke:tarball` asserts this held by listing the
   real tarball, since a broken `files` entry is how credentials reach npm.
 
 ## When a release branch IS worth it
