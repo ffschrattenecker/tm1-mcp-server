@@ -12,21 +12,6 @@ import { odataKey } from "./odata-page.js";
 export class SubsetService {
   constructor(private readonly http: TM1HttpClient) {}
 
-  private base(dimensionName: string, hierarchyName: string): string {
-    return `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')`;
-  }
-
-  private bind(
-    dimensionName: string,
-    hierarchyName: string,
-    elements: string[],
-  ): string[] {
-    return elements.map(
-      (e) =>
-        `Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Elements('${odataKey(e)}')`,
-    );
-  }
-
   /**
    * List public + private subsets of a hierarchy.
    * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Subsets|PrivateSubsets

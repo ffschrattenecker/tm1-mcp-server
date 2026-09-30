@@ -2,7 +2,6 @@
 // /api/v1/Dimensions('{d}')/Hierarchies(...) — get, create, delete, plus the
 // derived ancestors/descendants traversals that fetch a hierarchy and walk it
 // client-side. See docs/ARCHITECTURE.md for the layering.
-import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { compileUserRegex } from "../../lib/safe-regex.js";
 import type { Hierarchy, HierarchyElement } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
@@ -12,14 +11,6 @@ import {
   pageClauseList,
   readNestedCount,
 } from "./odata-page.js";
-
-interface NestedElement {
-  Name: string;
-  Type?: string;
-  Level: number;
-  Components?: NestedElement[];
-  Parents?: NestedElement[];
-}
 
 /**
  * A hierarchy plus the size of the element set the request selected, so
@@ -289,155 +280,6 @@ export class HierarchyService {
       }
       if (rows.length < pageSize) return out;
     }
-  }
-
-  private async getDescendantsFromFull(
-    dimensionName: string,
-    hierarchyName: string,
-    element: string,
-    opts?: { depth?: number; leavesOnly?: boolean },
-  ): Promise<{
-    element: string;
-    descendants: Array<{
-      name: string;
-      type: HierarchyElement["type"];
-      level: number;
-      depth: number;
-    }>;
-  }> {
-    const hierarchy = await this.get(dimensionName, hierarchyName);
-    const byName = new Map<string, HierarchyElement>();
-    for (const e of hierarchy.elements) byName.set(e.name, e);
-    if (!byName.has(element)) {
-      throw new TM1Error({
-        code: TM1ErrorCode.NOT_FOUND,
-        message: `Element '${element}' not found in ${dimensionName}.${hierarchyName}`,
-      });
-    }
-    const out: Array<{
-      name: string;
-      type: HierarchyElement["type"];
-      level: number;
-      depth: number;
-    }> = [];
-    const seen = new Set<string>([element]);
-    const queue: Array<{ name: string; depth: number }> = [
-      { name: element, depth: 0 },
-    ];
-    while (queue.length > 0) {
-      const cur = queue.shift()!;
-      const node = byName.get(cur.name);
-      if (!node) continue;
-      const nextDepth = cur.depth + 1;
-      if (opts?.depth !== undefined && nextDepth > opts.depth) continue;
-      for (const child of node.children) {
-        if (seen.has(child.name)) continue;
-        seen.add(child.name);
-        const childNode = byName.get(child.name);
-        if (!childNode) continue;
-        // Type, not just shape: an empty consolidation has no children but is
-        // not a leaf in the sense callers ask for — nothing can be written to
-        // it and it carries no value of its own.
-        const isLeaf =
-          childNode.children.length === 0 && childNode.type !== "Consolidated";
-        if (!opts?.leavesOnly || isLeaf) {
-          out.push({
-            name: childNode.name,
-            type: childNode.type,
-            level: childNode.level,
-            depth: nextDepth,
-          });
-        }
-        queue.push({ name: child.name, depth: nextDepth });
-      }
-    }
-    return { element, descendants: out };
-  }
-
-  /**
-   * One element with a navigation property expanded `levels` deep. Nodes on
-   * the last level come back without that property, which is how callers see
-   * where the request stopped.
-   */
-  private async getNested(
-    dimensionName: string,
-    hierarchyName: string,
-    element: string,
-    nav: "Components" | "Parents",
-    select: string,
-    levels: number,
-  ): Promise<NestedElement> {
-    let expand = `${nav}($select=${select})`;
-    for (let i = 1; i < levels; i++) {
-      expand = `${nav}($select=${select};$expand=${expand})`;
-    }
-    const path =
-      `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')` +
-      `/Elements('${odataKey(element)}')?$select=${select}` +
-      (levels > 0 ? `&$expand=${expand}` : "");
-    try {
-      return await this.http.request<NestedElement>("GET", path);
-    } catch (e) {
-      if (e instanceof TM1Error && e.code === TM1ErrorCode.NOT_FOUND) {
-        throw new TM1Error({
-          code: TM1ErrorCode.NOT_FOUND,
-          message: `Element '${element}' not found in ${dimensionName}.${hierarchyName}`,
-          httpStatus: e.httpStatus,
-          // The nested $expand runs to kilobytes; the path alone locates it.
-          endpoint: e.endpoint?.split("?")[0],
-        });
-      }
-      throw e;
-    }
-  }
-
-  private async getAncestorsFromFull(
-    dimensionName: string,
-    hierarchyName: string,
-    element: string,
-  ): Promise<{
-    element: string;
-    ancestors: Array<{ name: string; level: number }>;
-    paths: string[][];
-  }> {
-    const hierarchy = await this.get(dimensionName, hierarchyName);
-    const byName = new Map<string, HierarchyElement>();
-    for (const e of hierarchy.elements) byName.set(e.name, e);
-    if (!byName.has(element)) {
-      throw new TM1Error({
-        code: TM1ErrorCode.NOT_FOUND,
-        message: `Element '${element}' not found in ${dimensionName}.${hierarchyName}`,
-      });
-    }
-    const ancestorMap = new Map<string, number>();
-    const paths: string[][] = [];
-    const walk = (
-      name: string,
-      currentPath: string[],
-      visited: Set<string>,
-    ) => {
-      const node = byName.get(name);
-      if (!node) return;
-      const parents = node.parents;
-      if (parents.length === 0) {
-        paths.push([...currentPath]);
-        return;
-      }
-      for (const parentName of parents) {
-        if (visited.has(parentName)) continue;
-        const parentNode = byName.get(parentName);
-        if (!parentNode) continue;
-        ancestorMap.set(parentName, parentNode.level);
-        const nextVisited = new Set(visited);
-        nextVisited.add(parentName);
-        walk(parentName, [...currentPath, parentName], nextVisited);
-      }
-    };
-    walk(element, [element], new Set([element]));
-    const ancestors = [...ancestorMap.entries()]
-      .map(([name, level]) => ({ name, level }))
-      .sort((a, b) => a.level - b.level || a.name.localeCompare(b.name));
-    return { element, ancestors, paths };
   }
 
   /**
