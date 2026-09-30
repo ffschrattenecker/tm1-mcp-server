@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compiled JavaScript, `NOTICE` and `npm-shrinkwrap.json` only. TypeScript declarations, `docs/`
   and `CHANGELOG.md` are no longer included (this is a bin-only package; the docs live on GitHub).
 
+### Security
+
+- `ip-address` (via the MCP SDK) pinned to 10.7.2 for GHSA-rpw4-54j3-4h4q, GHSA-2vr4-cq9g-pvrc,
+  GHSA-j6r3-76f7-8jcv and GHSA-h3mg-xc3c-68pw.
+
 ### Fixed
 
 - The MCP prompt texts named tool arguments that no longer exist.

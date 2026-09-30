@@ -75,7 +75,7 @@
   },
   "overrides": {
     "fast-uri": "^4.2.1",
-    "ip-address": "^10.4.0"
+    "ip-address": "^10.7.2"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.1",
