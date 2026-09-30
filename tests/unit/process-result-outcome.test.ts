@@ -61,6 +61,8 @@ describe("ProcessResult — a missing status code is not success (T-4)", () => {
   });
 
   it("reports an empty response body as indeterminate, not as a successful run", async () => {
+    // A live server always sends the field (tests/live/process.live.test.ts),
+    // so reaching this branch means we genuinely do not know the outcome.
     fetchSpy.mockResolvedValueOnce(mockEmptyBody(200));
 
     const result = await client.processes.execute("RunCalc");
