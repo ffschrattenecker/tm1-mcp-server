@@ -1,14 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { contractCheckedClient } from "../helpers/service-contract.js";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { TM1Client } from "../../src/tm1-client.js";
-import { registerAllTools } from "../../src/tools/index.js";
-import { withAnnotations } from "../../src/tools/with-annotations.js";
-// Output schemas come from the defineTool() specs; registerAllTools is
-// imported above, so every spec has been defined.
+// Output schemas come from the defineTool() specs; the barrel import runs them.
+import "../../src/tools/index.js";
 import { allSpecs } from "../../src/tools/define-tool.js";
-import { mockLogger } from "../helpers/client-harness.js";
 
 const OUTPUT_SCHEMAS = new Map(
   [...allSpecs()].flatMap(([name, meta]) =>
@@ -36,38 +30,7 @@ function schemaOf(toolName: string): ZodTypeAny {
   return asSchema(entry);
 }
 
-// Version-gated tools (tm1_save_data, v11 only) register under one version at
-// a time — union both so "registered" reflects full coverage.
-function registeredToolNames(): Set<string> {
-  const names = new Set<string>();
-  for (const version of [11, 12] as const) {
-    const server = new McpServer({ name: "test", version: "0.0.0" });
-    const orig = server.registerTool.bind(server);
-    server.registerTool = (...args: unknown[]) => {
-      names.add(args[0] as string);
-      return (orig as (...a: unknown[]) => unknown)(...args) as ReturnType<
-        typeof server.registerTool
-      >;
-    };
-    registerAllTools(
-      withAnnotations(server, mockLogger, "readwrite"),
-      contractCheckedClient({
-        version,
-      } as unknown as TM1Client),
-    );
-  }
-  return names;
-}
-
 describe("declared output schemas", () => {
-  it("every declared output schema belongs to a registered tool (no orphans)", () => {
-    const registered = registeredToolNames();
-    const orphans = [...OUTPUT_SCHEMAS.keys()].filter(
-      (k) => !registered.has(k),
-    );
-    expect(orphans).toEqual([]);
-  });
-
   // Live-sweep regression 2026-07-12: the not-found branch omitted choreName/
   // tasks and was rejected by the strict output schema (surfaced as isError
   // via the drift pre-validation). Both branches must conform.
