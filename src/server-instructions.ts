@@ -11,7 +11,7 @@ export function serverInstructions(registry: ConnectionRegistry): string {
     );
   }
   lines.push(
-    "Keep results small: filter by name, use projections (fields, include* flags, compact) and countOnly before paging.",
+    "Keep tm1_rest_read results small with $select, $filter, $top and $count. Collections include '}' control objects (filter not startswith(Name,'}')); name matches are case-sensitive, use tolower().",
   );
   return lines.join(" ");
 }

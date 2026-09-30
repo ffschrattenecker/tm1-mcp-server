@@ -11,20 +11,24 @@ import type { TM1Client } from "../../tm1-client.js";
 
 /**
  * Client-abort recovery hint, branched by TM1 major version: v11 exposes
- * server threads (tm1_list_threads / tm1_cancel_thread), v12 exposes jobs
- * (tm1_list_jobs / tm1_cancel_job) instead.
+ * Threads (read with tm1_rest_read, cancel with tm1_rest_write), v12 exposes
+ * Jobs instead.
  *
  * The abort DELETEs the async operation, which on 11.8 cancels the run and
  * rolls back its writes (tests/live/async-exec.live.test.ts). v12 is not
  * measured, and the cancel is best-effort — so the hint still says to check.
  */
 export function abortHint(version: 11 | 12): string {
-  const monitor = version === 12 ? "tm1_list_jobs" : "tm1_list_threads";
-  const cancel = version === 12 ? "tm1_cancel_job" : "tm1_cancel_thread";
+  const monitor =
+    version === 12 ? "tm1_rest_read Jobs" : "tm1_rest_read Threads";
+  const cancel =
+    version === 12
+      ? "tm1_rest_write POST Jobs('id')/tm1.Cancel"
+      : "tm1_rest_write POST Threads(id)/tm1.CancelOperation";
   const effect =
     version === 12
       ? "TM1 was asked to cancel the run."
-      : `TM1 was told to cancel the run, which stops it and rolls back its writes like ${cancel}.`;
+      : `TM1 was told to cancel the run, which stops it and rolls back its writes like a thread cancel.`;
   return `Request aborted by the client — ${effect} Confirm with ${monitor} that it is gone before running it again; if it still shows, stop it with ${cancel}.`;
 }
 
@@ -57,7 +61,7 @@ export const registerExecuteProcess = defineTool({
   description: [
     "Execute a TurboIntegrator process on the TM1 server with optional parameters.",
     "Non-idempotent: each call re-runs the process — do not retry blindly on transport errors without checking server state.",
-    "Before: tm1_check_process_code (syntax) and/or tm1_compile_process (full compile). Discover required params with tm1_get_process.",
+    "Before: tm1_check_process_code (syntax) and/or tm1_rest_read Processes('P')/tm1.Compile (full compile). Discover required params with tm1_get_process.",
     "When TM1 wrote an error log for the run (failure or minor errors), its last 40 lines come back as errorLog. For cascade siblings and older logs use tm1_diagnose_process_error.",
   ],
   annotations: DESTRUCTIVE,
@@ -96,7 +100,7 @@ export const registerExecuteProcess = defineTool({
           signal: extra?.signal,
           ...(timeoutMs ? { timeoutMs } : {}),
         }),
-        `Process '${processName}' failed at runtime. Inspect cascade with tm1_diagnose_process_error(processName='${processName}', includeRelated=true). Verify parameter shape via tm1_get_process; check syntax with tm1_compile_process before re-running.`,
+        `Process '${processName}' failed at runtime. Inspect cascade with tm1_diagnose_process_error(processName='${processName}', includeRelated=true). Verify parameter shape via tm1_get_process; compile it with tm1_rest_read Processes('${processName}')/tm1.Compile before re-running.`,
         TRANSPORT_CODES,
       );
       // TM1 names the run's own error log when it wrote one (minor errors

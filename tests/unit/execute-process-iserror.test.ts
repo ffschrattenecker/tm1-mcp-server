@@ -186,8 +186,8 @@ describe("tm1_execute_process abort handling (M2)", () => {
     expect(caught).toBeInstanceOf(TM1Error);
     const err = caught as TM1Error;
     expect(err.message).toContain("cancelled client-side");
-    expect(err.hint).toContain("tm1_list_threads");
-    expect(err.hint).toContain("tm1_cancel_thread");
+    expect(err.hint).toContain("tm1_rest_read Threads");
+    expect(err.hint).toContain("Threads(id)/tm1.CancelOperation");
     // The misleading "re-run after diagnosing" guidance must be gone — the TI
     // may still be running, so re-running risks a duplicate execution.
     expect(err.hint).not.toContain("diagnose_process_error");

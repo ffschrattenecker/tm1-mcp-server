@@ -256,8 +256,8 @@ export class TM1HttpClient {
             message: `Request to ${path} timed out after ${ms}ms`,
             endpoint: path,
             hint: isSafeMethod
-              ? "Query timed out — result set may be too large. Add filters or reduce scope. If a lock is suspected, use tm1_list_threads to diagnose."
-              : "Request timed out — TM1 server may be waiting on a lock held by another session. Use tm1_list_threads to diagnose and cancel the blocking thread.",
+              ? "Query timed out — result set may be too large. Add filters or reduce scope. If a lock is suspected, read Threads (v11) or Jobs (v12) with tm1_rest_read."
+              : "Request timed out — TM1 server may be waiting on a lock held by another session. Read Threads (v11) or Jobs (v12) with tm1_rest_read to find it; cancel it with tm1_rest_write (POST Threads(id)/tm1.CancelOperation or Jobs('id')/tm1.Cancel).",
           });
         }
 
@@ -604,7 +604,7 @@ export class TM1HttpClient {
             code: TM1ErrorCode.LOCK_TIMEOUT,
             message: `${path} was still running on the TM1 server when the ${budgetMs}ms wait ran out. It was NOT cancelled.`,
             endpoint: path,
-            hint: "Only the waiting stopped, not the run. Watch it with tm1_list_threads (v11) or tm1_list_jobs (v12) and do not re-run it meanwhile; pass a larger timeoutMs next time.",
+            hint: "Only the waiting stopped, not the run. Watch it with tm1_rest_read on Threads (v11) or Jobs (v12) and do not re-run it meanwhile; pass a larger timeoutMs next time.",
           });
         }
       }
@@ -944,7 +944,7 @@ function lostTrack(path: string, why: string): TM1Error {
     code: TM1ErrorCode.CONNECTION_FAILED,
     message: `Lost track of the async run of ${path}: ${why}. It may still be running, or may have finished.`,
     endpoint: path,
-    hint: "The outcome is unknown. Check tm1_list_threads (v11) or tm1_list_jobs (v12) and the message log before running it again — a re-run risks a duplicate execution.",
+    hint: "The outcome is unknown. Check Threads (v11) or Jobs (v12) and MessageLogEntries (v11) with tm1_rest_read before running it again — a re-run risks a duplicate execution.",
   });
 }
 
