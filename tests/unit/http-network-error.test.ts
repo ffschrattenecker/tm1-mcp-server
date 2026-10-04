@@ -114,6 +114,14 @@ describe("Watch-item #5: isNetworkError classifies via err.cause.code", () => {
     expect(calls).toBeGreaterThan(1);
   });
 
+  it("does NOT retry a local TypeError (programming error, no cause)", async () => {
+    const calls = await fetchCallsFor(
+      client,
+      new TypeError("Cannot read properties of undefined (reading 'x')"),
+    );
+    expect(calls).toBe(1);
+  });
+
   it("does NOT retry a non-network error (fails fast)", async () => {
     const calls = await fetchCallsFor(
       client,

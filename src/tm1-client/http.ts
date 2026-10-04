@@ -671,8 +671,14 @@ function isNetworkErrorImpl(error: unknown): boolean {
 
     // Fallback: undici wraps every fetch-level network failure in
     // `TypeError: fetch failed`. This catches wrappers whose cause carries no
-    // recognised code (or no cause at all) — preserves the old TypeError branch.
-    if (error instanceof TypeError) {
+    // recognised code (or no cause at all). A TypeError with neither that
+    // message nor a cause is a local programming error (a bad property access,
+    // a body that will not serialize): retrying it only adds 7 s of backoff.
+    if (
+      error instanceof TypeError &&
+      (error.message === "fetch failed" ||
+        (error as { cause?: unknown }).cause !== undefined)
+    ) {
       return true;
     }
 
