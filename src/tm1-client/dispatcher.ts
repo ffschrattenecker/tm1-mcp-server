@@ -43,10 +43,7 @@ export function tm1Fetch(url: string, init: RequestInit): Promise<Response> {
   if (globalThis.fetch !== builtinFetch) {
     return globalThis.fetch(url, init);
   }
-  // undici ships its own Response type; @types/node's global one diverges
-  // between versions although the runtime object is the same.
-  return undiciFetch(
-    url,
-    init as unknown as Parameters<typeof undiciFetch>[1],
-  ) as unknown as Promise<Response>;
+  // undici's RequestInit is stricter than the global one under
+  // exactOptionalPropertyTypes; the runtime object is the same.
+  return undiciFetch(url, init as unknown as Parameters<typeof undiciFetch>[1]);
 }
