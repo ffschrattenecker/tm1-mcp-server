@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { loadConfig } from "../../src/config.js";
 
 describe("loadConfig", () => {
@@ -129,6 +129,24 @@ describe("loadConfig", () => {
 
     const config = loadConfig();
     expect(config.ssl.rejectUnauthorized).toBe(false);
+  });
+
+  it("warns on stderr when TLS verification is off for an https server", () => {
+    setRequiredEnv();
+    process.env.TM1_SSL_REJECT_UNAUTHORIZED = "false";
+    const write = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    try {
+      loadConfig();
+      expect(write).toHaveBeenCalledWith(
+        expect.stringContaining("TM1_SSL_REJECT_UNAUTHORIZED=false"),
+      );
+      write.mockClear();
+      process.env.TM1_BASE_URL = "http://tm1server:8010";
+      loadConfig();
+      expect(write).not.toHaveBeenCalled();
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it("should parse TM1_SSL_REJECT_UNAUTHORIZED=true", () => {

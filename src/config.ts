@@ -163,6 +163,12 @@ export function loadConfig(): TM1Config {
 
   const sslRaw = process.env.TM1_SSL_REJECT_UNAUTHORIZED;
   const rejectUnauthorized = sslRaw === undefined ? true : sslRaw !== "false";
+  if (!rejectUnauthorized && baseUrl?.startsWith("https:")) {
+    process.stderr.write(
+      "[tm1-mcp-server] WARNING: TM1_SSL_REJECT_UNAUTHORIZED=false — the TM1 " +
+        "certificate is not verified, so credentials go to whoever answers on that address.\n",
+    );
+  }
 
   const keepAliveIntervalMs = parseIntEnv(
     "TM1_KEEP_ALIVE_INTERVAL",
