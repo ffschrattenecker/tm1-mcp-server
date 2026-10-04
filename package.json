@@ -4,7 +4,7 @@
   "description": "MCP server for IBM Planning Analytics / TM1 — full model lifecycle via REST API",
   "repository": {
     "type": "git",
-    "url": "https://github.com/flameY3T1/tm1-mcp-server.git"
+    "url": "git+https://github.com/flameY3T1/tm1-mcp-server.git"
   },
   "author": "flameY3T1",
   "type": "module",
