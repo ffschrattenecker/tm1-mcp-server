@@ -14,7 +14,37 @@ import { defineTool } from "../define-tool.js";
 
 type EditOp = { op: "eq" | "add" | "del"; line: string };
 
-function computeEditScript(a: string[], b: string[]): EditOp[] {
+// The LCS table holds (m+1)·(n+1) cells, 4 bytes each: 16M cells = 64 MB.
+// Beyond that the tab is reported tooLarge instead of exhausting the heap.
+const MAX_LCS_CELLS = 16_000_000;
+
+/**
+ * Edit script for a → b, or null when the changed region is too large to
+ * diff. The common head and tail are matched first, so a one-line edit in a
+ * long tab costs a table the size of the edit, not of the tab.
+ */
+function computeEditScript(a: string[], b: string[]): EditOp[] | null {
+  let head = 0;
+  while (head < a.length && head < b.length && a[head] === b[head]) head++;
+  let tail = 0;
+  while (
+    tail < a.length - head &&
+    tail < b.length - head &&
+    a[a.length - 1 - tail] === b[b.length - 1 - tail]
+  )
+    tail++;
+  const midA = a.slice(head, a.length - tail);
+  const midB = b.slice(head, b.length - tail);
+  if ((midA.length + 1) * (midB.length + 1) > MAX_LCS_CELLS) return null;
+  const eq = (line: string): EditOp => ({ op: "eq", line });
+  return [
+    ...a.slice(0, head).map(eq),
+    ...lcsEditScript(midA, midB),
+    ...a.slice(a.length - tail).map(eq),
+  ];
+}
+
+function lcsEditScript(a: string[], b: string[]): EditOp[] {
   const m = a.length;
   const n = b.length;
   const w = n + 1;
@@ -147,7 +177,13 @@ function tabCodeDiff(
   codeA: string,
   codeB: string,
   contextLines: number,
-): { identical: boolean; linesA: number; linesB: number; hunks: DiffHunk[] } {
+): {
+  identical: boolean;
+  linesA: number;
+  linesB: number;
+  hunks: DiffHunk[];
+  tooLarge?: true;
+} {
   const na = NORM(codeA);
   const nb = NORM(codeB);
   if (na === nb) {
@@ -157,6 +193,15 @@ function tabCodeDiff(
   const a = na ? na.split("\n") : [];
   const b = nb ? nb.split("\n") : [];
   const ops = computeEditScript(a, b);
+  if (!ops) {
+    return {
+      identical: false,
+      linesA: a.length,
+      linesB: b.length,
+      hunks: [],
+      tooLarge: true,
+    };
+  }
   const hunks = buildHunks(ops, contextLines);
   return { identical: false, linesA: a.length, linesB: b.length, hunks };
 }
@@ -311,6 +356,7 @@ export const registerDiffProcesses = defineTool({
   description: [
     "Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog).",
     "Returns per-tab identical flag, line counts, and unified diff hunks for changed tabs.",
+    "A tab whose changed region is too large to diff (about 4000 × 4000 lines) reports tooLarge: true and line counts only.",
     "Also diffs parameters, variables, and datasource.",
     "Analogue of tm1_diff_process_with_file but server-side — no .pro file needed.",
   ],
