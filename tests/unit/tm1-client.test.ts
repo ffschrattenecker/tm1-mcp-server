@@ -288,6 +288,23 @@ describe("TM1Client", () => {
       }
     });
 
+    it("does not read English prose as a security denial", async () => {
+      // e.g. a TI error carrying an ODBC driver's own wording.
+      fetchSpy.mockResolvedValueOnce(
+        mockResponse({
+          ok: false,
+          status: 400,
+          body: {
+            error: { message: "[ODBC] user svc_load not authorized on DSN" },
+          },
+        }),
+      );
+
+      await expect(
+        client.testRequest("POST", "/api/v1/ExecuteMDX"),
+      ).rejects.toMatchObject({ code: TM1ErrorCode.TM1_ERROR });
+    });
+
     it("also reads the nested `message.value` error shape", async () => {
       // http.ts accepts `error.message.value` as well as a plain string. No
       // server in the recordings sends the nested form, so this branch had no

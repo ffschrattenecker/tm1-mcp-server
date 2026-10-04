@@ -575,11 +575,12 @@ export function classifyHttpError(
     // returns 400 {"error":{"code":"65","message":"ObjectSecurityNoReadRights"}}.
     // Classify by message so the caller gets PERMISSION_DENIED + its actionable
     // hint instead of a generic TM1_ERROR. Verified live with a cube-only user.
+    // Only TM1's own tokens count: free English prose such as "not authorized"
+    // never matched on a localized server and could come from a TI or ODBC
+    // message that has nothing to do with object security.
     if (
       details &&
-      /No(Read|Write|Admin)Rights|ObjectSecurity|SecurityAccess|not\s+authori[sz]ed/i.test(
-        details,
-      )
+      /No(Read|Write|Admin)Rights|ObjectSecurity|SecurityAccess/i.test(details)
     ) {
       return new TM1Error({
         code: TM1ErrorCode.PERMISSION_DENIED,
