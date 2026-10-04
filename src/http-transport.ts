@@ -57,7 +57,7 @@ export async function startHttpTransport(
   }
 
   const httpServer = createServer(
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- async request handler intentional; errors are caught internally
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- async request handler intentional; everything after the body read runs inside one try
     async (req: IncomingMessage, res: ServerResponse) => {
       // Match the exact /mcp endpoint (optionally with a query string) or a real
       // subpath under /mcp/. A loose startsWith("/mcp") would also accept
@@ -67,6 +67,18 @@ export async function startHttpTransport(
         res.statusCode = 404;
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify({ error: "Not found. Use POST /mcp." }));
+        return;
+      }
+      // Stateless: no standing SSE stream (GET) and no session to end
+      // (DELETE). The SDK would answer GET with an open stream that pins a
+      // whole McpServer until the client hangs up, so refuse up front.
+      if (req.method !== "POST") {
+        res.statusCode = 405;
+        res.setHeader("Allow", "POST");
+        res.setHeader("Content-Type", "application/json");
+        res.end(
+          JSON.stringify({ error: "Method not allowed. Use POST /mcp." }),
+        );
         return;
       }
       if (config.httpToken) {
@@ -145,27 +157,29 @@ export async function startHttpTransport(
         }
       }
 
-      // Fresh server + transport per request (stateless single-use); tear both down
-      // once the response is fully written so nothing leaks between requests.
-      const { server, dispose } = buildServer();
-      const transport = new StreamableHTTPServerTransport({
-        // sessionIdGenerator omitted → stateless mode (single-use per request)
-        enableJsonResponse: true,
-        enableDnsRebindingProtection: true,
-        allowedHosts,
-        allowedOrigins: config.httpAllowedOrigins,
-      });
-      res.on("close", () => {
-        // dispose() FIRST and synchronously: it detaches the per-build listener
-        // from the process-global tm1Events emitter, which server.close() has no
-        // knowledge of. Skipping it leaks one listener plus the server graph it
-        // retains on every request — the transport builds a fresh server each
-        // time, so the leak is unbounded, not one-off.
-        dispose();
-        void transport.close();
-        void server.close();
-      });
       try {
+        // Fresh server + transport per request (stateless single-use); tear
+        // both down once the response is fully written so nothing leaks
+        // between requests. Inside the try: a throw here would otherwise
+        // escape the async handler and leave the request without an answer.
+        const { server, dispose } = buildServer();
+        const transport = new StreamableHTTPServerTransport({
+          // sessionIdGenerator omitted → stateless mode (single-use per request)
+          enableJsonResponse: true,
+          enableDnsRebindingProtection: true,
+          allowedHosts,
+          allowedOrigins: config.httpAllowedOrigins,
+        });
+        res.on("close", () => {
+          // dispose() FIRST and synchronously: it detaches the per-build listener
+          // from the process-global tm1Events emitter, which server.close() has no
+          // knowledge of. Skipping it leaks one listener plus the server graph it
+          // retains on every request — the transport builds a fresh server each
+          // time, so the leak is unbounded, not one-off.
+          dispose();
+          void transport.close();
+          void server.close();
+        });
         // Cast: StreamableHTTPServerTransport.onclose is `(() => void) | undefined`
         // while Transport expects `() => void`; the cast papers over that library-
         // internal signature mismatch without changing behaviour. Cast to the

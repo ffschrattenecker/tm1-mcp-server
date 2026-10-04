@@ -175,6 +175,43 @@ describe("startHttpTransport (stateless, per-request)", () => {
     expect(ok.status).toBe(200);
   });
 
+  it("answers GET and DELETE with 405 instead of holding a server open (M1)", async () => {
+    const port = await freePort();
+    let builds = 0;
+    close = await startHttpTransport(
+      () => {
+        builds++;
+        return buildServer();
+      },
+      makeConfig(port),
+      silentLogger,
+    );
+
+    for (const method of ["GET", "DELETE"]) {
+      const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
+        method,
+        headers: { Accept: "text/event-stream" },
+      });
+      expect(res.status).toBe(405);
+      expect(res.headers.get("allow")).toBe("POST");
+    }
+    expect(builds).toBe(0);
+  });
+
+  it("answers 500 when building the server throws (M11)", async () => {
+    const port = await freePort();
+    close = await startHttpTransport(
+      () => {
+        throw new Error("registration failed");
+      },
+      makeConfig(port),
+      silentLogger,
+    );
+
+    const res = await post(port, INIT);
+    expect(res.status).toBe(500);
+  });
+
   it("returns 404 for non-/mcp paths", async () => {
     const port = await freePort();
     close = await startHttpTransport(
