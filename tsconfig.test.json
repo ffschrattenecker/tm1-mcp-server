@@ -2,7 +2,7 @@
   // Type-check gate for the test suite.
   //
   // The base tsconfig deliberately excludes `tests/` because it also drives the
-  // `dist` build (rootDir: src, declaration output). That left every test file
+  // `dist` build (rootDir: src). That left every test file
   // compiled only by vitest's esbuild, which strips types without checking
   // them — so a test could construct an incomplete config literal or call a
   // function with the wrong arity and `npm run verify` stayed green.
@@ -11,8 +11,6 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "declaration": false,
-    "declarationMap": false,
     "sourceMap": false,
     "rootDir": ".",
     "types": ["node", "vitest/globals"],

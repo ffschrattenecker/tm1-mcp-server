@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Smaller package: TypeScript declarations are no longer built or shipped (234 files instead
+  of 462, 1.6 MB unpacked instead of 1.9 MB). The package is a CLI and exports no API.
+
 ### Fixed
 
 - **Connections through a PAW gateway (`…/api/v0/tm1/<db>`) log in.** The gateway names the
