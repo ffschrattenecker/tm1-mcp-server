@@ -24,6 +24,19 @@ describe("dataSourceSchema", () => {
   // field: 11.8 answers a write with 400 'unprocessed properties were
   // "oDBCConnection"', v12 takes the write and never returns the field. Strict
   // parsing turns both server behaviours into one named client-side error.
+  it("takes only the two ASCII delimiter types TM1 knows", () => {
+    for (const asciiDelimiterType of ["Character", "FixedWidth"]) {
+      expect(
+        dataSourceSchema.safeParse({ type: "ASCII", asciiDelimiterType })
+          .success,
+      ).toBe(true);
+    }
+    expect(
+      dataSourceSchema.safeParse({ type: "ASCII", asciiDelimiterType: "Fixed" })
+        .success,
+    ).toBe(false);
+  });
+
   it("rejects oDBCConnection, which TM1 has never had", () => {
     const result = dataSourceSchema
       .strict()
