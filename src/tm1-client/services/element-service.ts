@@ -253,7 +253,7 @@ export class ElementService {
    * examines the first 100k names and one that examines the dimension —
    * see src/lib/naming/odata-filter.ts.
    *
-   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Name
+   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Name&$orderby=Name
    */
   async scanElementNames(
     dimensionName: string,
@@ -278,8 +278,9 @@ export class ElementService {
   }> {
     const { pageSize, maxScan, filter, scopeTotal } = opts;
     const hierarchyPath = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')`;
+    // $orderby is mandatory with $skip — see odata-page.ts.
     const basePath =
-      `${hierarchyPath}/Elements?$select=Name&$top=${pageSize}` +
+      `${hierarchyPath}/Elements?$select=Name&$orderby=Name&$top=${pageSize}` +
       (filter ? `&$filter=${encodeURIComponent(filter)}` : "");
 
     // First page carries $count=true so we learn the total in one round-trip
