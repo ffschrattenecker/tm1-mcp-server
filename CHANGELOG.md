@@ -11,8 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Smaller package: TypeScript declarations are no longer built or shipped (234 files instead
   of 462, 1.6 MB unpacked instead of 1.9 MB). The package is a CLI and exports no API.
+- `tm1_list_error_logs`, `tm1_get_error_log_content` and `tm1_diagnose_process_error` let TM1
+  sort and prefilter the error-log listing, and cap it when no other filter applies, instead
+  of fetching every file each time (a v12 test server held 23 000).
+- `TM1_SSL_REJECT_UNAUTHORIZED=false` on an `https` server now prints a startup warning.
+- `tm1_delete_element` and `tm1_delete_hierarchy` say what the delete takes with it: cell and
+  attribute values on leaves that exist in no other hierarchy, and a hierarchy's subsets.
 
 ### Fixed
+
+- `tm1_diff_processes` no longer runs out of memory on long tabs. Equal leading and trailing
+  lines are matched first, so a small edit in a long tab stays cheap; a changed region too
+  large to diff reports `tooLarge: true` with line counts instead of hunks.
+- A programming error inside the request path is no longer retried three times as a network
+  failure (7 s of backoff) before it surfaces.
+- `tm1_audit_naming` pages element names in a stable order; a scan running alongside an
+  element create or delete could repeat or skip names.
+- A TM1 error message that merely contains "not authorized" (for example an ODBC driver's)
+  is no longer reported as `PERMISSION_DENIED`.
+- `asciiDelimiterType` accepts only `Character` or `FixedWidth` on input.
+- HTTP transport: `GET` and `DELETE /mcp` answer 405 instead of holding a server open per
+  connection, and a failure while building the server answers 500 instead of leaving the
+  request hanging.
 
 - **Connections through a PAW gateway (`…/api/v0/tm1/<db>`) log in.** The gateway names the
   session cookie `TM1SessionId_<db>` and authenticates later requests by its `paSession`
