@@ -19,7 +19,7 @@ export const registerTraceCellCalculation = defineTool({
     elements: z
       .array(z.string())
       .describe(
-        "Element names for each dimension of the cube, in cube dimension order. Prefix with a hierarchy to leave the default one: 'AltHier:Elem'.",
+        "Element names for each dimension of the cube, in cube dimension order. Sandboxes may be left out (bound to Base). Prefix with a hierarchy to leave the default one: 'AltHier:Elem'.",
       ),
     maxDepth: z
       .number()

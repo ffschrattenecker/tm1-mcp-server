@@ -358,6 +358,8 @@ export class CellService {
       `/api/v1/Cubes('${odataKey(cubeName)}')?$expand=Dimensions($select=Name)`,
     );
     const dims = cubeMeta.Dimensions.map((d) => d.Name);
+    // Sandboxes left out → Base, as tm1_get_cell_value does.
+    elements = bindLeftOutSandbox(dims, elements) ?? elements;
     if (elements.length !== dims.length) {
       throw new TM1Error({
         code: TM1ErrorCode.VALIDATION_ERROR,
