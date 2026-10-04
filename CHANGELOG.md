@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On servers with `EnableSandboxDimension=true`, `tm1_get_cell_value` and
   `tm1_check_writable_coords` (without `dimensions`) accept a coordinate that leaves out
   `Sandboxes` and bind it to `Base`, as `tm1_write_cells` already did. Before, they refused
-  the coordinate as one element short.
+  the coordinate as one element short. `tm1_check_feeders`, `tm1_trace_feeders` and
+  `tm1_trace_cell_calculation` do the same.
 - `tm1_sample_cells` found no cells in any cube with a `Sandboxes` dimension: TM1's
   `NONEMPTY()` returns an empty set whenever Sandboxes is part of the row set. An unfiltered
   Sandboxes is now pinned to `Base` in the WHERE clause and reported as `sandboxPin`.
@@ -24,8 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer breaks the table at the next `|`. In `tm1_execute_mdx`, raw cell values are no
   longer escaped twice.
 
-All four ported from the [ffschrattenecker fork](https://github.com/ffschrattenecker/tm1-mcp-server)
-(7.0.2 and 8.2.0).
+### Security
+
+- `tm1_trace_data_flow` no longer pulls every process's datasource password, user name and
+  ODBC query over the wire. It selected the whole `DataSource`, which TM1 answers with the
+  complete complex type; the client dropped those fields, but they were sent. It now selects
+  type, source, view and subset only.
+- `ip-address` (via the MCP SDK) raised to 10.7.2 or later for GHSA-rpw4-54j3-4h4q and
+  GHSA-2vr4-cq9g-pvrc.
+
+All ported from the [ffschrattenecker fork](https://github.com/ffschrattenecker/tm1-mcp-server)
+(7.0.2 to 9.1.0).
 
 ## [5.0.0] - 2026-09-27
 
