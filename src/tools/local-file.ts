@@ -54,8 +54,9 @@ export function resolveLocalPath(
     throw new TM1Error({
       code: TM1ErrorCode.VALIDATION_ERROR,
       message:
-        `Host-file access is disabled. Set ${ROOT_ENV} to an allowed directory to enable ` +
-        `'${paramName}', or pass the .pro content inline via the 'content' parameter instead.`,
+        `Host-file access is disabled. Set ${ROOT_ENV} to an allowed directory in the server ` +
+        `environment (MCP 'env:' block or a user environment variable, not a connection .env), ` +
+        `then restart the client fully to enable '${paramName}'. Or pass the content inline.`,
     });
   }
   if (!path.isAbsolute(inputPath)) {

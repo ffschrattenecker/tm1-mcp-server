@@ -210,6 +210,10 @@ traversal is rejected).
 TM1_LOCAL_FILE_ROOT=/srv/tm1-git    # optional; enables host-disk file params
 ```
 
+It is server-wide: set it in the server environment (MCP `env:` block or a
+user environment variable), not in a connection folder's `.env`, and restart
+the client fully.
+
 The git tools also work without it, via inline content:
 
 - `tm1_export_process_to_git` returns `{name}.json` + `{name}.ti` inline by
