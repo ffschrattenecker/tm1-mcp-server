@@ -27,7 +27,7 @@ export const registerValidateProcessRefs = defineTool({
       .string()
       .optional()
       .describe(
-        "Validate a .pro file (absolute host path). Disabled unless TM1_LOCAL_FILE_ROOT is set; the path must resolve within that directory. Otherwise pass 'content' inline.",
+        "Validate a .pro file (absolute host path). Otherwise pass 'content' inline.",
       ),
     content: z.string().optional().describe("Validate raw .pro content"),
     includeControl: z

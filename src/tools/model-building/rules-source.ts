@@ -28,7 +28,7 @@ export const RULES_SOURCE_SCHEMA = {
     .string()
     .optional()
     .describe(
-      "Absolute host path of a full rules file. Disabled unless TM1_LOCAL_FILE_ROOT is set; must resolve within it.",
+      "Absolute host path of a full rules file.",
     ),
 };
 

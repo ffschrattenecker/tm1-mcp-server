@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The "host-file access is disabled" error says where `TM1_LOCAL_FILE_ROOT` goes: the server
-  environment, not a connection `.env`, followed by a full client restart.
+- Host-file paths (`filePath`, `writeToFile`, `writeToDir`, `jsonPath`/`tiPath`, `directory`) work
+  on stdio without `TM1_LOCAL_FILE_ROOT`. Over HTTP they stay disabled until it is set. A root,
+  when set, still confines paths on either transport.
 - The package ships `docs/`, which the README links to.
 
 ## [9.1.1] - 2026-10-01

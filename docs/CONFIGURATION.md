@@ -201,25 +201,19 @@ its report, just redacted.
 
 Tools that read or write files on the host running the server —
 `tm1_import_pro_file`, `tm1_install_pro_bundle`, `tm1_diff_process_with_file`,
-`tm1_validate_process_refs`, and the git export/import pair — are **disabled by
-default**. Set `TM1_LOCAL_FILE_ROOT` to an absolute directory to enable
-host-path parameters; every supplied path must resolve inside that root (path
-traversal is rejected).
+`tm1_validate_process_refs`, the git export/import pair and `tm1_set_cube_rules`
+— take absolute host paths. On stdio any absolute path is allowed; over HTTP
+they are **disabled** until `TM1_LOCAL_FILE_ROOT` is set. When it is set, on
+either transport, every path must resolve inside that root (`..` and escaping
+symlinks are rejected).
 
 ```env
-TM1_LOCAL_FILE_ROOT=/srv/tm1-git    # optional; enables host-disk file params
+TM1_LOCAL_FILE_ROOT=/srv/tm1-git    # optional; confines host-disk file params
 ```
 
 It is server-wide: set it in the server environment (MCP `env:` block or a
 user environment variable), not in a connection folder's `.env`, and restart
-the client fully.
-
-The git tools also work without it, via inline content:
-
-- `tm1_export_process_to_git` returns `{name}.json` + `{name}.ti` inline by
-  default; pass `writeToDir` (a host path under the root) to also persist them.
-- `tm1_import_process_from_git` accepts `jsonContent`/`tiContent` strings, or
-  `jsonPath`/`tiPath` host paths when the root is set.
+the server.
 
 ### What the git round-trip preserves
 
@@ -253,8 +247,7 @@ installed version as a tm1-git pair and returns its paths as `backup: { json, ti
 - Files land under `<dir>/<host>_<port>[_<instance>_<database>]/<process>/<timestamp>.json|.ti`,
   so several connections can share one directory. Nothing is pruned.
 - The directory is chosen by the server, not the caller, so it is independent of
-  `TM1_LOCAL_FILE_ROOT`. Restoring by path (`jsonPath`/`tiPath`) needs the backup
-  directory inside that root; otherwise pass the file contents inline.
+  `TM1_LOCAL_FILE_ROOT`.
 - The code is written **unmasked**: a masked backup would restore placeholder
   literals and fail at runtime. The ODBC datasource password is never written.
   Treat the directory like the TM1 data directory.

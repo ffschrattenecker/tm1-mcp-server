@@ -27,7 +27,7 @@ export const registerExportProcessToPro = defineTool({
       .string()
       .optional()
       .describe(
-        "Optional absolute host path to write the .pro file to. Disabled unless TM1_LOCAL_FILE_ROOT is set; the path must resolve within that directory. If omitted, content is only returned inline.",
+        "Optional absolute host path to write the .pro file to. If omitted, content is only returned inline.",
       ),
     maskSecrets: z
       .boolean()

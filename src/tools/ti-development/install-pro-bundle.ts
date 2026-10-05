@@ -33,7 +33,7 @@ export const registerInstallProBundle = defineTool({
     directory: z
       .string()
       .describe(
-        "Absolute host path to directory containing .pro files. Disabled unless TM1_LOCAL_FILE_ROOT is set; the directory must resolve within that root.",
+        "Absolute host path to directory containing .pro files.",
       ),
     recursive: z
       .boolean()

@@ -25,7 +25,7 @@ export const registerImportProFile = defineTool({
       .string()
       .optional()
       .describe(
-        "Absolute path to the .pro file on the MCP server host. Disabled unless TM1_LOCAL_FILE_ROOT is set; the path must resolve within that directory. Otherwise pass 'content' inline.",
+        "Absolute path to the .pro file on the MCP server host. Otherwise pass 'content' inline.",
       ),
     content: z
       .string()

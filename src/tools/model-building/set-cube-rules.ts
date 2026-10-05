@@ -14,7 +14,7 @@ export const registerSetCubeRules = defineTool({
   description: [
     "Create or replace the rules for a TM1 cube.",
     "SKIPCHECK; belongs at the top and FEEDERS; before all feeder definitions — SKIPCHECK is what makes feeders take effect, so rules with feeders need it.",
-    "Pass exactly one source: rules (the full text — replaces everything), edits (find/replace patch against the current text; each find must match exactly once, else nothing is written), or filePath (full text from a host file under TM1_LOCAL_FILE_ROOT).",
+    "Pass exactly one source: rules (the full text — replaces everything), edits (find/replace patch against the current text; each find must match exactly once, else nothing is written), or filePath (full text from a host file).",
     "The full resulting text is syntax-checked with tm1.CheckRules before anything is written: TM1 itself stores broken rules without an error, and they then silently compute nothing. Any error aborts the call with VALIDATION_ERROR, the errors with their line numbers in details, and nothing is written; preflight:false skips the check.",
     "The stored text is read back after writing (verified.textMatches), so no separate tm1_get_cube_rules is needed; the callgraph cache is dropped automatically.",
   ],

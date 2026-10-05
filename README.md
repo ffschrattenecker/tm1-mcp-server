@@ -107,7 +107,7 @@ TM1_MODE=readonly                   # readonly (default) | readwrite
 # TM1_ENVIRONMENT=prod              # dev | test | prod; prod forces readonly
 # TM1_RESPONSE_MODE=structured      # legacy (default) | structured
 # TM1_MAX_RESPONSE_CHARS=80000      # larger results fail with RESPONSE_TOO_LARGE
-# TM1_LOCAL_FILE_ROOT=/srv/tm1-git  # optional; enables host-disk file params
+# TM1_LOCAL_FILE_ROOT=/srv/tm1-git  # optional; confines host-disk file params to this dir
 ```
 
 `TM1_RESPONSE_MODE=structured` drops the text block and ships `structuredContent`
@@ -143,11 +143,6 @@ One server then serves them all: every tool takes a `connection` argument and
 no connection logs in before its first use. One entry replaces one MCP server
 per TM1 instance, so the client carries one tool list instead of N.
 [docs/CONFIGURATION.md](docs/CONFIGURATION.md#several-tm1-connections) has the details.
-
-Host-disk file access is default-off in the same spirit: the `.pro` and git
-tools accept inline content, and touch host paths only once
-`TM1_LOCAL_FILE_ROOT` names an allowed directory (paths outside it, and `..`
-traversal, are rejected).
 
 ### Positioning — this is a single-user tool
 

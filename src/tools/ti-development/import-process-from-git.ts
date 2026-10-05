@@ -39,13 +39,13 @@ export const registerImportProcessFromGit = defineTool({
       .string()
       .optional()
       .describe(
-        "Absolute host path to the .json file. Disabled unless TM1_LOCAL_FILE_ROOT is set; must resolve within that directory.",
+        "Absolute host path to the .json file.",
       ),
     tiPath: z
       .string()
       .optional()
       .describe(
-        "Absolute host path to the .ti file. Disabled unless TM1_LOCAL_FILE_ROOT is set; must resolve within that directory.",
+        "Absolute host path to the .ti file.",
       ),
     processName: z
       .string()

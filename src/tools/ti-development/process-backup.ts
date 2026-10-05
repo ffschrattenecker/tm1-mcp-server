@@ -12,8 +12,8 @@ import type { TM1Client } from "../../tm1-client.js";
 // first. The backup is the tm1-git pair tm1_export_process_to_git produces,
 // so tm1_import_process_from_git is the restore path.
 //
-// The directory is chosen by the server, never by the caller, so it is not
-// confined to TM1_LOCAL_FILE_ROOT and is on by default:
+// The directory is chosen by the server, never by the caller, so it is
+// independent of TM1_LOCAL_FILE_ROOT and is on by default:
 //   TM1_PROCESS_BACKUP_DIR unset → ~/.tm1-mcp-server/backups
 //   TM1_PROCESS_BACKUP_DIR=off   → no backup
 // Under it: <connection>/<process>/<timestamp>.json + .ti.
