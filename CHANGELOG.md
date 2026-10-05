@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [9.2.0] - 2026-10-05
+
 ### Changed
 
 - Host-file paths (`filePath`, `writeToFile`, `writeToDir`, `jsonPath`/`tiPath`, `directory`) work
@@ -293,7 +295,8 @@ response-size guard, the per-connection caches) are unchanged.
 Older history (before 8.0.0): see the git tags and the upstream repository,
 https://github.com/flameY3T1/tm1-mcp-server.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.1.1...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.2.0...HEAD
+[9.2.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.1.1...v9.2.0
 [9.1.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.1.0...v9.1.1
 [9.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.0.0...v9.1.0
 [9.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v8.3.1...v9.0.0
