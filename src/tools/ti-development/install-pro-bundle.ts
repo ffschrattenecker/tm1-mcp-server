@@ -32,9 +32,7 @@ export const registerInstallProBundle = defineTool({
   input: {
     directory: z
       .string()
-      .describe(
-        "Absolute host path to directory containing .pro files.",
-      ),
+      .describe("Absolute host path to directory containing .pro files."),
     recursive: z
       .boolean()
       .optional()

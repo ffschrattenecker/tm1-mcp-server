@@ -38,15 +38,11 @@ export const registerImportProcessFromGit = defineTool({
     jsonPath: z
       .string()
       .optional()
-      .describe(
-        "Absolute host path to the .json file.",
-      ),
+      .describe("Absolute host path to the .json file."),
     tiPath: z
       .string()
       .optional()
-      .describe(
-        "Absolute host path to the .ti file.",
-      ),
+      .describe("Absolute host path to the .ti file."),
     processName: z
       .string()
       .optional()

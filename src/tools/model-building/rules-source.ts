@@ -27,9 +27,7 @@ export const RULES_SOURCE_SCHEMA = {
   filePath: z
     .string()
     .optional()
-    .describe(
-      "Absolute host path of a full rules file.",
-    ),
+    .describe("Absolute host path of a full rules file."),
 };
 
 export interface RulesSource {
