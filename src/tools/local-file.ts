@@ -32,31 +32,31 @@ function realpathNearestExisting(p: string): string {
 }
 
 /**
- * Confine a caller-supplied host filesystem path to the directory configured via
- * `TM1_LOCAL_FILE_ROOT`.
+ * Resolve a caller-supplied host filesystem path, confined to the directory
+ * configured via `TM1_LOCAL_FILE_ROOT` when one is set.
  *
- * Host-file access (the `filePath` / `writeToFile` / `directory` parameters on the
- * `.pro` round-trip tools) is DISABLED by default: without the env var set, those
- * tools only accept inline `content`. This keeps arbitrary host file read/write off
- * the default (readonly) tool surface — a prompt-injected agent cannot coerce the
- * server into reading `/proc/self/environ` (which would leak TM1 credentials),
- * `~/.ssh/id_rsa`, or writing to arbitrary locations.
+ * Without a root, stdio (the default transport) allows any absolute path: the
+ * server runs as the same user as its client, so there is nothing to protect.
+ * Over HTTP the callers are remote, so host-file access stays DISABLED until a
+ * root is set — otherwise anyone reaching the endpoint could read the host's
+ * files (TM1 credentials, `~/.ssh`) or write anywhere.
  *
- * When the root IS configured, the resolved absolute path must stay within it; any
- * `..` traversal or absolute escape is rejected. Returns the resolved absolute path.
+ * When the root IS configured, on either transport, the resolved absolute path
+ * must stay within it; any `..` traversal, absolute escape or escaping symlink is
+ * rejected. Returns the resolved absolute path.
  */
 export function resolveLocalPath(
   inputPath: string,
   paramName = "filePath",
 ): string {
   const root = process.env[ROOT_ENV]?.trim();
-  if (!root) {
+  if (!root && process.env.TM1_MCP_TRANSPORT?.trim().toLowerCase() === "http") {
     throw new TM1Error({
       code: TM1ErrorCode.VALIDATION_ERROR,
       message:
-        `Host-file access is disabled. Set ${ROOT_ENV} to an allowed directory in the server ` +
+        `Host-file access is disabled over HTTP. Set ${ROOT_ENV} to an allowed directory in the server ` +
         `environment (MCP 'env:' block or a user environment variable, not a connection .env), ` +
-        `then restart the client fully to enable '${paramName}'. Or pass the content inline.`,
+        `then restart the server to enable '${paramName}'. Or pass the content inline.`,
     });
   }
   if (!path.isAbsolute(inputPath)) {
@@ -65,6 +65,7 @@ export function resolveLocalPath(
       message: `${paramName} must be absolute: ${inputPath}`,
     });
   }
+  if (!root) return path.resolve(inputPath);
   const resolvedRoot = path.resolve(root);
   const resolved = path.resolve(inputPath);
   const rel = path.relative(resolvedRoot, resolved);

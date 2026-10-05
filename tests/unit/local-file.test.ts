@@ -6,31 +6,51 @@ import { resolveLocalPath } from "../../src/tools/local-file.js";
 import { TM1Error } from "../../src/types.js";
 
 // resolveLocalPath confines caller-supplied host paths to TM1_LOCAL_FILE_ROOT.
-// Default-off: with the env unset, host-file access is disabled entirely.
+// Without a root, stdio allows any absolute path; HTTP disables host files.
 describe("resolveLocalPath", () => {
   const ROOT = path.resolve("/srv/pro-bundles");
   let prev: string | undefined;
+  let prevTransport: string | undefined;
 
   beforeEach(() => {
     prev = process.env.TM1_LOCAL_FILE_ROOT;
+    prevTransport = process.env.TM1_MCP_TRANSPORT;
+    delete process.env.TM1_MCP_TRANSPORT;
   });
   afterEach(() => {
     if (prev === undefined) delete process.env.TM1_LOCAL_FILE_ROOT;
     else process.env.TM1_LOCAL_FILE_ROOT = prev;
+    if (prevTransport === undefined) delete process.env.TM1_MCP_TRANSPORT;
+    else process.env.TM1_MCP_TRANSPORT = prevTransport;
   });
 
-  it("is disabled when TM1_LOCAL_FILE_ROOT is unset", () => {
+  it("is disabled over HTTP when TM1_LOCAL_FILE_ROOT is unset", () => {
     delete process.env.TM1_LOCAL_FILE_ROOT;
+    process.env.TM1_MCP_TRANSPORT = "http";
     expect(() => resolveLocalPath("/srv/pro-bundles/x.pro")).toThrow(TM1Error);
     expect(() => resolveLocalPath("/srv/pro-bundles/x.pro")).toThrow(
-      /Host-file access is disabled/,
+      /Host-file access is disabled over HTTP/,
     );
   });
 
-  it("is disabled when the root is blank/whitespace", () => {
+  it("is disabled over HTTP when the root is blank/whitespace", () => {
     process.env.TM1_LOCAL_FILE_ROOT = "   ";
+    process.env.TM1_MCP_TRANSPORT = " HTTP ";
     expect(() => resolveLocalPath("/srv/pro-bundles/x.pro")).toThrow(
       /disabled/,
+    );
+  });
+
+  it("allows any absolute path on stdio without a root", () => {
+    delete process.env.TM1_LOCAL_FILE_ROOT;
+    const p = path.resolve("/srv/elsewhere/x.pro");
+    expect(resolveLocalPath(p)).toBe(p);
+  });
+
+  it("still rejects a relative path on stdio without a root", () => {
+    delete process.env.TM1_LOCAL_FILE_ROOT;
+    expect(() => resolveLocalPath("deploy/load.pro")).toThrow(
+      /must be absolute/,
     );
   });
 

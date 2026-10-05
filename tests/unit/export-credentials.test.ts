@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerExportProcessToPro } from "../../src/tools/ti-development/export-process-to-pro.js";
 import { registerExportProcessToGit } from "../../src/tools/ti-development/export-process-to-git.js";
@@ -7,6 +7,16 @@ import { serializeProcessToGit } from "../../src/lib/git-process.js";
 import { serializeToPro } from "../../src/lib/pro-serializer.js";
 import { parseProFile } from "../../src/lib/pro-parser.js";
 import { captureTool, type ToolCb } from "../helpers/client-harness.js";
+
+// Over HTTP resolveLocalPath rejects host paths while no TM1_LOCAL_FILE_ROOT is
+// set, so a call that names a file fails at the write step and touches no disk.
+beforeEach(() => {
+  vi.stubEnv("TM1_MCP_TRANSPORT", "http");
+  vi.stubEnv("TM1_LOCAL_FILE_ROOT", "");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 // The ODBC password is a server-bound ciphertext on v11 and plain text on v12,
 // so it only leaves the server when the caller asks for it AND names a file.
@@ -68,8 +78,7 @@ describe("credential export is opt-in", () => {
   it("keeps the body out of the response when credentials are included", async () => {
     // v12: the only version that exports a credential at all.
     const { cb, secretsAsked } = captureProExport(12);
-    // resolveLocalPath rejects unless TM1_LOCAL_FILE_ROOT is configured, so the
-    // call fails at the write step — after the secret decision under test.
+    // The call fails at the write step — after the secret decision under test.
     await expect(
       cb(
         {
@@ -146,8 +155,7 @@ describe("git export refuses credentials on v11", () => {
   });
 
   it("lets v12 through, whose value is the password itself", async () => {
-    // resolveLocalPath rejects without TM1_LOCAL_FILE_ROOT, so the call still
-    // fails — but at the write step, past the gate under test.
+    // The call still fails — but at the write step, past the gate under test.
     await expect(
       captureGitExport(12)(
         {
