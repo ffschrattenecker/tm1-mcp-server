@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tm1_import_process_from_git` reads a `.ti` whose code holds a `#Region` fold the user never
+  closed. The parser counted depth and refused it (2 of 366 processes on an 11.8 server). Only the
+  four tab markers are structure now; a tab ends at the bare `#endregion` followed by a later tab
+  or the end of the file, and user folds stay code, broken or not.
 - `tm1_import_process_from_git` refuses a `.json` with unknown keys or without `parameters`,
   `variables` and `dataSource`. A file in another layout (PascalCase `Parameters`, as the VS Code
   extension writes it) used to parse as "no parameters, no variables, source None" and cleared all

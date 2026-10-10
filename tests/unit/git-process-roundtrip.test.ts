@@ -126,9 +126,8 @@ describe("git-process #region round-trip", () => {
 
   it("rejects a blob with a missing #endregion (next tab's #region follows directly) instead of silently swallowing the following tab", () => {
     // Prolog's #endregion is missing/typo'd; Metadata's #region follows directly.
-    // Depth-aware parsing treats the unclosed Metadata #region as nested inside
-    // Prolog (depth 2), so depth never returns to 0 by EOF — an unclosed tab,
-    // still rejected, rather than silently absorbing Metadata into Prolog.
+    // A later tab opening inside a tab is rejected rather than silently
+    // absorbing Metadata into Prolog.
     const ti =
       "#region Prolog\r\nsP='p';\r\n#region Metadata\r\nsM='m';\r\n#endregion";
     const json = JSON.stringify({
@@ -205,7 +204,7 @@ describe("git-process #region round-trip", () => {
     );
   });
 
-  it("rejects a stray #endregion at the top level with no matching #region", () => {
+  it("keeps a trailing #endregion inside the tab: the server writes this blob for a tab whose code ends with one", () => {
     const ti = "#region Prolog\r\nsP='p';\r\n#endregion\r\n#endregion";
     const json = JSON.stringify({
       name: "P",
@@ -213,7 +212,42 @@ describe("git-process #region round-trip", () => {
       variables: [],
       dataSource: { type: "None" },
     });
-    expect(() => parseProcessFromGit(json, ti)).toThrow(/#region/);
+    expect(parseProcessFromGit(json, ti).prolog).toBe("sP='p';\r\n#endregion");
+  });
+
+  it("ignores broken user folds: a fold never closed, a stray #EndRegion, a fold named like a tab", () => {
+    // 2 of 366 processes on an 11.8 server leave a fold open; depth counting
+    // rejected their export. Only the four tab markers are structure.
+    const ti = makeTi({
+      Prolog: "#Region never closed\r\nx = 1;",
+      Metadata: "#EndRegion\r\ny = 2;",
+      Data: "z = 3;",
+      Epilog: "#region Prolog\r\nw = 4;\r\n#EndRegion wrong",
+    });
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    expect(parseProcessFromGit(json, ti)).toMatchObject({
+      prolog: "#Region never closed\r\nx = 1;",
+      metadata: "#EndRegion\r\ny = 2;",
+      data: "z = 3;",
+      epilog: "#region Prolog\r\nw = 4;\r\n#EndRegion wrong",
+    });
+  });
+
+  it("rejects tabs out of order", () => {
+    const ti =
+      "#region Epilog\r\ne;\r\n#endregion\r\n#region Prolog\r\np;\r\n#endregion";
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    expect(() => parseProcessFromGit(json, ti)).toThrow(/out of order/);
   });
 
   it("rejects a top-level #region whose name is not a recognized TI tab", () => {
