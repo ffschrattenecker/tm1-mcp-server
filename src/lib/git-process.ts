@@ -243,6 +243,46 @@ function parseCodeBlob(ti: string): Record<Tab, string> {
   return out;
 }
 
+const KNOWN_JSON_KEYS: ReadonlySet<string> = new Set([
+  "name",
+  "hasSecurityAccess",
+  "parameters",
+  "variables",
+  "variablesUIData",
+  "dataSource",
+]);
+const REQUIRED_JSON_KEYS = ["parameters", "variables", "dataSource"] as const;
+
+/**
+ * Import deploys the .json as the whole truth: a missing `parameters` or
+ * `variables` goes out as an empty list, a missing `dataSource` as `None`, and
+ * TM1 applies both. A .json in another layout (e.g. PascalCase `Parameters`
+ * as written by the VS Code extension) therefore parsed to "no parameters, no
+ * variables, no source" and wiped them on the server without a word. Reject
+ * any unknown key and any missing structural key instead of guessing.
+ */
+function assertKnownJsonShape(meta: unknown): void {
+  if (meta === null || typeof meta !== "object" || Array.isArray(meta)) {
+    throw new Error("Process JSON must be an object");
+  }
+  const keys = Object.keys(meta);
+  const unknown = keys.filter((k) => !KNOWN_JSON_KEYS.has(k));
+  if (unknown.length > 0) {
+    throw new Error(
+      `Process JSON has unknown key(s): ${unknown.join(", ")}. ` +
+        `Expected only: ${[...KNOWN_JSON_KEYS].join(", ")}. ` +
+        "Refusing to deploy: unread fields would be sent as empty and clear the process on the server.",
+    );
+  }
+  const missing = REQUIRED_JSON_KEYS.filter((k) => !keys.includes(k));
+  if (missing.length > 0) {
+    throw new Error(
+      `Process JSON is missing key(s): ${missing.join(", ")}. ` +
+        "Refusing to deploy: a missing list would be sent as empty and clear it on the server.",
+    );
+  }
+}
+
 /** Parse a `{name}.json` + `{name}.ti` pair back into deployable process parts. */
 export function parseProcessFromGit(
   jsonContent: string,
@@ -261,6 +301,7 @@ export function parseProcessFromGit(
   } catch {
     throw new Error("Process JSON is not valid JSON");
   }
+  assertKnownJsonShape(meta);
 
   const name = typeof meta.name === "string" ? meta.name : "";
   const hasSecurityAccess =

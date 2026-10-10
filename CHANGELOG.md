@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tm1_import_process_from_git` refuses a `.json` with unknown keys or without `parameters`,
+  `variables` and `dataSource`. A file in another layout (PascalCase `Parameters`, as the VS Code
+  extension writes it) used to parse as "no parameters, no variables, source None" and cleared all
+  three on the server.
 - `tm1_diff_processes` no longer runs out of memory on long tabs. Equal leading and trailing
   lines are matched first, so a small edit in a long tab stays cheap; a changed region too
   large to diff reports `tooLarge: true` with line counts instead of hunks.

@@ -411,11 +411,43 @@ describe("git-process ignored datasource columns", () => {
   it("rejects a json whose variablesUIData is not a list of strings", () => {
     const broken = JSON.stringify({
       name: "P",
+      parameters: [],
       variables: [],
       variablesUIData: [{ ColType: 1165 }],
+      dataSource: { type: "None" },
     });
     expect(() =>
       parseProcessFromGit(broken, makeTi({ Prolog: "sX='a';" })),
     ).toThrow(/variablesUIData/);
+  });
+
+  it("rejects a .json with PascalCase keys (VS Code extension layout) instead of deploying empty lists", () => {
+    const json = JSON.stringify({
+      Name: "P",
+      HasSecurityAccess: false,
+      DataSource: { Type: "None" },
+      Parameters: [{ Name: "pA", Prompt: "", Value: "x", Type: "String" }],
+      Variables: [],
+    });
+    expect(() => parseProcessFromGit(json, makeTi({ Prolog: "x=1;" }))).toThrow(
+      /unknown key\(s\): Name, HasSecurityAccess, DataSource, Parameters, Variables/,
+    );
+  });
+
+  it("rejects a .json that lacks a structural key instead of clearing it on the server", () => {
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      dataSource: { type: "None" },
+    });
+    expect(() => parseProcessFromGit(json, makeTi({ Prolog: "x=1;" }))).toThrow(
+      /missing key\(s\): variables/,
+    );
+  });
+
+  it("rejects a .json that is not an object", () => {
+    expect(() => parseProcessFromGit("[]", makeTi({ Prolog: "x=1;" }))).toThrow(
+      /must be an object/,
+    );
   });
 });
