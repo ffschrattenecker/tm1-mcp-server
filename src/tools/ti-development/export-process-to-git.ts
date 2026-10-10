@@ -13,7 +13,7 @@ import { defineTool } from "../define-tool.js";
 export const registerExportProcessToGit = defineTool({
   name: "tm1_export_process_to_git",
   description: [
-    "Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' (parameters, variables, ignored datasource columns, datasource) plus a '{name}.ti' (Prolog/Metadata/Data/Epilog as plain code).",
+    "Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' — the server's own REST payload for the process without the code (Name, HasSecurityAccess, UIData, VariablesUIData, DataSource, Parameters, Variables; server key order, no renamed fields) — plus a '{name}.ti' (Prolog/Metadata/Data/Epilog as plain code).",
     "The .ti holds the code in TM1's native `Code` representation (#region <Tab> / #endregion, CRLF, empty tabs omitted); the .json holds the structure. Code lives outside the JSON so Git diffs stay readable.",
     "Returns both file bodies (json + ti) inline by default. Pass writeToDir to persist them to disk instead: the code is then written to files and omitted from the response to avoid duplicating it into the context window; only metadata (filenames, counts, writtenTo paths) comes back. Files written via writeToDir are round-trip safe with tm1_import_process_from_git; the inline .ti has credential literals masked by default and is for reading, not re-importing.",
     "Security: the ODBC datasource password is stripped unless includeDataSourcePassword is set (which also requires writeToDir); credential literals in the TI code are masked in the inline response when maskSecrets is on, never in written files (those must re-import intact); credentialsOmitted=true flags when a password was stripped.",
@@ -67,35 +67,19 @@ export const registerExportProcessToGit = defineTool({
           "includeDataSourcePassword is v12-only. On v11 the exported credential stops working when the TM1 service restarts, and the .json gives no sign of it. To clone a process with its password inside this instance use tm1_copy_process; to deploy elsewhere or later, export without the password and pass dataSourcePassword to tm1_import_process_from_git.",
       });
     }
-    const [codeBlob, parameters, layout, dataSource, deployMeta] =
-      await Promise.all([
-        tm1Client.processes.getCodeBlob(processName),
-        tm1Client.processes.getParameters(processName),
-        tm1Client.processes.getVariableLayout(processName),
-        tm1Client.processes.getDataSource(processName, {
-          includeSecrets: includeDataSourcePassword === true,
-        }),
-        tm1Client.processes.getDeployMeta(processName),
-      ]);
+    const [codeBlob, header] = await Promise.all([
+      tm1Client.processes.getCodeBlob(processName),
+      tm1Client.processes.getGitHeader(processName),
+    ]);
 
     // The file is the deployable copy and gets the code as it is: a masked
     // literal would re-import as broken code ('***' instead of the password).
     // Masking applies to what goes back to the model — the inline body.
     const ti = codeBlob;
     const inlineTi = resolveMaskSecrets(maskSecrets) ? maskCode(ti) : ti;
-    const { json, credentialsOmitted } = serializeProcessToGit(
-      {
-        name: processName,
-        parameters,
-        variables: layout.variables,
-        ...(layout.variablesUIData !== undefined
-          ? { variablesUIData: layout.variablesUIData }
-          : {}),
-        dataSource,
-        hasSecurityAccess: deployMeta.hasSecurityAccess,
-      },
-      { includePassword: includeDataSourcePassword === true },
-    );
+    const { json, credentialsOmitted } = serializeProcessToGit(header, {
+      includePassword: includeDataSourcePassword === true,
+    });
 
     const jsonFileName = `${processName}.json`;
     const tiFileName = `${processName}.ti`;
@@ -136,11 +120,11 @@ export const registerExportProcessToGit = defineTool({
             processName,
             jsonFileName,
             tiFileName,
-            parameterCount: parameters.length,
-            variableCount: layout.variables.length,
-            dataSourceType: dataSource.type,
+            parameterCount: header.Parameters.length,
+            variableCount: header.Variables.length,
+            dataSourceType: header.DataSource.Type,
             credentialsOmitted,
-            hasSecurityAccess: deployMeta.hasSecurityAccess,
+            hasSecurityAccess: header.HasSecurityAccess === true,
             writtenTo,
             // Echo the file bodies inline only when NOT persisting to disk. With
             // writeToDir the caller already has the files, so returning the code

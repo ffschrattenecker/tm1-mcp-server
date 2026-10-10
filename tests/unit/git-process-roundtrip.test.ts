@@ -2,28 +2,37 @@ import { describe, it, expect } from "vitest";
 import {
   serializeProcessToGit,
   parseProcessFromGit,
-  type GitProcessInput,
+  type NativeProcessHeader,
 } from "../../src/lib/git-process.js";
-import type { DataSource } from "../../src/types.js";
 
-function fixture(over: Partial<GitProcessInput> = {}): GitProcessInput {
+/** A process as TM1 REST returns it for the git field list. */
+function fixture(over: Partial<NativeProcessHeader> = {}): NativeProcessHeader {
   return {
-    name: "MyProc",
-    parameters: [
-      { name: "pNum", type: "Numeric", defaultValue: 42, prompt: "a number" },
+    Name: "MyProc",
+    HasSecurityAccess: false,
+    UIData: "CubeAction=1511\fDataAction=1503\fCubeLogChanges=0\f",
+    VariablesUIData: [],
+    DataSource: { Type: "None" },
+    Parameters: [
+      { Name: "pNum", Prompt: "a number", Value: 42, Type: "Numeric" },
+      { Name: "pStr", Prompt: "a string", Value: "default", Type: "String" },
+    ],
+    Variables: [
       {
-        name: "pStr",
-        type: "String",
-        defaultValue: "default",
-        prompt: "a string",
+        Name: "vCol1",
+        Type: "String",
+        Position: 1,
+        StartByte: 0,
+        EndByte: 0,
+      },
+      {
+        Name: "vCol2",
+        Type: "Numeric",
+        Position: 2,
+        StartByte: 0,
+        EndByte: 0,
       },
     ],
-    variables: [
-      { name: "vCol1", type: "String", position: 1 },
-      { name: "vCol2", type: "Numeric", position: 2 },
-    ],
-    dataSource: { type: "None" },
-    hasSecurityAccess: false,
     ...over,
   };
 }
@@ -40,32 +49,31 @@ function makeTi(
 }
 
 describe("git-process #region round-trip", () => {
-  it("serializes json in OData-native field order (top-level + param fields)", () => {
-    const { json } = serializeProcessToGit({
-      name: "P",
-      parameters: [
-        { name: "pA", type: "Numeric", defaultValue: 1, prompt: "ask" },
-      ],
-      variables: [],
-      dataSource: { type: "None" },
-      hasSecurityAccess: true,
-    });
+  it("writes the REST payload as it came: server key order, no renamed fields", () => {
+    const { json } = serializeProcessToGit(
+      fixture({
+        Parameters: [{ Name: "pA", Prompt: "", Value: 1, Type: "Numeric" }],
+        Variables: [],
+      }),
+    );
     expect(json).toBe(
       `{
-  "name": "P",
-  "hasSecurityAccess": true,
-  "dataSource": {
-    "type": "None"
+  "Name": "MyProc",
+  "HasSecurityAccess": false,
+  "UIData": "CubeAction=1511\\fDataAction=1503\\fCubeLogChanges=0\\f",
+  "VariablesUIData": [],
+  "DataSource": {
+    "Type": "None"
   },
-  "parameters": [
+  "Parameters": [
     {
-      "name": "pA",
-      "prompt": "ask",
-      "value": 1,
-      "type": "Numeric"
+      "Name": "pA",
+      "Prompt": "",
+      "Value": 1,
+      "Type": "Numeric"
     }
   ],
-  "variables": []
+  "Variables": []
 }
 `,
     );
@@ -340,14 +348,17 @@ describe("git-process #region round-trip", () => {
   });
 
   it("ODBC password is stripped from JSON and flagged", () => {
-    const ds: DataSource = {
-      type: "ODBC",
-      dataSourceNameForServer: "MyDSN",
-      userName: "etl_user",
-      password: "s3cr3t",
-      query: "SELECT 1",
-    };
-    const serialized = serializeProcessToGit(fixture({ dataSource: ds }));
+    const serialized = serializeProcessToGit(
+      fixture({
+        DataSource: {
+          Type: "ODBC",
+          dataSourceNameForServer: "MyDSN",
+          userName: "etl_user",
+          password: "s3cr3t",
+          query: "SELECT 1",
+        },
+      }),
+    );
     expect(serialized.credentialsOmitted).toBe(true);
     expect(serialized.json).not.toContain("s3cr3t");
     expect(serialized.json).toContain("etl_user");
@@ -398,7 +409,7 @@ describe("git-process #region round-trip", () => {
 
   it("round-trips hasSecurityAccess=true", () => {
     const { json } = serializeProcessToGit(
-      fixture({ hasSecurityAccess: true }),
+      fixture({ HasSecurityAccess: true }),
     );
     expect(
       parseProcessFromGit(json, makeTi({ Prolog: "x=1;" })).hasSecurityAccess,
@@ -429,14 +440,14 @@ describe("git-process ignored datasource columns", () => {
   ];
 
   it("survives a json round-trip", () => {
-    const { json } = serializeProcessToGit(fixture({ variablesUIData: UI }));
+    const { json } = serializeProcessToGit(fixture({ VariablesUIData: UI }));
     const parsed = parseProcessFromGit(json, makeTi({ Prolog: "sX='a';" }));
     expect(parsed.variablesUIData).toEqual(UI);
   });
 
-  it("is absent from the json when the process ignores nothing", () => {
+  it("stays an empty list as the server sends it, and reads back as absent", () => {
     const { json } = serializeProcessToGit(fixture());
-    expect(JSON.parse(json)).not.toHaveProperty("variablesUIData");
+    expect(JSON.parse(json).VariablesUIData).toEqual([]);
     expect(
       parseProcessFromGit(json, makeTi({ Prolog: "sX='a';" })).variablesUIData,
     ).toBeUndefined();
@@ -455,16 +466,57 @@ describe("git-process ignored datasource columns", () => {
     ).toThrow(/variablesUIData/);
   });
 
-  it("rejects a .json with PascalCase keys (VS Code extension layout) instead of deploying empty lists", () => {
+  it("reads the file the VS Code extension writes (same native layout), UIData included", () => {
     const json = JSON.stringify({
       Name: "P",
-      HasSecurityAccess: false,
-      DataSource: { Type: "None" },
+      HasSecurityAccess: true,
+      UIData: "CubeAction=1511\f",
+      VariablesUIData: ["VarType=32\fColType=827\f"],
+      DataSource: { Type: "ASCII", dataSourceNameForServer: "in.csv" },
       Parameters: [{ Name: "pA", Prompt: "", Value: "x", Type: "String" }],
+      Variables: [
+        { Name: "v1", Type: "String", Position: 1, StartByte: 0, EndByte: 0 },
+      ],
+    });
+    expect(parseProcessFromGit(json, makeTi({ Prolog: "x=1;" }))).toMatchObject(
+      {
+        name: "P",
+        hasSecurityAccess: true,
+        uiData: "CubeAction=1511\f",
+        variablesUIData: ["VarType=32\fColType=827\f"],
+        dataSource: { type: "ASCII", dataSourceNameForServer: "in.csv" },
+        parameters: [
+          { name: "pA", prompt: "", defaultValue: "x", type: "String" },
+        ],
+        variables: [
+          { name: "v1", type: "String", position: 1, startByte: 0, endByte: 0 },
+        ],
+      },
+    );
+  });
+
+  it("rejects a file that mixes both layouts instead of reading half of it", () => {
+    const json = JSON.stringify({
+      Name: "P",
+      parameters: [],
+      Variables: [],
+      DataSource: { Type: "None" },
+      Parameters: [],
+    });
+    expect(() => parseProcessFromGit(json, makeTi({ Prolog: "x=1;" }))).toThrow(
+      /unknown key\(s\): parameters/,
+    );
+  });
+
+  it("rejects a data source field it would otherwise drop without a word", () => {
+    const json = JSON.stringify({
+      Name: "P",
+      DataSource: { Type: "ASCII", asciiFancy: "x" },
+      Parameters: [],
       Variables: [],
     });
     expect(() => parseProcessFromGit(json, makeTi({ Prolog: "x=1;" }))).toThrow(
-      /unknown key\(s\): Name, HasSecurityAccess, DataSource, Parameters, Variables/,
+      /unknown 'dataSource' key\(s\): asciiFancy/,
     );
   });
 

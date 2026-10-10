@@ -4,6 +4,7 @@
 //
 // See docs/ARCHITECTURE.md for the layering.
 import { TM1Error, TM1ErrorCode } from "../../types.js";
+import type { NativeProcessHeader } from "../../lib/git-process.js";
 import type {
   CompileResult,
   DataSource,
@@ -453,6 +454,46 @@ export class ProcessService {
       if (!isUnsupportedQueryShape(e)) throw e;
       return {};
     }
+  }
+
+  /**
+   * The process as TM1 REST sends it for the git `.json`: everything needed to
+   * rebuild it except the code, in the server's key order, `@odata.*` removed.
+   * `UIData` and `VariablesUIData` must be named — a plain GET omits them. A
+   * server that rejects them in `$select` yields the payload without them.
+   * The data source password stays in (ciphertext on 11.8, plain on v12);
+   * the serializer decides whether it reaches the file.
+   */
+  async getGitHeader(processName: string): Promise<NativeProcessHeader> {
+    const base = `/api/v1/Processes('${odataKey(processName)}')?$select=`;
+    const strip = (r: Record<string, unknown>) => {
+      for (const k of Object.keys(r)) if (k.startsWith("@odata.")) delete r[k];
+      return r as unknown as NativeProcessHeader;
+    };
+    try {
+      return strip(
+        await this.http.request<Record<string, unknown>>(
+          "GET",
+          base +
+            "Name,HasSecurityAccess,UIData,VariablesUIData,DataSource,Parameters,Variables",
+        ),
+      );
+    } catch (e) {
+      rethrowIfSystemic(e);
+      if (!isUnsupportedQueryShape(e)) throw e;
+      return strip(
+        await this.http.request<Record<string, unknown>>(
+          "GET",
+          base + "Name,HasSecurityAccess,DataSource,Parameters,Variables",
+        ),
+      );
+    }
+  }
+
+  /** Write the Architect action settings. PATCH { UIData }. */
+  async updateUIData(processName: string, uiData: string): Promise<void> {
+    const path = `/api/v1/Processes('${odataKey(processName)}')`;
+    await this.http.request<void>("PATCH", path, { UIData: uiData });
   }
 
   /**

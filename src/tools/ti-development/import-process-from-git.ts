@@ -11,7 +11,7 @@ import { defineTool } from "../define-tool.js";
 export const registerImportProcessFromGit = defineTool({
   name: "tm1_import_process_from_git",
   description: [
-    "Deploy a TM1 process from the tm1-git two-file layout ('{name}.json' + '{name}.ti'). Provide the pair inline (jsonContent + tiContent) or as host paths (jsonPath + tiPath).",
+    "Deploy a TM1 process from the tm1-git two-file layout ('{name}.json' + '{name}.ti'). Provide the pair inline (jsonContent + tiContent) or as host paths (jsonPath + tiPath). The .json is the server's REST payload (as tm1_export_process_to_git and the VS Code extension write it); files in the older lowercase layout are read too.",
     "Reverse of tm1_export_process_to_git. Modes: 'create' (fail if exists), 'update' (fail if missing), 'upsert' (default).",
     "If the source datasource is ODBC, pass dataSourcePassword to re-inject the credential that export strips.",
   ],
@@ -206,6 +206,15 @@ export const registerImportProcessFromGit = defineTool({
           parsed.hasSecurityAccess,
         ),
         `HasSecurityAccess update failed for '${processName}'. Code+params+vars+datasource applied. Re-run with mode=update once root cause fixed.`,
+      );
+    }
+
+    // A POST does not create UIData and a PATCH without it leaves it alone, so
+    // a new process would lose the Architect action settings without this.
+    if (parsed.uiData !== undefined) {
+      await withToolHint(
+        tm1Client.processes.updateUIData(processName, parsed.uiData),
+        `UIData update failed for '${processName}'. Code+params+vars+datasource applied; only the Architect action settings are missing. Re-run with mode=update once root cause fixed.`,
       );
     }
 

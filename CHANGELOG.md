@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking for stored `.json` files:** `tm1_export_process_to_git` writes the server's own REST
+  payload for the process without the code (`Name`, `HasSecurityAccess`, `UIData`, `VariablesUIData`,
+  `DataSource`, `Parameters`, `Variables`), in the server's key order, with no renamed fields. The
+  VS Code extension writes the same bytes (366 of 366 processes on an 11.8 server). `UIData` (the
+  Architect action settings) is new in the file and is written back on import, since a POST does not
+  create it. `tm1_import_process_from_git` still reads files in the old lowercase layout.
 - Smaller package: TypeScript declarations are no longer built or shipped (234 files instead
   of 462, 1.6 MB unpacked instead of 1.9 MB). The package is a CLI and exports no API.
 - `tm1_list_error_logs`, `tm1_get_error_log_content` and `tm1_diagnose_process_error` let TM1

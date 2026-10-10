@@ -125,6 +125,13 @@ function clientWith(
       getVariableLayout: async () => ({ variables: [], ignoredColumns: [] }),
       getDataSource: async () => NONE_DS,
       getDeployMeta: async () => ({ hasSecurityAccess: false }),
+      getGitHeader: async (name: string) => ({
+        Name: name,
+        HasSecurityAccess: false,
+        DataSource: { Type: "None" },
+        Parameters: [],
+        Variables: [],
+      }),
     },
   } as unknown as TM1Client);
 }

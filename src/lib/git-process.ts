@@ -13,31 +13,46 @@ import {
 /**
  * tm1-git two-file representation of a TI process.
  *
- * `{name}.json` holds the structure (parameters, variables, datasource,
- * hasSecurityAccess). `{name}.ti` holds the code as TM1's native `Code`
- * representation — `#region <Tab>` / `#endregion` blocks (CRLF, empty tabs
- * omitted), byte-identical to `GET /Processes('x')/Code/$value`. The `.ti`
- * blob is produced by the server, not built here; this module only parses it
- * back (for import preflight). The `.json` is built by serializeProcessToGit.
+ * `{name}.json` is the server's own REST payload for the process minus the code:
+ * the response to `$select=Name,HasSecurityAccess,UIData,VariablesUIData,
+ * DataSource,Parameters,Variables` without `@odata.*`, in the server's key order,
+ * 2-space indent and a trailing newline. No renamed or invented fields, so any
+ * tool that reads TM1 REST reads the file, and the VS Code extension writes the
+ * same bytes (366 of 366 processes measured on 11.8). `UIData` and
+ * `VariablesUIData` are undeclared in $metadata and missing from a plain GET,
+ * but needed: the first holds the Architect action settings (a POST does not
+ * create it), the second every datasource column including ignored ones.
+ *
+ * `{name}.ti` holds the code as TM1's native `Code` representation —
+ * `#region <Tab>` / `#endregion` blocks (CRLF, empty tabs omitted),
+ * byte-identical to `GET /Processes('x')/Code/$value`. The `.ti` blob is
+ * produced by the server, not built here; this module only parses it back.
  *
  * Credentials: the ODBC `password` is never written to the .json. A committed
  * password would be a leaked secret; on import it is re-supplied out of band
  * (see `dataSourcePassword` on the import tool).
  */
 
-export interface GitProcessInput {
-  name: string;
-  parameters: ProcessParameter[];
-  variables: ProcessVariable[];
-  /**
-   * Raw `VariablesUIData` — one entry per datasource column, ignored ones
-   * included. Written to the .json as-is because a column set to "Ignore"
-   * appears nowhere in `variables`; leaving it out makes the export lose the
-   * setting on every re-import.
-   */
-  variablesUIData?: string[];
-  dataSource: DataSource;
-  hasSecurityAccess: boolean;
+/** The process as TM1 REST returns it for the .json field list. */
+export interface NativeProcessHeader {
+  Name: string;
+  HasSecurityAccess?: boolean;
+  UIData?: string;
+  VariablesUIData?: string[];
+  DataSource: { Type: string; password?: string; [key: string]: unknown };
+  Parameters: Array<{
+    Name: string;
+    Prompt?: string;
+    Value: string | number;
+    Type: string;
+  }>;
+  Variables: Array<{
+    Name: string;
+    Type: string;
+    Position: number;
+    StartByte?: number;
+    EndByte?: number;
+  }>;
 }
 
 export interface GitProcessJson {
@@ -55,6 +70,8 @@ export interface ParsedGitProcess {
   parameters: ProcessParameter[];
   variables: ProcessVariable[];
   variablesUIData?: string[];
+  /** Architect action settings; absent in files written before 2026-10-10. */
+  uiData?: string;
   dataSource: DataSource;
   hasSecurityAccess?: boolean;
 }
@@ -62,44 +79,28 @@ export interface ParsedGitProcess {
 type Tab = "prolog" | "metadata" | "data" | "epilog";
 
 /**
- * Build only the `{name}.json` (structure). Field order mirrors TM1's OData
- * Process entity (Name, HasSecurityAccess, DataSource, then Parameters/
- * Variables); parameter objects follow OData order (Name, Prompt, Value, Type).
- * Order is cosmetic — parseProcessFromGit reads by key.
+ * Build the `{name}.json`: the server payload as it came, the password
+ * stripped unless asked for. Key order is the server's, so nothing is rebuilt.
  */
 export function serializeProcessToGit(
-  input: GitProcessInput,
+  header: NativeProcessHeader,
   opts?: { includePassword?: boolean },
 ): GitProcessJson {
-  const { password, ...dataSourceNoPwd } = input.dataSource;
+  const { password, ...dataSourceNoPwd } = header.DataSource;
   const keepPassword = opts?.includePassword === true && Boolean(password);
   const credentialsOmitted =
     !keepPassword && password !== undefined && password !== "";
-
   const json =
     JSON.stringify(
       {
-        name: input.name,
-        hasSecurityAccess: input.hasSecurityAccess,
-        dataSource: keepPassword
+        ...header,
+        DataSource: keepPassword
           ? { ...dataSourceNoPwd, password }
           : dataSourceNoPwd,
-        parameters: input.parameters.map((p) => ({
-          name: p.name,
-          ...(p.prompt !== undefined ? { prompt: p.prompt } : {}),
-          value: p.defaultValue,
-          type: p.type,
-        })),
-        variables: input.variables,
-        ...(input.variablesUIData !== undefined &&
-        input.variablesUIData.length > 0
-          ? { variablesUIData: input.variablesUIData }
-          : {}),
       },
       null,
       2,
     ) + "\n";
-
   return { json, credentialsOmitted };
 }
 
@@ -216,44 +217,97 @@ function parseCodeBlob(ti: string): Record<Tab, string> {
   return out;
 }
 
-const KNOWN_JSON_KEYS: ReadonlySet<string> = new Set([
+const NATIVE_KEYS = [
+  "Name",
+  "HasSecurityAccess",
+  "UIData",
+  "VariablesUIData",
+  "DataSource",
+  "Parameters",
+  "Variables",
+] as const;
+const LEGACY_KEYS = [
   "name",
   "hasSecurityAccess",
   "parameters",
   "variables",
   "variablesUIData",
   "dataSource",
-]);
-const REQUIRED_JSON_KEYS = ["parameters", "variables", "dataSource"] as const;
+] as const;
+const DATASOURCE_KEYS = new Set(Object.keys(dataSourceSchema.shape));
 
 /**
- * Import deploys the .json as the whole truth: a missing `parameters` or
- * `variables` goes out as an empty list, a missing `dataSource` as `None`, and
- * TM1 applies both. A .json in another layout (e.g. PascalCase `Parameters`
- * as written by the VS Code extension) therefore parsed to "no parameters, no
- * variables, no source" and wiped them on the server without a word. Reject
- * any unknown key and any missing structural key instead of guessing.
+ * Import deploys the .json as the whole truth: a missing parameter or variable
+ * list goes out empty, a missing data source as `None`, and TM1 applies both.
+ * A file whose keys were not read (another layout, a typo) therefore cleared
+ * them on the server without a word. Accept exactly one of the two layouts —
+ * the native REST one, or the lowercase one written before 2026-10-10 — and
+ * require the three structural keys; reject anything else instead of guessing.
  */
-function assertKnownJsonShape(meta: unknown): void {
+function assertKnownJsonShape(meta: unknown): "native" | "legacy" {
   if (meta === null || typeof meta !== "object" || Array.isArray(meta)) {
     throw new Error("Process JSON must be an object");
   }
   const keys = Object.keys(meta);
-  const unknown = keys.filter((k) => !KNOWN_JSON_KEYS.has(k));
+  const layout = keys.some((k) => /^[A-Z]/.test(k)) ? "native" : "legacy";
+  const known: readonly string[] =
+    layout === "native" ? NATIVE_KEYS : LEGACY_KEYS;
+  const unknown = keys.filter((k) => !known.includes(k));
   if (unknown.length > 0) {
     throw new Error(
       `Process JSON has unknown key(s): ${unknown.join(", ")}. ` +
-        `Expected only: ${[...KNOWN_JSON_KEYS].join(", ")}. ` +
+        `Expected only: ${known.join(", ")}. ` +
         "Refusing to deploy: unread fields would be sent as empty and clear the process on the server.",
     );
   }
-  const missing = REQUIRED_JSON_KEYS.filter((k) => !keys.includes(k));
+  const required =
+    layout === "native"
+      ? ["Parameters", "Variables", "DataSource"]
+      : ["parameters", "variables", "dataSource"];
+  const missing = required.filter((k) => !keys.includes(k));
   if (missing.length > 0) {
     throw new Error(
       `Process JSON is missing key(s): ${missing.join(", ")}. ` +
         "Refusing to deploy: a missing list would be sent as empty and clear it on the server.",
     );
   }
+  return layout;
+}
+
+/** Native REST field names → the lowercase shape the validators below read. */
+function fromNative(n: Record<string, unknown>): Record<string, unknown> {
+  // Non-list values pass through untouched, so the validators name them.
+  const rows = (
+    v: unknown,
+    map: (r: Record<string, unknown>) => unknown,
+  ): unknown =>
+    Array.isArray(v)
+      ? (v as unknown[]).map((r): unknown =>
+          r && typeof r === "object" ? map(r as Record<string, unknown>) : r,
+        )
+      : v;
+  const ds = n.DataSource as Record<string, unknown> | undefined;
+  const { Type, ...dsRest } = ds && typeof ds === "object" ? ds : {};
+  return {
+    name: n.Name,
+    hasSecurityAccess: n.HasSecurityAccess,
+    uiData: n.UIData,
+    variablesUIData: n.VariablesUIData,
+    dataSource: ds && typeof ds === "object" ? { type: Type, ...dsRest } : ds,
+    parameters: rows(n.Parameters, (p) => ({
+      name: p.Name,
+      type: p.Type,
+      value: p.Value,
+      ...(p.Prompt !== undefined ? { prompt: p.Prompt } : {}),
+    })),
+    variables: rows(n.Variables, (v) => ({
+      name: v.Name,
+      type: v.Type,
+      position: v.Position,
+      ...(v.StartByte !== undefined ? { startByte: v.StartByte } : {}),
+      ...(v.EndByte !== undefined ? { endByte: v.EndByte } : {}),
+    })),
+  };
 }
 
 /** Parse a `{name}.json` + `{name}.ti` pair back into deployable process parts. */
@@ -261,20 +315,42 @@ export function parseProcessFromGit(
   jsonContent: string,
   tiContent: string,
 ): ParsedGitProcess {
-  let meta: {
+  type Meta = {
     name?: unknown;
     hasSecurityAccess?: unknown;
     parameters?: unknown;
     variables?: unknown;
     variablesUIData?: unknown;
+    uiData?: unknown;
     dataSource?: unknown;
   };
+  let raw: unknown;
   try {
-    meta = JSON.parse(jsonContent) as typeof meta;
+    raw = JSON.parse(jsonContent);
   } catch {
     throw new Error("Process JSON is not valid JSON");
   }
-  assertKnownJsonShape(meta);
+  const meta: Meta =
+    assertKnownJsonShape(raw) === "native"
+      ? fromNative(raw as Record<string, unknown>)
+      : (raw as Meta);
+
+  // Zod drops unknown keys silently; a data source field it does not know
+  // would be lost on deploy.
+  if (meta.dataSource && typeof meta.dataSource === "object") {
+    const extra = Object.keys(meta.dataSource).filter(
+      (k) => !DATASOURCE_KEYS.has(k),
+    );
+    if (extra.length > 0) {
+      throw new Error(
+        `Process JSON has unknown 'dataSource' key(s): ${extra.join(", ")}. ` +
+          "Refusing to deploy: they would be dropped without a word.",
+      );
+    }
+  }
+  if (meta.uiData !== undefined && typeof meta.uiData !== "string") {
+    throw new Error("Process JSON has invalid 'UIData': expected a string");
+  }
 
   const name = typeof meta.name === "string" ? meta.name : "";
   const hasSecurityAccess =
@@ -346,6 +422,7 @@ export function parseProcessFromGit(
     parameters,
     variables,
     ...(variablesUIData.length > 0 ? { variablesUIData } : {}),
+    ...(typeof meta.uiData === "string" ? { uiData: meta.uiData } : {}),
     dataSource,
   };
 }

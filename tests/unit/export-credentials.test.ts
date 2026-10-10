@@ -129,13 +129,18 @@ describe("git export refuses credentials on v11", () => {
       getParameters: async () => [],
       getVariables: async () => [],
       getVariableLayout: async () => ({ variables: [], ignoredColumns: [] }),
-      getDataSource: async () => ({
-        type: "ODBC" as const,
-        dataSourceNameForServer: "SALES_DWH",
-        userName: "etl_reader",
-        password: "W0br6scX06nUHxVZQrQC+g==",
+      getGitHeader: async () => ({
+        Name: "P",
+        HasSecurityAccess: false,
+        DataSource: {
+          Type: "ODBC",
+          dataSourceNameForServer: "SALES_DWH",
+          userName: "etl_reader",
+          password: "W0br6scX06nUHxVZQrQC+g==",
+        },
+        Parameters: [],
+        Variables: [],
       }),
-      getDeployMeta: async () => ({ hasSecurityAccess: false }),
     };
     let cb: ToolCb | undefined;
     const server = {
@@ -226,12 +231,13 @@ describe("password slots in the two file formats", () => {
   });
 
   it("git json keeps the password only when asked", () => {
+    const { type, ...rest } = ds;
     const input = {
-      name: "P",
-      dataSource: ds,
-      parameters: [],
-      variables: [],
-      hasSecurityAccess: false,
+      Name: "P",
+      HasSecurityAccess: false,
+      DataSource: { Type: type, ...rest },
+      Parameters: [],
+      Variables: [],
     };
     const stripped = serializeProcessToGit(input);
     expect(stripped.credentialsOmitted).toBe(true);
