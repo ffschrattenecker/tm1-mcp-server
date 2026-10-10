@@ -219,7 +219,7 @@ describe("git-process #region round-trip", () => {
     // 2 of 366 processes on an 11.8 server leave a fold open; depth counting
     // rejected their export. Only the four tab markers are structure.
     const ti = makeTi({
-      Prolog: "#Region never closed\r\nx = 1;",
+      Prolog: "#Region never closed\r\nx = 1;\r\n#Region Data",
       Metadata: "#EndRegion\r\ny = 2;",
       Data: "z = 3;",
       Epilog: "#region Prolog\r\nw = 4;\r\n#EndRegion wrong",
@@ -231,7 +231,7 @@ describe("git-process #region round-trip", () => {
       dataSource: { type: "None" },
     });
     expect(parseProcessFromGit(json, ti)).toMatchObject({
-      prolog: "#Region never closed\r\nx = 1;",
+      prolog: "#Region never closed\r\nx = 1;\r\n#Region Data",
       metadata: "#EndRegion\r\ny = 2;",
       data: "z = 3;",
       epilog: "#region Prolog\r\nw = 4;\r\n#EndRegion wrong",

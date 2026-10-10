@@ -114,9 +114,12 @@ function regionBlobError(problem: string): Error {
   );
 }
 
-/** The tab a line opens (`#region Prolog`, case-insensitive), or undefined. */
+/**
+ * The tab a line opens, or undefined. The keyword is lowercase, as TM1 writes
+ * it: a user fold `#Region Data` stays code (VS Code extension, same rule).
+ */
 function openedTab(line: string): Tab | undefined {
-  const m = /^[ \t]*#region[ \t]+(\w+)[ \t]*$/i.exec(line);
+  const m = /^[ \t]*#region[ \t]+(\w+)[ \t]*$/.exec(line);
   const name = m?.[1]!.toLowerCase();
   return TABS.includes(name as Tab) ? (name as Tab) : undefined;
 }
