@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  EMPTY_CODE_BLOB,
   serializeProcessToGit,
   parseProcessFromGit,
   type NativeProcessHeader,
@@ -77,6 +78,37 @@ describe("git-process #region round-trip", () => {
 }
 `,
     );
+  });
+
+  it("reads the export of a process without code back as four empty tabs", () => {
+    const json = serializeProcessToGit(fixture()).json;
+    const parsed = parseProcessFromGit(json, EMPTY_CODE_BLOB);
+    expect([
+      parsed.prolog,
+      parsed.metadata,
+      parsed.data,
+      parsed.epilog,
+    ]).toEqual(["", "", "", ""]);
+  });
+
+  it("keeps TM1 12's layout: lists last in the .json, trailing newline before #endregion", () => {
+    // 12.5.9 sends UIData/VariablesUIData after Variables and always puts a
+    // line break before #endregion, so a tab ending in one shows a blank line.
+    const { UIData, VariablesUIData, ...rest } = fixture();
+    const { json } = serializeProcessToGit({
+      ...rest,
+      UIData: UIData!,
+      VariablesUIData: VariablesUIData!,
+    });
+    expect(Object.keys(JSON.parse(json)).slice(-2)).toEqual([
+      "UIData",
+      "VariablesUIData",
+    ]);
+    const parsed = parseProcessFromGit(
+      json,
+      "#region Prolog\r\np;\r\n\r\n#endregion",
+    );
+    expect(parsed.prolog).toBe("p;\r\n");
   });
 
   it("parses #region tabs into prolog/metadata/data/epilog; omitted tab is empty", () => {

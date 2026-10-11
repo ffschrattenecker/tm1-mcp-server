@@ -4,7 +4,10 @@ import { z } from "zod";
 import { supportsCredentialExport } from "../../lib/credential-format.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { resolveLocalPath } from "../local-file.js";
-import { serializeProcessToGit } from "../../lib/git-process.js";
+import {
+  EMPTY_CODE_BLOB,
+  serializeProcessToGit,
+} from "../../lib/git-process.js";
 import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
 import { ExportProcessToGitResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -75,7 +78,7 @@ export const registerExportProcessToGit = defineTool({
     // The file is the deployable copy and gets the code as it is: a masked
     // literal would re-import as broken code ('***' instead of the password).
     // Masking applies to what goes back to the model — the inline body.
-    const ti = codeBlob;
+    const ti = codeBlob === "" ? EMPTY_CODE_BLOB : codeBlob;
     const inlineTi = resolveMaskSecrets(maskSecrets) ? maskCode(ti) : ti;
     const { json, credentialsOmitted } = serializeProcessToGit(header, {
       includePassword: includeDataSourcePassword === true,

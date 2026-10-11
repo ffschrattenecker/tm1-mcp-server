@@ -106,6 +106,14 @@ export function serializeProcessToGit(
 
 const TABS: readonly Tab[] = ["prolog", "metadata", "data", "epilog"];
 
+/**
+ * The `.ti` for a process without code. TM1 (11.8 and 12) sends an empty
+ * `Code` blob there, but the parser rejects an empty file — a truncated `.ti`
+ * must not deploy as "delete all code". So the export writes one empty Prolog
+ * region instead, the same bytes the VS Code extension writes.
+ */
+export const EMPTY_CODE_BLOB = "#region Prolog\r\n#endregion";
+
 /** Build a descriptive error naming the structural problem ("reject, don't guess"). */
 function regionBlobError(problem: string): Error {
   return new Error(

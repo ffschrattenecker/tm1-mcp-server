@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   VS Code extension writes the same bytes (366 of 366 processes on an 11.8 server). `UIData` (the
   Architect action settings) is new in the file and is written back on import, since a POST does not
   create it. `tm1_import_process_from_git` still reads files in the old lowercase layout.
+- `tm1_export_process_to_git` writes a process without code as one empty Prolog region instead
+  of an empty `.ti`, which `tm1_import_process_from_git` refused to read back. Same bytes as the
+  VS Code extension; on a TM1 12 server both now match the server's own layout (102 of 102 `.json`).
 - Smaller package: TypeScript declarations are no longer built or shipped (234 files instead
   of 462, 1.6 MB unpacked instead of 1.9 MB). The package is a CLI and exports no API.
 - `tm1_list_error_logs`, `tm1_get_error_log_content` and `tm1_diagnose_process_error` let TM1
