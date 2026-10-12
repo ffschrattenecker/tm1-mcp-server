@@ -278,6 +278,25 @@ describe("git-process #region round-trip", () => {
     });
   });
 
+  it("reads the VS Code extension's former layout: lowercase tabs closed by `#endregion <tab>`", () => {
+    // Written by the extension before 2026-10-10 (LF, one break before each close).
+    const ti =
+      "#region prolog\nx = 1;\n#endregion prolog\n#region metadata\n\n#endregion metadata\n" +
+      "#region data\n#EndRegion\ny = 2;\n#endregion data\n#region epilog\n\n#endregion epilog";
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    expect(parseProcessFromGit(json, ti)).toMatchObject({
+      prolog: "x = 1;",
+      metadata: "",
+      data: "#EndRegion\ny = 2;",
+      epilog: "",
+    });
+  });
+
   it("rejects tabs out of order", () => {
     const ti =
       "#region Epilog\r\ne;\r\n#endregion\r\n#region Prolog\r\np;\r\n#endregion";

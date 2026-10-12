@@ -133,9 +133,15 @@ function openedTab(line: string): Tab | undefined {
   return TABS.includes(name as Tab) ? (name as Tab) : undefined;
 }
 
-/** The server's tab close: a bare `#endregion` (lowercase, as TM1 writes it). */
+/**
+ * The server's tab close: a bare `#endregion` (lowercase, as TM1 writes it).
+ * Also the VS Code extension's former `#endregion prolog` close, so `.ti`
+ * files it wrote before 2026-10-10 still read (git/sectionMarkers.ts).
+ */
 function isTabClose(line: string): boolean {
-  return /^[ \t]*#endregion[ \t]*$/.test(line);
+  return /^[ \t]*#endregion(?: (?:prolog|metadata|data|epilog))?[ \t]*$/.test(
+    line,
+  );
 }
 
 /**
