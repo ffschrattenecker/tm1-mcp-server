@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   EMPTY_CODE_BLOB,
   serializeProcessToGit,
+  toCodeBlob,
   parseProcessFromGit,
   type NativeProcessHeader,
 } from "../../src/lib/git-process.js";
@@ -314,6 +315,23 @@ describe("git-process #region round-trip", () => {
       data: "#EndRegion\ny = 2;",
       epilog: "",
     });
+  });
+
+  it("sends a native .ti as it is and rebuilds the former layout into TM1's blob", () => {
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    const native = "#region Prolog\r\nx = 1;\r\n\r\n#endregion";
+    expect(toCodeBlob(native, parseProcessFromGit(json, native))).toBe(native);
+    const former =
+      "#region prolog\nx = 1;\n#endregion prolog\n#region metadata\n\n#endregion metadata\n" +
+      "#region data\n#EndRegion\n#endregion data\n#region epilog\n\n#endregion epilog";
+    expect(toCodeBlob(former, parseProcessFromGit(json, former))).toBe(
+      "#region Prolog\r\nx = 1;\r\n#endregion\r\n#region Data\r\n#EndRegion\r\n#endregion",
+    );
   });
 
   it("rejects tabs out of order", () => {

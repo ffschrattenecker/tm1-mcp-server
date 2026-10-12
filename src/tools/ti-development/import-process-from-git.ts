@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { resolveLocalPath } from "../local-file.js";
-import { parseProcessFromGit } from "../../lib/git-process.js";
+import { parseProcessFromGit, toCodeBlob } from "../../lib/git-process.js";
 import { withToolHint } from "../error-format.js";
 import { IDEMPOTENT_WRITE } from "../annotations.js";
 import { ImportProcessFromGitResultSchema } from "../schemas/items.js";
@@ -169,11 +169,9 @@ export const registerImportProcessFromGit = defineTool({
     // into the four tabs. This is a full replace — tabs whose region is
     // absent are cleared, matching the exported .ti exactly.
     // Note: parsed tabs were used only for preflight validation above; this raw blob deploys, and TM1 owns the authoritative region split.
+    // Only a file in the extension's former layout is rebuilt (toCodeBlob).
     await withToolHint(
-      tm1Client.processes.updateCodeBlob(
-        processName,
-        ti.replace(/\r?\n/g, "\r\n"),
-      ),
+      tm1Client.processes.updateCodeBlob(processName, toCodeBlob(ti, parsed)),
       `Code update failed after process '${processName}' was ${exists ? "located" : "created"}. PARTIAL APPLY: shell exists but tabs are stale/empty. Re-run with mode=update once root cause fixed, or tm1_delete_process to roll back.`,
     );
 

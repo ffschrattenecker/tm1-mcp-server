@@ -123,6 +123,28 @@ const TABS: readonly Tab[] = ["prolog", "metadata", "data", "epilog"];
  */
 export const EMPTY_CODE_BLOB = "#region Prolog\r\n#endregion";
 
+/**
+ * The `Code` blob to send for a `.ti`. A native one goes as it is (CRLF), so
+ * TM1 splits exactly what the file holds. The VS Code extension's former
+ * layout (`#region prolog` … `#endregion prolog`) is rebuilt from the parsed
+ * tabs instead: TM1 refuses those closes ("mismatched regions").
+ */
+export function toCodeBlob(ti: string, parsed: ParsedGitProcess): string {
+  if (!/^[ \t]*#endregion (?:prolog|metadata|data|epilog)[ \t]*$/m.test(ti)) {
+    return ti.replace(/\r?\n/g, "\r\n");
+  }
+  const TITLE = {
+    prolog: "Prolog",
+    metadata: "Metadata",
+    data: "Data",
+    epilog: "Epilog",
+  };
+  const blob = TABS.filter((t) => parsed[t] !== "")
+    .map((t) => `#region ${TITLE[t]}\n${parsed[t]}\n#endregion`)
+    .join("\n");
+  return (blob || EMPTY_CODE_BLOB).replace(/\r?\n/g, "\r\n");
+}
+
 /** Build a descriptive error naming the structural problem ("reject, don't guess"). */
 function regionBlobError(problem: string): Error {
   return new Error(

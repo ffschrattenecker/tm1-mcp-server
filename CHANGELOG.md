@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tm1_import_process_from_git` deploys `.ti` files the VS Code extension wrote before its native
+  layout (`#region prolog` … `#endregion prolog`). They parsed, but TM1 refused the blob with
+  "mismatched regions"; the code is now rebuilt from the parsed tabs.
 - `tm1_import_process_from_git` reads a `.ti` whose code holds a `#Region` fold the user never
   closed. The parser counted depth and refused it (2 of 366 processes on an 11.8 server). Only the
   four tab markers are structure now; a tab ends at the bare `#endregion` followed by a later tab
