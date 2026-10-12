@@ -576,11 +576,20 @@ describe("git-process ignored datasource columns", () => {
     expect(parsed.variablesUIData).toEqual(UI);
   });
 
-  it("stays an empty list as the server sends it, and reads back as absent", () => {
+  it("stays an empty list as the server sends it, and reads back as one", () => {
+    // TM1 12 creates a process without VariablesUIData; only an import that
+    // sends [] restores the key the source process had.
     const { json } = serializeProcessToGit(fixture());
     expect(JSON.parse(json).VariablesUIData).toEqual([]);
     expect(
       parseProcessFromGit(json, makeTi({ Prolog: "sX='a';" })).variablesUIData,
+    ).toEqual([]);
+    const { VariablesUIData: _, ...withoutKey } = JSON.parse(json);
+    expect(
+      parseProcessFromGit(
+        JSON.stringify(withoutKey),
+        makeTi({ Prolog: "sX='a';" }),
+      ).variablesUIData,
     ).toBeUndefined();
   });
 

@@ -492,7 +492,9 @@ export function parseProcessFromGit(
     epilog: tabs.epilog,
     parameters,
     variables,
-    ...(variablesUIData.length > 0 ? { variablesUIData } : {}),
+    // An empty list is kept: TM1 12 creates a process without the key and
+    // only adds it, empty, on a PATCH with []; dropping it lost it on import.
+    ...(meta.variablesUIData !== undefined ? { variablesUIData } : {}),
     ...(typeof meta.uiData === "string" ? { uiData: meta.uiData } : {}),
     dataSource,
   };

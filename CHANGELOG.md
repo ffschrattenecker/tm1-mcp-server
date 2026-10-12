@@ -47,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not spelled exactly like one (`#region data` or `#Region Data` inside the Prolog). In the VS Code
   extension's former layout only `#endregion <tab>` closes a tab; a fold such as `#region Epilog`
   after a bare `#endregion` moved the rest of the Prolog into the Epilog.
+- `tm1_import_process_from_git` keeps an empty `VariablesUIData` list. TM1 12 creates a process
+  without the key, so dropping the empty list left it missing after import (89 of 103 processes
+  on 12.5.9).
 - `tm1_export_process_to_git` adds a `warning` when `tm1_import_process_from_git` would refuse the
   pair, for example a data source field or type the import does not know.
 - `tm1_export_process_to_git` reports a v11 security denial as such instead of retrying without
