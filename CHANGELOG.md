@@ -75,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   type, source, view and subset only.
 - `ip-address` (via the MCP SDK) raised to 10.7.2 or later for GHSA-rpw4-54j3-4h4q and
   GHSA-2vr4-cq9g-pvrc.
+- `proxy-addr` (via the MCP SDK's `express`) raised to 2.0.8 for GHSA-jqcg-44mw-7w3h.
 
 All ported from the [ffschrattenecker fork](https://github.com/ffschrattenecker/tm1-mcp-server)
 (7.0.2 to 9.1.0).
