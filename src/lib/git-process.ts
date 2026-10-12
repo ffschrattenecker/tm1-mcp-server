@@ -80,7 +80,11 @@ type Tab = "prolog" | "metadata" | "data" | "epilog";
 
 /**
  * Build the `{name}.json`: the server payload as it came, the password
- * stripped unless asked for. Key order is the server's, so nothing is rebuilt.
+ * stripped unless asked for. Key order is the server's, so nothing is rebuilt
+ * — with one exception: TM1 12 usually sends `UIData` before
+ * `VariablesUIData`, but not always (1 of 103 processes on 12.5.9 had them
+ * swapped). The file puts `UIData` first, as the VS Code extension does, so
+ * both tools write the same bytes and the order never shows up as a diff.
  */
 export function serializeProcessToGit(
   header: NativeProcessHeader,
@@ -90,14 +94,19 @@ export function serializeProcessToGit(
   const keepPassword = opts?.includePassword === true && Boolean(password);
   const credentialsOmitted =
     !keepPassword && password !== undefined && password !== "";
+  const keys = Object.keys(header);
+  const ui = keys.indexOf("UIData");
+  const vui = keys.indexOf("VariablesUIData");
+  if (ui > vui && vui >= 0) [keys[ui], keys[vui]] = [keys[vui]!, keys[ui]!];
+  const payload: Record<string, unknown> = {
+    ...header,
+    DataSource: keepPassword
+      ? { ...dataSourceNoPwd, password }
+      : dataSourceNoPwd,
+  };
   const json =
     JSON.stringify(
-      {
-        ...header,
-        DataSource: keepPassword
-          ? { ...dataSourceNoPwd, password }
-          : dataSourceNoPwd,
-      },
+      Object.fromEntries(keys.map((k) => [k, payload[k]])),
       null,
       2,
     ) + "\n";

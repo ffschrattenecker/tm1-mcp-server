@@ -111,6 +111,25 @@ describe("git-process #region round-trip", () => {
     expect(parsed.prolog).toBe("p;\r\n");
   });
 
+  it("puts UIData before VariablesUIData when TM1 12 sends them swapped", () => {
+    // 1 of 103 processes on 12.5.9; the VS Code extension writes UIData first.
+    const { UIData, VariablesUIData, ...rest } = fixture();
+    const { json } = serializeProcessToGit({
+      ...rest,
+      VariablesUIData: VariablesUIData!,
+      UIData: UIData!,
+    });
+    expect(Object.keys(JSON.parse(json))).toEqual([
+      "Name",
+      "HasSecurityAccess",
+      "DataSource",
+      "Parameters",
+      "Variables",
+      "UIData",
+      "VariablesUIData",
+    ]);
+  });
+
   it("parses #region tabs into prolog/metadata/data/epilog; omitted tab is empty", () => {
     const ti = makeTi({
       Prolog: "sP='p';",
