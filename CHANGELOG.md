@@ -41,6 +41,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `variables` and `dataSource`. A file in another layout (PascalCase `Parameters`, as the VS Code
   extension writes it) used to parse as "no parameters, no variables, source None" and cleared all
   three on the server.
+- `tm1_import_process_from_git` also refuses those three keys when they are `null`, which used to
+  clear parameters, variables and data source just like a missing key.
+- `tm1_import_process_from_git` keeps a user fold in its tab when it looks like a tab marker but is
+  not spelled exactly like one (`#region data` or `#Region Data` inside the Prolog). In the VS Code
+  extension's former layout only `#endregion <tab>` closes a tab; a fold such as `#region Epilog`
+  after a bare `#endregion` moved the rest of the Prolog into the Epilog.
+- `tm1_export_process_to_git` adds a `warning` when `tm1_import_process_from_git` would refuse the
+  pair, for example a data source field or type the import does not know.
+- `tm1_export_process_to_git` reports a v11 security denial as such instead of retrying without
+  `UIData`, and writes `includeDataSourcePassword` exports with the password where the server
+  sends it.
 - `tm1_diff_processes` no longer runs out of memory on long tabs. Equal leading and trailing
   lines are matched first, so a small edit in a long tab stays cheap; a changed region too
   large to diff reports `tooLarge: true` with line counts instead of hunks.

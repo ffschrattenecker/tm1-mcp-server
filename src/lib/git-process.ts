@@ -100,9 +100,7 @@ export function serializeProcessToGit(
   if (ui > vui && vui >= 0) [keys[ui], keys[vui]] = [keys[vui]!, keys[ui]!];
   const payload: Record<string, unknown> = {
     ...header,
-    DataSource: keepPassword
-      ? { ...dataSourceNoPwd, password }
-      : dataSourceNoPwd,
+    DataSource: keepPassword ? header.DataSource : dataSourceNoPwd,
   };
   const json =
     JSON.stringify(
@@ -114,6 +112,12 @@ export function serializeProcessToGit(
 }
 
 const TABS: readonly Tab[] = ["prolog", "metadata", "data", "epilog"];
+const TITLE: Record<Tab, string> = {
+  prolog: "Prolog",
+  metadata: "Metadata",
+  data: "Data",
+  epilog: "Epilog",
+};
 
 /**
  * The `.ti` for a process without code. TM1 (11.8 and 12) sends an empty
@@ -124,21 +128,24 @@ const TABS: readonly Tab[] = ["prolog", "metadata", "data", "epilog"];
 export const EMPTY_CODE_BLOB = "#region Prolog\r\n#endregion";
 
 /**
+ * The VS Code extension's former layout (before 2026-10-10): lowercase tab
+ * names, each tab closed by name (`#region prolog` … `#endregion prolog`).
+ * TM1's own blob closes with a bare `#endregion` only.
+ */
+function isLegacyLayout(ti: string): boolean {
+  return /^[ \t]*#endregion (?:prolog|metadata|data|epilog)[ \t]*\r?$/m.test(
+    ti,
+  );
+}
+
+/**
  * The `Code` blob to send for a `.ti`. A native one goes as it is (CRLF), so
  * TM1 splits exactly what the file holds. The VS Code extension's former
  * layout (`#region prolog` … `#endregion prolog`) is rebuilt from the parsed
  * tabs instead: TM1 refuses those closes ("mismatched regions").
  */
 export function toCodeBlob(ti: string, parsed: ParsedGitProcess): string {
-  if (!/^[ \t]*#endregion (?:prolog|metadata|data|epilog)[ \t]*$/m.test(ti)) {
-    return ti.replace(/\r?\n/g, "\r\n");
-  }
-  const TITLE = {
-    prolog: "Prolog",
-    metadata: "Metadata",
-    data: "Data",
-    epilog: "Epilog",
-  };
+  if (!isLegacyLayout(ti)) return ti.replace(/\r?\n/g, "\r\n");
   const blob = TABS.filter((t) => parsed[t] !== "")
     .map((t) => `#region ${TITLE[t]}\n${parsed[t]}\n#endregion`)
     .join("\n");
@@ -155,24 +162,34 @@ function regionBlobError(problem: string): Error {
 }
 
 /**
- * The tab a line opens, or undefined. The keyword is lowercase, as TM1 writes
- * it: a user fold `#Region Data` stays code (VS Code extension, same rule).
+ * The tab a line opens, or undefined. Between tabs nothing else may stand, so
+ * any spelling counts there (`any`). Inside a tab, or right after a possible
+ * close, only the exact form the layout writes does: `#region Prolog` (TM1)
+ * or `#region prolog` (former layout). Every other spelling (`#region data`,
+ * `#Region Data`) is a user fold and stays code.
  */
-function openedTab(line: string): Tab | undefined {
+function openedTab(
+  line: string,
+  form: "any" | "native" | "legacy",
+): Tab | undefined {
   const m = /^[ \t]*#region[ \t]+(\w+)[ \t]*$/.exec(line);
-  const name = m?.[1]!.toLowerCase();
-  return TABS.includes(name as Tab) ? (name as Tab) : undefined;
+  const name = m?.[1];
+  return TABS.find((t) =>
+    form === "any"
+      ? name?.toLowerCase() === t
+      : name === (form === "legacy" ? t : TITLE[t]),
+  );
 }
 
 /**
- * The server's tab close: a bare `#endregion` (lowercase, as TM1 writes it).
- * Also the VS Code extension's former `#endregion prolog` close, so `.ti`
- * files it wrote before 2026-10-10 still read (git/sectionMarkers.ts).
+ * A tab's close: TM1's bare `#endregion`, or in the extension's former layout
+ * `#endregion <tab>` naming that tab — there a bare `#endregion` is a user
+ * fold's close, which is what keeps that layout unambiguous.
  */
-function isTabClose(line: string): boolean {
-  return /^[ \t]*#endregion(?: (?:prolog|metadata|data|epilog))?[ \t]*$/.test(
-    line,
-  );
+function isTabClose(line: string, tab: Tab, legacy: boolean): boolean {
+  return new RegExp(
+    `^[ \\t]*#endregion${legacy ? ` ${tab}` : ""}[ \\t]*$`,
+  ).test(line);
 }
 
 /**
@@ -183,10 +200,14 @@ function isTabClose(line: string): boolean {
  * support it) and the server stores them inside the tab. They are code, never
  * structure — and they can be wrong: on an 11.8 server 94 of 366 processes
  * carry folds and 2 leave one open, so counting depth rejected real exports.
- * A tab therefore ends at the bare `#endregion` that is followed (blank lines
- * aside) by the opening of a LATER tab or by the end of the blob — the shape
- * the server writes. Any other `#endregion` stays in the tab's code. The same
- * rule reads the file in the VS Code extension (git/sectionMarkers.ts).
+ * A tab therefore ends at its close (see isTabClose) that is followed (blank
+ * lines aside) by the opening of a LATER tab or by the end of the blob — the
+ * shape the server writes. Any other `#endregion` stays in the tab's code. The
+ * same rule reads the file in the VS Code extension (git/sectionMarkers.ts).
+ *
+ * One case stays ambiguous in TM1's own format: a user fold spelled exactly
+ * like a later tab (`#region Data` inside the Prolog) looks the same as that
+ * tab after a deleted `#endregion`. It is refused rather than guessed.
  *
  * Still throws on genuine structural corruption: no tab at all (rejects the
  * pre-1.x `### TM1-TI-TAB:` layout), code or an unknown `#region` outside a
@@ -220,10 +241,12 @@ function parseCodeBlob(ti: string): Record<Tab, string> {
     );
   }
 
+  const legacy = isLegacyLayout(ti);
+  const form = legacy ? "legacy" : "native";
   let last = -1;
   let i = nextNonBlank(0);
   while (i < lines.length) {
-    const tab = openedTab(text(i));
+    const tab = openedTab(text(i), "any");
     if (!tab) {
       throw regionBlobError(
         `found ${JSON.stringify(text(i).trim().slice(0, 40))} outside a tab ` +
@@ -243,15 +266,15 @@ function parseCodeBlob(ti: string): Record<Tab, string> {
             "or a closing #endregion is missing.",
         );
       }
-      const inner = openedTab(text(j));
+      const inner = openedTab(text(j), form);
       if (inner && TABS.indexOf(inner) > TABS.indexOf(tab)) {
         throw regionBlobError(
           `"#region ${inner}" opens inside "${tab}" — the #endregion closing "${tab}" is missing.`,
         );
       }
-      if (!isTabClose(text(j))) continue;
+      if (!isTabClose(text(j), tab, legacy)) continue;
       const k = nextNonBlank(j + 1);
-      const following = k < lines.length ? openedTab(text(k)) : undefined;
+      const following = k < lines.length ? openedTab(text(k), form) : undefined;
       if (k === lines.length || following) break;
     }
     // Strip the single line break the server places before #endregion.
@@ -309,10 +332,13 @@ function assertKnownJsonShape(meta: unknown): "native" | "legacy" {
     layout === "native"
       ? ["Parameters", "Variables", "DataSource"]
       : ["parameters", "variables", "dataSource"];
-  const missing = required.filter((k) => !keys.includes(k));
+  // null is as good as missing: `?? []` below would turn it into a wipe.
+  const missing = required.filter(
+    (k) => (meta as Record<string, unknown>)[k] == null,
+  );
   if (missing.length > 0) {
     throw new Error(
-      `Process JSON is missing key(s): ${missing.join(", ")}. ` +
+      `Process JSON is missing key(s): ${missing.join(", ")} (absent or null). ` +
         "Refusing to deploy: a missing list would be sent as empty and clear it on the server.",
     );
   }

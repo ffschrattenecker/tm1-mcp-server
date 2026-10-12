@@ -334,6 +334,49 @@ describe("git-process #region round-trip", () => {
     );
   });
 
+  it("former layout: a user fold named like a later tab stays in its tab", () => {
+    // There only `#endregion prolog` closes the Prolog; a bare `#endregion`
+    // and `#region Epilog` are the user's.
+    const ti =
+      "#region prolog\na=1;\n#endregion\n#region Epilog\nc=1;\n#endregion\n#endregion prolog";
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    const parsed = parseProcessFromGit(json, ti);
+    expect(parsed).toMatchObject({
+      prolog: "a=1;\n#endregion\n#region Epilog\nc=1;\n#endregion",
+      epilog: "",
+    });
+    expect(toCodeBlob(ti, parsed)).toBe(
+      "#region Prolog\r\na=1;\r\n#endregion\r\n#region Epilog\r\nc=1;\r\n#endregion\r\n#endregion",
+    );
+  });
+
+  it("native layout: a fold not spelled exactly like TM1's tab opener stays code", () => {
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    for (const fold of ["#region data", "#region DATA", "#Region Data"]) {
+      const ti = `#region Prolog\r\n${fold}\r\na=1;\r\n#endregion\r\n#endregion`;
+      expect(parseProcessFromGit(json, ti).prolog).toBe(
+        `${fold}\r\na=1;\r\n#endregion`,
+      );
+    }
+    // Spelled exactly like the Data tab it cannot be told from a deleted close.
+    expect(() =>
+      parseProcessFromGit(
+        json,
+        "#region Prolog\r\n#region Data\r\na=1;\r\n#endregion\r\n#endregion",
+      ),
+    ).toThrow(/opens inside "prolog"/);
+  });
+
   it("rejects tabs out of order", () => {
     const ti =
       "#region Epilog\r\ne;\r\n#endregion\r\n#region Prolog\r\np;\r\n#endregion";
@@ -617,6 +660,27 @@ describe("git-process ignored datasource columns", () => {
     expect(() => parseProcessFromGit(json, makeTi({ Prolog: "x=1;" }))).toThrow(
       /missing key\(s\): variables/,
     );
+  });
+
+  it("rejects null structural keys, which would otherwise clear the server", () => {
+    const native = JSON.stringify({
+      Name: "P",
+      DataSource: null,
+      Parameters: null,
+      Variables: null,
+    });
+    expect(() =>
+      parseProcessFromGit(native, makeTi({ Prolog: "x=1;" })),
+    ).toThrow(/missing key\(s\): Parameters, Variables, DataSource/);
+    const legacy = JSON.stringify({
+      name: "P",
+      parameters: null,
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    expect(() =>
+      parseProcessFromGit(legacy, makeTi({ Prolog: "x=1;" })),
+    ).toThrow(/missing key\(s\): parameters/);
   });
 
   it("rejects a .json that is not an object", () => {

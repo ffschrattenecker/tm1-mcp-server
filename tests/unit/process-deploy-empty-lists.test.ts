@@ -39,6 +39,7 @@ function harness(
     updateVariables: rec("updateVariables"),
     updateDataSource: rec("updateDataSource"),
     updateSecurityAccess: rec("updateSecurityAccess"),
+    updateDeployMeta: rec("updateDeployMeta"),
     check: async () => ({ ok: true, errors: [] }),
     getVariableLayout: async () => ({
       variables: [],

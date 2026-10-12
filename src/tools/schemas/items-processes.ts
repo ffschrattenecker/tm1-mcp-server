@@ -249,6 +249,9 @@ export const ExportProcessToGitResultSchema = z.object({
     json: z.string().nullable(),
     ti: z.string().nullable(),
   }),
+  // Set when tm1_import_process_from_git would refuse this pair (a data source
+  // field or type it does not know, an ambiguous #region in the code).
+  warning: z.string().optional(),
   // Full file bodies are echoed inline only when writeToDir is NOT set; when
   // exporting to disk the caller already has the files, so we omit them to
   // avoid flooding the context window with duplicate code.

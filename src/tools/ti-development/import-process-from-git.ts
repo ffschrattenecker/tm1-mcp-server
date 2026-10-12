@@ -104,7 +104,7 @@ export const registerImportProcessFromGit = defineTool({
       throw new TM1Error({
         code: TM1ErrorCode.VALIDATION_ERROR,
         message:
-          "Process name not found in JSON ('name') and no name override provided",
+          "Process name not found in JSON ('Name', or 'name' in the older layout) and no name override provided",
       });
     }
 
@@ -197,22 +197,16 @@ export const registerImportProcessFromGit = defineTool({
       `Datasource update failed for '${processName}' (type=${dataSource.type}). Code+params+vars applied. For ODBC verify dataSourcePassword/DSN and re-run with mode=update.`,
     );
 
-    if (parsed.hasSecurityAccess !== undefined) {
+    // One PATCH for both. A POST does not create UIData and a PATCH without it
+    // leaves it alone, so a new process would lose the Architect action
+    // settings without it.
+    if (parsed.hasSecurityAccess !== undefined || parsed.uiData !== undefined) {
       await withToolHint(
-        tm1Client.processes.updateSecurityAccess(
-          processName,
-          parsed.hasSecurityAccess,
-        ),
-        `HasSecurityAccess update failed for '${processName}'. Code+params+vars+datasource applied. Re-run with mode=update once root cause fixed.`,
-      );
-    }
-
-    // A POST does not create UIData and a PATCH without it leaves it alone, so
-    // a new process would lose the Architect action settings without this.
-    if (parsed.uiData !== undefined) {
-      await withToolHint(
-        tm1Client.processes.updateUIData(processName, parsed.uiData),
-        `UIData update failed for '${processName}'. Code+params+vars+datasource applied; only the Architect action settings are missing. Re-run with mode=update once root cause fixed.`,
+        tm1Client.processes.updateDeployMeta(processName, {
+          hasSecurityAccess: parsed.hasSecurityAccess,
+          uiData: parsed.uiData,
+        }),
+        `HasSecurityAccess/UIData update failed for '${processName}'. Code+params+vars+datasource applied. Re-run with mode=update once root cause fixed.`,
       );
     }
 

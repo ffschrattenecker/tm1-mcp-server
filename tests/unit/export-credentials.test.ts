@@ -123,12 +123,12 @@ describe("credential export is v12-only", () => {
 });
 
 describe("git export refuses credentials on v11", () => {
-  function captureGitExport(version: 11 | 12): ToolCb {
+  function captureGitExport(
+    version: 11 | 12,
+    extraDataSource: Record<string, unknown> = {},
+  ): ToolCb {
     const processes = {
-      getCodeBlob: async () => "#region Prolog\nsVal = 'x';\n#endregion Prolog",
-      getParameters: async () => [],
-      getVariables: async () => [],
-      getVariableLayout: async () => ({ variables: [], ignoredColumns: [] }),
+      getCodeBlob: async () => "#region Prolog\r\nsVal = 'x';\r\n#endregion",
       getGitHeader: async () => ({
         Name: "P",
         HasSecurityAccess: false,
@@ -137,6 +137,7 @@ describe("git export refuses credentials on v11", () => {
           dataSourceNameForServer: "SALES_DWH",
           userName: "etl_reader",
           password: "W0br6scX06nUHxVZQrQC+g==",
+          ...extraDataSource,
         },
         Parameters: [],
         Variables: [],
@@ -188,6 +189,18 @@ describe("git export refuses credentials on v11", () => {
     const res = await captureGitExport(11)({ processName: "P" }, {});
     const payload: Record<string, unknown> = JSON.parse(res.content[0].text);
     expect(payload.credentialsOmitted).toBe(true);
+    expect(payload.warning).toBeUndefined();
+  });
+
+  it("warns when the server sends a data source field the import would refuse", async () => {
+    const res = await captureGitExport(12, { jsonFeed: "x" })(
+      { processName: "P" },
+      {},
+    );
+    const payload: Record<string, unknown> = JSON.parse(res.content[0].text);
+    expect(String(payload.warning)).toMatch(
+      /would refuse[\s\S]*unknown 'dataSource' key\(s\): jsonFeed/,
+    );
   });
 });
 
@@ -246,5 +259,9 @@ describe("password slots in the two file formats", () => {
     const kept = serializeProcessToGit(input, { includePassword: true });
     expect(kept.credentialsOmitted).toBe(false);
     expect(kept.json).toContain("W0br6scX06nUHxVZQrQC+g==");
+    // The password stays where the server put it, not appended.
+    expect(Object.keys(JSON.parse(kept.json).DataSource)).toEqual(
+      Object.keys(input.DataSource),
+    );
   });
 });

@@ -466,8 +466,12 @@ export class ProcessService {
    */
   async getGitHeader(processName: string): Promise<NativeProcessHeader> {
     const base = `/api/v1/Processes('${odataKey(processName)}')?$select=`;
+    // Lists TM1 leaves out come back empty, not missing: the export reads
+    // their length and the import refuses a .json without them.
     const strip = (r: Record<string, unknown>) => {
       for (const k of Object.keys(r)) if (k.startsWith("@odata.")) delete r[k];
+      r.Parameters ??= [];
+      r.Variables ??= [];
       return r as unknown as NativeProcessHeader;
     };
     try {
@@ -479,7 +483,9 @@ export class ProcessService {
         ),
       );
     } catch (e) {
-      rethrowIfSystemic(e);
+      // A v11 denial is a 400 too; retrying would report the wrong error or
+      // quietly drop UIData.
+      rethrowIfSystemicOrDenied(e);
       if (!isUnsupportedQueryShape(e)) throw e;
       return strip(
         await this.http.request<Record<string, unknown>>(
@@ -490,10 +496,24 @@ export class ProcessService {
     }
   }
 
-  /** Write the Architect action settings. PATCH { UIData }. */
-  async updateUIData(processName: string, uiData: string): Promise<void> {
+  /**
+   * Write HasSecurityAccess and the Architect action settings in one PATCH.
+   * An undefined field is left out, so the server keeps its value.
+   */
+  async updateDeployMeta(
+    processName: string,
+    meta: {
+      hasSecurityAccess?: boolean | undefined;
+      uiData?: string | undefined;
+    },
+  ): Promise<void> {
     const path = `/api/v1/Processes('${odataKey(processName)}')`;
-    await this.http.request<void>("PATCH", path, { UIData: uiData });
+    await this.http.request<void>("PATCH", path, {
+      ...(meta.hasSecurityAccess !== undefined
+        ? { HasSecurityAccess: meta.hasSecurityAccess }
+        : {}),
+      ...(meta.uiData !== undefined ? { UIData: meta.uiData } : {}),
+    });
   }
 
   /**

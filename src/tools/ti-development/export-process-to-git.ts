@@ -6,6 +6,7 @@ import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { resolveLocalPath } from "../local-file.js";
 import {
   EMPTY_CODE_BLOB,
+  parseProcessFromGit,
   serializeProcessToGit,
 } from "../../lib/git-process.js";
 import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
@@ -84,6 +85,16 @@ export const registerExportProcessToGit = defineTool({
       includePassword: includeDataSourcePassword === true,
     });
 
+    // The .json is the server's payload verbatim, so a field or data source
+    // type the import does not know gets written without complaint. Say so
+    // now rather than at the next import.
+    let warning: string | undefined;
+    try {
+      parseProcessFromGit(json, ti);
+    } catch (e) {
+      warning = `tm1_import_process_from_git would refuse this export: ${(e as Error).message}`;
+    }
+
     const jsonFileName = `${processName}.json`;
     const tiFileName = `${processName}.ti`;
 
@@ -129,6 +140,7 @@ export const registerExportProcessToGit = defineTool({
             credentialsOmitted,
             hasSecurityAccess: header.HasSecurityAccess === true,
             writtenTo,
+            ...(warning ? { warning } : {}),
             // Echo the file bodies inline only when NOT persisting to disk. With
             // writeToDir the caller already has the files, so returning the code
             // would just duplicate thousands of tokens into the context window.
