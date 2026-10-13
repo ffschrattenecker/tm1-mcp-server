@@ -114,7 +114,7 @@ datasource (562-589).
 - `tm1_get_cube_stats` — Read }StatsByCube metrics for one or more cubes (memory, populated cells, fed cells, feeder efficiency)
 - `tm1_get_error_log_content` — Fetch the raw text of one TI error log file produced by a failed process run
 - `tm1_get_server_state` — Health-check style snapshot of the TM1 server in one call
-- `tm1_list_connections` — List the TM1 connections this server can reach: name (the `connection` argument of every other tool), readonly/readwrite mode, TM1_ENVIRONMENT label (and why mo
+- `tm1_list_connections` — List the TM1 connections this server can reach (rescans the connections folder first, so new or changed ones show up without a restart): name (the `connection`
 - `tm1_list_error_logs` — List TI process error log files on the TM1 server, newest first
 - `tm1_save_data` — Persist in-memory cube data to disk: SaveDataAll (all cubes) or CubeSaveData when `cube` is given
 

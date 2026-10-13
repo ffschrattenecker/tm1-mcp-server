@@ -37,8 +37,8 @@ npx -y @ffschrattenecker/tm1-mcp-server secrets migrate my-dev
 
 This stores every secret of `~/.tm1/mcp-servers/my-dev/.env` in the
 keychain, reads each one back, and only then removes those lines and adds
-`TM1_SECRETS=keychain`. No plaintext backup is kept. Restart the MCP client
-afterwards.
+`TM1_SECRETS=keychain`. No plaintext backup is kept. No restart is needed: the
+next call to that connection uses the keychain.
 
 To set one by hand, you are prompted without echo, or it is read from stdin.
 Run it in a real terminal (PowerShell, cmd, a POSIX tty): under Git Bash/mintty,
@@ -129,6 +129,18 @@ connection is readwrite; calling one against a readonly connection returns
 `PERMISSION_DENIED` without touching TM1. Version-specific tools (v11 threads,
 v12 jobs) are listed when any connection runs that version and refused against
 the others.
+
+**The folder is rescanned on demand.** A connection folder created, removed or
+edited after startup is picked up by `tm1_list_connections` and by a call that
+names an unknown connection; no MCP restart or `/mcp` reconnect is needed. An
+edited `.env` replaces its connection only if that has no open session. With no
+connection folder at all the server still starts: `tm1_list_connections` returns
+`[]` with a setup hint and every other tool fails with
+`No TM1 connection configured under <dir>`. Resources are registered at startup,
+so they appear for connections that exist then. After a rejected login (401/403)
+the server stops logging in, so the account is not locked out, until the `.env`
+or the keychain secret changes (`secrets set`); the next call then tries once.
+Legacy single-connection mode (`TM1_BASE_URL`) still needs a restart.
 
 **Nothing logs in at startup.** Each connection authenticates on its first
 tool call. A folder whose `.env` is invalid is listed with its error and

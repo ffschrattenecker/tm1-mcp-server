@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The server starts with no connection folder (or a missing one). `tm1_list_connections` returns
+  `[]` plus a hint on where to create `<name>/.env`; other tools fail with
+  `No TM1 connection configured under <dir>`. Why: first-time setup no longer needs a working
+  connection before the tools exist. Tools are all listed in that state and enforce mode and
+  version per call; a client that started empty sees `connection` as a plain string, not an enum.
+- Connections are rescanned on demand (no file watcher), from `tm1_list_connections` and before an
+  "Unknown connection" error: new folders appear, removed ones go, and a folder whose `.env` mtime
+  changed is replaced if its connection has no live session (never connected, logged out or latched).
+  Why: adding or fixing a connection no longer needs an MCP restart or `/mcp` reconnect.
+
+### Changed
+
+- A rejected login (401/403) no longer stays latched until restart: the latch lifts when the `.env`
+  mtime or the hash of the keychain secret differs from what the rejected login used, and the next
+  call then tries once. Unchanged inputs keep the latch, so a wrong password still costs one login.
+  An unreadable keychain keeps the latch. Legacy `TM1_BASE_URL` mode has no folder to watch and
+  still needs a restart. The error now says "fix the credentials (secrets set) and retry".
+- `secrets set` prompts `TM1_PASSWORD for <name> (input hidden; right-click pastes in the classic console):`.
+
+### Migration
+
+- Startup with an empty or missing connections dir used to exit with "No TM1 connections found";
+  it now serves an empty registry. A dir whose folders all fail validation still exits.
+
 ## [9.2.0] - 2026-10-05
 
 ### Changed

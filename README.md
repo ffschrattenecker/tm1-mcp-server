@@ -140,7 +140,8 @@ Give each connection its own folder with a `.env` under `~/.tm1/mcp-servers/`
 One server then serves them all: every tool takes a `connection` argument and
 `tm1_list_connections` shows what is configured. Each folder sets its own
 `TM1_MODE` — a write against a readonly connection is refused per call — and
-no connection logs in before its first use. One entry replaces one MCP server
+no connection logs in before its first use. Folders added or edited later are picked up without
+a restart (`tm1_list_connections` rescans), and the server also starts with none. One entry replaces one MCP server
 per TM1 instance, so the client carries one tool list instead of N.
 [docs/CONFIGURATION.md](docs/CONFIGURATION.md#several-tm1-connections) has the details.
 
