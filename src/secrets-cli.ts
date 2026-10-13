@@ -69,7 +69,9 @@ export async function runSecretsCli(
   switch (command) {
     case "set": {
       const key = keyArg ?? "TM1_PASSWORD";
-      const value = await io.readSecret(`${key} for ${connection}: `);
+      const value = await io.readSecret(
+        `${key} for ${connection} (input hidden; right-click pastes in the classic console): `,
+      );
       if (value === "") {
         io.err("Empty value — nothing stored.");
         return 1;

@@ -24,11 +24,15 @@ describe("tm1-mcp-server secrets", () => {
   let out: string[];
   let err: string[];
   let typed: string;
+  let prompts: string[];
 
   const io: CliIo = {
     out: (line) => out.push(line),
     err: (line) => err.push(line),
-    readSecret: () => Promise.resolve(typed),
+    readSecret: (prompt) => {
+      prompts.push(prompt);
+      return Promise.resolve(typed);
+    },
   };
 
   function envFile(name = "c"): string {
@@ -50,6 +54,7 @@ describe("tm1-mcp-server secrets", () => {
     out = [];
     err = [];
     typed = "typed-secret";
+    prompts = [];
   });
 
   afterEach(() => {
@@ -80,6 +85,13 @@ describe("tm1-mcp-server secrets", () => {
       expect(await run("set", "c")).toBe(0);
       expect(store.get("c", "TM1_PASSWORD")).toBe("typed-secret");
       expect(out.join("\n")).not.toContain("typed-secret");
+    });
+
+    it("tells the user the input is hidden", async () => {
+      await run("set", "c");
+      expect(prompts).toEqual([
+        "TM1_PASSWORD for c (input hidden; right-click pastes in the classic console): ",
+      ]);
     });
 
     it("stores the named key", async () => {
