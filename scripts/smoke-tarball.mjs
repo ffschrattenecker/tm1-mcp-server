@@ -8,7 +8,8 @@
 // installs it into a throwaway project under os.tmpdir(), asserts the bin entry
 // resolves to dist/index.js, asserts the shebang, asserts no secrets/sources
 // leaked into the tarball, then starts the binary with NO TM1 configuration and
-// asserts it dies with a readable configuration error instead of a hang.
+// asserts it still answers tm1_list_connections with an empty list and a hint
+// (no hang, no crash), so a first connection can be added without a restart.
 //
 // Not part of `npm run verify` (it packs, builds and hits the npm registry);
 // CI and the publish workflow run it, and RELEASING.md lists it.
@@ -167,6 +168,56 @@ function run(cmd, args, { cwd, env, timeoutMs }) {
       clearTimeout(timer);
       done({ code: code ?? -1, stdout, stderr, timedOut });
     });
+  });
+}
+
+/**
+ * Spawn an MCP stdio server, send newline-delimited JSON-RPC requests, wait for
+ * the response with `waitForId`, then close stdin so the server exits.
+ */
+function runMcp(cmd, args, { cwd, env, timeoutMs, requests, waitForId }) {
+  return new Promise((done) => {
+    const child = spawn(cmd, args, {
+      cwd,
+      env: env ?? process.env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let buf = "";
+    let stderr = "";
+    let timedOut = false;
+    const responses = [];
+    const finish = (extra = {}) => {
+      clearTimeout(timer);
+      done({ responses, stderr, timedOut, ...extra });
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, timeoutMs);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (c) => (stderr += c));
+    child.stdout.on("data", (c) => {
+      buf += c;
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        try {
+          responses.push(JSON.parse(line));
+        } catch {
+          responses.push({ unparsable: line });
+        }
+        if (responses.some((r) => r.id === waitForId)) child.stdin.end();
+      }
+    });
+    child.on("error", (err) => {
+      stderr += err.message;
+      finish();
+    });
+    child.on("close", () => finish());
+    for (const r of requests) child.stdin.write(`${JSON.stringify(r)}\n`);
   });
 }
 
@@ -371,9 +422,10 @@ async function tier1(proj, opts) {
   }
   say(`   version ${installedPkg.version}`);
 
-  // 4. Start with NO configuration at all. The contract is a readable
-  //    configuration error and a prompt non-zero exit — not a hang (which
-  //    leaves an MCP client spinning forever) and not a bare stack.
+  // 4. Start with NO configuration at all. The contract since 9.3.0 is an
+  //    empty registry: the server starts and tm1_list_connections answers
+  //    with [] plus a hint — not a hang (which leaves an MCP client spinning
+  //    forever) and not a crash.
   // bareProcessEnv() strips every TM1_* variable (and DOTENV_CONFIG_PATH) from the
   // caller's shell. The child's cwd and package root are both under tmpdir(),
   // so load-env.ts finds no .env either. HOME/USERPROFILE point at the empty
@@ -382,54 +434,54 @@ async function tier1(proj, opts) {
   // turn this into a configured start.
   const bareEnv = { ...bareProcessEnv(), HOME: proj, USERPROFILE: proj };
   const started = Date.now();
-  const noConfig = await run(process.execPath, [binTarget], {
+  const noConfig = await runMcp(process.execPath, [binTarget], {
     cwd: proj,
     env: bareEnv,
     timeoutMs: opts.startTimeoutSec * 1000,
+    requests: [
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: { name: "smoke-tarball", version: "0" },
+        },
+      },
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "tm1_list_connections", arguments: {} },
+      },
+    ],
+    waitForId: 2,
   });
   const secs = ((Date.now() - started) / 1000).toFixed(1);
   if (noConfig.timedOut) {
+    for (const l of tail(noConfig.stderr)) say(`   | ${l}`);
     throw new Tier1Error(
-      `unconfigured start HUNG — still alive after ${opts.startTimeoutSec}s ` +
-        `(an MCP client would wait forever)`,
+      `unconfigured start HUNG — no answer to tm1_list_connections within ` +
+        `${opts.startTimeoutSec}s (an MCP client would wait forever)`,
     );
   }
-  if (noConfig.code === 0) {
-    throw new Tier1Error(
-      `unconfigured start exited 0 — a server with no TM1 target must fail`,
-    );
-  }
-  const errText = noConfig.stderr;
-  // Both ways to configure it must be named: one TM1_BASE_URL, or a folder
-  // of connections.
-  const wanted = ["TM1_BASE_URL", "TM1_CONNECTIONS_DIR"];
-  const missingFromMessage = wanted.filter((w) => !errText.includes(w));
+  const answer = noConfig.responses.find((r) => r.id === 2);
+  const text = JSON.stringify(answer?.result ?? answer?.error ?? "");
   if (
-    !/No TM1 connections found/i.test(errText) ||
-    missingFromMessage.length > 0
+    !answer ||
+    answer.error ||
+    !/\[\]/.test(text) ||
+    !text.includes("TM1_BASE_URL")
   ) {
-    for (const l of tail(errText)) say(`   | ${l}`);
+    for (const l of tail(noConfig.stderr)) say(`   | ${l}`);
     throw new Tier1Error(
-      `unconfigured start did not name the missing configuration ` +
-        `(absent from stderr: ${missingFromMessage.join(", ") || "message text"})`,
+      `unconfigured start must serve an empty tm1_list_connections with a ` +
+        `hint naming the .env keys; got ${text.slice(0, 200)}`,
     );
   }
-  // The diagnosis must be the FIRST thing on stderr. A stack trace above it
-  // means the user has to read a crash dump to learn they forgot a variable.
-  const firstErrLine = tail(errText, 200)[0] ?? "";
-  if (!firstErrLine.includes("No TM1 connections found")) {
-    say(`   | ${firstErrLine}`);
-    throw new Tier1Error(
-      `stderr opens with something other than the configuration error`,
-    );
-  }
-  if (noConfig.stdout.trim().length > 0) {
-    for (const l of tail(noConfig.stdout, 3)) say(`   | stdout: ${l}`);
-    throw new Tier1Error(
-      `wrote to stdout while failing — that corrupts the JSON-RPC stream`,
-    );
-  }
-  say(`   unconfigured start → exit ${noConfig.code} in ${secs}s, clear error`);
+  say(`   unconfigured start → serves an empty connection list in ${secs}s`);
   say(`   => PASS`);
 }
 
