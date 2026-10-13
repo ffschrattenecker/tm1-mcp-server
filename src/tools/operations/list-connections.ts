@@ -16,15 +16,17 @@ const ConnectionSchema = z.object({
 export const registerListConnections = defineTool({
   name: "tm1_list_connections",
   description:
-    "List the TM1 connections this server can reach: name (the `connection` argument of every other tool), readonly/readwrite mode, TM1_ENVIRONMENT label (and why mode was forced), TM1 version, and whether a session is open; plus this MCP server's own name and version. Makes no TM1 call.",
+    "List the TM1 connections this server can reach (rescans the connections folder first, so new or changed ones show up without a restart): name (the `connection` argument of every other tool), readonly/readwrite mode, TM1_ENVIRONMENT label (and why mode was forced), TM1 version, and whether a session is open; plus this MCP server's own name and version. Makes no TM1 call.",
   annotations: READ_ONLY,
   output: z.object({
     server: z.object({ name: z.string(), version: z.string() }),
     connections: z.array(ConnectionSchema),
+    hint: z.string().optional(),
   }),
   input: {},
   connectionless: true,
   handler: (_args, registry) => {
+    registry.refresh();
     const connections = registry.status().map((c) => ({
       name: c.name,
       ...(c.mode && { mode: c.mode }),
@@ -43,6 +45,11 @@ export const registerListConnections = defineTool({
           text: JSON.stringify({
             server: { name: NAME, version: VERSION },
             connections,
+            ...(connections.length === 0 && {
+              hint:
+                `No TM1 connection configured under ${registry.dir ?? "(none)"}. ` +
+                "Create <name>/.env there (TM1_BASE_URL, TM1_USER, TM1_SECRETS=keychain), then run secrets set <name>; no restart needed.",
+            }),
           }),
         },
       ],

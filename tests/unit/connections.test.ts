@@ -126,13 +126,16 @@ describe("ConnectionRegistry.fromEnvironment", () => {
     expect(reg.info("default")?.mode).toBe("readonly");
   });
 
-  it("throws when no connection can be found", () => {
-    expect(() =>
-      ConnectionRegistry.fromEnvironment(
-        { TM1_CONNECTIONS_DIR: join(root, "missing") },
-        logger,
-      ),
-    ).toThrow(/No TM1 connections found/);
+  it("starts empty when the folder is missing", async () => {
+    const dir = join(root, "missing");
+    const reg = ConnectionRegistry.fromEnvironment(
+      { TM1_CONNECTIONS_DIR: dir },
+      logger,
+    );
+    expect(reg.names).toEqual([]);
+    await expect(reg.get(undefined)).rejects.toThrow(
+      `No TM1 connection configured under ${dir}`,
+    );
   });
 
   it("requires a connection name when there are several, and rejects unknown ones", async () => {

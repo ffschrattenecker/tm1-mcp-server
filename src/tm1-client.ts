@@ -118,6 +118,16 @@ export class TM1Client {
   /**
    * Authenticate and start the keep-alive timer.
    */
+  /** TM1 rejected the credentials (401/403); see SessionManager. */
+  get loginRejected(): boolean {
+    return this.sessionManager.isLoginRejected();
+  }
+
+  /** A TM1 session is currently open. */
+  get sessionActive(): boolean {
+    return this.sessionManager.isSessionActive();
+  }
+
   async connect(): Promise<void> {
     this.logger.info("Connecting to TM1 server");
     await this.sessionManager.authenticate();

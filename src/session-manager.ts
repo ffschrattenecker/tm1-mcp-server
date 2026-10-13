@@ -49,11 +49,13 @@ export class SessionManager {
   private authInFlight: Promise<string> | null = null;
   private keepAliveTimer: ReturnType<typeof setInterval> | null = null;
   // Set once TM1 rejects the configured credentials (401/403 on login).
-  // Credentials come from env and cannot change without a restart, so every
-  // later attempt would be rejected the same way — and each one counts
-  // against MaximumLoginAttempts. Latching here keeps one failed login from
-  // becoming dozens (fan-out tools, the 401 retry, the keep-alive timer)
-  // and locking the account.
+  // Until the credentials change every later attempt would be rejected the
+  // same way — and each one counts against MaximumLoginAttempts. Latching
+  // here keeps one failed login from becoming dozens (fan-out tools, the 401
+  // retry, the keep-alive timer) and locking the account. This class never
+  // lifts the latch: ConnectionRegistry drops the whole client once the
+  // credential inputs (.env mtime, keychain secret) differ from the ones it
+  // logged in with, and builds a fresh one.
   private rejectedLogin: TM1Error | null = null;
   private readonly config: TM1Config;
   private readonly logger: pino.Logger;
@@ -158,13 +160,13 @@ export class SessionManager {
         message:
           `Authentication failed with status ${response.status}: ${response.statusText}. ` +
           "No further login attempts are made, so the account is not locked out; " +
-          "fix the credentials and restart the MCP server.",
+          "fix the credentials (secrets set) and retry; no restart is needed.",
         httpStatus: response.status,
         endpoint: loginReq.url,
       });
       this.logger.error(
         { endpoint: loginReq.url, status: response.status },
-        "Authentication rejected; login attempts stopped until restart",
+        "Authentication rejected; login attempts stopped until the credentials change",
       );
       this.stopKeepAlive();
       throw this.rejectedLogin;
@@ -317,6 +319,11 @@ export class SessionManager {
       this.keepAliveTimer = null;
       this.logger.info("Keep-alive timer stopped");
     }
+  }
+
+  /** True once TM1 rejected the credentials; no login is attempted again. */
+  isLoginRejected(): boolean {
+    return this.rejectedLogin !== null;
   }
 
   /**

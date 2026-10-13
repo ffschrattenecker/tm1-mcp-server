@@ -98,6 +98,64 @@ describe("tm1_list_connections", () => {
     expect(server).toEqual({ name: NAME, version: VERSION });
   });
 
+  it("rescans, so a folder created after startup is listed", async () => {
+    const { wrapped, tools } = capture();
+    registerListConnections(wrapped, registry);
+    mkdirSync(join(root, "extra"));
+    writeFileSync(
+      join(root, "extra", ".env"),
+      ["TM1_BASE_URL=http://extra:1", "TM1_USER=u", "TM1_PASSWORD=p"].join(
+        "\n",
+      ),
+    );
+    const { connections } = JSON.parse(
+      text(await tools.get("tm1_list_connections")!({})),
+    );
+    expect(connections.map((c: { name: string }) => c.name)).toEqual([
+      "dev",
+      "extra",
+      "prod",
+    ]);
+  });
+
+  it("returns [] and a setup hint when no connection exists", async () => {
+    const empty = mkdtempSync(join(tmpdir(), "tm1-listconn-empty-"));
+    try {
+      const reg = ConnectionRegistry.fromEnvironment(
+        { TM1_CONNECTIONS_DIR: empty },
+        logger,
+      );
+      const { wrapped, tools } = capture();
+      registerListConnections(wrapped, reg);
+      defineTool({
+        name: "tm1_spec_listconn_empty",
+        description: "fixture",
+        annotations: DESTRUCTIVE,
+        input: { cubeName: z.string() },
+        handler: () => ({ content: [{ type: "text" as const, text: "{}" }] }),
+      })(wrapped, reg);
+
+      const out = JSON.parse(
+        text(await tools.get("tm1_list_connections")!({})),
+      );
+      expect(out.connections).toEqual([]);
+      expect(out.hint).toContain(`No TM1 connection configured under ${empty}`);
+
+      // Tools are still listed (the registry may fill up later) and say why they fail.
+      const refused = text(
+        await tools.get("tm1_spec_listconn_empty")!({
+          cubeName: "C",
+          connection: "dev",
+        }),
+      );
+      expect(JSON.parse(refused).message).toBe(
+        `No TM1 connection configured under ${empty}`,
+      );
+    } finally {
+      rmSync(empty, { recursive: true, force: true });
+    }
+  });
+
   it("names the prod rule in a write tool's refusal", async () => {
     const { wrapped, tools } = capture();
     const handler = vi.fn(() => ({

@@ -83,7 +83,11 @@ function buildMcpServer(
   // in the tool listing — no autoApprove lists needed. With several
   // connections, write tools are listed when ANY connection is readwrite and
   // refused per call against a readonly one (see defineTool).
-  const mode = registry.anyReadwrite ? "readwrite" : "readonly";
+  // An empty registry lists everything; each call is checked against its connection.
+  const mode =
+    registry.anyReadwrite || registry.usableNames.length === 0
+      ? "readwrite"
+      : "readonly";
   registerAllTools(
     withAnnotations(
       server,

@@ -22,7 +22,8 @@
 // A folder with TM1_SECRETS=keychain keeps its secrets in the OS keychain
 // (see ./secrets.ts). Discovery validates it without them; get() reads them
 // and builds the real config on first use.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse as parseDotenv } from "dotenv";
@@ -31,6 +32,7 @@ import { connectionIdOf, loadConfig, type TM1Config } from "./config.js";
 import {
   keychainHint,
   plaintextSecretKeys,
+  SECRET_KEYS,
   usesKeychain,
   withKeychainSecrets,
   type SecretStore,
@@ -84,6 +86,22 @@ export function connectionEnv(
   return connEnv;
 }
 
+function mtimeOf(file: string): number {
+  try {
+    return statSync(file).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+/** Hash of every secret in `env`; compares credentials without keeping them. */
+function secretHashOf(env: NodeJS.ProcessEnv): string {
+  const hash = createHash("sha256");
+  for (const key of SECRET_KEYS)
+    hash.update(JSON.stringify([key, env[key] ?? ""]));
+  return hash.digest("hex");
+}
+
 export interface ConnectionInfo {
   name: string;
   /** Folder the `.env` came from; undefined for the legacy single connection. */
@@ -109,6 +127,10 @@ interface Entry {
   /** Keychain connections: the env to fill with secrets on first use. */
   env?: NodeJS.ProcessEnv;
   resolving?: Promise<TM1Config> | undefined;
+  /** mtime of the folder's `.env` when it was loaded (rescan change check). */
+  envMtime?: number | undefined;
+  /** Hash of the keychain secrets the current config was built from. */
+  secretHash?: string | undefined;
   client?: TM1Client;
   connecting?: Promise<void> | undefined;
   lastError?: string | undefined;
@@ -121,6 +143,9 @@ export interface ConnectionStatus extends ConnectionInfo {
 
 export class ConnectionRegistry {
   private readonly entries = new Map<string, Entry>();
+  /** Folder (and process env) discovery runs against; unset for single/of(). */
+  private discoveryDir: string | undefined;
+  private discoveryEnv: NodeJS.ProcessEnv = {};
 
   private constructor(
     private readonly logger: pino.Logger,
@@ -141,16 +166,14 @@ export class ConnectionRegistry {
       return registry;
     }
     const dir = connectionsDir(env);
+    registry.discoveryDir = dir;
+    registry.discoveryEnv = env;
     registry.discover(dir, env);
-    if (registry.entries.size === 0) {
-      throw new Error(
-        `No TM1 connections found. Set TM1_BASE_URL (single connection) or ` +
-          `create <name>/.env folders under ${dir} (or point TM1_CONNECTIONS_DIR at them).`,
-      );
-    }
-    // Folders exist but none is usable: fail at startup with every reason,
-    // rather than serve tools whose `connection` enum is empty.
-    if (registry.usableNames.length === 0) {
+    // No folder at all is a valid state: the server starts with an empty
+    // registry so a first connection can be added without a restart (see
+    // refresh()). Folders that exist but none is usable still fail at
+    // startup with every reason, rather than serve a broken `connection` enum.
+    if (registry.entries.size > 0 && registry.usableNames.length === 0) {
       const reasons = registry
         .status()
         .map((c) => `  ${c.name}: ${c.configError}`)
@@ -226,8 +249,9 @@ export class ConnectionRegistry {
     });
   }
 
-  private discover(dir: string, env: NodeJS.ProcessEnv): void {
-    if (!existsSync(dir)) return;
+  /** Folder names under `dir` holding a `.env`, honouring TM1_CONNECTIONS. */
+  private scan(dir: string, env: NodeJS.ProcessEnv): string[] {
+    if (!existsSync(dir)) return [];
     const only = env.TM1_CONNECTIONS
       ? new Set(
           env.TM1_CONNECTIONS.split(",")
@@ -235,43 +259,128 @@ export class ConnectionRegistry {
             .filter(Boolean),
         )
       : undefined;
-
-    const names = readdirSync(dir, { withFileTypes: true })
+    return readdirSync(dir, { withFileTypes: true })
       .filter((d) => d.isDirectory() && existsSync(join(dir, d.name, ".env")))
       .map((d) => d.name)
       .filter((name) => !only || only.has(name))
       .sort((a, b) => a.localeCompare(b));
+  }
 
-    const plaintext: string[] = [];
-    for (const name of names) {
-      const folder = join(dir, name);
-      try {
-        const connEnv = connectionEnv(folder, env);
-        this.addEnv(name, connEnv, folder);
-        if (
-          !this.entries.get(name)!.env &&
-          plaintextSecretKeys(connEnv).length
-        ) {
-          plaintext.push(name);
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        this.logger.warn(
-          { connection: name, err: message },
-          "skipping connection",
-        );
-        this.entries.set(name, {
-          info: { name, dir: folder, configError: message },
-        });
+  /** Load one folder into the registry; true when it holds a plaintext secret. */
+  private loadFolder(
+    name: string,
+    folder: string,
+    env: NodeJS.ProcessEnv,
+  ): boolean {
+    const envMtime = mtimeOf(join(folder, ".env"));
+    try {
+      const connEnv = connectionEnv(folder, env);
+      this.addEnv(name, connEnv, folder);
+      const entry = this.entries.get(name)!;
+      entry.envMtime = envMtime;
+      return !entry.env && plaintextSecretKeys(connEnv).length > 0;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(
+        { connection: name, err: message },
+        "skipping connection",
+      );
+      this.entries.set(name, {
+        info: { name, dir: folder, configError: message },
+        envMtime,
+      });
+      return false;
+    }
+  }
+
+  private warnPlaintext(plaintext: string[]): void {
+    if (plaintext.length === 0) return;
+    this.logger.warn(
+      { connections: plaintext },
+      "plaintext secrets in .env — move them to the OS keychain with " +
+        "`npx -y @ffschrattenecker/tm1-mcp-server secrets migrate <connection>`",
+    );
+  }
+
+  private discover(dir: string, env: NodeJS.ProcessEnv): void {
+    this.warnPlaintext(
+      this.scan(dir, env).filter((name) =>
+        this.loadFolder(name, join(dir, name), env),
+      ),
+    );
+  }
+
+  /**
+   * Re-run discovery so connections added, removed or edited after startup
+   * show up without restarting the server. There is no file watcher: it runs
+   * from tm1_list_connections and before an "Unknown connection" error.
+   *
+   * - a new folder is added, a removed folder is dropped;
+   * - a folder whose `.env` mtime changed is reloaded, but only when its
+   *   connection has no live session (never connected, logged out, or latched
+   *   on a rejected login). A connected one keeps the credentials it logged
+   *   in with until its session ends.
+   *
+   * No-op for the legacy single connection and prebuilt clients.
+   */
+  refresh(): void {
+    const dir = this.discoveryDir;
+    if (dir === undefined) return;
+    const found = this.scan(dir, this.discoveryEnv);
+    const foundSet = new Set(found);
+    for (const [name, entry] of [...this.entries]) {
+      if (entry.info.dir !== undefined && !foundSet.has(name)) {
+        this.entries.delete(name);
+        this.dispose(entry);
+        this.logger.info({ connection: name }, "connection folder removed");
       }
     }
-    if (plaintext.length > 0) {
-      this.logger.warn(
-        { connections: plaintext },
-        "plaintext secrets in .env — move them to the OS keychain with " +
-          "`npx -y @ffschrattenecker/tm1-mcp-server secrets migrate <connection>`",
-      );
+    const plaintext: string[] = [];
+    for (const name of found) {
+      const folder = join(dir, name);
+      const existing = this.entries.get(name);
+      if (existing) {
+        if (mtimeOf(join(folder, ".env")) === existing.envMtime) continue;
+        if (this.hasLiveSession(existing)) continue;
+        this.entries.delete(name);
+        this.dispose(existing);
+      }
+      if (this.loadFolder(name, folder, this.discoveryEnv)) {
+        plaintext.push(name);
+      }
+      this.logger.info({ connection: name }, "connection folder (re)loaded");
     }
+    this.warnPlaintext(plaintext);
+    // Keep the name-sorted order discovery gave, whatever was added or replaced.
+    const sorted = [...this.entries].sort(([a], [b]) => a.localeCompare(b));
+    this.entries.clear();
+    for (const [name, entry] of sorted) this.entries.set(name, entry);
+  }
+
+  /** A login is in flight or a session is open; a latched one is neither. */
+  private hasLiveSession(entry: Entry): boolean {
+    return (
+      entry.connecting !== undefined ||
+      entry.resolving !== undefined ||
+      (entry.client?.sessionActive ?? false)
+    );
+  }
+
+  /** Release a replaced or removed entry's client; failures are only logged. */
+  private dispose(entry: Entry): void {
+    const client = entry.client;
+    if (!client || !entry.config) return; // prebuilt clients are the owner's
+    client.disconnect().catch((err: unknown) => {
+      this.logger.error(
+        { err, connection: entry.info.name },
+        "disconnect failed",
+      );
+    });
+  }
+
+  /** Folder discovery runs against; undefined in single-connection mode. */
+  get dir(): string | undefined {
+    return this.discoveryDir;
   }
 
   /** Every connection name, including ones whose config failed to load. */
@@ -321,18 +430,30 @@ export class ConnectionRegistry {
   /** Resolve a connection name (optional when there is only one). */
   private entryFor(name: string | undefined): Entry {
     if (name === undefined) {
+      if (this.usableNames.length === 0) this.refresh();
       if (this.isSingle) return this.entries.get(this.usableNames[0]!)!;
-      throw new TM1Error({
-        code: TM1ErrorCode.VALIDATION_ERROR,
-        message: `connection is required. One of: ${this.names.join(", ")}.`,
-      });
+      throw (
+        this.noConnections() ??
+        new TM1Error({
+          code: TM1ErrorCode.VALIDATION_ERROR,
+          message: `connection is required. One of: ${this.names.join(", ")}.`,
+        })
+      );
     }
-    const entry = this.entries.get(name);
+    let entry = this.entries.get(name);
     if (!entry) {
-      throw new TM1Error({
-        code: TM1ErrorCode.VALIDATION_ERROR,
-        message: `Unknown connection "${name}". One of: ${this.names.join(", ")}.`,
-      });
+      // The folder may have been created after startup.
+      this.refresh();
+      entry = this.entries.get(name);
+    }
+    if (!entry) {
+      throw (
+        this.noConnections() ??
+        new TM1Error({
+          code: TM1ErrorCode.VALIDATION_ERROR,
+          message: `Unknown connection "${name}". One of: ${this.names.join(", ")}.`,
+        })
+      );
     }
     if (entry.info.configError) {
       throw new TM1Error({
@@ -343,16 +464,71 @@ export class ConnectionRegistry {
     return entry;
   }
 
+  /** Set when no connection exists at all: where to create one. */
+  private noConnections(): TM1Error | undefined {
+    if (this.entries.size > 0) return undefined;
+    return new TM1Error({
+      code: TM1ErrorCode.VALIDATION_ERROR,
+      message: `No TM1 connection configured under ${this.discoveryDir ?? "(none)"}`,
+      hint: "Create <name>/.env there (TM1_BASE_URL, TM1_USER, TM1_SECRETS=keychain), then `secrets set <name>`. No restart needed.",
+    });
+  }
+
+  /** The folder's current credential inputs: `.env` mtime + secret hash. */
+  private async credentialFingerprint(entry: Entry): Promise<string> {
+    const dir = entry.info.dir!;
+    const mtime = mtimeOf(join(dir, ".env"));
+    const secrets = entry.env
+      ? secretHashOf(
+          await withKeychainSecrets(
+            entry.info.name,
+            { TM1_SECRETS: "keychain" },
+            this.secretStore,
+          ),
+        )
+      : "";
+    return `${mtime}:${secrets}`;
+  }
+
+  /**
+   * True when the credential inputs differ from those the latched client
+   * logged in with. An unreadable keychain counts as unchanged: the latch
+   * stays, so a failing lookup can never turn into extra login attempts.
+   */
+  private async credentialsChanged(entry: Entry): Promise<boolean> {
+    try {
+      const now = await this.credentialFingerprint(entry);
+      return now !== `${entry.envMtime}:${entry.secretHash ?? ""}`;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * The client for a connection, built and logged in on first use. A failed
    * login does not poison the entry: the client's own request path retries
    * authentication, so the next call gets a fresh attempt — except when TM1
    * rejected the credentials (401/403). The client is kept, so its
    * SessionManager's latch answers every later call without another login
-   * until the server restarts.
+   * until the credential inputs (`.env` mtime, keychain secret) change; then
+   * the connection is reloaded and gets exactly one new attempt.
    */
   async get(name: string | undefined): Promise<TM1Client> {
-    const entry = this.entryFor(name);
+    let entry = this.entryFor(name);
+    if (
+      entry.client?.loginRejected &&
+      entry.info.dir !== undefined &&
+      (await this.credentialsChanged(entry))
+    ) {
+      this.logger.info(
+        { connection: entry.info.name },
+        "credentials changed after a rejected login; reloading connection",
+      );
+      this.entries.delete(entry.info.name);
+      this.dispose(entry);
+      this.loadFolder(entry.info.name, entry.info.dir, this.discoveryEnv);
+      entry = this.entryFor(entry.info.name);
+    }
     if (!entry.client && entry.env) {
       // Concurrent first calls share one keychain read. A failure is not
       // cached: the next call reads again, after the user stored the entry.
@@ -395,6 +571,7 @@ export class ConnectionRegistry {
   private async resolveSecrets(entry: Entry): Promise<TM1Config> {
     const { name } = entry.info;
     const env = await withKeychainSecrets(name, entry.env!, this.secretStore);
+    entry.secretHash = secretHashOf(env);
     try {
       return loadConfig(env);
     } catch (err) {

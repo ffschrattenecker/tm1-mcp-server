@@ -217,21 +217,31 @@ export function defineTool<I extends ZodRawShape>(
       server.tool(spec.name, description, spec.input, cb);
       return;
     }
-    if (spec.version !== undefined && !registry.hasVersion(spec.version)) {
+    // An empty registry (no connection yet) lists every tool: connections
+    // may appear later (registry.refresh) and the tool list is fixed at
+    // startup. Mode and version are then enforced per call by gate().
+    const empty = registry.usableNames.length === 0;
+    if (
+      !empty &&
+      spec.version !== undefined &&
+      !registry.hasVersion(spec.version)
+    ) {
       return;
     }
     // One connection: the input shape is exactly what the tool declares. More
     // than one: every tool takes a `connection` naming the target.
+    // Empty at startup: a plain string, since the enum cannot be empty and
+    // would go stale once a connection is added.
     const names = registry.usableNames as [string, ...string[]];
+    const connectionSchema = empty ? z.string() : z.enum(names);
     const input = registry.isSingle
       ? spec.input
       : {
           ...spec.input,
-          connection: z.enum(names).describe("Target TM1 connection."),
+          connection: connectionSchema.describe("Target TM1 connection."),
           ...(spec.peer
             ? {
-                connectionB: z
-                  .enum(names)
+                connectionB: connectionSchema
                   .optional()
                   .describe(
                     "Second connection to compare against (e.g. PROD vs DEV). Default: the same as connection.",
