@@ -162,7 +162,7 @@ export const registerImportProFile = defineTool({
       tm1Client.processes.updateVariables(
         processName,
         parsed.variables,
-        parsed.variablesUIData.length > 0 ? parsed.variablesUIData : undefined,
+        parsed.variablesUIData,
       ),
       `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
     );

@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tm1_import_pro_file` writes the Architect action settings (`UIData`, line 576), and
   `tm1_export_process_to_pro` writes them out. A POST does not create them, so a new process lost
   them (63 of 90 Bedrock processes).
+- `tm1_export_process_to_pro` writes an empty `VariablesUIData` as `582,0`, and
+  `tm1_import_pro_file` sends it back as `[]`. TM1 12 keeps the empty list; omitting the key left
+  it missing (88 of 92 Bedrock v5 processes). A file without the block still leaves the server's
+  layout alone.
 - `tm1_import_pro_file` and `tm1_export_process_to_pro` carry `HasSecurityAccess` in footer line
   1217, where TM1 keeps it (366 of 366 processes on an 11.8 server). Before, it was lost on
   every round trip (83 of 89 Bedrock processes run with it on).

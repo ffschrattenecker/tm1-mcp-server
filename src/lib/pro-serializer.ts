@@ -83,7 +83,9 @@ function serializeVariables(vars: ProcessVariable[]): string[] {
 // the block counts COLUMNS, not variables, so its length legitimately exceeds
 // the variable count whenever columns are ignored.
 function serializeVariablesUIData(uiData: string[] | undefined): string[] {
-  if (!uiData || uiData.length === 0) return [];
+  // An empty list is written as 582,0: TM1 12 keeps VariablesUIData: [], and
+  // an import that omits the key leaves it missing.
+  if (uiData === undefined) return [];
   return [`582,${uiData.length}`, ...uiData];
 }
 

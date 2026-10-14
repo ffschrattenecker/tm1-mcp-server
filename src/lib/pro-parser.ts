@@ -14,10 +14,11 @@ export interface ParsedPro {
   variables: ProcessVariable[];
   /**
    * Raw line block 582: one entry per datasource COLUMN, ignored ones included.
-   * Empty when the file carries none. See src/lib/variables-ui-data.ts — the
+   * Undefined when the file carries none; `582,0` is an empty list, which
+   * TM1 12 keeps as `[]` (88 of 92 Bedrock v5 processes). See src/lib/variables-ui-data.ts — the
    * ignore flag exists nowhere else, so dropping this block loses it.
    */
-  variablesUIData: string[];
+  variablesUIData?: string[];
   /**
    * Line 576 of the footer: the Architect action settings (`UIData`).
    * Undefined when the file has no footer, so an update leaves them alone.
@@ -375,7 +376,9 @@ export function parseProFile(content: string): ParsedPro {
     ...sections,
     parameters: parseParameters(fields.blocks),
     variables: parseVariables(fields.blocks),
-    variablesUIData: fields.blocks.get("582") ?? [],
+    ...(fields.blocks.has("582")
+      ? { variablesUIData: fields.blocks.get("582")! }
+      : {}),
     ...parseFooter(lines),
     dataSource: parseDataSource(fields),
   };

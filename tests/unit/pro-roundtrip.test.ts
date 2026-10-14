@@ -214,9 +214,15 @@ describe("pro-serializer ignored datasource columns (block 582)", () => {
     expect(out).toContain("577,2");
   });
 
-  it("omits the block when nothing is ignored", () => {
+  it("omits the block when the server sends no list", () => {
     const out = serializeToPro(fixture());
     expect(out).not.toContain("582,");
+    expect(parseProFile(out).variablesUIData).toBeUndefined();
+  });
+
+  it("writes an empty list as 582,0 and reads it back as []", () => {
+    const out = serializeToPro(fixture({ variablesUIData: [] }));
+    expect(out).toContain("582,0");
     expect(parseProFile(out).variablesUIData).toEqual([]);
   });
 });
