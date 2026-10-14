@@ -18,6 +18,11 @@ export interface ParsedPro {
    * ignore flag exists nowhere else, so dropping this block loses it.
    */
   variablesUIData: string[];
+  /**
+   * Line 576 of the footer: the Architect action settings (`UIData`).
+   * Undefined when the file has no footer, so an update leaves them alone.
+   */
+  uiData?: string;
   dataSource: DataSource;
 }
 
@@ -131,6 +136,24 @@ function parseSections(lines: string[]): {
       counted.add(code);
       for (let taken = 0; taken < count && i < lines.length; taken++, i++) {
         map[code]!.push(lines[i]!);
+      }
+      // A count that is too low (hand-edited file; the Bedrock repo's
+      // }bedrock.server.util.string.validate.pro says 572,185 over 189 lines)
+      // would drop real code: here END; and #EndRegion. When non-blank lines
+      // follow before the next section header — or, for the last section,
+      // before the footer at the last "576," line — they belong to the section.
+      let end = i;
+      while (end < lines.length && !SECTION_RE.test(lines[end]!)) end++;
+      if (end === lines.length) {
+        let footer = lines.length - 1;
+        while (footer >= i && !lines[footer]!.startsWith("576,")) footer--;
+        if (footer >= i) end = footer;
+      }
+      const overflow = lines.slice(i, end);
+      if (overflow.some((l) => l.trim() !== "")) {
+        map[code]!.push(...overflow);
+        counted.delete(code);
+        i = end;
       }
       continue;
     }
@@ -308,6 +331,16 @@ function parseDataSource(fields: HeaderFields): DataSource {
   return ds;
 }
 
+// The footer follows the last section, so its 576 is the last such line; an
+// earlier one could be code inside a section.
+function parseUIData(lines: string[]): { uiData?: string } {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (SECTION_RE.test(lines[i]!)) break;
+    if (lines[i]!.startsWith("576,")) return { uiData: lines[i]!.slice(4) };
+  }
+  return {};
+}
+
 export function parseProFile(content: string): ParsedPro {
   const lines = content
     // TM1 writes .pro files with a UTF-8 BOM.
@@ -322,6 +355,7 @@ export function parseProFile(content: string): ParsedPro {
     parameters: parseParameters(fields.blocks),
     variables: parseVariables(fields.blocks),
     variablesUIData: fields.blocks.get("582") ?? [],
+    ...parseUIData(lines),
     dataSource: parseDataSource(fields),
   };
 }

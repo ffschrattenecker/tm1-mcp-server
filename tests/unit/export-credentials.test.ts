@@ -30,6 +30,7 @@ function captureProExport(version: 11 | 12 = 11): {
     getParameters: async () => [],
     getVariables: async () => [],
     getVariableLayout: async () => ({ variables: [], ignoredColumns: [] }),
+    getUIData: async () => ({}),
     getDataSource: async (_n: string, opts?: { includeSecrets?: boolean }) => {
       secretsAsked.push(opts?.includeSecrets === true);
       return {

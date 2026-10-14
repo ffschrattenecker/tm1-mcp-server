@@ -124,6 +124,7 @@ function clientWith(
       getVariables: async () => [],
       getVariableLayout: async () => ({ variables: [], ignoredColumns: [] }),
       getDataSource: async () => NONE_DS,
+      getUIData: async () => ({}),
       getDeployMeta: async () => ({ hasSecurityAccess: false }),
       getGitHeader: async (name: string) => ({
         Name: name,

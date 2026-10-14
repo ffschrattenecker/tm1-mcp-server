@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `tm1_import_pro_file` no longer drops code when a section's line count is too low. The
+  Bedrock repo's `}bedrock.server.util.string.validate.pro` says `572,185` over 189 lines, and
+  the import cut off `END;` and `#EndRegion`. Lines that follow the count up to the next section
+  or the footer now belong to the section.
+- `tm1_import_pro_file` writes the Architect action settings (`UIData`, line 576), and
+  `tm1_export_process_to_pro` writes them out. A POST does not create them, so a new process lost
+  them (63 of 90 Bedrock processes).
 - `tm1_import_process_from_git` deploys `.ti` files the VS Code extension wrote before its native
   layout (`#region prolog` … `#endregion prolog`). They parsed, but TM1 refused the blob with
   "mismatched regions"; the code is now rebuilt from the parsed tabs.

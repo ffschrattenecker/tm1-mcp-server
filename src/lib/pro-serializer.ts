@@ -18,6 +18,8 @@ export interface ProcessSerializeInput {
    * no representation in the variables list.
    */
   variablesUIData?: string[];
+  /** Architect action settings (`UIData`), written as footer line 576. */
+  uiData?: string;
   dataSource?: DataSource;
 }
 
@@ -185,6 +187,7 @@ export function serializeToPro(input: ProcessSerializeInput): string {
   lines.push(...serializeSection("573", input.metadata));
   lines.push(...serializeSection("574", input.data));
   lines.push(...serializeSection("575", input.epilog));
+  if (input.uiData !== undefined) lines.push(`576,${input.uiData}`);
   // Trailing newline — TM1 .pro files end with one.
   return lines.join("\n") + "\n";
 }
