@@ -82,6 +82,17 @@ describe("pro-serializer round-trip", () => {
     expect(parseProFile(serializeToPro(fixture())).uiData).toBeUndefined();
   });
 
+  it("HasSecurityAccess (footer line 1217) survives", () => {
+    for (const flag of [true, false])
+      expect(
+        parseProFile(serializeToPro(fixture({ hasSecurityAccess: flag })))
+          .hasSecurityAccess,
+      ).toBe(flag);
+    expect(
+      parseProFile(serializeToPro(fixture())).hasSecurityAccess,
+    ).toBeUndefined();
+  });
+
   it("still trims a countless section, whose tail runs into the next header", () => {
     const parsed = parseProFile('602,"P"\n572,\nnX = 1;\n\n573,\n');
     expect(parsed.prolog).toBe("nX = 1;");

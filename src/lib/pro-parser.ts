@@ -23,6 +23,11 @@ export interface ParsedPro {
    * Undefined when the file has no footer, so an update leaves them alone.
    */
   uiData?: string;
+  /**
+   * Footer line 1217: `HasSecurityAccess` (measured on 11.8, 366 of 366
+   * processes). Undefined when the file has no such line.
+   */
+  hasSecurityAccess?: boolean;
   dataSource: DataSource;
 }
 
@@ -333,12 +338,28 @@ function parseDataSource(fields: HeaderFields): DataSource {
 
 // The footer follows the last section, so its 576 is the last such line; an
 // earlier one could be code inside a section.
-function parseUIData(lines: string[]): { uiData?: string } {
+// Its 1217 line holds HasSecurityAccess.
+function parseFooter(lines: string[]): {
+  uiData?: string;
+  hasSecurityAccess?: boolean;
+} {
+  let footer = -1;
   for (let i = lines.length - 1; i >= 0; i--) {
     if (SECTION_RE.test(lines[i]!)) break;
-    if (lines[i]!.startsWith("576,")) return { uiData: lines[i]!.slice(4) };
+    if (lines[i]!.startsWith("576,")) {
+      footer = i;
+      break;
+    }
   }
-  return {};
+  if (footer === -1) return {};
+  const out: { uiData?: string; hasSecurityAccess?: boolean } = {
+    uiData: lines[footer]!.slice(4),
+  };
+  for (let i = footer + 1; i < lines.length; i++) {
+    const m = /^1217,(\d)$/.exec(lines[i]!);
+    if (m) out.hasSecurityAccess = m[1] === "1";
+  }
+  return out;
 }
 
 export function parseProFile(content: string): ParsedPro {
@@ -355,7 +376,7 @@ export function parseProFile(content: string): ParsedPro {
     parameters: parseParameters(fields.blocks),
     variables: parseVariables(fields.blocks),
     variablesUIData: fields.blocks.get("582") ?? [],
-    ...parseUIData(lines),
+    ...parseFooter(lines),
     dataSource: parseDataSource(fields),
   };
 }

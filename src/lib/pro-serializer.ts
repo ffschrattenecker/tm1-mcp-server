@@ -20,6 +20,8 @@ export interface ProcessSerializeInput {
   variablesUIData?: string[];
   /** Architect action settings (`UIData`), written as footer line 576. */
   uiData?: string;
+  /** Written as footer line 1217, where TM1 keeps it. */
+  hasSecurityAccess?: boolean;
   dataSource?: DataSource;
 }
 
@@ -187,7 +189,11 @@ export function serializeToPro(input: ProcessSerializeInput): string {
   lines.push(...serializeSection("573", input.metadata));
   lines.push(...serializeSection("574", input.data));
   lines.push(...serializeSection("575", input.epilog));
-  if (input.uiData !== undefined) lines.push(`576,${input.uiData}`);
+  // 1217 belongs to the footer, so it needs a 576 line in front of it.
+  if (input.uiData !== undefined || input.hasSecurityAccess !== undefined)
+    lines.push(`576,${input.uiData ?? ""}`);
+  if (input.hasSecurityAccess !== undefined)
+    lines.push(`1217,${input.hasSecurityAccess ? 1 : 0}`);
   // Trailing newline — TM1 .pro files end with one.
   return lines.join("\n") + "\n";
 }
