@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tm1_delete_element` and `tm1_delete_hierarchy` say what the delete takes with it: cell and
   attribute values on leaves that exist in no other hierarchy, and a hierarchy's subsets.
 
+### Added
+
+- **Planning Analytics SaaS connections** via `TM1_AUTH_MODE=saas` with `TM1_TENANT`, `TM1_DATABASE`
+  and `TM1_API_KEY`. Requests go to `/api/{tenant}/v0/tm1/{database}/api/v1`, the login is Basic as
+  user `apikey`, and the session runs on the `paSession` cookie that SaaS sets instead of
+  `TM1SessionId`. Tested live against PA SaaS 12.6.4.
+
 ### Fixed
 
 - `tm1_import_pro_file` no longer drops code when a section's line count is too low. The

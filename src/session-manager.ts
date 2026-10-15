@@ -400,7 +400,12 @@ export class SessionManager {
       this.gatewayCookies = false;
       return direct.slice("TM1SessionId=".length) || null;
     }
-    if (pairs.some((p) => p.startsWith("TM1SessionId_"))) {
+    // PA SaaS sets only paSession; it carries the session on its own.
+    if (
+      pairs.some(
+        (p) => p.startsWith("TM1SessionId_") || p.startsWith("paSession="),
+      )
+    ) {
       this.gatewayCookies = true;
       return pairs.join("; ");
     }

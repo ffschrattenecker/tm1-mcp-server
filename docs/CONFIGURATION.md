@@ -120,7 +120,7 @@ flow. For v12, `TM1_BASE_URL` is address:port only (no path) — e.g.
 ```env
 TM1_INSTANCE=my-instance
 TM1_DATABASE=my-database
-TM1_AUTH_MODE=s2s                   # s2s (default) | basic | access_token | oidc | iam
+TM1_AUTH_MODE=s2s                   # s2s (default) | basic | access_token | oidc | iam | saas
 TM1_USER=admin                      # REQUIRED in every v12 mode (incl. s2s) — the session login "User"
 
 # Per-mode credentials — set the ones your TM1_AUTH_MODE requires:
@@ -146,6 +146,25 @@ with its own env vars:
 > Only `s2s` has been exercised against a live PAE server. The other modes'
 > request builders are covered by unit tests but not yet confirmed against a
 > real server — verify against your environment before relying on them.
+
+### Planning Analytics SaaS
+
+PA SaaS (`*.planninganalytics.saas.ibm.com`) has its own URL scheme and login,
+selected by `TM1_AUTH_MODE=saas`. Requests go to
+`/api/{tenant}/v0/tm1/{database}/api/v1/...`, and the login is a Basic request
+with the fixed user `apikey` and the API key as password — no session POST, no
+`TM1_INSTANCE`, no `TM1_USER`. Find the tenant ID and create the API key in the
+Planning Analytics UI under your user's API keys.
+
+```env
+TM1_BASE_URL=https://<region>.planninganalytics.saas.ibm.com   # region host, no path
+TM1_AUTH_MODE=saas
+TM1_TENANT=YOUR-TENANT-ID
+TM1_DATABASE=my-database
+TM1_API_KEY=...
+```
+
+**Live-validated** against PA SaaS 12.6.4 (readonly tools, certificate check on).
 
 ### Tools that differ by version
 

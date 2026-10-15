@@ -192,4 +192,29 @@ describe("v12 buildLoginRequest", () => {
       vi.unstubAllGlobals();
     }
   });
+
+  it("saas: tenant-rooted paths, Basic GET as apikey, no session POST", async () => {
+    const p = createConnectionProfile(
+      baseConfig({
+        version: 12,
+        authMode: "saas",
+        tenant: "T3NANT",
+        database: "Plan Db",
+        apiKey: "k3y",
+        baseUrl: "https://region.example.com",
+      }),
+    );
+    expect(p.resolveApiPath("/api/v1/Cubes")).toBe(
+      "/api/T3NANT/v0/tm1/Plan%20Db/api/v1/Cubes",
+    );
+    const req = await p.buildLoginRequest();
+    expect(req.method).toBe("GET");
+    expect(req.url).toBe(
+      "https://region.example.com/api/T3NANT/v0/tm1/Plan%20Db/api/v1/Configuration/ProductVersion",
+    );
+    expect(req.headers.Authorization).toBe(
+      "Basic " + Buffer.from("apikey:k3y").toString("base64"),
+    );
+    expect(req.body).toBeUndefined();
+  });
 });

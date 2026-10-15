@@ -113,7 +113,28 @@ async function buildV12Authorization(config: TM1Config): Promise<string> {
   }
 }
 
+// PA SaaS: database root sits under /api/{tenant}/v0/tm1/{database}, and the
+// login is a plain Basic GET with user "apikey" — there is no session POST.
+// Every segment after /v0/tm1/ is read as a database name (measured on 12.6.4).
+function createSaasProfile(config: TM1Config): ConnectionProfile {
+  const dbRoot =
+    `/api/${encodeURIComponent(config.tenant ?? "")}/v0/tm1/` +
+    `${encodeURIComponent(config.database ?? "")}/api/v1`;
+  return {
+    resolveApiPath: (path) => path.replace(/^\/api\/v1/, () => dbRoot),
+    buildLoginRequest: () =>
+      Promise.resolve({
+        url: `${config.baseUrl}${dbRoot}/Configuration/ProductVersion`,
+        method: "GET",
+        headers: {
+          Authorization: buildBasicToken("apikey", config.apiKey ?? ""),
+        },
+      }),
+  };
+}
+
 function createV12Profile(config: TM1Config): ConnectionProfile {
+  if (config.authMode === "saas") return createSaasProfile(config);
   const instance = config.instance ?? "";
   const database = config.database ?? "";
   // encodeURIComponent (not `enc`) for the instance: it's a bare path segment,

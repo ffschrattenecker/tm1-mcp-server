@@ -63,8 +63,11 @@ export interface TM1Config {
   // when instance+database are set, or TM1_VERSION major is 12.
   version: 11 | 12;
   instance?: string | undefined;
+  // PA SaaS tenant ID (authMode "saas"); replaces instance in the URL.
+  tenant?: string | undefined;
   database?: string | undefined;
-  authMode?: "s2s" | "basic" | "access_token" | "oidc" | "iam" | undefined;
+  authMode?:
+    "s2s" | "basic" | "access_token" | "oidc" | "iam" | "saas" | undefined;
   clientId?: string | undefined;
   clientSecret?: string | undefined;
   accessToken?: string | undefined;
@@ -82,6 +85,7 @@ const VALID_AUTH_MODES = [
   "access_token",
   "oidc",
   "iam",
+  "saas",
 ] as const;
 
 // Parse a positive-integer env var. Empty/unset → default. A non-numeric or
@@ -121,7 +125,12 @@ export function loadConfig(): TM1Config {
   const instance = process.env.TM1_INSTANCE || undefined;
   const database = process.env.TM1_DATABASE || undefined;
   const versionMajor = Number.parseInt(tm1Version, 10);
-  const isV12 = Boolean(instance || database) || versionMajor === 12;
+  // "saas" exists only on v12; without this a saas config missing
+  // TM1_DATABASE would fall back to v11 and demand TM1_USER/TM1_PASSWORD.
+  const isV12 =
+    Boolean(instance || database) ||
+    versionMajor === 12 ||
+    process.env.TM1_AUTH_MODE?.trim().toLowerCase() === "saas";
   const version: 11 | 12 = isV12 ? 12 : 11;
 
   // Every v12 auth mode except "basic" authenticates with a client secret, a
@@ -132,6 +141,9 @@ export function loadConfig(): TM1Config {
   // block below still requires whichever credential the chosen mode does need.
   const v12AuthMode = (process.env.TM1_AUTH_MODE ?? "s2s").trim().toLowerCase();
   const passwordlessV12 = version === 12 && v12AuthMode !== "basic";
+  // PA SaaS logs in as the fixed user "apikey" with TM1_API_KEY as password.
+  const saas = version === 12 && v12AuthMode === "saas";
+  const tenant = process.env.TM1_TENANT || undefined;
 
   // Required: baseUrl always. user/password only when NOT using a passport — a
   // passport carries the authenticated identity, so TM1 needs no credentials.
@@ -141,7 +153,7 @@ export function loadConfig(): TM1Config {
   const missing: string[] = [];
   if (!baseUrl) missing.push("TM1_BASE_URL");
   if (!camPassport) {
-    if (!user) missing.push("TM1_USER");
+    if (!user && !saas) missing.push("TM1_USER");
     if (password === undefined && !passwordlessV12) {
       missing.push("TM1_PASSWORD");
     }
@@ -316,7 +328,12 @@ export function loadConfig(): TM1Config {
   let iamUrl: string | undefined;
 
   if (version === 12) {
-    if (!instance) {
+    if (saas && !tenant) {
+      throw new Error(
+        'TM1_AUTH_MODE="saas" requires TM1_TENANT (the PA SaaS tenant ID).',
+      );
+    }
+    if (!instance && !saas) {
       throw new Error(
         "v12 connection requires TM1_INSTANCE (set alongside TM1_DATABASE).",
       );
@@ -352,7 +369,7 @@ export function loadConfig(): TM1Config {
     // above (camPassport-gated) already pushed TM1_USER and threw before this
     // block runs when it's absent, so this only actually fires for the
     // non-basic modes — no duplicate report.
-    if (!user) missingV12.push("TM1_USER");
+    if (!user && !saas) missingV12.push("TM1_USER");
     if (authMode === "s2s") {
       if (!clientId) missingV12.push("TM1_CLIENT_ID");
       if (!clientSecret) missingV12.push("TM1_CLIENT_SECRET");
@@ -361,6 +378,8 @@ export function loadConfig(): TM1Config {
     } else if (authMode === "iam") {
       if (!apiKey) missingV12.push("TM1_API_KEY");
       if (!iamUrl) missingV12.push("TM1_IAM_URL");
+    } else if (authMode === "saas") {
+      if (!apiKey) missingV12.push("TM1_API_KEY");
     }
     if (missingV12.length > 0) {
       throw new Error(
@@ -393,6 +412,7 @@ export function loadConfig(): TM1Config {
     responseMode,
     version,
     instance,
+    tenant,
     database,
     authMode,
     clientId,
