@@ -5,8 +5,9 @@ Exposes the full TM1 model lifecycle — metadata, dimensions, cubes, cell I/O,
 TI processes, chores, security, code-graph analysis — to any MCP-compatible
 LLM client (Claude Code, Claude Desktop, etc.).
 
-Tested against TM1 11.8 (REST, Basic/CAM auth) and TM1 12.5 / Planning Analytics
-Engine (rerooted REST, `s2s` auth live-validated).
+Tested against TM1 11.8 (REST, Basic/CAM auth), TM1 12.5 / Planning Analytics
+Engine (rerooted REST, `s2s` auth live-validated) and Planning Analytics SaaS 12.6
+(API key).
 
 > **Companion — TM1 IDE for VS Code.** Pair this server with the
 > [**flameY3T1.vscode-tm1-ide**](https://marketplace.visualstudio.com/items?itemName=flameY3T1.vscode-tm1-ide)
@@ -93,7 +94,8 @@ them) then see nothing. Worth it only for clients that copy the whole result int
 the model prompt. [`.env.example`](.env.example) lists every variable with
 inline comments; [docs/CONFIGURATION.md](docs/CONFIGURATION.md) covers the ones
 needing more than a comment line — CAM/LDAP login, the TM1 v12 (Planning
-Analytics Engine) connection and its auth modes, host-disk file access.
+Analytics Engine) connection and its auth modes, Planning Analytics SaaS,
+host-disk file access.
 
 > **Safe by default:** the server starts in `TM1_MODE=readonly` — only read
 > tools are registered, so it cannot mutate or delete anything. Set
@@ -190,6 +192,9 @@ security notes and the `autoApprove` allowlist:
   v12 ships no `}Stats*` control cubes, so `tm1_get_cube_stats` and
   `tm1_audit_feeders` in `mode` `runtime`/`both` report the statistics as
   unavailable instead of returning metrics (static feeder analysis is unaffected)
+- Planning Analytics SaaS — via `TM1_AUTH_MODE=saas` with `TM1_TENANT`,
+  `TM1_DATABASE` and `TM1_API_KEY`; same v12 tool set
+  ([setup](docs/CONFIGURATION.md#planning-analytics-saas))
 
 <!-- TOOLS-AUTOGEN:START -->
 

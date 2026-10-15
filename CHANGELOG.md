@@ -7,121 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+### Breaking
 
-- **Breaking for stored `.json` files:** `tm1_export_process_to_git` writes the server's own REST
-  payload for the process without the code (`Name`, `HasSecurityAccess`, `UIData`, `VariablesUIData`,
-  `DataSource`, `Parameters`, `Variables`), in the server's key order (`UIData` always before
-  `VariablesUIData`, which TM1 12 occasionally swaps), with no renamed fields. The VS Code
-  extension writes the same bytes (366 of 366 processes on an 11.8 server, 103 of 103 on 12.5.9). `UIData` (the
-  Architect action settings) is new in the file and is written back on import, since a POST does not
-  create it. `tm1_import_process_from_git` still reads files in the old lowercase layout.
-- `tm1_export_process_to_git` writes a process without code as one empty Prolog region instead
-  of an empty `.ti`, which `tm1_import_process_from_git` refused to read back. Same bytes as the
-  VS Code extension.
-- Smaller package: TypeScript declarations are no longer built or shipped (234 files instead
-  of 462, 1.6 MB unpacked instead of 1.9 MB). The package is a CLI and exports no API.
-- `tm1_list_error_logs`, `tm1_get_error_log_content` and `tm1_diagnose_process_error` let TM1
-  sort and prefilter the error-log listing, and cap it when no other filter applies, instead
-  of fetching every file each time (a v12 test server held 23 000).
-- `TM1_SSL_REJECT_UNAUTHORIZED=false` on an `https` server now prints a startup warning.
-- `tm1_delete_element` and `tm1_delete_hierarchy` say what the delete takes with it: cell and
-  attribute values on leaves that exist in no other hierarchy, and a hierarchy's subsets.
+- **`tm1_export_process_to_git` writes a new `.json` layout:** the server's REST payload without
+  the code, in the server's key order, now including `UIData`. Same bytes as the VS Code
+  extension. `tm1_import_process_from_git` still reads the old layout. *Action:* re-export
+  stored `.json` files once, or the next export shows every file as changed.
 
 ### Added
 
-- **Planning Analytics SaaS connections** via `TM1_AUTH_MODE=saas` with `TM1_TENANT`, `TM1_DATABASE`
-  and `TM1_API_KEY`. Requests go to `/api/{tenant}/v0/tm1/{database}/api/v1`, the login is Basic as
-  user `apikey`, and the session runs on the `paSession` cookie that SaaS sets instead of
-  `TM1SessionId`. Tested live against PA SaaS 12.6.4.
+- **Planning Analytics SaaS:** `TM1_AUTH_MODE=saas` with `TM1_TENANT`, `TM1_DATABASE` and
+  `TM1_API_KEY`. Tested against PA SaaS 12.6.4.
+
+### Changed
+
+- A process without code exports as one empty Prolog region instead of an empty `.ti`.
+- The package no longer ships TypeScript declarations (234 files instead of 462).
+- The error-log tools let TM1 sort, filter and cap the listing instead of fetching every file.
+- `TM1_SSL_REJECT_UNAUTHORIZED=false` on an `https` server prints a startup warning.
+- `tm1_delete_element` and `tm1_delete_hierarchy` say what the delete removes with it.
 
 ### Fixed
 
-- Deploying variables named `NVALUE`, `SVALUE` or `VALUE_IS_STRING` (as Architect-era `.pro` files
-  such as Bedrock's `}bedrock.cube.data.import` declare them) now fails with a message naming them.
-  TM1 refuses these exact names over REST on 11.8, 12.5 and PA SaaS with only "Invalid variable name
-  supplied". `tm1_import_pro_file` also keeps a variable position of `0` instead of reading it as `1`.
-- `tm1_import_pro_file` no longer drops code when a section's line count is too low. The
-  Bedrock repo's `}bedrock.server.util.string.validate.pro` says `572,185` over 189 lines, and
-  the import cut off `END;` and `#EndRegion`. Lines that follow the count up to the next section
-  or the footer now belong to the section.
-- `tm1_import_pro_file` writes the Architect action settings (`UIData`, line 576), and
-  `tm1_export_process_to_pro` writes them out. A POST does not create them, so a new process lost
-  them (63 of 90 Bedrock processes).
-- `tm1_export_process_to_pro` writes an empty `VariablesUIData` as `582,0`, and
-  `tm1_import_pro_file` sends it back as `[]`. TM1 12 keeps the empty list; omitting the key left
-  it missing (88 of 92 Bedrock v5 processes). A file without the block still leaves the server's
-  layout alone.
-- `tm1_import_pro_file` and `tm1_export_process_to_pro` carry `HasSecurityAccess` in footer line
-  1217, where TM1 keeps it (366 of 366 processes on an 11.8 server). Before, it was lost on
-  every round trip (83 of 89 Bedrock processes run with it on).
-- `tm1_import_process_from_git` deploys `.ti` files the VS Code extension wrote before its native
-  layout (`#region prolog` … `#endregion prolog`). They parsed, but TM1 refused the blob with
-  "mismatched regions"; the code is now rebuilt from the parsed tabs.
-- `tm1_import_process_from_git` reads a `.ti` whose code holds a `#Region` fold the user never
-  closed. The parser counted depth and refused it (2 of 366 processes on an 11.8 server). Only the
-  four tab markers are structure now; a tab ends at the bare `#endregion` followed by a later tab
-  or the end of the file, and user folds stay code, broken or not.
-- `tm1_import_process_from_git` refuses a `.json` with unknown keys or without `parameters`,
-  `variables` and `dataSource`. A file in another layout (PascalCase `Parameters`, as the VS Code
-  extension writes it) used to parse as "no parameters, no variables, source None" and cleared all
-  three on the server.
-- `tm1_import_process_from_git` also refuses those three keys when they are `null`, which used to
-  clear parameters, variables and data source just like a missing key.
-- `tm1_import_process_from_git` keeps a user fold in its tab when it looks like a tab marker but is
-  not spelled exactly like one (`#region data` or `#Region Data` inside the Prolog). In the VS Code
-  extension's former layout only `#endregion <tab>` closes a tab; a fold such as `#region Epilog`
-  after a bare `#endregion` moved the rest of the Prolog into the Epilog.
-- `tm1_import_process_from_git` keeps an empty `VariablesUIData` list. TM1 12 creates a process
-  without the key, so dropping the empty list left it missing after import (89 of 103 processes
-  on 12.5.9).
-- `tm1_export_process_to_git` adds a `warning` when `tm1_import_process_from_git` would refuse the
-  pair, for example a data source field or type the import does not know.
-- `tm1_export_process_to_git` reports a v11 security denial as such instead of retrying without
-  `UIData`, and writes `includeDataSourcePassword` exports with the password where the server
-  sends it.
-- `tm1_diff_processes` no longer runs out of memory on long tabs. Equal leading and trailing
-  lines are matched first, so a small edit in a long tab stays cheap; a changed region too
-  large to diff reports `tooLarge: true` with line counts instead of hunks.
-- A programming error inside the request path is no longer retried three times as a network
-  failure (7 s of backoff) before it surfaces.
-- `tm1_audit_naming` pages element names in a stable order; a scan running alongside an
-  element create or delete could repeat or skip names.
-- A TM1 error message that merely contains "not authorized" (for example an ODBC driver's)
-  is no longer reported as `PERMISSION_DENIED`.
-- `asciiDelimiterType` accepts only `Character` or `FixedWidth` on input.
-- HTTP transport: `GET` and `DELETE /mcp` answer 405 instead of holding a server open per
-  connection, and a failure while building the server answers 500 instead of leaving the
-  request hanging.
+`.pro` files:
 
-- **Connections through a PAW gateway (`…/api/v0/tm1/<db>`) log in.** The gateway names the
-  session cookie `TM1SessionId_<db>` and authenticates later requests by its `paSession`
-  cookie, so the login failed with "no TM1SessionId cookie found". The server now keeps every
-  cookie such a login sets and sends them back; direct TM1 connections are unchanged.
-- On servers with `EnableSandboxDimension=true`, `tm1_get_cell_value` and
-  `tm1_check_writable_coords` (without `dimensions`) accept a coordinate that leaves out
-  `Sandboxes` and bind it to `Base`, as `tm1_write_cells` already did. Before, they refused
-  the coordinate as one element short. `tm1_check_feeders`, `tm1_trace_feeders` and
-  `tm1_trace_cell_calculation` do the same.
-- `tm1_sample_cells` found no cells in any cube with a `Sandboxes` dimension: TM1's
-  `NONEMPTY()` returns an empty set whenever Sandboxes is part of the row set. An unfiltered
-  Sandboxes is now pinned to `Base` in the WHERE clause and reported as `sandboxPin`.
-- Markdown tables (`format: "markdown"`) escape backslashes, so a value ending in `\` no
-  longer breaks the table at the next `|`. In `tm1_execute_mdx`, raw cell values are no
-  longer escaped twice.
+- `tm1_import_pro_file` dropped code when a section's line count was too low (Bedrock's
+  `}bedrock.server.util.string.validate`).
+- `UIData` (line 576), `HasSecurityAccess` (line 1217) and an empty `VariablesUIData` (`582,0`)
+  survive export and import. Before, a round trip lost them.
+- A variable position of `0` is kept instead of read as `1`.
+
+`.ti` / `.json` files:
+
+- `tm1_import_process_from_git` deploys `.ti` files in the extension's former layout
+  (`#region prolog` … `#endregion prolog`).
+- User `#Region` folds stay code, even when unclosed or named like a tab.
+- A `.json` with unknown keys, or with `parameters`, `variables` or `dataSource` missing or
+  `null`, is refused. Before, it cleared all three on the server.
+- An empty `VariablesUIData` is kept on import.
+- `tm1_export_process_to_git` warns when the import would refuse the pair, and reports a v11
+  security denial as such.
+
+Processes:
+
+- Variables named `NVALUE`, `SVALUE` or `VALUE_IS_STRING` are refused with their names. TM1
+  rejects them over REST with a bare "Invalid variable name supplied".
+- `asciiDelimiterType` accepts only `Character` or `FixedWidth`.
+- `tm1_diff_processes` no longer runs out of memory on long tabs.
+
+Cells:
+
+- `tm1_get_cell_value`, `tm1_check_writable_coords`, `tm1_check_feeders`, `tm1_trace_feeders`
+  and `tm1_trace_cell_calculation` bind a left-out `Sandboxes` to `Base`, as
+  `tm1_write_cells` does.
+- `tm1_sample_cells` found no cells in cubes with a `Sandboxes` dimension.
+
+Connection and transport:
+
+- Logins through a PAW gateway (`…/api/v0/tm1/<db>`) work.
+- A programming error in the request path is no longer retried as a network failure.
+- A TM1 message that only contains "not authorized" is no longer reported as
+  `PERMISSION_DENIED`.
+- HTTP transport: `GET` and `DELETE /mcp` answer 405, and a failed server build answers 500
+  instead of hanging.
+
+Other:
+
+- `tm1_audit_naming` pages elements in a stable order.
+- Markdown tables escape backslashes; `tm1_execute_mdx` no longer escapes cell values twice.
 
 ### Security
 
-- `tm1_trace_data_flow` no longer pulls every process's datasource password, user name and
-  ODBC query over the wire. It selected the whole `DataSource`, which TM1 answers with the
-  complete complex type; the client dropped those fields, but they were sent. It now selects
-  type, source, view and subset only.
-- `ip-address` (via the MCP SDK) raised to 10.7.2 or later for GHSA-rpw4-54j3-4h4q and
-  GHSA-2vr4-cq9g-pvrc.
-- `proxy-addr` (via the MCP SDK's `express`) raised to 2.0.8 for GHSA-jqcg-44mw-7w3h.
+- `tm1_trace_data_flow` no longer fetches datasource passwords, user names and ODBC queries.
+- `ip-address` raised to 10.7.2 (GHSA-rpw4-54j3-4h4q, GHSA-2vr4-cq9g-pvrc), `proxy-addr` to
+  2.0.8 (GHSA-jqcg-44mw-7w3h).
 
-All ported from the [ffschrattenecker fork](https://github.com/ffschrattenecker/tm1-mcp-server)
-(7.0.2 to 9.1.0).
+Several fixes are ported from the
+[ffschrattenecker fork](https://github.com/ffschrattenecker/tm1-mcp-server) (7.0.2 to 9.1.0).
 
 ## [5.0.0] - 2026-09-27
 
