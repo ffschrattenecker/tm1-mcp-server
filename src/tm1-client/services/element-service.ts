@@ -781,9 +781,10 @@ export class ElementService {
    * comes back, so `total` is exact without fetching every match.
    *
    * Every searched attribute costs one `Properties()` per element. Measured
-   * in the VS Code extension on 1.63 million elements: one attribute 0.9 s,
-   * name plus all attributes 2.3 s. Hence Alias only by default, String
-   * attributes on request; names that are not String attributes are ignored.
+   * on 160,666 elements: name plus alias 0.65 s, +0.07 s per String
+   * attribute; the VS Code extension saw 0.9 s for one attribute and 2.3 s
+   * for all on 1.63 million. Hence Alias only by default, String attributes
+   * on request; names that are not String attributes are ignored.
    *
    * POST /api/v1/ExecuteMDXSetExpression
    */

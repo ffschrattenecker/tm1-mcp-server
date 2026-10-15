@@ -7,12 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.1.0] - 2026-10-15
+
 ### Added
 
 - **`tm1_search_elements`:** finds elements by a business term instead of guessing names. It does a
   case-insensitive substring match on element names and Alias values, across all dimensions of a cube
-  or within one hierarchy. String attributes are searched only when named in `attributes`, since each
-  one costs about a second on a million-element dimension. Each hit says which attribute matched, and
+  or within one hierarchy. String attributes are searched only when named in `attributes`, since every
+  searched attribute adds a scan over all elements (on 160,000 elements: 0.65 s for name and alias,
+  about 0.07 s more per String attribute). Each hit says which attribute matched, and
   `total` counts every match even when `topN` caps the list. The search runs as an MDX `FILTER` on the
   server because OData cannot filter on attribute values (v11 answers error 278).
 
@@ -1154,7 +1157,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/flameY3T1/tm1-mcp-server/compare/v6.0.0...HEAD
+[Unreleased]: https://github.com/flameY3T1/tm1-mcp-server/compare/v6.1.0...HEAD
+[6.1.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v6.0.0...v6.1.0
 [6.0.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v5.0.0...v6.0.0
 [5.0.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v4.0.0...v5.0.0
 [4.0.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v3.1.0...v4.0.0
