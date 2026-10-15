@@ -110,7 +110,7 @@ datasource (562-589).
 - `tm1_list_processes` — List TurboIntegrator processes (with parameters) in the TM1 server
 - `tm1_list_processes_grouped` — Group TI processes by name prefix to give a structural overview without listing every process
 - `tm1_resolve_default_members` — Resolve N hierarchies' effective default members in parallel from one tool call; pass items:[{dimensionName}] with a single entry for a one-off lookup
-- `tm1_search_elements` — Find elements by a business term instead of guessing names: case-insensitive substring match on element names and Alias values, plus String attributes listed in
+- `tm1_search_elements` — Find elements by a business term instead of guessing names: case-insensitive substring match on names and Alias values
 
 ### model-building (9)
 

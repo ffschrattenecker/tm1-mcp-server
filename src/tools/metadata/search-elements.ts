@@ -14,7 +14,8 @@ import { defineTool } from "../define-tool.js";
 export const registerSearchElements = defineTool({
   name: "tm1_search_elements",
   description: [
-    "Find elements by a business term instead of guessing names: case-insensitive substring match on element names and Alias values, plus String attributes listed in `attributes` (e.g. attributes=['Location'] lets 'frankfurt' find CC_SAP via Location=LOC_Frankfurt).",
+    "Find elements by a business term instead of guessing names: case-insensitive substring match on names and Alias values.",
+    "String attributes listed in `attributes` are searched too (e.g. attributes=['Location'] lets 'frankfurt' find CC_SAP via Location=LOC_Frankfurt). Unlike tm1_get_hierarchy nameContains, which matches names in one hierarchy, this matches aliases/attributes and spans a whole cube.",
     "Cost grows per searched attribute (~1 s per attribute on a million-element dimension), so String attributes are opt-in; tm1_list_element_attributes names them.",
     "Scope: cubeName searches every dimension of the cube (default hierarchies); dimensionName searches one hierarchy.",
     "Use before tm1_execute_mdx / tm1_get_cell_value to resolve the exact element names a question refers to.",
