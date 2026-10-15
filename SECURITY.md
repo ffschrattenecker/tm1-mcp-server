@@ -4,10 +4,10 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 2.x     | ✅        |
-| < 2.0   | ❌        |
+| 6.x     | ✅        |
+| < 6.0   | ❌        |
 
-Only the latest `2.x` release line receives security fixes.
+Only the latest major release line receives security fixes.
 
 ## Reporting a Vulnerability
 
@@ -52,3 +52,30 @@ instance over the TM1 REST API. Keep the following in mind before reporting:
 In scope: credential leakage paths, injection into TM1 REST calls, auth bypass
 in the HTTP transport, secret-masking gaps, and anything that lets a tool act
 outside its declared `readOnlyHint` / `destructiveHint` contract.
+
+## Single-user design
+
+The server holds **one TM1 identity per process** and every call runs with it.
+That is the design, not a limitation to work around, and it has consequences
+worth stating plainly:
+
+- **The HTTP transport is single-tenant.** A bearer token authenticates the
+  _endpoint_, not a caller. Everyone who reaches it shares the same TM1
+  credential, session, caches and audit identity. The "fresh MCP server per
+  request" wording in the architecture notes describes request isolation inside
+  the process — it is not a security boundary between users.
+- **`TM1_MODE=readwrite` with an admin account is a developer configuration**,
+  not a production recommendation. In production, point the server at an account
+  whose TM1 rights already match what the agent should be able to do — the
+  server enforces no per-caller authorization of its own.
+- **The confirmation guards are misuse protection, not access control.**
+  Seventeen tools require a `confirm` argument repeating the target name
+  verbatim: every `delete_*` and `clear_*`, plus `tm1_remove_client_group`,
+  `tm1_execute_process`, `tm1_execute_chore`, `tm1_write_cells`,
+  `tm1_set_cube_rules` and `tm1_upload_file`. Anything that can call such a
+  tool can also supply its `confirm` value — the guard only stops an
+  auto-approving client firing an irreversible action without naming the
+  target.
+
+If you need multi-user access with per-caller identity, run one process per
+identity behind your own front end rather than sharing one.

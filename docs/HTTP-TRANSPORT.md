@@ -2,7 +2,7 @@
 
 The default transport is **stdio**, which is how this server is meant to be run:
 one local process, one TM1 identity, one user (see
-[Positioning](../README.md#positioning--this-is-a-single-user-tool)). The HTTP
+[Single-user design](../SECURITY.md#single-user-design)). The HTTP
 transport exists for remote or multi-client setups and does not change that — it
 is single-tenant, and everything below follows from that.
 
