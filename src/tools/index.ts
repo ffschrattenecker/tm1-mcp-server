@@ -8,6 +8,7 @@ import { registerListDimensions } from "./metadata/list-dimensions.js";
 import { registerGetHierarchy } from "./metadata/get-hierarchy.js";
 import { registerGetDescendants } from "./metadata/get-descendants.js";
 import { registerGetAncestors } from "./metadata/get-ancestors.js";
+import { registerSearchElements } from "./metadata/search-elements.js";
 import { registerResolveDefaultMembers } from "./metadata/resolve-default-members.js";
 import { registerListProcesses } from "./metadata/list-processes.js";
 import { registerListProcessesGrouped } from "./metadata/list-processes-grouped.js";
@@ -149,6 +150,7 @@ const REGISTRARS: ToolRegistrar[] = [
   registerGetHierarchy,
   registerGetDescendants,
   registerGetAncestors,
+  registerSearchElements,
   registerResolveDefaultMembers,
   registerListProcesses,
   registerListProcessesGrouped,

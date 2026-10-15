@@ -16,7 +16,7 @@ Engine (rerooted REST, `s2s` auth live-validated) and Planning Analytics SaaS 12
 
 ## Features
 
-113 tools across 12 categories — every one listed in
+114 tools across 12 categories — every one listed in
 [docs/TOOLS.md](docs/TOOLS.md), with working JSON payloads in
 [docs/EXAMPLES.md](docs/EXAMPLES.md). Past plain CRUD over the REST API:
 
@@ -198,7 +198,7 @@ security notes and the `autoApprove` allowlist:
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (113)
+## Tools (114)
 
 Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 
@@ -208,7 +208,7 @@ Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 | celldata | 10 |
 | dimension-management | 12 |
 | fileops | 5 |
-| metadata | 9 |
+| metadata | 10 |
 | model-building | 9 |
 | operations | 15 |
 | scheduling | 5 |
@@ -216,7 +216,7 @@ Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 | subsets | 5 |
 | ti-development | 21 |
 | views | 4 |
-| **Total** | **113** |
+| **Total** | **114** |
 
 <!-- TOOLS-AUTOGEN:END -->
 

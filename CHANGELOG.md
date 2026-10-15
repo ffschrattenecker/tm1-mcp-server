@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`tm1_search_elements`:** finds elements by a business term instead of guessing names. It does a
+  case-insensitive substring match on element names and Alias values, across all dimensions of a cube
+  or within one hierarchy. String attributes are searched only when named in `attributes`, since each
+  one costs about a second on a million-element dimension. Each hit says which attribute matched, and
+  `total` counts every match even when `topN` caps the list. The search runs as an MDX `FILTER` on the
+  server because OData cannot filter on attribute values (v11 answers error 278).
+
 ## [6.0.0] - 2026-10-15
 
 ### Breaking

@@ -48,7 +48,7 @@ datasource (562-589).
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (113)
+## Tools (114)
 
 ### analysis (10)
 
@@ -99,7 +99,7 @@ datasource (562-589).
 - `tm1_search_files` — Search file names in the TM1 server's blob/file storage by prefix and/or substring
 - `tm1_upload_file` — Upload (create or update) a file in the TM1 server's blob/file storage
 
-### metadata (9)
+### metadata (10)
 
 - `tm1_get_ancestors` — Get all ancestors of an element via parent-walk
 - `tm1_get_descendants` — Get descendants of a consolidation element
@@ -110,6 +110,7 @@ datasource (562-589).
 - `tm1_list_processes` — List TurboIntegrator processes (with parameters) in the TM1 server
 - `tm1_list_processes_grouped` — Group TI processes by name prefix to give a structural overview without listing every process
 - `tm1_resolve_default_members` — Resolve N hierarchies' effective default members in parallel from one tool call; pass items:[{dimensionName}] with a single entry for a one-off lookup
+- `tm1_search_elements` — Find elements by a business term instead of guessing names: case-insensitive substring match on element names and Alias values, plus String attributes listed in
 
 ### model-building (9)
 

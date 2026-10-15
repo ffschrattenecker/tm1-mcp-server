@@ -148,6 +148,29 @@ export const DescendantsResultSchema = z.object({
   truncated: z.boolean(),
 });
 
+export const SearchElementsResultSchema = z.object({
+  searchTerm: z.string(),
+  dimensions: z.array(
+    z.object({
+      dimension: z.string(),
+      hierarchy: z.string(),
+      // Every match in the hierarchy; elements is capped at topN.
+      total: z.number().int(),
+      // true when topN clipped the match set — narrow the term.
+      truncated: z.boolean(),
+      elements: z.array(
+        z.object({
+          name: z.string(),
+          type: z.string(),
+          level: z.number().int(),
+          matchedOn: z.string(),
+          matchedValue: z.string(),
+        }),
+      ),
+    }),
+  ),
+});
+
 export const DefaultMemberResolutionSchema = z.object({
   dimension: z.string(),
   hierarchy: z.string(),
