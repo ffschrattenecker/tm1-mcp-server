@@ -10,6 +10,7 @@ import { registerUpsertProcess } from "../../src/tools/ti-development/upsert-pro
 import { registerImportProcessFromGit } from "../../src/tools/ti-development/import-process-from-git.js";
 import { registerImportProFile } from "../../src/tools/ti-development/import-pro-file.js";
 import type { ToolRegistrar } from "../../src/tools/define-tool.js";
+import { serializeToPro } from "../../src/lib/pro-serializer.js";
 
 type ToolCb = (
   args: Record<string, unknown>,
@@ -158,5 +159,44 @@ describe("imports apply empty lists and a None source", () => {
     expect(h.of("updateParameters")[0]?.[2]).toEqual([]);
     expect(h.of("updateVariables")[0]?.[2]).toEqual([]);
     expect(h.of("updateDataSource")[0]?.[2]).toMatchObject({ type: "None" });
+  });
+});
+
+// The .pro footer (576 UIData, 1217 HasSecurityAccess) and the 582 block are
+// tested in the parser and serializer on their own; this runs the import
+// handler, where they have to reach the service unchanged.
+describe("tm1_import_pro_file carries the footer and the column layout", () => {
+  it("passes false, an empty UIData and 582,0 through to a new process", async () => {
+    const h = harness(registerImportProFile, { exists: false });
+    await h.run({
+      content: serializeToPro({
+        name: "Load.Sales",
+        variablesUIData: [],
+        uiData: "",
+        hasSecurityAccess: false,
+      }),
+      mode: "create",
+      preflight: false,
+    });
+    expect(h.of("create")).toHaveLength(1);
+    expect(h.of("updateVariables")[0]?.[3]).toEqual([]);
+    expect(h.of("updateDeployMeta")).toEqual([
+      [
+        "updateDeployMeta",
+        "Load.Sales",
+        { uiData: "", hasSecurityAccess: false },
+      ],
+    ]);
+  });
+
+  it("leaves both alone when the file has neither", async () => {
+    const h = harness(registerImportProFile, { exists: true });
+    await h.run({
+      content: serializeToPro({ name: "Load.Sales" }),
+      mode: "update",
+      preflight: false,
+    });
+    expect(h.of("updateVariables")[0]?.[3]).toBeUndefined();
+    expect(h.of("updateDeployMeta")).toEqual([]);
   });
 });
