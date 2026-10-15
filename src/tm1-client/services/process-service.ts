@@ -35,6 +35,12 @@ import {
   odataKey,
 } from "./odata-page.js";
 
+const RESERVED_VARIABLE_NAMES = new Set([
+  "NVALUE",
+  "SVALUE",
+  "VALUE_IS_STRING",
+]);
+
 interface RawProcessVariable {
   Name: string;
   Type: string;
@@ -1093,6 +1099,19 @@ export class ProcessService {
     const body: Record<string, unknown> = {};
     // undefined = leave the variables alone and patch only the column layout.
     if (vars !== undefined) {
+      // TM1 rejects these exact names (case matters) with "Invalid variable
+      // name supplied" and does not say which one (11.8, 12.5 and SaaS 12.6,
+      // measured 2026-10-15). Architect-era .pro files such as Bedrock's
+      // cube.data.import declare them; name them here instead.
+      const reserved = vars
+        .map((v) => v.name)
+        .filter((n) => RESERVED_VARIABLE_NAMES.has(n));
+      if (reserved.length > 0) {
+        throw new TM1Error({
+          code: TM1ErrorCode.VALIDATION_ERROR,
+          message: `Variable name(s) ${reserved.join(", ")} are reserved by TM1 and cannot be set over REST. Remove them from the variables list.`,
+        });
+      }
       body.Variables = vars.map((v) => ({
         Name: v.name,
         Type: v.type,

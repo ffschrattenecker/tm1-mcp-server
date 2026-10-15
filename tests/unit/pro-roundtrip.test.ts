@@ -225,4 +225,11 @@ describe("pro-serializer ignored datasource columns (block 582)", () => {
     expect(out).toContain("582,0");
     expect(parseProFile(out).variablesUIData).toEqual([]);
   });
+
+  it("keeps a 0 in block 579 instead of reading it as 1", () => {
+    const out = serializeToPro(
+      fixture({ variables: [{ name: "v1", type: "String", position: 0 }] }),
+    );
+    expect(parseProFile(out).variables[0]?.position).toBe(0);
+  });
 });

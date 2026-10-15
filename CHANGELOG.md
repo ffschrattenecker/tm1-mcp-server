@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Deploying variables named `NVALUE`, `SVALUE` or `VALUE_IS_STRING` (as Architect-era `.pro` files
+  such as Bedrock's `}bedrock.cube.data.import` declare them) now fails with a message naming them.
+  TM1 refuses these exact names over REST on 11.8, 12.5 and PA SaaS with only "Invalid variable name
+  supplied". `tm1_import_pro_file` also keeps a variable position of `0` instead of reading it as `1`.
 - `tm1_import_pro_file` no longer drops code when a section's line count is too low. The
   Bedrock repo's `}bedrock.server.util.string.validate.pro` says `572,185` over 189 lines, and
   the import cut off `END;` and `#EndRegion`. Lines that follow the count up to the next section

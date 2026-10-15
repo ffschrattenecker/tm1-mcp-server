@@ -223,9 +223,12 @@ function parseVariables(blocks: Map<string, string[]>): ProcessVariable[] {
   const types = (blocks.get("578") ?? []).map(
     (l) => parseInt(l.trim(), 10) || 2,
   );
-  const positions = (blocks.get("579") ?? []).map(
-    (l) => parseInt(l.trim(), 10) || 1,
-  );
+  // 0 is kept: it is what the file says, and TM1 rejects it rather than
+  // reading it as 1.
+  const positions = (blocks.get("579") ?? []).map((l) => {
+    const n = parseInt(l.trim(), 10);
+    return Number.isNaN(n) ? 1 : n;
+  });
 
   const startBytes = (blocks.get("580") ?? []).map(
     (l) => parseInt(l.trim(), 10) || 0,
