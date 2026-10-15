@@ -20,7 +20,7 @@ describe("buildDatasourceMembership", () => {
           hierarchyName: dim,
           private: false,
           expression: undefined,
-          elements: ["SuDatenquellen_C", "SuDatenquellen_D"],
+          elements: ["SuKanaele_C", "SuKanaele_D"],
           alias: undefined,
         }),
       },
@@ -28,14 +28,14 @@ describe("buildDatasourceMembership", () => {
         {
           name: "P",
           type: "TM1DimensionSubset",
-          sourceName: "Datenquellen",
+          sourceName: "Kanaele",
           subset: "sMy",
         },
       ],
     );
-    expect(
-      m.byElement.get(elementKey("Datenquellen", "SuDatenquellen_C")),
-    ).toEqual([{ process: "P", via: "subset-static" }]);
+    expect(m.byElement.get(elementKey("Kanaele", "SuKanaele_C"))).toEqual([
+      { process: "P", via: "subset-static" },
+    ]);
   });
 
   it("resolves an MDX view datasource to literal members + flags computed selectors", async () => {
@@ -46,7 +46,7 @@ describe("buildDatasourceMembership", () => {
           viewName: view,
           private: false,
           type: "MDX" as const,
-          mdx: "{ TM1FILTERBYLEVEL(TM1SUBSETALL([Zeit]),0) } * { [Datenquellen].[SuDatenquellen_C] }",
+          mdx: "{ TM1FILTERBYLEVEL(TM1SUBSETALL([Zeit]),0) } * { [Kanaele].[SuKanaele_C] }",
         }),
         getSubset: noSubset,
       },
@@ -59,9 +59,9 @@ describe("buildDatasourceMembership", () => {
         },
       ],
     );
-    expect(
-      m.byElement.get(elementKey("Datenquellen", "SuDatenquellen_C")),
-    ).toEqual([{ process: "P", via: "view-mdx" }]);
+    expect(m.byElement.get(elementKey("Kanaele", "SuKanaele_C"))).toEqual([
+      { process: "P", via: "view-mdx" },
+    ]);
     // Whole-MDX-VIEW datasource: not tied to a single axis → recorded under the "*" sentinel.
     expect([...(m.computedByProcess.get("P")?.get("*") ?? [])].sort()).toEqual([
       "TM1FILTERBYLEVEL",
@@ -183,14 +183,14 @@ describe("buildDatasourceMembership — computed axis resolution (C1)", () => {
           set: string,
         ) => {
           calls.push({ cube, dim, set });
-          return ["EUR", "CHF", "USD", "Group_EUR"];
+          return ["EUR", "CHF", "USD", "Group_CHF"];
         },
       },
       [
         {
           name: "P",
           type: "TM1CubeView",
-          sourceName: "Cube_Assumptions",
+          sourceName: "Cube_Inputs",
           view: "vC",
         },
       ],
@@ -200,7 +200,7 @@ describe("buildDatasourceMembership — computed axis resolution (C1)", () => {
     ]);
     expect(calls).toEqual([
       {
-        cube: "Cube_Assumptions",
+        cube: "Cube_Inputs",
         dim: "Currency",
         set: "{TM1FILTERBYLEVEL({TM1SUBSETALL([Currency])},0)}",
       },

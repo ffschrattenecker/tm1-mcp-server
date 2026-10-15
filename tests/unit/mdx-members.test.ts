@@ -6,9 +6,9 @@ import {
 
 describe("extractMdxMemberRefs", () => {
   it("extracts a two-part [Dim].[Element] member", () => {
-    const r = extractMdxMemberRefs("{ [Datenquellen].[SuDatenquellen_C] }");
+    const r = extractMdxMemberRefs("{ [Kanaele].[SuKanaele_C] }");
     expect(r.members).toEqual([
-      { dimension: "Datenquellen", element: "SuDatenquellen_C" },
+      { dimension: "Kanaele", element: "SuKanaele_C" },
     ]);
     expect(r.computedSelectors).toEqual([]);
   });
@@ -20,9 +20,9 @@ describe("extractMdxMemberRefs", () => {
 
   it("flags computed selectors and does NOT invent members for them", () => {
     const r = extractMdxMemberRefs(
-      "{TM1FILTERBYLEVEL(TM1SUBSETALL([Datenquellen]),0)}",
+      "{TM1FILTERBYLEVEL(TM1SUBSETALL([Kanaele]),0)}",
     );
-    expect(r.members).toEqual([]); // [Datenquellen] alone is a dimension ref, not a member
+    expect(r.members).toEqual([]); // [Kanaele] alone is a dimension ref, not a member
     expect(r.computedSelectors.sort()).toEqual([
       "TM1FILTERBYLEVEL",
       "TM1SUBSETALL",
@@ -31,11 +31,11 @@ describe("extractMdxMemberRefs", () => {
 
   it("captures explicit members even alongside a computed selector", () => {
     const r = extractMdxMemberRefs(
-      "{ DESCENDANTS([Zeit].[2026]) , [Datenquellen].[SuDatenquellen_C] }",
+      "{ DESCENDANTS([Zeit].[2026]) , [Kanaele].[SuKanaele_C] }",
     );
     expect(r.members).toEqual([
       { dimension: "Zeit", element: "2026" },
-      { dimension: "Datenquellen", element: "SuDatenquellen_C" },
+      { dimension: "Kanaele", element: "SuKanaele_C" },
     ]);
     expect(r.computedSelectors).toEqual(["DESCENDANTS"]);
   });

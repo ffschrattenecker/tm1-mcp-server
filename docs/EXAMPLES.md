@@ -434,14 +434,14 @@ require `selected` — TM1 rejects title subsets without a selected element.
 {
   "tool": "tm1_trace_cell_calculation",
   "args": {
-    "cubeName": "Cube_PnL_Integration",
+    "cubeName": "Cube_PL_Bridge",
     "elements": [
       "2026_01",
       "Budget",
-      "CC_SAP",
-      "ACC_GrossSalary",
+      "CC_North",
+      "ACC_BaseWage",
       "EUR",
-      "AmountGroup"
+      "ValueGroup"
     ],
     "maxDepth": 3,
     "maxComponents": 10
@@ -459,14 +459,14 @@ branches; re-run with that node's `tuple`/`cube` to drill deeper.
 {
   "tool": "tm1_trace_feeders",
   "args": {
-    "cubeName": "Cube_PnL_Integration",
+    "cubeName": "Cube_PL_Bridge",
     "elements": [
       "2026_01",
       "Budget",
-      "CC_SAP",
-      "ACC_GrossSalary",
+      "CC_North",
+      "ACC_BaseWage",
       "EUR",
-      "AmountLocal"
+      "ValueLocal"
     ]
   }
 }
