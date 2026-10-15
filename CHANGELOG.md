@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.0] - 2026-10-15
+
 ### Breaking
 
 - **`tm1_export_process_to_git` writes a new `.json` layout:** the server's REST payload without
@@ -1143,7 +1145,8 @@ Initial public release.
 - Quality gates: strict typecheck, ESLint, `lint:no-flat-api`,
   annotation-coverage, and tool-registration wiring.
 
-[Unreleased]: https://github.com/flameY3T1/tm1-mcp-server/compare/v5.0.0...HEAD
+[Unreleased]: https://github.com/flameY3T1/tm1-mcp-server/compare/v6.0.0...HEAD
+[6.0.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v5.0.0...v6.0.0
 [5.0.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v4.0.0...v5.0.0
 [4.0.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v3.1.0...v4.0.0
 [3.1.0]: https://github.com/flameY3T1/tm1-mcp-server/compare/v3.0.1...v3.1.0
