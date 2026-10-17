@@ -264,4 +264,30 @@ describe("ConnectionRegistry — rejected login", () => {
       /Authentication failed with status 401/,
     );
   });
+
+  it("warns once per connection when TLS verification is off", async () => {
+    writeConn(root, "tls", [
+      "TM1_BASE_URL=https://tls:1",
+      "TM1_SSL_REJECT_UNAUTHORIZED=false",
+      ...CREDS,
+    ]);
+    writeConn(root, "plain", ["TM1_BASE_URL=http://plain:1", ...CREDS]);
+    const lines: string[] = [];
+    const capture = pino(
+      { level: "warn" },
+      { write: (line: string) => void lines.push(line) },
+    );
+    const reg = ConnectionRegistry.fromEnvironment(
+      { TM1_CONNECTIONS_DIR: root },
+      capture,
+    );
+
+    await reg.get("tls");
+    await reg.get("tls");
+    await reg.get("plain");
+
+    const warned = lines.filter((l) => l.includes("not verified"));
+    expect(warned).toHaveLength(1);
+    expect(warned[0]).toContain('"connection":"tls"');
+  });
 });

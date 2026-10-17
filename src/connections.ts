@@ -545,6 +545,17 @@ export class ConnectionRegistry {
     if (!entry.client) {
       const config = entry.config!;
       const logger = this.logger.child({ connection: entry.info.name });
+      // Once per client, not per config load: discovery and rescans reload
+      // the config far more often than a connection is used.
+      if (
+        !config.ssl.rejectUnauthorized &&
+        config.baseUrl.startsWith("https:")
+      ) {
+        logger.warn(
+          "TM1_SSL_REJECT_UNAUTHORIZED=false: the TM1 certificate is not " +
+            "verified, so credentials go to whoever answers on that address",
+        );
+      }
       const sessionManager = new SessionManager(config, logger);
       entry.client = new TM1Client(config, sessionManager, logger);
       entry.connecting = entry.client
