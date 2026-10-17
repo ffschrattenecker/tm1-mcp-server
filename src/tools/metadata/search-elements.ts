@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
+import { withoutSandboxes } from "../../lib/tm1-name.js";
 import {
   FORMAT_SCHEMA,
   payloadResponse,
@@ -78,8 +79,10 @@ export const registerSearchElements = defineTool({
         message: "Provide exactly one of cubeName or dimensionName",
       });
     }
+    // The Sandboxes dimension is no business dimension and TM1 answers an
+    // MDX over its elements with an error, which would fail the whole search.
     const targets = cubeName
-      ? (await tm1Client.cubes.getDimensionNames(cubeName)).map(
+      ? withoutSandboxes(await tm1Client.cubes.getDimensionNames(cubeName)).map(
           (d) => [d, d] as const,
         )
       : [[dimensionName!, hierarchyName ?? dimensionName!] as const];
