@@ -11,6 +11,7 @@ export const registerDeleteElements = defineTool({
   description: [
     "Delete many elements from one TM1 dimension hierarchy in a single call ($batch where the server supports it).",
     "Not all-or-nothing: each element reports deleted or its error, and success is true only when every one was deleted. Irreversible — pass confirm=<dimension name verbatim>.",
+    "Data loss: a leaf that exists in no other hierarchy of the dimension takes its cell values in every cube that uses the dimension, and its attribute values, with it.",
   ],
   annotations: DESTRUCTIVE,
   output: MutationResultSchema,
