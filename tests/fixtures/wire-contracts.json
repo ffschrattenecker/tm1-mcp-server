@@ -1296,6 +1296,26 @@
         "message": "string"
       }
     },
+    "POST /api/v1/ExecuteMDXSetExpression": {
+      "@odata.context": "string",
+      "@odata.id": "string",
+      "Cardinality": "number",
+      "Tuples[]": {
+        "Members[]": {
+          "Attributes": {
+            "Caption": "string"
+          },
+          "Element": {
+            "@odata.etag": "string",
+            "@odata.id": "string",
+            "Level": "number",
+            "Type": "string"
+          },
+          "Name": "string"
+        },
+        "Ordinal": "number"
+      }
+    },
     "POST /api/v1/Processes": {
       "@odata.context": "string",
       "@odata.etag": "string",

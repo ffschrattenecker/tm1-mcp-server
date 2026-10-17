@@ -203,6 +203,16 @@
       "total": "number",
       "truncated": "boolean"
     },
+    "elements.searchElements": {
+      "elements[]": {
+        "level": "number",
+        "matchedOn": "string",
+        "matchedValue": "string",
+        "name": "string",
+        "type": "string"
+      },
+      "total": "number"
+    },
     "files.getContentBytes": {
       "*": "number"
     },
@@ -309,6 +319,36 @@
     "processes.getDeployMeta": {
       "hasSecurityAccess": "boolean"
     },
+    "processes.getGitHeader": {
+      "DataSource": {
+        "asciiDecimalSeparator?": "string",
+        "asciiDelimiterChar?": "string",
+        "asciiDelimiterType?": "string",
+        "asciiHeaderRecords?": "number",
+        "asciiQuoteCharacter?": "string",
+        "asciiThousandSeparator?": "string",
+        "dataSourceNameForClient?": "string",
+        "dataSourceNameForServer?": "string",
+        "Type": "string"
+      },
+      "HasSecurityAccess": "boolean",
+      "Name": "string",
+      "Parameters[]": {
+        "Name": "string",
+        "Prompt": "string",
+        "Type": "string",
+        "Value": "number"
+      },
+      "UIData": "string",
+      "Variables[]": {
+        "EndByte": "number",
+        "Name": "string",
+        "Position": "number",
+        "StartByte": "number",
+        "Type": "string"
+      },
+      "VariablesUIData[]": "string"
+    },
     "processes.getParameters": {
       "[]": {
         "defaultValue": "number|string",
@@ -316,6 +356,10 @@
         "prompt?": "string",
         "type": "string"
       }
+    },
+    "processes.getUIData": {
+      "uiData": "string",
+      "variablesUIData[]": "string"
     },
     "processes.getVariableLayout": {
       "ignoredColumns[]": {
