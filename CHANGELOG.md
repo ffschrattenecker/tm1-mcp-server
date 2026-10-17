@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [10.0.0] - 2026-10-17
+
 Merged upstream 6.0.0 and 6.1.0.
 
 ### Breaking
@@ -371,7 +373,8 @@ response-size guard, the per-connection caches) are unchanged.
 Older history (before 8.0.0): see the git tags and the upstream repository,
 https://github.com/flameY3T1/tm1-mcp-server.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.3.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.0.0...HEAD
+[10.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.3.0...v10.0.0
 [9.3.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.2.0...v9.3.0
 [9.2.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.1.1...v9.2.0
 [9.1.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.1.0...v9.1.1
