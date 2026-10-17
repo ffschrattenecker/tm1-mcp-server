@@ -117,6 +117,11 @@
       "endpoint": "GET /api/v1/Chores",
       "path": "$.value[].Tasks[].Parameters[].Value",
       "reason": "A chore task parameter's value is numeric or string depending on the parameter's type. Only numeric values were recorded; see the Processes('*')/Parameters entry."
+    },
+    {
+      "endpoint": "POST /api/v1/ExecuteMDXSetExpression",
+      "path": "$.Tuples[].Members[].Attributes.Site",
+      "reason": "Attributes holds one key per attribute named in the Properties() list of the MDX. The recorded search matched on names and the Caption alias only, so only Caption appeared; searching a String attribute adds that attribute name as a key."
     }
   ]
 }
