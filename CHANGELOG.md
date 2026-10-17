@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Merged upstream 6.0.0 and 6.1.0.
+
+### Breaking
+
+- **`tm1_export_process_to_git` writes the server's REST payload as the `.json`** (`Name`,
+  `UIData`, `VariablesUIData`, `Parameters`, ... in the server's key order, same bytes as the VS Code
+  extension), not the lowercase `name`/`parameters` layout. This also applies to the automatic
+  process backups. `tm1_import_process_from_git` reads both layouts, so older backups still
+  restore. *Action:* re-export stored `.json` files once, or the next export shows every file as
+  changed; anything outside this repo that reads the lowercase keys needs updating.
+
+### Added
+
+- `tm1_search_elements` finds elements by a business term: a case-insensitive substring match on
+  names and Alias values, plus the String attributes named in `attributes`, for one hierarchy or
+  every dimension of a cube (except `Sandboxes`). `total` counts every match even when `topN` caps
+  the list. It runs as an MDX `FILTER` on the server, because OData cannot filter on attribute values.
+- Planning Analytics SaaS: `TM1_AUTH_MODE=saas` with `TM1_TENANT`, `TM1_DATABASE` and `TM1_API_KEY`
+  (a keychain secret like any other). The tenant is part of the connection id. Validated upstream
+  against PA SaaS 12.6.4; not tried in this fork.
+- A connection with `TM1_SSL_REJECT_UNAUTHORIZED=false` on `https` logs a warning, once, when its
+  client is created.
+
+### Changed
+
+- The `.ti` parser keeps your own `#Region` folds as code and reads the VS Code extension's former
+  `#region prolog` layout. A process without code exports as one empty Prolog region.
+- `tm1_import_process_from_git` refuses a `.json` with unknown keys, or with `parameters`,
+  `variables` or `dataSource` missing or `null`; before, it cleared all three on the server. It
+  also writes `UIData` and an empty `VariablesUIData`. The preflight no longer needs its own
+  check that the tabs cover the blob: the parser refuses code outside a tab and a repeated tab.
+- `tm1_export_process_to_git` warns when the import would refuse the pair it just wrote.
+- Error-log tools let TM1 sort, filter and cap the `ErrorLogFiles` listing.
+- `tm1_delete_elements` says that deleting a leaf takes its cell values with it.
+
+### Fixed
+
+- `.pro` files: code past a too-low section line count is kept, and `UIData` (line 576),
+  `HasSecurityAccess` (line 1217) and an empty `VariablesUIData` (`582,0`) survive a round trip. A
+  variable position of `0` is kept. `tm1_install_pro_bundle` applies them too.
+- Variables named `NVALUE`, `SVALUE` or `VALUE_IS_STRING` are refused with their names;
+  `asciiDelimiterType` accepts only `Character` or `FixedWidth`.
+- A programming error in the request path is no longer retried as a network failure, and a TM1
+  message that only says "not authorized" is no longer reported as `PERMISSION_DENIED`.
+- The HTTP transport answers `GET` and `DELETE /mcp` with 405, and a failed server build with 500
+  instead of hanging.
+- Test fixtures use invented object names.
+
 ## [9.3.0] - 2026-10-13
 
 ### Added

@@ -19,7 +19,8 @@ TI processes, chores, security, code-graph analysis — to any MCP-compatible
 LLM client (Claude Code, Claude Desktop, etc.).
 
 Tested against TM1 11.8 (REST, Basic/CAM auth) and TM1 12.5 / Planning Analytics
-Engine (rerooted REST, `s2s` auth live-validated).
+Engine (rerooted REST, `s2s` auth live-validated). Planning Analytics SaaS
+(`TM1_AUTH_MODE=saas`) is supported but was validated upstream only.
 
 Everything below describes this fork's state. For the real project, read the
 [upstream README](https://github.com/flameY3T1/tm1-mcp-server#readme).
