@@ -74,11 +74,13 @@ export class ServerService {
   /**
    * List TI process error log files.
    *
-   * TM1 v11 OData exposes only `Filename` on this entity set (no LastUpdated /
-   * $select / $orderby support). Sorting is filename-descending — filenames
-   * embed a yyyymmddhhmmss timestamp, so lexical desc sort matches
-   * chronological newest-first. Filters (processName, since, top) are applied
-   * client-side.
+   * The entity set exposes only `Filename`. Sorting is filename-descending —
+   * filenames embed a yyyymmddhhmmss timestamp, so lexical desc sort matches
+   * chronological newest-first. Both versions sort, filter and cap this set
+   * server-side (measured 2026-10-04; a v12 test server held 23 000 files), so
+   * the sort, a case-insensitive name prefilter for `processName` and, when
+   * nothing else filters, `$top` go to TM1. The exact process-name match and
+   * `since` stay client-side: the filename layouts differ by version.
    */
   async listErrorLogFiles(
     opts: {
@@ -88,9 +90,16 @@ export class ServerService {
     } = {},
   ): Promise<ErrorLogFile[]> {
     const top = opts.top ?? 50;
+    let query = "?$orderby=Filename desc";
+    if (opts.processName) {
+      // Superset of every pattern matched below; narrowed client-side.
+      query += `&$filter=contains(tolower(Filename),'${odataKey(opts.processName.toLowerCase())}')`;
+    } else if (!opts.since) {
+      query += `&$top=${top}`;
+    }
     const response = await this.http.request<{
       value: Array<{ Filename?: string }>;
-    }>("GET", "/api/v1/ErrorLogFiles");
+    }>("GET", `/api/v1/ErrorLogFiles${query}`);
     let entries = response.value
       .map((e): ErrorLogFile => ({ filename: e.Filename ?? "" }))
       .filter((e) => e.filename);

@@ -35,6 +35,8 @@ function captureProExport(version: 11 | 12 = 11): {
     getParameters: async () => [],
     getVariables: async () => [],
     getVariableLayout: async () => ({ variables: [], ignoredColumns: [] }),
+    getUIData: async () => ({}),
+    getDeployMeta: async () => ({ hasSecurityAccess: false }),
     getDataSource: async (_n: string, opts?: { includeSecrets?: boolean }) => {
       secretsAsked.push(opts?.includeSecrets === true);
       return {
@@ -120,19 +122,25 @@ describe("credential export is v12-only", () => {
 });
 
 describe("git export refuses credentials on v11", () => {
-  function captureGitExport(version: 11 | 12): ToolCb {
+  function captureGitExport(
+    version: 11 | 12,
+    extraDataSource: Record<string, unknown> = {},
+  ): ToolCb {
     const processes = {
-      getCodeBlob: async () => "#region Prolog\nsVal = 'x';\n#endregion Prolog",
-      getParameters: async () => [],
-      getVariables: async () => [],
-      getVariableLayout: async () => ({ variables: [], ignoredColumns: [] }),
-      getDataSource: async () => ({
-        type: "ODBC" as const,
-        dataSourceNameForServer: "SALES_DWH",
-        userName: "etl_reader",
-        password: "W0br6scX06nUHxVZQrQC+g==",
+      getCodeBlob: async () => "#region Prolog\r\nsVal = 'x';\r\n#endregion",
+      getGitHeader: async () => ({
+        Name: "P",
+        HasSecurityAccess: false,
+        DataSource: {
+          Type: "ODBC",
+          dataSourceNameForServer: "SALES_DWH",
+          userName: "etl_reader",
+          password: "W0br6scX06nUHxVZQrQC+g==",
+          ...extraDataSource,
+        },
+        Parameters: [],
+        Variables: [],
       }),
-      getDeployMeta: async () => ({ hasSecurityAccess: false }),
     };
     const { cb } = captureTool(registerExportProcessToGit, {
       processes,
@@ -172,6 +180,18 @@ describe("git export refuses credentials on v11", () => {
     const res = await captureGitExport(11)({ processName: "P" }, {});
     const payload: Record<string, unknown> = JSON.parse(res.content[0].text);
     expect(payload.credentialsOmitted).toBe(true);
+    expect(payload.warning).toBeUndefined();
+  });
+
+  it("warns when the server sends a data source field the import would refuse", async () => {
+    const res = await captureGitExport(12, { jsonFeed: "x" })(
+      { processName: "P" },
+      {},
+    );
+    const payload: Record<string, unknown> = JSON.parse(res.content[0].text);
+    expect(String(payload.warning)).toMatch(
+      /would refuse[\s\S]*unknown 'dataSource' key\(s\): jsonFeed/,
+    );
   });
 });
 
@@ -215,12 +235,13 @@ describe("password slots in the two file formats", () => {
   });
 
   it("git json keeps the password only when asked", () => {
+    const { type, ...rest } = ds;
     const input = {
-      name: "P",
-      dataSource: ds,
-      parameters: [],
-      variables: [],
-      hasSecurityAccess: false,
+      Name: "P",
+      HasSecurityAccess: false,
+      DataSource: { Type: type, ...rest },
+      Parameters: [],
+      Variables: [],
     };
     const stripped = serializeProcessToGit(input);
     expect(stripped.credentialsOmitted).toBe(true);
@@ -229,5 +250,9 @@ describe("password slots in the two file formats", () => {
     const kept = serializeProcessToGit(input, { includePassword: true });
     expect(kept.credentialsOmitted).toBe(false);
     expect(kept.json).toContain("W0br6scX06nUHxVZQrQC+g==");
+    // The password stays where the server put it, not appended.
+    expect(Object.keys(JSON.parse(kept.json).DataSource)).toEqual(
+      Object.keys(input.DataSource),
+    );
   });
 });

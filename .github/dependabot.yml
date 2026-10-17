@@ -10,6 +10,12 @@ updates:
       default-days: 7
     open-pull-requests-limit: 10
     groups:
+      # @vitest/coverage-v8 pins an exact vitest peer, so separate PRs for the
+      # pair can never install (ERESOLVE). Listed first: the first match wins.
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
       minor-and-patch:
         update-types:
           - "minor"

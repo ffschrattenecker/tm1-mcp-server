@@ -161,7 +161,7 @@ export const registerImportProFile = defineTool({
       tm1Client.processes.updateVariables(
         processName,
         parsed.variables,
-        parsed.variablesUIData.length > 0 ? parsed.variablesUIData : undefined,
+        parsed.variablesUIData,
       ),
       `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
     );
@@ -169,6 +169,18 @@ export const registerImportProFile = defineTool({
       tm1Client.processes.updateDataSource(processName, parsed.dataSource),
       `Datasource update failed for '${processName}' (type=${parsed.dataSource.type}). Code+params+vars applied. Verify datasource credentials/path (ASCII file existence, ODBC DSN, view name) and re-run tm1_upsert_process with mode=update + dataSource={...} to recover.`,
     );
+    // A POST does not create UIData and a PATCH without it leaves it alone,
+    // so a new process would lose the Architect action settings (line 576)
+    // and the security access flag (line 1217).
+    if (parsed.uiData !== undefined || parsed.hasSecurityAccess !== undefined) {
+      await withToolHint(
+        tm1Client.processes.updateDeployMeta(processName, {
+          uiData: parsed.uiData,
+          hasSecurityAccess: parsed.hasSecurityAccess,
+        }),
+        `HasSecurityAccess/UIData update failed for '${processName}'. Code+params+vars+datasource applied. Re-run with mode=update once root cause fixed.`,
+      );
+    }
 
     return {
       content: [

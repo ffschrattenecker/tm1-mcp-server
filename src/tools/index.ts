@@ -3,6 +3,7 @@ import type { ClientSource, ToolRegistrar } from "./define-tool.js";
 
 // Metadata tools
 import { registerResolveDefaultMembers } from "./metadata/resolve-default-members.js";
+import { registerSearchElements } from "./metadata/search-elements.js";
 import { registerListProcessesGrouped } from "./metadata/list-processes-grouped.js";
 
 // Cell data tools
@@ -87,6 +88,7 @@ import { registerAuditFeeders } from "./analysis/audit-feeders.js";
 const REGISTRARS: ToolRegistrar[] = [
   // Metadata
   registerResolveDefaultMembers,
+  registerSearchElements,
   registerListProcessesGrouped,
 
   // Cell data

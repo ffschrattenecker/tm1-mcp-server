@@ -124,7 +124,15 @@ function clientWith(
       getVariables: async () => [],
       getVariableLayout: async () => ({ variables: [], ignoredColumns: [] }),
       getDataSource: async () => NONE_DS,
+      getUIData: async () => ({}),
       getDeployMeta: async () => ({ hasSecurityAccess: false }),
+      getGitHeader: async (name: string) => ({
+        Name: name,
+        HasSecurityAccess: false,
+        DataSource: { Type: "None" },
+        Parameters: [],
+        Variables: [],
+      }),
     },
   } as unknown as TM1Client);
 }
@@ -561,5 +569,57 @@ describe("maskSecrets=false is ignored without operator consent (S8)", () => {
       maskSecrets: false,
     });
     expect(text).not.toContain("S3cr3t_Pw!");
+  });
+});
+
+describe("tm1_diff_processes on long tabs", () => {
+  const lines = (n: number, tag: string) =>
+    Array.from({ length: n }, (_, i) => `v${tag}${i} = ${i};`).join("\n");
+
+  it("diffs a one-line edit in a long tab with correct positions", async () => {
+    const base = lines(20_000, "x").split("\n");
+    const edited = [...base];
+    edited[9_999] = "vChanged = 1;";
+    const client = clientWith({
+      A: { prolog: base.join("\n") },
+      B: { prolog: edited.join("\n") },
+    });
+    const out = JSON.parse(
+      await run(registerDiffProcesses, client, {
+        processA: "A",
+        processB: "B",
+        tabs: ["prolog"],
+      }),
+    );
+    const tab = out.tabs.prolog;
+    expect(tab.tooLarge).toBeUndefined();
+    expect(tab.hunks).toHaveLength(1);
+    expect(tab.hunks[0]).toMatchObject({
+      startA: 9_997,
+      countA: 7,
+      startB: 9_997,
+      countB: 7,
+    });
+  });
+
+  it("reports tooLarge instead of building an oversized table", async () => {
+    const client = clientWith({
+      A: { prolog: lines(5_000, "a") },
+      B: { prolog: lines(5_000, "b") },
+    });
+    const out = JSON.parse(
+      await run(registerDiffProcesses, client, {
+        processA: "A",
+        processB: "B",
+        tabs: ["prolog"],
+      }),
+    );
+    expect(out.tabs.prolog).toEqual({
+      identical: false,
+      linesA: 5_000,
+      linesB: 5_000,
+      hunks: [],
+      tooLarge: true,
+    });
   });
 });

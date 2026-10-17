@@ -19,6 +19,7 @@ import type {
 import type { CellService } from "./cell-service.js";
 import { rethrowIfSystemic } from "./fallback.js";
 import { escapeOdataLiteral, odataKey } from "./odata-page.js";
+import { escapeMdxName } from "../../lib/mdx.js";
 
 // Max in-flight per-element REST calls within a single bulkUpsert pass. Bounds
 // pressure on TM1's worker pool (mirrors the cap the feeder-audit fan-out uses)
@@ -307,7 +308,7 @@ export class ElementService {
    * examines the first 100k names and one that examines the dimension —
    * see src/lib/naming/odata-filter.ts.
    *
-   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Name
+   * GET /api/v1/Dimensions('{d}')/Hierarchies('{h}')/Elements?$select=Name&$orderby=Name
    */
   async scanElementNames(
     dimensionName: string,
@@ -332,8 +333,9 @@ export class ElementService {
   }> {
     const { pageSize, maxScan, filter, scopeTotal } = opts;
     const hierarchyPath = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')`;
+    // $orderby is mandatory with $skip — see odata-page.ts.
     const basePath =
-      `${hierarchyPath}/Elements?$select=Name&$top=${pageSize}` +
+      `${hierarchyPath}/Elements?$select=Name&$orderby=Name&$top=${pageSize}` +
       (filter ? `&$filter=${encodeURIComponent(filter)}` : "");
 
     // First page carries $count=true so we learn the total in one round-trip
@@ -822,6 +824,94 @@ export class ElementService {
       name: a.Name,
       type: a.Type as "Numeric" | "String" | "Alias",
     }));
+  }
+
+  /**
+   * Case-insensitive substring search over element names, Alias attribute
+   * values and the String attributes named in `stringAttributes`. OData cannot do this: `$filter`
+   * on `Attributes/X` fails with error 278 ("did not resolve to a value of
+   * type string") on v11, so the match runs as an MDX FILTER on the server.
+   * `Cardinality` counts the whole match set while `Tuples($top)` caps what
+   * comes back, so `total` is exact without fetching every match.
+   *
+   * Every searched attribute costs one `Properties()` per element. Measured
+   * on 160,666 elements: name plus alias 0.65 s, +0.07 s per String
+   * attribute; the VS Code extension saw 0.9 s for one attribute and 2.3 s
+   * for all on 1.63 million. Hence Alias only by default, String attributes
+   * on request; names that are not String attributes are ignored.
+   *
+   * POST /api/v1/ExecuteMDXSetExpression
+   */
+  async searchElements(
+    dimensionName: string,
+    hierarchyName: string,
+    searchTerm: string,
+    topN: number,
+    stringAttributes: readonly string[] = [],
+  ): Promise<{
+    total: number;
+    elements: Array<{
+      name: string;
+      type: string;
+      level: number;
+      matchedOn: string;
+      matchedValue: string;
+    }>;
+  }> {
+    const attrs = (await this.listAttributes(dimensionName, hierarchyName))
+      .filter(
+        (a) =>
+          a.type === "Alias" ||
+          (a.type === "String" && stringAttributes.includes(a.name)),
+      )
+      .map((a) => a.name);
+    const term = searchTerm.toLowerCase();
+    const member = `[${escapeMdxName(dimensionName)}].[${escapeMdxName(hierarchyName)}].CurrentMember`;
+    // MDX string literals escape `"` by doubling it.
+    const lit = (s: string) => `"${s.replace(/"/g, '""')}"`;
+    const tests = [
+      `${member}.Name`,
+      ...attrs.map((a) => `${member}.Properties(${lit(a)})`),
+    ].map((expr) => `INSTR(1, LCASE(${expr}), ${lit(term)}) > 0`);
+    const mdx = `{FILTER(TM1SUBSETALL([${escapeMdxName(dimensionName)}].[${escapeMdxName(hierarchyName)}]), ${tests.join(" OR ")})}`;
+    const response = await this.http.request<{
+      Cardinality: number;
+      Tuples: Array<{
+        Members: Array<{
+          Name: string;
+          Attributes?: Record<string, unknown>;
+          Element: { Type: string; Level: number };
+        }>;
+      }>;
+    }>(
+      "POST",
+      `/api/v1/ExecuteMDXSetExpression?$select=Cardinality&$expand=Tuples($top=${topN};$expand=Members($select=Name,Attributes;$expand=Element($select=Type,Level)))`,
+      { MDX: mdx },
+    );
+    const elements = response.Tuples.map((t) => {
+      const m = t.Members[0]!;
+      const base = {
+        name: m.Name,
+        type: m.Element.Type,
+        level: m.Element.Level,
+      };
+      if (m.Name.toLowerCase().includes(term)) {
+        return { ...base, matchedOn: "Name", matchedValue: m.Name };
+      }
+      // Attributes carries only non-empty values; the server already
+      // proved one of them matches.
+      const hit = attrs.find((a) =>
+        String(m.Attributes?.[a] ?? "")
+          .toLowerCase()
+          .includes(term),
+      );
+      return {
+        ...base,
+        matchedOn: hit ?? "Name",
+        matchedValue: hit ? String(m.Attributes![hit]) : m.Name,
+      };
+    });
+    return { total: response.Cardinality, elements };
   }
 
   /**

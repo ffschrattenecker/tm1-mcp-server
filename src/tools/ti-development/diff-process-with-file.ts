@@ -194,7 +194,7 @@ export const registerDiffProcessWithFile = defineTool({
     const variables = diffVars(installedLayout.variables, parsed.variables);
     const ignoredColumns = diffIgnoredColumns(
       installedLayout.ignoredColumns,
-      ignoredColumnsOf(parsed.variablesUIData),
+      ignoredColumnsOf(parsed.variablesUIData ?? []),
     );
     const dataSource = diffDs(installedDs, parsed.dataSource);
 

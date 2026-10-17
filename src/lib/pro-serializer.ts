@@ -18,6 +18,10 @@ export interface ProcessSerializeInput {
    * no representation in the variables list.
    */
   variablesUIData?: string[];
+  /** Architect action settings (`UIData`), written as footer line 576. */
+  uiData?: string;
+  /** Written as footer line 1217, where TM1 keeps it. */
+  hasSecurityAccess?: boolean;
   dataSource?: DataSource;
 }
 
@@ -79,7 +83,9 @@ function serializeVariables(vars: ProcessVariable[]): string[] {
 // the block counts COLUMNS, not variables, so its length legitimately exceeds
 // the variable count whenever columns are ignored.
 function serializeVariablesUIData(uiData: string[] | undefined): string[] {
-  if (!uiData || uiData.length === 0) return [];
+  // An empty list is written as 582,0: TM1 12 keeps VariablesUIData: [], and
+  // an import that omits the key leaves it missing.
+  if (uiData === undefined) return [];
   return [`582,${uiData.length}`, ...uiData];
 }
 
@@ -185,6 +191,11 @@ export function serializeToPro(input: ProcessSerializeInput): string {
   lines.push(...serializeSection("573", input.metadata));
   lines.push(...serializeSection("574", input.data));
   lines.push(...serializeSection("575", input.epilog));
+  // 1217 belongs to the footer, so it needs a 576 line in front of it.
+  if (input.uiData !== undefined || input.hasSecurityAccess !== undefined)
+    lines.push(`576,${input.uiData ?? ""}`);
+  if (input.hasSecurityAccess !== undefined)
+    lines.push(`1217,${input.hasSecurityAccess ? 1 : 0}`);
   // Trailing newline — TM1 .pro files end with one.
   return lines.join("\n") + "\n";
 }

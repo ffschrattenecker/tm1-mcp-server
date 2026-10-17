@@ -742,11 +742,12 @@ export function classifyHttpError(
     // returns 400 {"error":{"code":"65","message":"ObjectSecurityNoReadRights"}}.
     // Classify by message so the caller gets PERMISSION_DENIED + its actionable
     // hint instead of a generic TM1_ERROR. Verified live with a cube-only user.
+    // Only TM1's own tokens count: free English prose such as "not authorized"
+    // never matched on a localized server and could come from a TI or ODBC
+    // message that has nothing to do with object security.
     if (
       details &&
-      /No(Read|Write|Admin)Rights|ObjectSecurity|SecurityAccess|not\s+authori[sz]ed/i.test(
-        details,
-      )
+      /No(Read|Write|Admin)Rights|ObjectSecurity|SecurityAccess/i.test(details)
     ) {
       return new TM1Error({
         code: TM1ErrorCode.PERMISSION_DENIED,
@@ -838,8 +839,14 @@ function isNetworkErrorImpl(error: unknown): boolean {
 
     // Fallback: undici wraps every fetch-level network failure in
     // `TypeError: fetch failed`. This catches wrappers whose cause carries no
-    // recognised code (or no cause at all) — preserves the old TypeError branch.
-    if (error instanceof TypeError) {
+    // recognised code (or no cause at all). A TypeError with neither that
+    // message nor a cause is a local programming error (a bad property access,
+    // a body that will not serialize): retrying it only adds 7 s of backoff.
+    if (
+      error instanceof TypeError &&
+      (error.message === "fetch failed" ||
+        (error as { cause?: unknown }).cause !== undefined)
+    ) {
       return true;
     }
 

@@ -20,11 +20,9 @@ function indexOf(prolog: string) {
 describe("byElement reverse index", () => {
   it("indexes a literal SubsetElementInsert element under (dim, element)", async () => {
     const index = await indexOf(
-      "SubsetCreate('sTmp','Datenquellen',1);\nSubsetElementInsert('Datenquellen','sTmp','SuDatenquellen_C',1);",
+      "SubsetCreate('sTmp','Kanaele',1);\nSubsetElementInsert('Kanaele','sTmp','SuKanaele_C',1);",
     );
-    const refs = index.byElement.get(
-      elementKey("Datenquellen", "SuDatenquellen_C"),
-    );
+    const refs = index.byElement.get(elementKey("Kanaele", "SuKanaele_C"));
     expect(refs).toBeDefined();
     expect(
       refs!.map((r) => ({
@@ -36,8 +34,8 @@ describe("byElement reverse index", () => {
     ).toEqual([
       {
         kind: "element",
-        dim: "Datenquellen",
-        name: "SuDatenquellen_C",
+        dim: "Kanaele",
+        name: "SuKanaele_C",
         src: "P",
       },
     ]);
@@ -47,7 +45,7 @@ describe("byElement reverse index", () => {
 describe("extractTiReferences — element refs from subset-membership calls", () => {
   it("emits an element ref (with dimension) for SubsetElementInsert", () => {
     const refs = extractTiReferences(
-      "SubsetElementInsert('Datenquellen','sTmp','SuDatenquellen_C',1);",
+      "SubsetElementInsert('Kanaele','sTmp','SuKanaele_C',1);",
     );
     const el = refs.filter((r) => r.targetKind === "element");
     expect(el).toEqual([
@@ -55,11 +53,10 @@ describe("extractTiReferences — element refs from subset-membership calls", ()
         line: 0,
         funcName: "SubsetElementInsert",
         targetKind: "element",
-        targetName: "SuDatenquellen_C",
-        dimension: "Datenquellen",
+        targetName: "SuKanaele_C",
+        dimension: "Kanaele",
         subset: "sTmp",
-        snippet:
-          "SubsetElementInsert('Datenquellen','sTmp','SuDatenquellen_C',1);",
+        snippet: "SubsetElementInsert('Kanaele','sTmp','SuKanaele_C',1);",
         params: undefined,
       },
     ]);
@@ -77,18 +74,18 @@ describe("extractTiReferences — element refs from subset-membership calls", ()
 
   it("resolves a variable dimension via live-var tracking", () => {
     const refs = extractTiReferences(
-      "csDim = 'Datenquellen';\nSubsetElementInsert(csDim,'sTmp','SuDatenquellen_C',1);",
+      "csDim = 'Kanaele';\nSubsetElementInsert(csDim,'sTmp','SuKanaele_C',1);",
     );
     const el = refs.filter((r) => r.targetKind === "element");
     expect(el.map((r) => ({ dim: r.dimension, name: r.targetName }))).toEqual([
-      { dim: "Datenquellen", name: "SuDatenquellen_C" },
+      { dim: "Kanaele", name: "SuKanaele_C" },
     ]);
   });
 
   it("surfaces a non-literal element arg as unresolved, not a resolved ref", () => {
     const unresolvedElem: unknown[] = [];
     const refs = extractTiReferences(
-      "SubsetElementInsert('Datenquellen','sTmp',CellGetS('C','x'),1);",
+      "SubsetElementInsert('Kanaele','sTmp',CellGetS('C','x'),1);",
       undefined,
       undefined,
       undefined,
@@ -99,10 +96,9 @@ describe("extractTiReferences — element refs from subset-membership calls", ()
       {
         line: 0,
         funcName: "SubsetElementInsert",
-        dimension: "Datenquellen",
+        dimension: "Kanaele",
         expr: "CellGetS('C','x')",
-        snippet:
-          "SubsetElementInsert('Datenquellen','sTmp',CellGetS('C','x'),1);",
+        snippet: "SubsetElementInsert('Kanaele','sTmp',CellGetS('C','x'),1);",
         reason: "dynamic",
       },
     ]);

@@ -56,7 +56,7 @@ datasource (562-589).
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (58)
+## Tools (59)
 
 ### analysis (11)
 
@@ -94,10 +94,11 @@ datasource (562-589).
 - `tm1_files_read` — Read the TM1 server's file storage (TI data directory: Files on v12, Blobs on v11; auto-fallback)
 - `tm1_files_write` — Change the TM1 server's file storage (TI data directory: Files on v12, Blobs on v11; auto-fallback)
 
-### metadata (2)
+### metadata (3)
 
 - `tm1_list_processes_grouped` — Group TI processes by name prefix to give a structural overview without listing every process
 - `tm1_resolve_default_members` — Resolve N hierarchies' effective default members in parallel from one tool call; pass items:[{dimensionName}] with a single entry for a one-off lookup
+- `tm1_search_elements` — Find elements by a business term instead of guessing names: case-insensitive substring match on names and Alias values
 
 ### model-building (6)
 
@@ -135,7 +136,7 @@ datasource (562-589).
 - `tm1_diff_process_with_file` — Compare an installed TI process on the server against a local .pro file
 - `tm1_diff_processes` — Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog), on one connection or across two (connectionB, e.g
 - `tm1_execute_process` — Execute a TurboIntegrator process on the TM1 server with optional parameters
-- `tm1_export_process_to_git` — Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' (parameters, variables, ignored datasource columns, datasource) plus a '{name}.ti' (Prol
+- `tm1_export_process_to_git` — Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' — the server's own REST payload for the process without the code (Name, HasSecurityAcces
 - `tm1_export_process_to_pro` — Reverse of tm1_import_pro_file: serialize a TM1 process back to a .pro file body
 - `tm1_get_all_processes_code` — Bulk-load source code (Prolog/Metadata/Data/Epilog) of every TI process in one call, plus each process's HasSecurityAccess elevation flag (hasSecurityAccess) fo
 - `tm1_get_process` — Native full read of a TI process — the read-twin of tm1_upsert_process

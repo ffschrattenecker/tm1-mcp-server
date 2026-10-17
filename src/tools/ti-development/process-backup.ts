@@ -2,7 +2,10 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
-import { serializeProcessToGit } from "../../lib/git-process.js";
+import {
+  EMPTY_CODE_BLOB,
+  serializeProcessToGit,
+} from "../../lib/git-process.js";
 import type { TM1Client } from "../../tm1-client.js";
 
 // Automatic backup of an installed process before a tool overwrites it.
@@ -46,36 +49,22 @@ export async function readProcessAsGit(
   opts?: { includePassword?: boolean },
 ): Promise<GitPair> {
   const includePassword = opts?.includePassword === true;
-  const [ti, parameters, layout, dataSource, deployMeta] = await Promise.all([
+  const [codeBlob, header] = await Promise.all([
     tm1Client.processes.getCodeBlob(processName),
-    tm1Client.processes.getParameters(processName),
-    tm1Client.processes.getVariableLayout(processName),
-    tm1Client.processes.getDataSource(processName, {
-      includeSecrets: includePassword,
-    }),
-    tm1Client.processes.getDeployMeta(processName),
+    tm1Client.processes.getGitHeader(processName),
   ]);
-  const { json, credentialsOmitted } = serializeProcessToGit(
-    {
-      name: processName,
-      parameters,
-      variables: layout.variables,
-      ...(layout.variablesUIData !== undefined
-        ? { variablesUIData: layout.variablesUIData }
-        : {}),
-      dataSource,
-      hasSecurityAccess: deployMeta.hasSecurityAccess,
-    },
-    { includePassword },
-  );
+  const { json, credentialsOmitted } = serializeProcessToGit(header, {
+    includePassword,
+  });
   return {
     json,
-    ti,
+    // An empty blob would not re-import: the parser rejects an empty .ti.
+    ti: codeBlob === "" ? EMPTY_CODE_BLOB : codeBlob,
     credentialsOmitted,
-    parameterCount: parameters.length,
-    variableCount: layout.variables.length,
-    dataSourceType: dataSource.type,
-    hasSecurityAccess: deployMeta.hasSecurityAccess,
+    parameterCount: header.Parameters.length,
+    variableCount: header.Variables.length,
+    dataSourceType: header.DataSource.Type,
+    hasSecurityAccess: header.HasSecurityAccess === true,
   };
 }
 

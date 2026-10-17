@@ -2,10 +2,7 @@ import { promises as fs } from "node:fs";
 import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { resolveLocalPath } from "../local-file.js";
-import {
-  parseProcessFromGit,
-  unplacedBlobContent,
-} from "../../lib/git-process.js";
+import { parseProcessFromGit, toCodeBlob } from "../../lib/git-process.js";
 import { withToolHint } from "../error-format.js";
 import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { ImportProcessFromGitResultSchema } from "../schemas/items.js";
@@ -20,7 +17,7 @@ import { backupProcess } from "./process-backup.js";
 export const registerImportProcessFromGit = defineTool({
   name: "tm1_import_process_from_git",
   description: [
-    "Deploy a TM1 process from the tm1-git two-file layout ('{name}.json' + '{name}.ti'). Provide the pair inline (jsonContent + tiContent) or as host paths (jsonPath + tiPath).",
+    "Deploy a TM1 process from the tm1-git two-file layout ('{name}.json' + '{name}.ti'). Provide the pair inline (jsonContent + tiContent) or as host paths (jsonPath + tiPath). The .json is the server's REST payload (as tm1_export_process_to_git and the VS Code extension write it); files in the older lowercase layout are read too.",
     "Reverse of tm1_export_process_to_git. Modes: 'create' (fail if exists), 'update' (fail if missing), 'upsert' (default).",
     "If the source datasource is ODBC, pass dataSourcePassword to re-inject the credential that export strips.",
   ],
@@ -111,7 +108,7 @@ export const registerImportProcessFromGit = defineTool({
       throw new TM1Error({
         code: TM1ErrorCode.VALIDATION_ERROR,
         message:
-          "Process name not found in JSON ('name') and no name override provided",
+          "Process name not found in JSON ('Name', or 'name' in the older layout) and no name override provided",
       });
     }
 
@@ -121,21 +118,9 @@ export const registerImportProcessFromGit = defineTool({
     }
 
     if (preflight) {
-      // The raw .ti blob is what deploys (TM1 splits it into tabs), so the
-      // parsed tabs are only an exact stand-in for it when every byte of the
-      // blob sits inside exactly one tab region. Anything else would be
-      // installed without having been checked.
-      const unplaced = unplacedBlobContent(ti);
-      if (unplaced.length > 0) {
-        return preflightResult({
-          stage: "preflight",
-          check: "syntax",
-          processName,
-          code: TM1ErrorCode.VALIDATION_ERROR,
-          message: `The .ti blob carries content the preflight cannot place in a tab: ${unplaced.join("; ")}.`,
-          hint: "Nothing was installed. Keep all code inside one #region Prolog/Metadata/Data/Epilog … #endregion block per tab — re-export with tm1_export_process_to_git if unsure.",
-        });
-      }
+      // The parser refuses code outside a tab region and a repeated tab, so
+      // the parsed tabs are exactly what the blob deploys (a file in the
+      // extension's former layout is rebuilt from them by toCodeBlob).
       const failure = await runPreflight(tm1Client, {
         name: processName,
         prolog: parsed.prolog,
@@ -177,17 +162,12 @@ export const registerImportProcessFromGit = defineTool({
       );
     }
 
-    // Write code via TM1's native Code property: send the raw #region blob
-    // (normalized to CRLF, as TM1 emits/expects) and let the server split it
-    // into the four tabs. This is a full replace — tabs whose region is
-    // absent are cleared, matching the exported .ti exactly.
-    // The parsed tabs were preflighted above; unplacedBlobContent() made
-    // sure they cover this blob exactly, so what was checked is what deploys.
+    // Write code via TM1's native Code property and let the server split it
+    // into the four tabs. This is a full replace — tabs whose region is absent
+    // are cleared. toCodeBlob sends the .ti as is (CRLF, as TM1 expects) and
+    // rebuilds only a file in the extension's former layout.
     await withToolHint(
-      tm1Client.processes.updateCodeBlob(
-        processName,
-        ti.replace(/\r?\n/g, "\r\n"),
-      ),
+      tm1Client.processes.updateCodeBlob(processName, toCodeBlob(ti, parsed)),
       `Code update failed after process '${processName}' was ${exists ? "located" : "created"}. PARTIAL APPLY: shell exists but tabs are stale/empty. Re-run with mode=update once root cause fixed, or tm1_rest_write DELETE Processes('${processName}') to roll back.`,
     );
 
@@ -213,13 +193,16 @@ export const registerImportProcessFromGit = defineTool({
       `Datasource update failed for '${processName}' (type=${dataSource.type}). Code+params+vars applied. For ODBC verify dataSourcePassword/DSN and re-run with mode=update.`,
     );
 
-    if (parsed.hasSecurityAccess !== undefined) {
+    // One PATCH for both. A POST does not create UIData and a PATCH without it
+    // leaves it alone, so a new process would lose the Architect action
+    // settings without it.
+    if (parsed.hasSecurityAccess !== undefined || parsed.uiData !== undefined) {
       await withToolHint(
-        tm1Client.processes.updateSecurityAccess(
-          processName,
-          parsed.hasSecurityAccess,
-        ),
-        `HasSecurityAccess update failed for '${processName}'. Code+params+vars+datasource applied. Re-run with mode=update once root cause fixed.`,
+        tm1Client.processes.updateDeployMeta(processName, {
+          hasSecurityAccess: parsed.hasSecurityAccess,
+          uiData: parsed.uiData,
+        }),
+        `HasSecurityAccess/UIData update failed for '${processName}'. Code+params+vars+datasource applied. Re-run with mode=update once root cause fixed.`,
       );
     }
 

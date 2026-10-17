@@ -818,6 +818,27 @@ describe("TM1Client – ProcessService", () => {
     });
   });
 
+  describe("updateVariables() – reserved names", () => {
+    it("names NVALUE/SVALUE/VALUE_IS_STRING instead of sending them", async () => {
+      await expect(
+        client.processes.updateVariables("Proc", [
+          { name: "v1", type: "String", position: 1 },
+          { name: "NVALUE", type: "Numeric", position: 0 },
+          { name: "VALUE_IS_STRING", type: "Numeric", position: 0 },
+        ]),
+      ).rejects.toThrow(/NVALUE, VALUE_IS_STRING are reserved/);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("lets other casings through, as TM1 does", async () => {
+      fetchSpy.mockResolvedValueOnce(mock204Response());
+      await client.processes.updateVariables("Proc", [
+        { name: "nvalue", type: "Numeric", position: 1 },
+      ]);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("Code ($value blob transport)", () => {
     it("getCodeBlob GETs Code/$value and returns raw text", async () => {
       const blob = "#region Prolog\r\nsX=1;\r\n#endregion";

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { supportsCredentialExport } from "../../lib/credential-format.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { resolveLocalPath } from "../local-file.js";
+import { parseProcessFromGit } from "../../lib/git-process.js";
 import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
 import { ExportProcessToGitResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -13,7 +14,7 @@ import { readProcessAsGit } from "./process-backup.js";
 export const registerExportProcessToGit = defineTool({
   name: "tm1_export_process_to_git",
   description: [
-    "Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' (parameters, variables, ignored datasource columns, datasource) plus a '{name}.ti' (Prolog/Metadata/Data/Epilog as plain code).",
+    "Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' — the server's own REST payload for the process without the code (Name, HasSecurityAccess, UIData, VariablesUIData, DataSource, Parameters, Variables; server key order, no renamed fields) — plus a '{name}.ti' (Prolog/Metadata/Data/Epilog as plain code).",
     "The .ti holds the code in TM1's native `Code` representation (#region <Tab> / #endregion, CRLF, empty tabs omitted); the .json holds the structure. Code lives outside the JSON so Git diffs stay readable.",
     "Returns both file bodies (json + ti) inline by default. Pass writeToDir to persist them to disk instead: the code is then written to files and omitted from the response to avoid duplicating it into the context window; only metadata (filenames, counts, writtenTo paths) comes back. Files written via writeToDir are round-trip safe with tm1_import_process_from_git; the inline .ti has credential literals masked by default and is for reading, not re-importing.",
     "Security: the ODBC datasource password is stripped unless includeDataSourcePassword is set (which also requires writeToDir); credential literals in the TI code are masked in the inline response when maskSecrets is on, never in written files (those must re-import intact); credentialsOmitted=true flags when a password was stripped.",
@@ -77,6 +78,16 @@ export const registerExportProcessToGit = defineTool({
     const inlineTi = resolveMaskSecrets(maskSecrets) ? maskCode(ti) : ti;
     const { json, credentialsOmitted } = pair;
 
+    // The .json is the server's payload verbatim, so a field or data source
+    // type the import does not know gets written without complaint. Say so
+    // now rather than at the next import.
+    let warning: string | undefined;
+    try {
+      parseProcessFromGit(json, ti);
+    } catch (e) {
+      warning = `tm1_import_process_from_git would refuse this export: ${(e as Error).message}`;
+    }
+
     const jsonFileName = `${processName}.json`;
     const tiFileName = `${processName}.ti`;
 
@@ -122,6 +133,7 @@ export const registerExportProcessToGit = defineTool({
             credentialsOmitted,
             hasSecurityAccess: pair.hasSecurityAccess,
             writtenTo,
+            ...(warning ? { warning } : {}),
             // Echo the file bodies inline only when NOT persisting to disk. With
             // writeToDir the caller already has the files, so returning the code
             // would just duplicate thousands of tokens into the context window.

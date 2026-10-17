@@ -297,6 +297,9 @@ describe("tm1_audit_naming tool", () => {
       const qs = new URLSearchParams(m[3]);
       const top = Number(qs.get("$top") ?? names.length);
       const skip = Number(qs.get("$skip") ?? 0);
+      // $skip without $orderby walks TM1's internal order, which shifts on
+      // every create or delete.
+      if (skip > 0) expect(qs.get("$orderby")).toBe("Name");
       const wantCount = qs.get("$count") === "true";
       const matching = qs.get("$filter")
         ? names.filter((n) => matchesElementViolationFilter(n))

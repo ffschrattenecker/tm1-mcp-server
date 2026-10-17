@@ -63,17 +63,17 @@ describe("strict outputSchemas accept real handler payloads", () => {
       next_offset: null,
       items: [
         {
-          process: "Load.Assumptions",
+          process: "Load.Inputs",
           tab: "data",
           line: 6,
-          text: "CellPutN(vValue, 'Cube_Assumptions', ...);",
-          alsoFoundIn: ["Load.Assumptions_copy2"],
+          text: "CellPutN(vValue, 'Cube_Inputs', ...);",
+          alsoFoundIn: ["Load.Inputs_copy2"],
         },
         {
-          process: "Load.Capacity.Plan",
+          process: "Load.Staffing.Plan",
           tab: "data",
           line: 7,
-          text: "CellPutN(vValue, 'Cube_Capacity', ...);",
+          text: "CellPutN(vValue, 'Cube_Staffing', ...);",
         },
       ],
     };
@@ -83,7 +83,7 @@ describe("strict outputSchemas accept real handler payloads", () => {
   it("tm1_analyze_object_usage: write-mode payload (accessMode, returned, truncated)", () => {
     const payload = {
       kind: "cube",
-      name: "Cube_Resource",
+      name: "Cube_Workforce",
       accessMode: "write",
       count: 1,
       returned: 1,
@@ -91,11 +91,11 @@ describe("strict outputSchemas accept real handler payloads", () => {
       usages: [
         {
           sourceKind: "process",
-          sourceName: "Load.Resource.Plan",
+          sourceName: "Load.Workforce.Plan",
           section: "data",
           line: 12,
           funcName: "CellPutN",
-          snippet: "CellPutN(vValue, 'Cube_Resource', ...);",
+          snippet: "CellPutN(vValue, 'Cube_Workforce', ...);",
           accessType: "write",
         },
       ],
@@ -130,7 +130,7 @@ describe("strict outputSchemas accept real handler payloads", () => {
   it("tm1_analyze_object_usage: mode='summary' payload (sources, sourceCount, no usages)", () => {
     const payload = {
       kind: "cube",
-      name: "Cube_Resource",
+      name: "Cube_Workforce",
       accessMode: "all",
       mode: "summary",
       count: 1191,
@@ -140,7 +140,7 @@ describe("strict outputSchemas accept real handler payloads", () => {
       sources: [
         {
           sourceKind: "process",
-          sourceName: "Load.Resource.Plan",
+          sourceName: "Load.Workforce.Plan",
           accessTypes: ["read", "write"],
           sections: ["data", "epilog"],
           funcNames: ["CellGetN", "CellPutN"],
@@ -190,7 +190,7 @@ describe("strict outputSchemas accept real handler payloads", () => {
     const schema = schemaOf("tm1_import_process_from_git");
     const payload = {
       action: "created",
-      processName: "Load.Assumptions",
+      processName: "Load.Inputs",
       hasSecurityAccess: false,
       parsed: {
         prologLines: 12,
@@ -214,13 +214,13 @@ describe("strict outputSchemas accept real handler payloads", () => {
       truncated: false,
       cubes: [
         {
-          cubeName: "Cube_Compliance",
+          cubeName: "Cube_Audit",
           skipCheck: true,
           lineCount: 19,
           ruleCount: 3,
           feederCount: 2,
           commentLineCount: 2,
-          referencedCubes: ["Cube_Assumptions"],
+          referencedCubes: ["Cube_Inputs"],
         },
       ],
     };

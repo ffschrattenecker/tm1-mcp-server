@@ -72,13 +72,15 @@ export const registerExportProcessToPro = defineTool({
           "includeDataSourcePassword is v12-only. On v11 the exported credential stops working when the TM1 service restarts, and the file gives no sign of it. To clone a process with its password inside this instance use tm1_copy_process; to deploy elsewhere or later, export without the password and pass dataSourcePassword to tm1_import_pro_file.",
       });
     }
-    const [code, parameters, layout, dataSource] = await Promise.all([
+    const [code, parameters, layout, dataSource, ui, meta] = await Promise.all([
       tm1Client.processes.getCode(processName),
       tm1Client.processes.getParameters(processName),
       tm1Client.processes.getVariableLayout(processName),
       tm1Client.processes.getDataSource(processName, {
         includeSecrets: includeDataSourcePassword === true,
       }),
+      tm1Client.processes.getUIData(processName),
+      tm1Client.processes.getDeployMeta(processName),
     ]);
 
     // Without the opt-in the service hands back a "[redacted]" marker, which
@@ -104,6 +106,8 @@ export const registerExportProcessToPro = defineTool({
         ...(layout.variablesUIData !== undefined
           ? { variablesUIData: layout.variablesUIData }
           : {}),
+        ...(ui.uiData !== undefined ? { uiData: ui.uiData } : {}),
+        hasSecurityAccess: meta.hasSecurityAccess,
         dataSource,
       });
     const proContent = build((s) => s);

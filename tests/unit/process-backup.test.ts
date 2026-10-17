@@ -62,15 +62,22 @@ function fakeClient(installed: string[], writes: string[]) {
       ],
       getVariables: async () => [],
       getVariableLayout: async () => ({ variables: [] }),
-      getDataSource: async () => ({ type: "None" }),
-      getDeployMeta: async () => ({ hasSecurityAccess: false }),
+      getGitHeader: async (name: string) => ({
+        Name: name,
+        HasSecurityAccess: false,
+        DataSource: { Type: "None" },
+        Parameters: [
+          { Name: "pYear", Prompt: "", Value: "2026", Type: "String" },
+        ],
+        Variables: [],
+      }),
       create: async (n: string) => write(`create ${n}`),
       updateCode: async (n: string) => write(`code ${n}`),
       updateCodeBlob: async (n: string) => write(`code ${n}`),
       updateParameters: async () => undefined,
       updateVariables: async () => undefined,
       updateDataSource: async () => undefined,
-      updateSecurityAccess: async () => undefined,
+      updateDeployMeta: async () => undefined,
     },
   };
 }
@@ -107,8 +114,8 @@ describe("process backup before overwrite", () => {
     );
     expect(readFileSync(backup.ti, "utf8")).toBe(INSTALLED_TI);
     const json = JSON.parse(readFileSync(backup.json, "utf8"));
-    expect(json.name).toBe("P");
-    expect(json.parameters[0].name).toBe("pYear");
+    expect(json.Name).toBe("P");
+    expect(json.Parameters[0].Name).toBe("pYear");
   });
 
   it("preflight:false still backs up", async () => {
@@ -185,7 +192,12 @@ describe("process backup before overwrite", () => {
     const writes: string[] = [];
     const client = fakeClient(["P"], writes);
     const res = await call(registerImportProcessFromGit, client, {
-      jsonContent: JSON.stringify({ name: "P", parameters: [], variables: [] }),
+      jsonContent: JSON.stringify({
+        Name: "P",
+        DataSource: { Type: "None" },
+        Parameters: [],
+        Variables: [],
+      }),
       tiContent: "#region Prolog\r\nx = 1;\r\n#endregion\r\n",
       confirm: "P",
       preflight: false,
@@ -249,7 +261,12 @@ describe("import on an update replaces the whole definition", () => {
         void applied.push(`datasource ${d.type}`),
     });
     await call(registerImportProcessFromGit, client, {
-      jsonContent: JSON.stringify({ name: "P", parameters: [], variables: [] }),
+      jsonContent: JSON.stringify({
+        Name: "P",
+        DataSource: { Type: "None" },
+        Parameters: [],
+        Variables: [],
+      }),
       tiContent: "#region Prolog\r\nx = 1;\r\n#endregion\r\n",
       confirm: "P",
       preflight: false,

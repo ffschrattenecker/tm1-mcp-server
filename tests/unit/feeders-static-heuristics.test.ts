@@ -101,8 +101,8 @@ describe("findMatchingRule — pair feeder with rule by element-bag overlap", ()
   });
 
   it("matches via qualified element values (Dim:Elem)", () => {
-    const rules = [lhs("['Measure:AvailableDays']")];
-    const feeder = lhs("['Measure:AvailableDays']");
+    const rules = [lhs("['Measure:OpenDays']")];
+    const feeder = lhs("['Measure:OpenDays']");
     expect(findMatchingRule(feeder, rules)).toBe(rules[0]);
   });
 
@@ -123,7 +123,7 @@ describe("detectBroaderThanMatchedRule — S1 rule-pairing variant", () => {
 
   it("does NOT flag when feeder and rule pin equally (idiomatic 1:1 N: pattern)", () => {
     const feeder = lhs("['Measure:WorkDays']");
-    const rule = lhs("['Measure:AvailableDays']");
+    const rule = lhs("['Measure:OpenDays']");
     expect(detectBroaderThanMatchedRule(feeder, rule)).toBe(false);
   });
 

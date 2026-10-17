@@ -63,6 +63,36 @@ describe("pro-serializer round-trip", () => {
     expect(parsed.epilog).toBe("nY = 2;\t");
   });
 
+  it("reads past a count that is too low instead of dropping code", () => {
+    // The Bedrock repo's }bedrock.server.util.string.validate.pro says 572,185
+    // over 189 lines; trusting the count dropped END; and #EndRegion.
+    const parsed = parseProFile(
+      '602,"P"\n572,1\nWHILE(1=1);\nEND;\n#EndRegion\n\n573,0\n574,0\n575,2\nx = 1;\n930,0\n576,\n930,0\n',
+    );
+    expect(parsed.prolog).toBe("WHILE(1=1);\nEND;\n#EndRegion");
+    // The counted epilog still keeps its header-like code line.
+    expect(parsed.epilog).toBe("x = 1;\n930,0");
+  });
+
+  it("UIData (footer line 576) survives", () => {
+    const ui = "CubeAction=1511\fDataAction=1503\fCubeLogChanges=0\f";
+    expect(parseProFile(serializeToPro(fixture({ uiData: ui }))).uiData).toBe(
+      ui,
+    );
+    expect(parseProFile(serializeToPro(fixture())).uiData).toBeUndefined();
+  });
+
+  it("HasSecurityAccess (footer line 1217) survives", () => {
+    for (const flag of [true, false])
+      expect(
+        parseProFile(serializeToPro(fixture({ hasSecurityAccess: flag })))
+          .hasSecurityAccess,
+      ).toBe(flag);
+    expect(
+      parseProFile(serializeToPro(fixture())).hasSecurityAccess,
+    ).toBeUndefined();
+  });
+
   it("still trims a countless section, whose tail runs into the next header", () => {
     const parsed = parseProFile('602,"P"\n572,\nnX = 1;\n\n573,\n');
     expect(parsed.prolog).toBe("nX = 1;");
@@ -184,9 +214,22 @@ describe("pro-serializer ignored datasource columns (block 582)", () => {
     expect(out).toContain("577,2");
   });
 
-  it("omits the block when nothing is ignored", () => {
+  it("omits the block when the server sends no list", () => {
     const out = serializeToPro(fixture());
     expect(out).not.toContain("582,");
+    expect(parseProFile(out).variablesUIData).toBeUndefined();
+  });
+
+  it("writes an empty list as 582,0 and reads it back as []", () => {
+    const out = serializeToPro(fixture({ variablesUIData: [] }));
+    expect(out).toContain("582,0");
     expect(parseProFile(out).variablesUIData).toEqual([]);
+  });
+
+  it("keeps a 0 in block 579 instead of reading it as 1", () => {
+    const out = serializeToPro(
+      fixture({ variables: [{ name: "v1", type: "String", position: 0 }] }),
+    );
+    expect(parseProFile(out).variables[0]?.position).toBe(0);
   });
 });

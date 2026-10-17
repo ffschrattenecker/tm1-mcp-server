@@ -225,6 +225,19 @@ describe("SessionManager", () => {
       );
     });
 
+    it("accepts a lone paSession cookie (PA SaaS sets no TM1SessionId)", async () => {
+      const login = mockFetchResponse({ ok: true, setCookie: null });
+      login.headers.append(
+        "set-cookie",
+        "paSession=pasess; Path=/; HttpOnly; Secure; SameSite=None",
+      );
+      fetchSpy.mockResolvedValueOnce(login);
+
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
+      const cookie = await sm.authenticate();
+      expect(sm.cookieHeader(cookie)).toBe("paSession=pasess");
+    });
+
     it("sends only TM1SessionId to a direct TM1 even if other cookies are set", async () => {
       const login = mockFetchResponse({ ok: true });
       login.headers.append("set-cookie", "TM1SessionId=direct; Path=/api/");

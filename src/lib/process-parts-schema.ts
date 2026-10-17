@@ -34,7 +34,7 @@ export const dataSourceSchema = z.object({
   ]),
   dataSourceNameForServer: z.string().optional(),
   dataSourceNameForClient: z.string().optional(),
-  asciiDelimiterType: z.string().optional(),
+  asciiDelimiterType: z.enum(["Character", "FixedWidth"]).optional(),
   asciiDelimiterChar: z.string().optional(),
   asciiQuoteCharacter: z.string().optional(),
   asciiHeaderRecords: z.number().optional(),

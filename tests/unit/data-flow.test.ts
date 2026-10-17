@@ -159,8 +159,7 @@ describe("traceDataFlow — per-row elements", () => {
       fetchProcesses: async () => [
         {
           name: "TransferP",
-          prolog:
-            "SubsetElementInsert('Datenquellen','sTmp','SuDatenquellen_C',1);",
+          prolog: "SubsetElementInsert('Kanaele','sTmp','SuKanaele_C',1);",
           metadata: "",
           data: "nV = CellGetN('Sales', 'E1');",
           epilog: "",
@@ -176,7 +175,7 @@ describe("traceDataFlow — per-row elements", () => {
         process: "TransferP",
         targetCubes: [],
         readsVia: "code",
-        elements: ["SuDatenquellen_C"],
+        elements: ["SuKanaele_C"],
       },
     ]);
   });
@@ -188,8 +187,7 @@ describe("traceDataFlow — element filter", () => {
       fetchProcesses: async () => [
         {
           name: "Builder",
-          prolog:
-            "SubsetElementInsert('Datenquellen','sTmp','SuDatenquellen_C',1);",
+          prolog: "SubsetElementInsert('Kanaele','sTmp','SuKanaele_C',1);",
           metadata: "",
           data: "",
           epilog: "",
@@ -202,12 +200,12 @@ describe("traceDataFlow — element filter", () => {
     // sTmp is built but never assigned to a view / iterated → indeterminate, which is
     // filtered out by default; opt in to see it.
     const flow = traceDataFlow(index, [], "AnyCube", "both", {
-      element: { dimension: "Datenquellen", name: "SuDatenquellen_C" },
+      element: { dimension: "Kanaele", name: "SuKanaele_C" },
       elementAccess: ["source", "write", "zero-out", "indeterminate"],
     });
     expect(flow.element).toEqual({
-      dimension: "Datenquellen",
-      name: "SuDatenquellen_C",
+      dimension: "Kanaele",
+      name: "SuKanaele_C",
       processes: [
         {
           process: "Builder",
@@ -421,7 +419,7 @@ describe("traceDataFlow — element filter incl. datasource membership", () => {
           hierarchyName: dim,
           private: false,
           expression: undefined,
-          elements: ["SuDatenquellen_C"],
+          elements: ["SuKanaele_C"],
           alias: undefined,
         }),
       },
@@ -429,13 +427,13 @@ describe("traceDataFlow — element filter incl. datasource membership", () => {
         {
           name: "Reader",
           type: "TM1DimensionSubset",
-          sourceName: "Datenquellen",
+          sourceName: "Kanaele",
           subset: "sMy",
         },
       ],
     );
     const flow = traceDataFlow(index, [], "AnyCube", "both", {
-      element: { dimension: "Datenquellen", name: "SuDatenquellen_C" },
+      element: { dimension: "Kanaele", name: "SuKanaele_C" },
       datasourceMembership: membership,
     });
     // A stored-subset datasource hit is a read → access ['source'] PLUS a via tag.

@@ -41,7 +41,6 @@ describe("TM1Client – Cell Data Methods", () => {
       Name: "StatusCube",
       Dimensions: [{ Name: "Time" }, { Name: "Status" }],
     };
-
     it("should return a numeric cell value with hierarchically qualified MDX", async () => {
       fetchSpy
         .mockResolvedValueOnce(mockResponse(salesCubeMeta))
@@ -934,6 +933,30 @@ describe("TM1Client – Cell Data Methods", () => {
           client.cells.checkFeeders("SalesCube", ["2024"]),
         ).rejects.toThrow(/2 dimension\(s\)/);
         expect(fetchSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it("binds a left-out Sandboxes to Base", async () => {
+        fetchSpy
+          .mockResolvedValueOnce(
+            mockResponse({
+              Name: "SalesCube",
+              Dimensions: [
+                { Name: "Sandboxes" },
+                { Name: "Time" },
+                { Name: "Region" },
+              ],
+            }),
+          )
+          .mockResolvedValueOnce(mockResponse({ value: [] }));
+
+        await client.cells.checkFeeders("SalesCube", ["2024", "Total"]);
+
+        const [, opts] = fetchSpy.mock.calls[1];
+        expect(JSON.parse(opts.body)["Tuple@odata.bind"]).toEqual([
+          "Dimensions('Sandboxes')/Hierarchies('Sandboxes')/Elements('Base')",
+          "Dimensions('Time')/Hierarchies('Time')/Elements('2024')",
+          "Dimensions('Region')/Hierarchies('Region')/Elements('Total')",
+        ]);
       });
 
       // A bare name means the default hierarchy, which carries the dimension's

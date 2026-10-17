@@ -4,6 +4,7 @@
 //
 // See docs/ARCHITECTURE.md for the layering.
 import { TM1Error, TM1ErrorCode } from "../../types.js";
+import type { NativeProcessHeader } from "../../lib/git-process.js";
 import type {
   CompileResult,
   DataSource,
@@ -33,6 +34,12 @@ import {
   type PageOpts,
   odataKey,
 } from "./odata-page.js";
+
+const RESERVED_VARIABLE_NAMES = new Set([
+  "NVALUE",
+  "SVALUE",
+  "VALUE_IS_STRING",
+]);
 
 interface RawProcessVariable {
   Name: string;
@@ -439,7 +446,7 @@ export class ProcessService {
    * `$select`; a server that rejects the query shape yields an empty result
    * rather than an error, since neither is required to use the process.
    */
-  private async getUIData(processName: string): Promise<{
+  async getUIData(processName: string): Promise<{
     uiData?: string;
     variablesUIData?: string[];
   }> {
@@ -462,6 +469,66 @@ export class ProcessService {
       if (!isUnsupportedQueryShape(e)) throw e;
       return {};
     }
+  }
+
+  /**
+   * The process as TM1 REST sends it for the git `.json`: everything needed to
+   * rebuild it except the code, in the server's key order, `@odata.*` removed.
+   * `UIData` and `VariablesUIData` must be named — a plain GET omits them. A
+   * server that rejects them in `$select` yields the payload without them.
+   * The data source password stays in (ciphertext on 11.8, plain on v12);
+   * the serializer decides whether it reaches the file.
+   */
+  async getGitHeader(processName: string): Promise<NativeProcessHeader> {
+    const base = `/api/v1/Processes('${odataKey(processName)}')?$select=`;
+    // Lists TM1 leaves out come back empty, not missing: the export reads
+    // their length and the import refuses a .json without them.
+    const strip = (r: Record<string, unknown>) => {
+      for (const k of Object.keys(r)) if (k.startsWith("@odata.")) delete r[k];
+      r.Parameters ??= [];
+      r.Variables ??= [];
+      return r as unknown as NativeProcessHeader;
+    };
+    try {
+      return strip(
+        await this.http.request<Record<string, unknown>>(
+          "GET",
+          base +
+            "Name,HasSecurityAccess,UIData,VariablesUIData,DataSource,Parameters,Variables",
+        ),
+      );
+    } catch (e) {
+      // A v11 denial is a 400 too; retrying would report the wrong error or
+      // quietly drop UIData.
+      rethrowIfSystemicOrDenied(e);
+      if (!isUnsupportedQueryShape(e)) throw e;
+      return strip(
+        await this.http.request<Record<string, unknown>>(
+          "GET",
+          base + "Name,HasSecurityAccess,DataSource,Parameters,Variables",
+        ),
+      );
+    }
+  }
+
+  /**
+   * Write HasSecurityAccess and the Architect action settings in one PATCH.
+   * An undefined field is left out, so the server keeps its value.
+   */
+  async updateDeployMeta(
+    processName: string,
+    meta: {
+      hasSecurityAccess?: boolean | undefined;
+      uiData?: string | undefined;
+    },
+  ): Promise<void> {
+    const path = `/api/v1/Processes('${odataKey(processName)}')`;
+    await this.http.request<void>("PATCH", path, {
+      ...(meta.hasSecurityAccess !== undefined
+        ? { HasSecurityAccess: meta.hasSecurityAccess }
+        : {}),
+      ...(meta.uiData !== undefined ? { UIData: meta.uiData } : {}),
+    });
   }
 
   /**
@@ -1041,6 +1108,19 @@ export class ProcessService {
     const body: Record<string, unknown> = {};
     // undefined = leave the variables alone and patch only the column layout.
     if (vars !== undefined) {
+      // TM1 rejects these exact names (case matters) with "Invalid variable
+      // name supplied" and does not say which one (11.8, 12.5 and SaaS 12.6,
+      // measured 2026-10-15). Architect-era .pro files such as Bedrock's
+      // cube.data.import declare them; name them here instead.
+      const reserved = vars
+        .map((v) => v.name)
+        .filter((n) => RESERVED_VARIABLE_NAMES.has(n));
+      if (reserved.length > 0) {
+        throw new TM1Error({
+          code: TM1ErrorCode.VALIDATION_ERROR,
+          message: `Variable name(s) ${reserved.join(", ")} are reserved by TM1 and cannot be set over REST. Remove them from the variables list.`,
+        });
+      }
       body.Variables = vars.map((v) => ({
         Name: v.name,
         Type: v.type,

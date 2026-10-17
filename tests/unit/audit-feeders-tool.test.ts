@@ -230,9 +230,9 @@ describe("tm1_audit_feeders tool", () => {
           cubeName: "Cap",
           rulesText: [
             "skipcheck;",
-            "['Measure:AvailableDays'] = N: ['Measure:WorkDaysPlanned'] - ['Measure:VacationDays'];",
+            "['Measure:OpenDays'] = N: ['Measure:SchedDays'] - ['Measure:LeaveDays'];",
             "feeders;",
-            "['Measure:WorkDaysPlanned'] => ['Measure:AvailableDays'];",
+            "['Measure:SchedDays'] => ['Measure:OpenDays'];",
           ].join("\n"),
           skipCheck: true,
         },

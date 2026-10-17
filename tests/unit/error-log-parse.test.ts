@@ -63,12 +63,10 @@ describe("parseLogName", () => {
 
   it("does NOT strip an all-letter trailing token (no digit → real proc suffix)", () => {
     expect(
-      parseLogName(
-        "TM1ProcessError_20260615123045_7_Cube_Assumptions.Export.log",
-      ),
+      parseLogName("TM1ProcessError_20260615123045_7_Cube_Inputs.Export.log"),
     ).toEqual({
       ts: "20260615123045",
-      process: "Cube_Assumptions.Export",
+      process: "Cube_Inputs.Export",
     });
   });
 

@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { runPreflight } from "../../src/tools/ti-development/preflight.js";
 import { registerUpsertProcess } from "../../src/tools/ti-development/upsert-process.js";
-import { unplacedBlobContent } from "../../src/lib/git-process.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { captureParsedTool } from "../helpers/client-harness.js";
 
@@ -137,31 +136,5 @@ describe("tm1_upsert_process preflight", () => {
     });
     expect(calls.check).toEqual([]);
     expect(calls.writes).toEqual(["create", "updateCode"]);
-  });
-});
-
-describe("unplacedBlobContent", () => {
-  const tab = (name: string, body: string) =>
-    `#region ${name}\r\n${body}\r\n#endregion\r\n`;
-
-  it("accepts a clean four-tab blob, nested user folds included", () => {
-    const blob =
-      tab("Prolog", "#region helpers\r\nx = 1;\r\n#endregion") +
-      tab("Metadata", "") +
-      tab("Data", "") +
-      tab("Epilog", "y = 2;");
-    expect(unplacedBlobContent(blob)).toEqual([]);
-  });
-
-  it("reports code outside every tab region", () => {
-    const blob = tab("Prolog", "x = 1;") + "CellPutN(1, 'Hidden', 'a');\r\n";
-    expect(unplacedBlobContent(blob)).toEqual([
-      `text outside any tab region: "CellPutN(1, 'Hidden', 'a');"`,
-    ]);
-  });
-
-  it("reports a tab region that appears twice", () => {
-    const blob = tab("Prolog", "x = 1;") + tab("prolog", "y = 2;");
-    expect(unplacedBlobContent(blob)).toEqual(["#region prolog appears twice"]);
   });
 });

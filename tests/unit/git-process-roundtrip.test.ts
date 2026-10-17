@@ -1,29 +1,40 @@
 import { describe, it, expect } from "vitest";
 import {
+  EMPTY_CODE_BLOB,
   serializeProcessToGit,
+  toCodeBlob,
   parseProcessFromGit,
-  type GitProcessInput,
+  type NativeProcessHeader,
 } from "../../src/lib/git-process.js";
-import type { DataSource } from "../../src/types.js";
 
-function fixture(over: Partial<GitProcessInput> = {}): GitProcessInput {
+/** A process as TM1 REST returns it for the git field list. */
+function fixture(over: Partial<NativeProcessHeader> = {}): NativeProcessHeader {
   return {
-    name: "MyProc",
-    parameters: [
-      { name: "pNum", type: "Numeric", defaultValue: 42, prompt: "a number" },
+    Name: "MyProc",
+    HasSecurityAccess: false,
+    UIData: "CubeAction=1511\fDataAction=1503\fCubeLogChanges=0\f",
+    VariablesUIData: [],
+    DataSource: { Type: "None" },
+    Parameters: [
+      { Name: "pNum", Prompt: "a number", Value: 42, Type: "Numeric" },
+      { Name: "pStr", Prompt: "a string", Value: "default", Type: "String" },
+    ],
+    Variables: [
       {
-        name: "pStr",
-        type: "String",
-        defaultValue: "default",
-        prompt: "a string",
+        Name: "vCol1",
+        Type: "String",
+        Position: 1,
+        StartByte: 0,
+        EndByte: 0,
+      },
+      {
+        Name: "vCol2",
+        Type: "Numeric",
+        Position: 2,
+        StartByte: 0,
+        EndByte: 0,
       },
     ],
-    variables: [
-      { name: "vCol1", type: "String", position: 1 },
-      { name: "vCol2", type: "Numeric", position: 2 },
-    ],
-    dataSource: { type: "None" },
-    hasSecurityAccess: false,
     ...over,
   };
 }
@@ -40,35 +51,84 @@ function makeTi(
 }
 
 describe("git-process #region round-trip", () => {
-  it("serializes json in OData-native field order (top-level + param fields)", () => {
-    const { json } = serializeProcessToGit({
-      name: "P",
-      parameters: [
-        { name: "pA", type: "Numeric", defaultValue: 1, prompt: "ask" },
-      ],
-      variables: [],
-      dataSource: { type: "None" },
-      hasSecurityAccess: true,
-    });
+  it("writes the REST payload as it came: server key order, no renamed fields", () => {
+    const { json } = serializeProcessToGit(
+      fixture({
+        Parameters: [{ Name: "pA", Prompt: "", Value: 1, Type: "Numeric" }],
+        Variables: [],
+      }),
+    );
     expect(json).toBe(
       `{
-  "name": "P",
-  "hasSecurityAccess": true,
-  "dataSource": {
-    "type": "None"
+  "Name": "MyProc",
+  "HasSecurityAccess": false,
+  "UIData": "CubeAction=1511\\fDataAction=1503\\fCubeLogChanges=0\\f",
+  "VariablesUIData": [],
+  "DataSource": {
+    "Type": "None"
   },
-  "parameters": [
+  "Parameters": [
     {
-      "name": "pA",
-      "prompt": "ask",
-      "value": 1,
-      "type": "Numeric"
+      "Name": "pA",
+      "Prompt": "",
+      "Value": 1,
+      "Type": "Numeric"
     }
   ],
-  "variables": []
+  "Variables": []
 }
 `,
     );
+  });
+
+  it("reads the export of a process without code back as four empty tabs", () => {
+    const json = serializeProcessToGit(fixture()).json;
+    const parsed = parseProcessFromGit(json, EMPTY_CODE_BLOB);
+    expect([
+      parsed.prolog,
+      parsed.metadata,
+      parsed.data,
+      parsed.epilog,
+    ]).toEqual(["", "", "", ""]);
+  });
+
+  it("keeps TM1 12's layout: lists last in the .json, trailing newline before #endregion", () => {
+    // 12.5.9 sends UIData/VariablesUIData after Variables and always puts a
+    // line break before #endregion, so a tab ending in one shows a blank line.
+    const { UIData, VariablesUIData, ...rest } = fixture();
+    const { json } = serializeProcessToGit({
+      ...rest,
+      UIData: UIData!,
+      VariablesUIData: VariablesUIData!,
+    });
+    expect(Object.keys(JSON.parse(json)).slice(-2)).toEqual([
+      "UIData",
+      "VariablesUIData",
+    ]);
+    const parsed = parseProcessFromGit(
+      json,
+      "#region Prolog\r\np;\r\n\r\n#endregion",
+    );
+    expect(parsed.prolog).toBe("p;\r\n");
+  });
+
+  it("puts UIData before VariablesUIData when TM1 12 sends them swapped", () => {
+    // 1 of 103 processes on 12.5.9; the VS Code extension writes UIData first.
+    const { UIData, VariablesUIData, ...rest } = fixture();
+    const { json } = serializeProcessToGit({
+      ...rest,
+      VariablesUIData: VariablesUIData!,
+      UIData: UIData!,
+    });
+    expect(Object.keys(JSON.parse(json))).toEqual([
+      "Name",
+      "HasSecurityAccess",
+      "DataSource",
+      "Parameters",
+      "Variables",
+      "UIData",
+      "VariablesUIData",
+    ]);
   });
 
   it("parses #region tabs into prolog/metadata/data/epilog; omitted tab is empty", () => {
@@ -126,9 +186,8 @@ describe("git-process #region round-trip", () => {
 
   it("rejects a blob with a missing #endregion (next tab's #region follows directly) instead of silently swallowing the following tab", () => {
     // Prolog's #endregion is missing/typo'd; Metadata's #region follows directly.
-    // Depth-aware parsing treats the unclosed Metadata #region as nested inside
-    // Prolog (depth 2), so depth never returns to 0 by EOF — an unclosed tab,
-    // still rejected, rather than silently absorbing Metadata into Prolog.
+    // A later tab opening inside a tab is rejected rather than silently
+    // absorbing Metadata into Prolog.
     const ti =
       "#region Prolog\r\nsP='p';\r\n#region Metadata\r\nsM='m';\r\n#endregion";
     const json = JSON.stringify({
@@ -205,7 +264,7 @@ describe("git-process #region round-trip", () => {
     );
   });
 
-  it("rejects a stray #endregion at the top level with no matching #region", () => {
+  it("keeps a trailing #endregion inside the tab: the server writes this blob for a tab whose code ends with one", () => {
     const ti = "#region Prolog\r\nsP='p';\r\n#endregion\r\n#endregion";
     const json = JSON.stringify({
       name: "P",
@@ -213,7 +272,121 @@ describe("git-process #region round-trip", () => {
       variables: [],
       dataSource: { type: "None" },
     });
-    expect(() => parseProcessFromGit(json, ti)).toThrow(/#region/);
+    expect(parseProcessFromGit(json, ti).prolog).toBe("sP='p';\r\n#endregion");
+  });
+
+  it("ignores broken user folds: a fold never closed, a stray #EndRegion, a fold named like a tab", () => {
+    // 2 of 366 processes on an 11.8 server leave a fold open; depth counting
+    // rejected their export. Only the four tab markers are structure.
+    const ti = makeTi({
+      Prolog: "#Region never closed\r\nx = 1;\r\n#Region Data",
+      Metadata: "#EndRegion\r\ny = 2;",
+      Data: "z = 3;",
+      Epilog: "#region Prolog\r\nw = 4;\r\n#EndRegion wrong",
+    });
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    expect(parseProcessFromGit(json, ti)).toMatchObject({
+      prolog: "#Region never closed\r\nx = 1;\r\n#Region Data",
+      metadata: "#EndRegion\r\ny = 2;",
+      data: "z = 3;",
+      epilog: "#region Prolog\r\nw = 4;\r\n#EndRegion wrong",
+    });
+  });
+
+  it("reads the VS Code extension's former layout: lowercase tabs closed by `#endregion <tab>`", () => {
+    // Written by the extension before 2026-10-10 (LF, one break before each close).
+    const ti =
+      "#region prolog\nx = 1;\n#endregion prolog\n#region metadata\n\n#endregion metadata\n" +
+      "#region data\n#EndRegion\ny = 2;\n#endregion data\n#region epilog\n\n#endregion epilog";
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    expect(parseProcessFromGit(json, ti)).toMatchObject({
+      prolog: "x = 1;",
+      metadata: "",
+      data: "#EndRegion\ny = 2;",
+      epilog: "",
+    });
+  });
+
+  it("sends a native .ti as it is and rebuilds the former layout into TM1's blob", () => {
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    const native = "#region Prolog\r\nx = 1;\r\n\r\n#endregion";
+    expect(toCodeBlob(native, parseProcessFromGit(json, native))).toBe(native);
+    const former =
+      "#region prolog\nx = 1;\n#endregion prolog\n#region metadata\n\n#endregion metadata\n" +
+      "#region data\n#EndRegion\n#endregion data\n#region epilog\n\n#endregion epilog";
+    expect(toCodeBlob(former, parseProcessFromGit(json, former))).toBe(
+      "#region Prolog\r\nx = 1;\r\n#endregion\r\n#region Data\r\n#EndRegion\r\n#endregion",
+    );
+  });
+
+  it("former layout: a user fold named like a later tab stays in its tab", () => {
+    // There only `#endregion prolog` closes the Prolog; a bare `#endregion`
+    // and `#region Epilog` are the user's.
+    const ti =
+      "#region prolog\na=1;\n#endregion\n#region Epilog\nc=1;\n#endregion\n#endregion prolog";
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    const parsed = parseProcessFromGit(json, ti);
+    expect(parsed).toMatchObject({
+      prolog: "a=1;\n#endregion\n#region Epilog\nc=1;\n#endregion",
+      epilog: "",
+    });
+    expect(toCodeBlob(ti, parsed)).toBe(
+      "#region Prolog\r\na=1;\r\n#endregion\r\n#region Epilog\r\nc=1;\r\n#endregion\r\n#endregion",
+    );
+  });
+
+  it("native layout: a fold not spelled exactly like TM1's tab opener stays code", () => {
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    for (const fold of ["#region data", "#region DATA", "#Region Data"]) {
+      const ti = `#region Prolog\r\n${fold}\r\na=1;\r\n#endregion\r\n#endregion`;
+      expect(parseProcessFromGit(json, ti).prolog).toBe(
+        `${fold}\r\na=1;\r\n#endregion`,
+      );
+    }
+    // Spelled exactly like the Data tab it cannot be told from a deleted close.
+    expect(() =>
+      parseProcessFromGit(
+        json,
+        "#region Prolog\r\n#region Data\r\na=1;\r\n#endregion\r\n#endregion",
+      ),
+    ).toThrow(/opens inside "prolog"/);
+  });
+
+  it("rejects tabs out of order", () => {
+    const ti =
+      "#region Epilog\r\ne;\r\n#endregion\r\n#region Prolog\r\np;\r\n#endregion";
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    expect(() => parseProcessFromGit(json, ti)).toThrow(/out of order/);
   });
 
   it("rejects a top-level #region whose name is not a recognized TI tab", () => {
@@ -306,14 +479,17 @@ describe("git-process #region round-trip", () => {
   });
 
   it("ODBC password is stripped from JSON and flagged", () => {
-    const ds: DataSource = {
-      type: "ODBC",
-      dataSourceNameForServer: "MyDSN",
-      userName: "etl_user",
-      password: "s3cr3t",
-      query: "SELECT 1",
-    };
-    const serialized = serializeProcessToGit(fixture({ dataSource: ds }));
+    const serialized = serializeProcessToGit(
+      fixture({
+        DataSource: {
+          Type: "ODBC",
+          dataSourceNameForServer: "MyDSN",
+          userName: "etl_user",
+          password: "s3cr3t",
+          query: "SELECT 1",
+        },
+      }),
+    );
     expect(serialized.credentialsOmitted).toBe(true);
     expect(serialized.json).not.toContain("s3cr3t");
     expect(serialized.json).toContain("etl_user");
@@ -364,7 +540,7 @@ describe("git-process #region round-trip", () => {
 
   it("round-trips hasSecurityAccess=true", () => {
     const { json } = serializeProcessToGit(
-      fixture({ hasSecurityAccess: true }),
+      fixture({ HasSecurityAccess: true }),
     );
     expect(
       parseProcessFromGit(json, makeTi({ Prolog: "x=1;" })).hasSecurityAccess,
@@ -395,27 +571,130 @@ describe("git-process ignored datasource columns", () => {
   ];
 
   it("survives a json round-trip", () => {
-    const { json } = serializeProcessToGit(fixture({ variablesUIData: UI }));
+    const { json } = serializeProcessToGit(fixture({ VariablesUIData: UI }));
     const parsed = parseProcessFromGit(json, makeTi({ Prolog: "sX='a';" }));
     expect(parsed.variablesUIData).toEqual(UI);
   });
 
-  it("is absent from the json when the process ignores nothing", () => {
+  it("stays an empty list as the server sends it, and reads back as one", () => {
+    // TM1 12 creates a process without VariablesUIData; only an import that
+    // sends [] restores the key the source process had.
     const { json } = serializeProcessToGit(fixture());
-    expect(JSON.parse(json)).not.toHaveProperty("variablesUIData");
+    expect(JSON.parse(json).VariablesUIData).toEqual([]);
     expect(
       parseProcessFromGit(json, makeTi({ Prolog: "sX='a';" })).variablesUIData,
+    ).toEqual([]);
+    const { VariablesUIData: _, ...withoutKey } = JSON.parse(json);
+    expect(
+      parseProcessFromGit(
+        JSON.stringify(withoutKey),
+        makeTi({ Prolog: "sX='a';" }),
+      ).variablesUIData,
     ).toBeUndefined();
   });
 
   it("rejects a json whose variablesUIData is not a list of strings", () => {
     const broken = JSON.stringify({
       name: "P",
+      parameters: [],
       variables: [],
       variablesUIData: [{ ColType: 1165 }],
+      dataSource: { type: "None" },
     });
     expect(() =>
       parseProcessFromGit(broken, makeTi({ Prolog: "sX='a';" })),
     ).toThrow(/variablesUIData/);
+  });
+
+  it("reads the file the VS Code extension writes (same native layout), UIData included", () => {
+    const json = JSON.stringify({
+      Name: "P",
+      HasSecurityAccess: true,
+      UIData: "CubeAction=1511\f",
+      VariablesUIData: ["VarType=32\fColType=827\f"],
+      DataSource: { Type: "ASCII", dataSourceNameForServer: "in.csv" },
+      Parameters: [{ Name: "pA", Prompt: "", Value: "x", Type: "String" }],
+      Variables: [
+        { Name: "v1", Type: "String", Position: 1, StartByte: 0, EndByte: 0 },
+      ],
+    });
+    expect(parseProcessFromGit(json, makeTi({ Prolog: "x=1;" }))).toMatchObject(
+      {
+        name: "P",
+        hasSecurityAccess: true,
+        uiData: "CubeAction=1511\f",
+        variablesUIData: ["VarType=32\fColType=827\f"],
+        dataSource: { type: "ASCII", dataSourceNameForServer: "in.csv" },
+        parameters: [
+          { name: "pA", prompt: "", defaultValue: "x", type: "String" },
+        ],
+        variables: [
+          { name: "v1", type: "String", position: 1, startByte: 0, endByte: 0 },
+        ],
+      },
+    );
+  });
+
+  it("rejects a file that mixes both layouts instead of reading half of it", () => {
+    const json = JSON.stringify({
+      Name: "P",
+      parameters: [],
+      Variables: [],
+      DataSource: { Type: "None" },
+      Parameters: [],
+    });
+    expect(() => parseProcessFromGit(json, makeTi({ Prolog: "x=1;" }))).toThrow(
+      /unknown key\(s\): parameters/,
+    );
+  });
+
+  it("rejects a data source field it would otherwise drop without a word", () => {
+    const json = JSON.stringify({
+      Name: "P",
+      DataSource: { Type: "ASCII", asciiFancy: "x" },
+      Parameters: [],
+      Variables: [],
+    });
+    expect(() => parseProcessFromGit(json, makeTi({ Prolog: "x=1;" }))).toThrow(
+      /unknown 'dataSource' key\(s\): asciiFancy/,
+    );
+  });
+
+  it("rejects a .json that lacks a structural key instead of clearing it on the server", () => {
+    const json = JSON.stringify({
+      name: "P",
+      parameters: [],
+      dataSource: { type: "None" },
+    });
+    expect(() => parseProcessFromGit(json, makeTi({ Prolog: "x=1;" }))).toThrow(
+      /missing key\(s\): variables/,
+    );
+  });
+
+  it("rejects null structural keys, which would otherwise clear the server", () => {
+    const native = JSON.stringify({
+      Name: "P",
+      DataSource: null,
+      Parameters: null,
+      Variables: null,
+    });
+    expect(() =>
+      parseProcessFromGit(native, makeTi({ Prolog: "x=1;" })),
+    ).toThrow(/missing key\(s\): Parameters, Variables, DataSource/);
+    const legacy = JSON.stringify({
+      name: "P",
+      parameters: null,
+      variables: [],
+      dataSource: { type: "None" },
+    });
+    expect(() =>
+      parseProcessFromGit(legacy, makeTi({ Prolog: "x=1;" })),
+    ).toThrow(/missing key\(s\): parameters/);
+  });
+
+  it("rejects a .json that is not an object", () => {
+    expect(() => parseProcessFromGit("[]", makeTi({ Prolog: "x=1;" }))).toThrow(
+      /must be an object/,
+    );
   });
 });

@@ -14,10 +14,21 @@ export interface ParsedPro {
   variables: ProcessVariable[];
   /**
    * Raw line block 582: one entry per datasource COLUMN, ignored ones included.
-   * Empty when the file carries none. See src/lib/variables-ui-data.ts — the
+   * Undefined when the file carries none; `582,0` is an empty list, which
+   * TM1 12 keeps as `[]` (88 of 92 Bedrock v5 processes). See src/lib/variables-ui-data.ts — the
    * ignore flag exists nowhere else, so dropping this block loses it.
    */
-  variablesUIData: string[];
+  variablesUIData?: string[];
+  /**
+   * Line 576 of the footer: the Architect action settings (`UIData`).
+   * Undefined when the file has no footer, so an update leaves them alone.
+   */
+  uiData?: string;
+  /**
+   * Footer line 1217: `HasSecurityAccess` (measured on 11.8, 366 of 366
+   * processes). Undefined when the file has no such line.
+   */
+  hasSecurityAccess?: boolean;
   dataSource: DataSource;
 }
 
@@ -132,6 +143,24 @@ function parseSections(lines: string[]): {
       for (let taken = 0; taken < count && i < lines.length; taken++, i++) {
         map[code]!.push(lines[i]!);
       }
+      // A count that is too low (hand-edited file; the Bedrock repo's
+      // }bedrock.server.util.string.validate.pro says 572,185 over 189 lines)
+      // would drop real code: here END; and #EndRegion. When non-blank lines
+      // follow before the next section header — or, for the last section,
+      // before the footer at the last "576," line — they belong to the section.
+      let end = i;
+      while (end < lines.length && !SECTION_RE.test(lines[end]!)) end++;
+      if (end === lines.length) {
+        let footer = lines.length - 1;
+        while (footer >= i && !lines[footer]!.startsWith("576,")) footer--;
+        if (footer >= i) end = footer;
+      }
+      const overflow = lines.slice(i, end);
+      if (overflow.some((l) => l.trim() !== "")) {
+        map[code]!.push(...overflow);
+        counted.delete(code);
+        i = end;
+      }
       continue;
     }
     // Countless header (older files written by this serializer): read until the
@@ -194,9 +223,12 @@ function parseVariables(blocks: Map<string, string[]>): ProcessVariable[] {
   const types = (blocks.get("578") ?? []).map(
     (l) => parseInt(l.trim(), 10) || 2,
   );
-  const positions = (blocks.get("579") ?? []).map(
-    (l) => parseInt(l.trim(), 10) || 1,
-  );
+  // 0 is kept: it is what the file says, and TM1 rejects it rather than
+  // reading it as 1.
+  const positions = (blocks.get("579") ?? []).map((l) => {
+    const n = parseInt(l.trim(), 10);
+    return Number.isNaN(n) ? 1 : n;
+  });
 
   const startBytes = (blocks.get("580") ?? []).map(
     (l) => parseInt(l.trim(), 10) || 0,
@@ -308,6 +340,32 @@ function parseDataSource(fields: HeaderFields): DataSource {
   return ds;
 }
 
+// The footer follows the last section, so its 576 is the last such line; an
+// earlier one could be code inside a section.
+// Its 1217 line holds HasSecurityAccess.
+function parseFooter(lines: string[]): {
+  uiData?: string;
+  hasSecurityAccess?: boolean;
+} {
+  let footer = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (SECTION_RE.test(lines[i]!)) break;
+    if (lines[i]!.startsWith("576,")) {
+      footer = i;
+      break;
+    }
+  }
+  if (footer === -1) return {};
+  const out: { uiData?: string; hasSecurityAccess?: boolean } = {
+    uiData: lines[footer]!.slice(4),
+  };
+  for (let i = footer + 1; i < lines.length; i++) {
+    const m = /^1217,(\d)$/.exec(lines[i]!);
+    if (m) out.hasSecurityAccess = m[1] === "1";
+  }
+  return out;
+}
+
 export function parseProFile(content: string): ParsedPro {
   const lines = content
     // TM1 writes .pro files with a UTF-8 BOM.
@@ -321,7 +379,10 @@ export function parseProFile(content: string): ParsedPro {
     ...sections,
     parameters: parseParameters(fields.blocks),
     variables: parseVariables(fields.blocks),
-    variablesUIData: fields.blocks.get("582") ?? [],
+    ...(fields.blocks.has("582")
+      ? { variablesUIData: fields.blocks.get("582")! }
+      : {}),
+    ...parseFooter(lines),
     dataSource: parseDataSource(fields),
   };
 }

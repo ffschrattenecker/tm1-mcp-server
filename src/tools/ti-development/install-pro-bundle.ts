@@ -281,14 +281,12 @@ export const registerInstallProBundle = defineTool({
         if (
           exists ||
           parsed.variables.length > 0 ||
-          parsed.variablesUIData.length > 0
+          parsed.variablesUIData !== undefined
         ) {
           await tm1Client.processes.updateVariables(
             processName,
             parsed.variables,
-            parsed.variablesUIData.length > 0 || parsed.variables.length === 0
-              ? parsed.variablesUIData
-              : undefined,
+            parsed.variablesUIData,
           );
         }
         if (exists || parsed.dataSource.type !== "None") {
@@ -296,6 +294,18 @@ export const registerInstallProBundle = defineTool({
             processName,
             parsed.dataSource,
           );
+        }
+        // A POST does not create UIData and a PATCH without it leaves it
+        // alone, so a new process would lose the Architect action settings
+        // (line 576) and the security access flag (line 1217).
+        if (
+          parsed.uiData !== undefined ||
+          parsed.hasSecurityAccess !== undefined
+        ) {
+          await tm1Client.processes.updateDeployMeta(processName, {
+            uiData: parsed.uiData,
+            hasSecurityAccess: parsed.hasSecurityAccess,
+          });
         }
         installedNames.add(processName);
         results.push({

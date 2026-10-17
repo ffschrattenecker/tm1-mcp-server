@@ -13,31 +13,46 @@ import {
 /**
  * tm1-git two-file representation of a TI process.
  *
- * `{name}.json` holds the structure (parameters, variables, datasource,
- * hasSecurityAccess). `{name}.ti` holds the code as TM1's native `Code`
- * representation — `#region <Tab>` / `#endregion` blocks (CRLF, empty tabs
- * omitted), byte-identical to `GET /Processes('x')/Code/$value`. The `.ti`
- * blob is produced by the server, not built here; this module only parses it
- * back (for import preflight). The `.json` is built by serializeProcessToGit.
+ * `{name}.json` is the server's own REST payload for the process minus the code:
+ * the response to `$select=Name,HasSecurityAccess,UIData,VariablesUIData,
+ * DataSource,Parameters,Variables` without `@odata.*`, in the server's key order,
+ * 2-space indent and a trailing newline. No renamed or invented fields, so any
+ * tool that reads TM1 REST reads the file, and the VS Code extension writes the
+ * same bytes (366 of 366 processes measured on 11.8). `UIData` and
+ * `VariablesUIData` are undeclared in $metadata and missing from a plain GET,
+ * but needed: the first holds the Architect action settings (a POST does not
+ * create it), the second every datasource column including ignored ones.
+ *
+ * `{name}.ti` holds the code as TM1's native `Code` representation —
+ * `#region <Tab>` / `#endregion` blocks (CRLF, empty tabs omitted),
+ * byte-identical to `GET /Processes('x')/Code/$value`. The `.ti` blob is
+ * produced by the server, not built here; this module only parses it back.
  *
  * Credentials: the ODBC `password` is never written to the .json. A committed
  * password would be a leaked secret; on import it is re-supplied out of band
  * (see `dataSourcePassword` on the import tool).
  */
 
-export interface GitProcessInput {
-  name: string;
-  parameters: ProcessParameter[];
-  variables: ProcessVariable[];
-  /**
-   * Raw `VariablesUIData` — one entry per datasource column, ignored ones
-   * included. Written to the .json as-is because a column set to "Ignore"
-   * appears nowhere in `variables`; leaving it out makes the export lose the
-   * setting on every re-import.
-   */
-  variablesUIData?: string[];
-  dataSource: DataSource;
-  hasSecurityAccess: boolean;
+/** The process as TM1 REST returns it for the .json field list. */
+export interface NativeProcessHeader {
+  Name: string;
+  HasSecurityAccess?: boolean;
+  UIData?: string;
+  VariablesUIData?: string[];
+  DataSource: { Type: string; password?: string; [key: string]: unknown };
+  Parameters: Array<{
+    Name: string;
+    Prompt?: string;
+    Value: string | number;
+    Type: string;
+  }>;
+  Variables: Array<{
+    Name: string;
+    Type: string;
+    Position: number;
+    StartByte?: number;
+    EndByte?: number;
+  }>;
 }
 
 export interface GitProcessJson {
@@ -55,6 +70,8 @@ export interface ParsedGitProcess {
   parameters: ProcessParameter[];
   variables: ProcessVariable[];
   variablesUIData?: string[];
+  /** Architect action settings; absent in files written before 2026-10-10. */
+  uiData?: string;
   dataSource: DataSource;
   hasSecurityAccess?: boolean;
 }
@@ -62,66 +79,80 @@ export interface ParsedGitProcess {
 type Tab = "prolog" | "metadata" | "data" | "epilog";
 
 /**
- * Build only the `{name}.json` (structure). Field order mirrors TM1's OData
- * Process entity (Name, HasSecurityAccess, DataSource, then Parameters/
- * Variables); parameter objects follow OData order (Name, Prompt, Value, Type).
- * Order is cosmetic — parseProcessFromGit reads by key.
+ * Build the `{name}.json`: the server payload as it came, the password
+ * stripped unless asked for. Key order is the server's, so nothing is rebuilt
+ * — with one exception: TM1 12 usually sends `UIData` before
+ * `VariablesUIData`, but not always (1 of 103 processes on 12.5.9 had them
+ * swapped). The file puts `UIData` first, as the VS Code extension does, so
+ * both tools write the same bytes and the order never shows up as a diff.
  */
 export function serializeProcessToGit(
-  input: GitProcessInput,
+  header: NativeProcessHeader,
   opts?: { includePassword?: boolean },
 ): GitProcessJson {
-  const { password, ...dataSourceNoPwd } = input.dataSource;
+  const { password, ...dataSourceNoPwd } = header.DataSource;
   const keepPassword = opts?.includePassword === true && Boolean(password);
   const credentialsOmitted =
     !keepPassword && password !== undefined && password !== "";
-
+  const keys = Object.keys(header);
+  const ui = keys.indexOf("UIData");
+  const vui = keys.indexOf("VariablesUIData");
+  if (ui > vui && vui >= 0) [keys[ui], keys[vui]] = [keys[vui]!, keys[ui]!];
+  const payload: Record<string, unknown> = {
+    ...header,
+    DataSource: keepPassword ? header.DataSource : dataSourceNoPwd,
+  };
   const json =
     JSON.stringify(
-      {
-        name: input.name,
-        hasSecurityAccess: input.hasSecurityAccess,
-        dataSource: keepPassword
-          ? { ...dataSourceNoPwd, password }
-          : dataSourceNoPwd,
-        parameters: input.parameters.map((p) => ({
-          name: p.name,
-          ...(p.prompt !== undefined ? { prompt: p.prompt } : {}),
-          value: p.defaultValue,
-          type: p.type,
-        })),
-        variables: input.variables,
-        ...(input.variablesUIData !== undefined &&
-        input.variablesUIData.length > 0
-          ? { variablesUIData: input.variablesUIData }
-          : {}),
-      },
+      Object.fromEntries(keys.map((k) => [k, payload[k]])),
       null,
       2,
     ) + "\n";
-
   return { json, credentialsOmitted };
 }
 
-const TAB_NAMES: ReadonlySet<Tab> = new Set([
-  "prolog",
-  "metadata",
-  "data",
-  "epilog",
-]);
+const TABS: readonly Tab[] = ["prolog", "metadata", "data", "epilog"];
+const TITLE: Record<Tab, string> = {
+  prolog: "Prolog",
+  metadata: "Metadata",
+  data: "Data",
+  epilog: "Epilog",
+};
 
-interface RegionMarker {
-  kind: "region" | "endregion";
-  /** Raw token right after the keyword (tab name for #region; usually empty for #endregion). */
-  name: string;
-  /** Index of the marker line's first character (including leading whitespace). */
-  start: number;
-  /** Index right after the marker line (where the following content, if any, begins). */
-  contentStart: number;
+/**
+ * The `.ti` for a process without code. TM1 (11.8 and 12) sends an empty
+ * `Code` blob there, but the parser rejects an empty file — a truncated `.ti`
+ * must not deploy as "delete all code". So the export writes one empty Prolog
+ * region instead, the same bytes the VS Code extension writes.
+ */
+export const EMPTY_CODE_BLOB = "#region Prolog\r\n#endregion";
+
+/**
+ * The VS Code extension's former layout (before 2026-10-10): lowercase tab
+ * names, each tab closed by name (`#region prolog` … `#endregion prolog`).
+ * TM1's own blob closes with a bare `#endregion` only.
+ */
+function isLegacyLayout(ti: string): boolean {
+  return /^[ \t]*#endregion (?:prolog|metadata|data|epilog)[ \t]*\r?$/m.test(
+    ti,
+  );
 }
 
-/** Build a descriptive error naming the structural problem (same "reject, don't guess" shape
- *  as the pre-existing zero-region error below). */
+/**
+ * The `Code` blob to send for a `.ti`. A native one goes as it is (CRLF), so
+ * TM1 splits exactly what the file holds. The VS Code extension's former
+ * layout (`#region prolog` … `#endregion prolog`) is rebuilt from the parsed
+ * tabs instead: TM1 refuses those closes ("mismatched regions").
+ */
+export function toCodeBlob(ti: string, parsed: ParsedGitProcess): string {
+  if (!isLegacyLayout(ti)) return ti.replace(/\r?\n/g, "\r\n");
+  const blob = TABS.filter((t) => parsed[t] !== "")
+    .map((t) => `#region ${TITLE[t]}\n${parsed[t]}\n#endregion`)
+    .join("\n");
+  return (blob || EMPTY_CODE_BLOB).replace(/\r?\n/g, "\r\n");
+}
+
+/** Build a descriptive error naming the structural problem ("reject, don't guess"). */
 function regionBlobError(problem: string): Error {
   return new Error(
     `TI file has a malformed #region/#endregion code blob: ${problem} ` +
@@ -130,44 +161,59 @@ function regionBlobError(problem: string): Error {
   );
 }
 
-/** Scan every `#region`/`#endregion` marker line, in document order, top-level AND nested. */
-function extractRegionMarkers(ti: string): RegionMarker[] {
-  const markerRe = /^[ \t]*#(region|endregion)\b[ \t]*(\S*)[^\r\n]*\r?\n?/gim;
-  const markers: RegionMarker[] = [];
-  let mm: RegExpExecArray | null;
-  while ((mm = markerRe.exec(ti)) !== null) {
-    markers.push({
-      kind: mm[1]!.toLowerCase() as "region" | "endregion",
-      name: mm[2]!,
-      start: mm.index,
-      contentStart: mm.index + mm[0].length,
-    });
-  }
-  return markers;
+/**
+ * The tab a line opens, or undefined. Between tabs nothing else may stand, so
+ * any spelling counts there (`any`). Inside a tab, or right after a possible
+ * close, only the exact form the layout writes does: `#region Prolog` (TM1)
+ * or `#region prolog` (former layout). Every other spelling (`#region data`,
+ * `#Region Data`) is a user fold and stays code.
+ */
+function openedTab(
+  line: string,
+  form: "any" | "native" | "legacy",
+): Tab | undefined {
+  const m = /^[ \t]*#region[ \t]+(\w+)[ \t]*$/.exec(line);
+  const name = m?.[1];
+  return TABS.find((t) =>
+    form === "any"
+      ? name?.toLowerCase() === t
+      : name === (form === "legacy" ? t : TITLE[t]),
+  );
+}
+
+/**
+ * A tab's close: TM1's bare `#endregion`, or in the extension's former layout
+ * `#endregion <tab>` naming that tab — there a bare `#endregion` is a user
+ * fold's close, which is what keeps that layout unambiguous.
+ */
+function isTabClose(line: string, tab: Tab, legacy: boolean): boolean {
+  return new RegExp(
+    `^[ \\t]*#endregion${legacy ? ` ${tab}` : ""}[ \\t]*$`,
+  ).test(line);
 }
 
 /**
  * Parse a native `#region <Tab>` / `#endregion` code blob into the four tabs.
- * Case-insensitive on keyword and tab name; a tab whose region is absent
- * defaults to "". Throws if the blob has no region markers at all (rejects the
- * pre-1.x `### TM1-TI-TAB:` layout — no longer supported).
+ * Tabs come in fixed order; a tab whose region is absent defaults to "".
  *
- * Depth-aware: TM1 users can write their OWN `#region <label>` / `#endregion`
- * FOLDING COMMENTS inside a tab's TI code (PAW/Arc supports this), and the
- * server stores them nested inside the tab's region — that is legitimate code
- * content, not a structural marker. A `#region`/`#endregion` pair encountered
- * while already inside a tab is therefore just a depth increment/decrement;
- * its lines stay part of the tab's code, preserved verbatim. Only the
- * top-level (depth 0→1) `#region` opens a tab, and only the marker that
- * brings depth back to 0 closes it.
+ * Users write their OWN `#Region` / `#EndRegion` folds into the code (PAW/Arc
+ * support it) and the server stores them inside the tab. They are code, never
+ * structure — and they can be wrong: on an 11.8 server 94 of 366 processes
+ * carry folds and 2 leave one open, so counting depth rejected real exports.
+ * A tab therefore ends at its close (see isTabClose) that is followed (blank
+ * lines aside) by the opening of a LATER tab or by the end of the blob — the
+ * shape the server writes. Any other `#endregion` stays in the tab's code. The
+ * same rule reads the file in the VS Code extension (git/sectionMarkers.ts).
  *
- * Still throws on genuine structural corruption:
- *   - an unclosed tab (depth never returns to 0 by EOF — a missing/typo'd
- *     #endregion, which would otherwise let the next tab's content get
- *     silently absorbed into the previous tab)
- *   - a stray #endregion at the top level (depth would go negative)
- *   - a top-level `#region` whose name isn't a recognized TI tab
- *     (Prolog/Metadata/Data/Epilog) — genuinely malformed, not a user fold
+ * One case stays ambiguous in TM1's own format: a user fold spelled exactly
+ * like a later tab (`#region Data` inside the Prolog) looks the same as that
+ * tab after a deleted `#endregion`. It is refused rather than guessed.
+ *
+ * Still throws on genuine structural corruption: no tab at all (rejects the
+ * pre-1.x `### TM1-TI-TAB:` layout), code or an unknown `#region` outside a
+ * tab, tabs out of order or twice, a later tab opening inside a tab (its
+ * `#endregion` was deleted — reading on would swallow that tab), or a tab
+ * that never closes.
  */
 function parseCodeBlob(ti: string): Record<Tab, string> {
   const out: Record<Tab, string> = {
@@ -176,109 +222,163 @@ function parseCodeBlob(ti: string): Record<Tab, string> {
     data: "",
     epilog: "",
   };
-  const markers = extractRegionMarkers(ti);
+  // Lines with their own ending, so tab content is sliced from the raw text.
+  const lines = ti.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+  const text = (k: number) => lines[k]!.replace(/\r?\n$/, "");
+  const offsets: number[] = [];
+  lines.reduce((at, l) => (offsets.push(at), at + l.length), 0);
+  offsets.push(ti.length);
+  const nextNonBlank = (from: number) => {
+    let k = from;
+    while (k < lines.length && text(k).trim() === "") k++;
+    return k;
+  };
 
-  if (markers.length === 0) {
+  if (!/^[ \t]*#region\b/im.test(ti)) {
     throw new Error(
       "TI file has no #region markers (expected `#region Prolog` … `#endregion`). " +
         "Pre-1.x `### TM1-TI-TAB:` files are no longer supported — re-export from the server.",
     );
   }
 
-  let depth = 0;
-  let currentTab: Tab | null = null;
-  let contentStart = 0;
-  let found = 0;
-
-  for (const marker of markers) {
-    if (marker.kind === "region") {
-      if (depth === 0) {
-        // Top-level #region: must be a known tab delimiter, not a user fold.
-        const tabName = marker.name.toLowerCase();
-        if (!TAB_NAMES.has(tabName as Tab)) {
-          throw regionBlobError(
-            `found "#region ${marker.name}" at the top level, which is not a recognized TI tab ` +
-              "(expected Prolog/Metadata/Data/Epilog).",
-          );
-        }
-        currentTab = tabName as Tab;
-        contentStart = marker.contentStart;
-      }
-      // depth > 0: a nested user #region fold — part of the tab's code content.
-      depth++;
-    } else {
-      depth--;
-      if (depth < 0) {
+  const legacy = isLegacyLayout(ti);
+  const form = legacy ? "legacy" : "native";
+  let last = -1;
+  let i = nextNonBlank(0);
+  while (i < lines.length) {
+    const tab = openedTab(text(i), "any");
+    if (!tab) {
+      throw regionBlobError(
+        `found ${JSON.stringify(text(i).trim().slice(0, 40))} outside a tab ` +
+          "(expected `#region Prolog`/`Metadata`/`Data`/`Epilog`).",
+      );
+    }
+    if (TABS.indexOf(tab) <= last) {
+      throw regionBlobError(
+        `tab "${tab}" appears twice or out of order (expected Prolog, Metadata, Data, Epilog).`,
+      );
+    }
+    let j = i + 1;
+    for (; ; j++) {
+      if (j >= lines.length) {
         throw regionBlobError(
-          `found a stray #endregion with no matching #region near offset ${marker.start}.`,
+          `"#region ${tab}" is missing its matching #endregion — the blob is truncated ` +
+            "or a closing #endregion is missing.",
         );
       }
-      if (depth === 0) {
-        // Back to top level: this #endregion closes the current tab. Strip
-        // the single newline the server places before #endregion; nested
-        // #region/#endregion lines (user folds) stay in the sliced content.
-        out[currentTab as Tab] = ti
-          .slice(contentStart, marker.start)
-          .replace(/\r?\n$/, "");
-        found++;
-        currentTab = null;
+      const inner = openedTab(text(j), form);
+      if (inner && TABS.indexOf(inner) > TABS.indexOf(tab)) {
+        throw regionBlobError(
+          `"#region ${inner}" opens inside "${tab}" — the #endregion closing "${tab}" is missing.`,
+        );
       }
+      if (!isTabClose(text(j), tab, legacy)) continue;
+      const k = nextNonBlank(j + 1);
+      const following = k < lines.length ? openedTab(text(k), form) : undefined;
+      if (k === lines.length || following) break;
     }
-  }
-
-  if (depth !== 0) {
-    throw regionBlobError(
-      `"#region ${currentTab ?? "?"}" is missing its matching #endregion — the blob is truncated ` +
-        "or a closing #endregion is missing.",
-    );
-  }
-
-  // Structurally unreachable given the checks above, but keep the original
-  // invariant explicit rather than silently returning a default-filled `out`.
-  if (found === 0) {
-    throw regionBlobError(
-      "no valid #region <Tab> … #endregion pair was found.",
-    );
+    // Strip the single line break the server places before #endregion.
+    out[tab] = ti.slice(offsets[i + 1], offsets[j]).replace(/\r?\n$/, "");
+    last = TABS.indexOf(tab);
+    i = nextNonBlank(j + 1);
   }
   return out;
 }
 
+const NATIVE_KEYS = [
+  "Name",
+  "HasSecurityAccess",
+  "UIData",
+  "VariablesUIData",
+  "DataSource",
+  "Parameters",
+  "Variables",
+] as const;
+const LEGACY_KEYS = [
+  "name",
+  "hasSecurityAccess",
+  "parameters",
+  "variables",
+  "variablesUIData",
+  "dataSource",
+] as const;
+const DATASOURCE_KEYS = new Set(Object.keys(dataSourceSchema.shape));
+
 /**
- * Blob content the tab parser does not place — text outside every top-level
- * `#region <Tab>` block, and a tab whose region appears more than once (the
- * parser keeps the last copy). tm1_import_process_from_git deploys the RAW
- * blob and lets TM1 split it, so its preflight can only vouch for the blob
- * when this list is empty: otherwise the checked tabs and the installed code
- * differ. Assumes a blob parseProcessFromGit already accepted.
+ * Import deploys the .json as the whole truth: a missing parameter or variable
+ * list goes out empty, a missing data source as `None`, and TM1 applies both.
+ * A file whose keys were not read (another layout, a typo) therefore cleared
+ * them on the server without a word. Accept exactly one of the two layouts —
+ * the native REST one, or the lowercase one written before 2026-10-10 — and
+ * require the three structural keys; reject anything else instead of guessing.
  */
-export function unplacedBlobContent(ti: string): string[] {
-  const problems: string[] = [];
-  const seen = new Set<string>();
-  let depth = 0;
-  let outsideFrom = 0;
-  const outside = (from: number, to: number) => {
-    const text = ti.slice(from, to).trim();
-    if (text !== "")
-      problems.push(
-        `text outside any tab region: "${text.split(/\r?\n/)[0]!.slice(0, 60)}"`,
-      );
-  };
-  for (const m of extractRegionMarkers(ti)) {
-    if (m.kind === "region") {
-      if (depth === 0) {
-        outside(outsideFrom, m.start);
-        const tab = m.name.toLowerCase();
-        if (seen.has(tab)) problems.push(`#region ${m.name} appears twice`);
-        seen.add(tab);
-      }
-      depth++;
-    } else {
-      depth--;
-      if (depth === 0) outsideFrom = m.contentStart;
-    }
+function assertKnownJsonShape(meta: unknown): "native" | "legacy" {
+  if (meta === null || typeof meta !== "object" || Array.isArray(meta)) {
+    throw new Error("Process JSON must be an object");
   }
-  outside(outsideFrom, ti.length);
-  return problems;
+  const keys = Object.keys(meta);
+  const layout = keys.some((k) => /^[A-Z]/.test(k)) ? "native" : "legacy";
+  const known: readonly string[] =
+    layout === "native" ? NATIVE_KEYS : LEGACY_KEYS;
+  const unknown = keys.filter((k) => !known.includes(k));
+  if (unknown.length > 0) {
+    throw new Error(
+      `Process JSON has unknown key(s): ${unknown.join(", ")}. ` +
+        `Expected only: ${known.join(", ")}. ` +
+        "Refusing to deploy: unread fields would be sent as empty and clear the process on the server.",
+    );
+  }
+  const required =
+    layout === "native"
+      ? ["Parameters", "Variables", "DataSource"]
+      : ["parameters", "variables", "dataSource"];
+  // null is as good as missing: `?? []` below would turn it into a wipe.
+  const missing = required.filter(
+    (k) => (meta as Record<string, unknown>)[k] == null,
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Process JSON is missing key(s): ${missing.join(", ")} (absent or null). ` +
+        "Refusing to deploy: a missing list would be sent as empty and clear it on the server.",
+    );
+  }
+  return layout;
+}
+
+/** Native REST field names → the lowercase shape the validators below read. */
+function fromNative(n: Record<string, unknown>): Record<string, unknown> {
+  // Non-list values pass through untouched, so the validators name them.
+  const rows = (
+    v: unknown,
+    map: (r: Record<string, unknown>) => unknown,
+  ): unknown =>
+    Array.isArray(v)
+      ? (v as unknown[]).map((r): unknown =>
+          r && typeof r === "object" ? map(r as Record<string, unknown>) : r,
+        )
+      : v;
+  const ds = n.DataSource as Record<string, unknown> | undefined;
+  const { Type, ...dsRest } = ds && typeof ds === "object" ? ds : {};
+  return {
+    name: n.Name,
+    hasSecurityAccess: n.HasSecurityAccess,
+    uiData: n.UIData,
+    variablesUIData: n.VariablesUIData,
+    dataSource: ds && typeof ds === "object" ? { type: Type, ...dsRest } : ds,
+    parameters: rows(n.Parameters, (p) => ({
+      name: p.Name,
+      type: p.Type,
+      value: p.Value,
+      ...(p.Prompt !== undefined ? { prompt: p.Prompt } : {}),
+    })),
+    variables: rows(n.Variables, (v) => ({
+      name: v.Name,
+      type: v.Type,
+      position: v.Position,
+      ...(v.StartByte !== undefined ? { startByte: v.StartByte } : {}),
+      ...(v.EndByte !== undefined ? { endByte: v.EndByte } : {}),
+    })),
+  };
 }
 
 /** Parse a `{name}.json` + `{name}.ti` pair back into deployable process parts. */
@@ -286,18 +386,41 @@ export function parseProcessFromGit(
   jsonContent: string,
   tiContent: string,
 ): ParsedGitProcess {
-  let meta: {
+  type Meta = {
     name?: unknown;
     hasSecurityAccess?: unknown;
     parameters?: unknown;
     variables?: unknown;
     variablesUIData?: unknown;
+    uiData?: unknown;
     dataSource?: unknown;
   };
+  let raw: unknown;
   try {
-    meta = JSON.parse(jsonContent) as typeof meta;
+    raw = JSON.parse(jsonContent);
   } catch {
     throw new Error("Process JSON is not valid JSON");
+  }
+  const meta: Meta =
+    assertKnownJsonShape(raw) === "native"
+      ? fromNative(raw as Record<string, unknown>)
+      : (raw as Meta);
+
+  // Zod drops unknown keys silently; a data source field it does not know
+  // would be lost on deploy.
+  if (meta.dataSource && typeof meta.dataSource === "object") {
+    const extra = Object.keys(meta.dataSource).filter(
+      (k) => !DATASOURCE_KEYS.has(k),
+    );
+    if (extra.length > 0) {
+      throw new Error(
+        `Process JSON has unknown 'dataSource' key(s): ${extra.join(", ")}. ` +
+          "Refusing to deploy: they would be dropped without a word.",
+      );
+    }
+  }
+  if (meta.uiData !== undefined && typeof meta.uiData !== "string") {
+    throw new Error("Process JSON has invalid 'UIData': expected a string");
   }
 
   const name = typeof meta.name === "string" ? meta.name : "";
@@ -369,7 +492,10 @@ export function parseProcessFromGit(
     epilog: tabs.epilog,
     parameters,
     variables,
-    ...(variablesUIData.length > 0 ? { variablesUIData } : {}),
+    // An empty list is kept: TM1 12 creates a process without the key and
+    // only adds it, empty, on a PATCH with []; dropping it lost it on import.
+    ...(meta.variablesUIData !== undefined ? { variablesUIData } : {}),
+    ...(typeof meta.uiData === "string" ? { uiData: meta.uiData } : {}),
     dataSource,
   };
 }
