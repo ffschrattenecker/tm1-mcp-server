@@ -321,7 +321,13 @@ TM1_DATABASE=my-database
 TM1_API_KEY=...
 ```
 
-**Live-validated** against PA SaaS 12.6.4 (readonly tools, certificate check on).
+The API key can live in the OS keychain like any other secret: set
+`TM1_SECRETS=keychain` and run `secrets set <connection> TM1_API_KEY`. The tenant
+is part of the connection id, so two tenants that share a region host and a
+database name keep separate process backups and caches.
+
+Validated upstream against PA SaaS 12.6.4 (readonly tools, certificate check on);
+not yet tried in this fork.
 
 ### Tools that differ by version
 

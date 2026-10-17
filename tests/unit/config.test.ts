@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { loadConfig } from "../../src/config.js";
+import { connectionIdOf, loadConfig } from "../../src/config.js";
 
 describe("loadConfig", () => {
   const originalEnv = process.env;
@@ -357,6 +357,63 @@ describe("loadConfig", () => {
   });
 
   describe("v12 connection config", () => {
+    it("loads a saas config with only tenant, database and api key", () => {
+      process.env.TM1_BASE_URL = "https://region.example.com";
+      process.env.TM1_AUTH_MODE = "saas";
+      process.env.TM1_TENANT = "T3NANT";
+      process.env.TM1_DATABASE = "db1";
+      process.env.TM1_API_KEY = "k3y";
+      const cfg = loadConfig();
+      expect(cfg.version).toBe(12);
+      expect(cfg.authMode).toBe("saas");
+      expect(cfg.tenant).toBe("T3NANT");
+    });
+
+    it("rejects a saas config without TM1_TENANT", () => {
+      process.env.TM1_BASE_URL = "https://region.example.com";
+      process.env.TM1_AUTH_MODE = "saas";
+      process.env.TM1_DATABASE = "db1";
+      process.env.TM1_API_KEY = "k3y";
+      expect(() => loadConfig()).toThrow(/TM1_TENANT/);
+    });
+
+    it("treats saas as v12 even without TM1_DATABASE", () => {
+      process.env.TM1_BASE_URL = "https://region.example.com";
+      process.env.TM1_AUTH_MODE = "saas";
+      process.env.TM1_TENANT = "T3NANT";
+      process.env.TM1_API_KEY = "k3y";
+      expect(() => loadConfig()).toThrow(/TM1_DATABASE/);
+    });
+
+    it("rejects a saas config without TM1_API_KEY", () => {
+      process.env.TM1_BASE_URL = "https://region.example.com";
+      process.env.TM1_AUTH_MODE = "saas";
+      process.env.TM1_TENANT = "T3NANT";
+      process.env.TM1_DATABASE = "db1";
+      expect(() => loadConfig()).toThrow(/TM1_API_KEY/);
+    });
+
+    it("defers the saas api key to the keychain", () => {
+      const env = {
+        TM1_BASE_URL: "https://region.example.com",
+        TM1_AUTH_MODE: "saas",
+        TM1_TENANT: "T3NANT",
+        TM1_DATABASE: "db1",
+      };
+      expect(() => loadConfig(env)).toThrow(/TM1_API_KEY/);
+      expect(loadConfig(env, { deferSecrets: true }).tenant).toBe("T3NANT");
+    });
+
+    it("keeps two tenants with the same database apart", () => {
+      const id = (tenant: string) =>
+        connectionIdOf({
+          baseUrl: "https://region.example.com",
+          tenant,
+          database: "db1",
+        });
+      expect(id("A")).not.toBe(id("B"));
+    });
+
     it("stays version 11 when no instance/database set", () => {
       process.env.TM1_BASE_URL = "https://tm1:8010";
       process.env.TM1_USER = "admin";

@@ -470,7 +470,7 @@ export class ConnectionRegistry {
     return new TM1Error({
       code: TM1ErrorCode.VALIDATION_ERROR,
       message: `No TM1 connection configured under ${this.discoveryDir ?? "(none)"}`,
-      hint: "Create <name>/.env there (TM1_BASE_URL, TM1_USER, TM1_SECRETS=keychain), then `secrets set <name>`. No restart needed.",
+      hint: "Create <name>/.env there (TM1_BASE_URL, TM1_USER, TM1_SECRETS=keychain; PA SaaS: TM1_AUTH_MODE=saas, TM1_TENANT), then `secrets set <name>`. No restart needed.",
     });
   }
 
