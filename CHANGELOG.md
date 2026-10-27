@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tm1_rest_read` reads a cube's storage dimension order:
+  `Cubes('C')/tm1.DimensionsStorageOrder()`. It was refused as an action, and without it a
+  `tm1.ReorderDimensions` write could not be checked or undone. `Cubes('C')/Dimensions` gives
+  the display order, which a reorder does not change.
+
 ## [10.0.0] - 2026-10-17
 
 Merged upstream 6.0.0 and 6.1.0.

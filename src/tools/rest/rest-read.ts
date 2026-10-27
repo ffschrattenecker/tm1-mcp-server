@@ -31,7 +31,7 @@ export const RestReadResultSchema = z.object({
 export const registerRestRead = defineTool({
   name: "tm1_rest_read",
   description: [
-    "GET any TM1 REST path (relative to /api/v1/), plus POST Processes('P')/tm1.Compile.",
+    "GET any TM1 REST path (relative to /api/v1/), plus POST Processes('P')/tm1.Compile and the function Cubes('C')/tm1.DimensionsStorageOrder().",
     "Returns data (@odata.* removed, secrets masked) or text for non-JSON bodies; over maxChars the value[] (or largest array) is cut: truncated, kept/total.",
     "Narrow with $select/$filter/$expand/$top; $count=true adds count.",
     "Paths: Cubes('C')?$expand=Dimensions($select=Name); Dimensions('D')/Hierarchies('H')/Elements?$select=Name,Type&$filter=Type eq 'Consolidated'&$top=50 (…/Elements/$count);",

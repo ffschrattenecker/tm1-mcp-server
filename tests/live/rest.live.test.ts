@@ -239,6 +239,30 @@ describe.skipIf(!LIVE_ENABLED)("live: REST tools", () => {
       expect(await names(h, `${dim}/Hierarchies`)).not.toContain(ALT);
     });
 
+    // Storage order and display order are separate: tm1.ReorderDimensions
+    // changes only the first, and answers the memory change in percent.
+    it("reorders storage dimensions and reads the order back", async () => {
+      const cube = seg("Cubes", CUBE);
+      const storage = async () =>
+        (
+          await restGet<Array<{ Name: string }>>(
+            h,
+            `${cube}/tm1.DimensionsStorageOrder()?$select=Name`,
+          )
+        ).map((d) => d.Name);
+      const reorder = (dims: string[]) =>
+        restWrite(h, "POST", `${cube}/tm1.ReorderDimensions`, {
+          "Dimensions@odata.bind": dims.map((d) => seg("Dimensions", d)),
+        });
+      expect(await storage()).toEqual([DIM, DIM2]);
+      const r = await reorder([DIM2, DIM]);
+      expect(typeof r.json.data.value).toBe("number");
+      expect(await storage()).toEqual([DIM2, DIM]);
+      expect(await names(h, `${cube}/Dimensions`)).toEqual([DIM, DIM2]);
+      await reorder([DIM, DIM2]);
+      expect(await storage()).toEqual([DIM, DIM2]);
+    });
+
     it("refuses a DELETE without the matching confirm", async () => {
       const r = await h.call("tm1_rest_write", {
         method: "DELETE",
