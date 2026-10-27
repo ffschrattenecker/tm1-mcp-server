@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [10.1.0] - 2026-10-27
+
 ### Added
 
 - `tm1_rest_read` reads a cube's storage dimension order:
@@ -30,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tm1_check_all_cube_rules` runs those checks on the stored rules of every cube and returns the
   cubes with errors. TM1 lets an element or cube that a stored rule names be deleted, keeps the
   rule text, and the rule then computes nothing without an error; this finds those rules.
+
+### Security
+
+- The shipped `npm-shrinkwrap.json` moves body-parser to 2.4.0 (GHSA-27r3-jxmh-p828, high) and
+  fast-uri, hono, ip-address and qs past newer advisories.
 
 ## [10.0.0] - 2026-10-17
 
@@ -397,7 +404,8 @@ response-size guard, the per-connection caches) are unchanged.
 Older history (before 8.0.0): see the git tags and the upstream repository,
 https://github.com/flameY3T1/tm1-mcp-server.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.0.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.1.0...HEAD
+[10.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.0.0...v10.1.0
 [10.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.3.0...v10.0.0
 [9.3.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.2.0...v9.3.0
 [9.2.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.1.1...v9.2.0
