@@ -42,7 +42,7 @@ describe.skipIf(!LIVE_ENABLED)("live: set_cube_rules preflight", () => {
   beforeAll(async () => {
     h = await getHarness();
     await cleanup();
-    await createDimension(h, ROW, ["R1"]);
+    await createDimension(h, ROW, ["R1", "Spare"]);
     await createDimension(h, MEAS, ["Amount", "Double"]);
     await createCube(h, CUBE, [ROW, MEAS]);
     await h.ok("tm1_set_cube_rules", {
@@ -188,5 +188,36 @@ describe.skipIf(!LIVE_ENABLED)("live: set_cube_rules preflight", () => {
       rules: dbRule(`'First'`, "'Amount'"),
     });
     expect(alias.json).toMatchObject({ ok: true });
+  });
+
+  it("an element deleted under a stored rule breaks it silently; check_all_cube_rules finds it", async () => {
+    const rules =
+      "SKIPCHECK;\n['Double'] = N: ['Amount'] * 2 + ['Spare', 'Amount'];\nFEEDERS;\n";
+    await h.ok("tm1_set_cube_rules", { cubeName: CUBE, confirm: CUBE, rules });
+    await h.ok("tm1_write_cells", {
+      cubeName: CUBE,
+      confirm: CUBE,
+      dimensions: [ROW, MEAS],
+      cells: [{ elements: ["R1", "Amount"], value: 5 }],
+    });
+    const double = () => cellValue(h, CUBE, [ROW, MEAS], ["R1", "Double"]);
+    expect(await double()).toBe(10);
+
+    // TM1 deletes the element, keeps the rule text, and the rule reads nothing.
+    await h.ok("tm1_delete_elements", {
+      dimensionName: ROW,
+      elementNames: ["Spare"],
+      confirm: ROW,
+    });
+    const back = await h.ok("tm1_get_cube_rules", { cubeName: CUBE });
+    expect(String(back.json.rulesText).replace(/\r\n/g, "\n")).toBe(rules);
+    expect(await double()).toBeNull();
+
+    const sweep = await h.ok("tm1_check_all_cube_rules", {});
+    const mine = sweep.json.cubes.find(
+      (c: { cube: string }) => c.cube === CUBE,
+    );
+    expect(mine).toMatchObject({ errors: [{ lineNumber: 2 }] });
+    expect(mine.errors[0].message).toMatch(/Element not found/);
   });
 });

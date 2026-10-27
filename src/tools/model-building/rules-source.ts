@@ -7,7 +7,10 @@ import { promises as fs } from "node:fs";
 import { z } from "zod";
 import type { TM1Client } from "../../tm1-client.js";
 import { applyRulesPatch, type RulesEdit } from "../../lib/rules-patch.js";
-import { checkDbReferences } from "../../lib/rules-db-check.js";
+import {
+  checkDbReferences,
+  type DbCheckLookups,
+} from "../../lib/rules-db-check.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { resolveLocalPath } from "../local-file.js";
 
@@ -70,16 +73,18 @@ export async function resolveRulesText(
  * DB() cube, element count and literal elements, which CheckRules does not
  * check against the target cube.
  * Empty = clean. Shared so tm1_check_cube_rule reports exactly what
- * tm1_set_cube_rules would refuse.
+ * tm1_set_cube_rules would refuse. `lookups` lets a whole-model check share
+ * cached cube and element lookups across cubes.
  */
 export async function checkRulesText(
   tm1Client: TM1Client,
   cubeName: string,
   text: string,
+  lookups: DbCheckLookups = tm1Client,
 ): Promise<Array<{ lineNumber?: number; message: string }>> {
   const [syntax, db] = await Promise.all([
     tm1Client.cubes.checkRule(cubeName, text),
-    checkDbReferences(tm1Client, text),
+    checkDbReferences(lookups, text),
   ]);
   return [
     ...syntax,

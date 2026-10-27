@@ -11,6 +11,7 @@
         "tm1_audit_complexity",
         "tm1_audit_feeders",
         "tm1_audit_naming",
+        "tm1_check_all_cube_rules",
         "tm1_check_cube_rule",
         "tm1_check_feeders",
         "tm1_check_process_code",

@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cube name: the cube must exist, the element count must match its dimensions (Sandboxes not
   counted), and each literal element must resolve in its dimension (aliases count).
   tm1.CheckRules accepts all three mistakes, and the rule then reads 0 without an error.
+- `tm1_check_all_cube_rules` runs those checks on the stored rules of every cube and returns the
+  cubes with errors. TM1 lets an element or cube that a stored rule names be deleted, keeps the
+  rule text, and the rule then computes nothing without an error; this finds those rules.
 
 ## [10.0.0] - 2026-10-17
 

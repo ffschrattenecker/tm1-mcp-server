@@ -43,6 +43,7 @@ import { registerGetCubeRules } from "./model-building/get-cube-rules.js";
 import { registerSetCubeRules } from "./model-building/set-cube-rules.js";
 import { registerClearCube } from "./model-building/clear-cube.js";
 import { registerGetAllCubeRules } from "./model-building/get-all-cube-rules.js";
+import { registerCheckAllCubeRules } from "./model-building/check-all-cube-rules.js";
 import { registerCheckCubeRule } from "./model-building/check-cube-rule.js";
 import { registerSearchRules } from "./model-building/search-rules.js";
 
@@ -129,6 +130,7 @@ const REGISTRARS: ToolRegistrar[] = [
   registerSetCubeRules,
   registerClearCube,
   registerGetAllCubeRules,
+  registerCheckAllCubeRules,
   registerCheckCubeRule,
   registerSearchRules,
 

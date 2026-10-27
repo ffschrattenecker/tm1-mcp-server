@@ -56,7 +56,7 @@ datasource (562-589).
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (59)
+## Tools (60)
 
 ### analysis (11)
 
@@ -100,8 +100,9 @@ datasource (562-589).
 - `tm1_resolve_default_members` — Resolve N hierarchies' effective default members in parallel from one tool call; pass items:[{dimensionName}] with a single entry for a one-off lookup
 - `tm1_search_elements` — Find elements by a business term instead of guessing names: case-insensitive substring match on names and Alias values
 
-### model-building (6)
+### model-building (7)
 
+- `tm1_check_all_cube_rules` — Check the stored rules of every cube with the same checks as tm1_check_cube_rule (tm1.CheckRules plus the DB() cube, element count and literal elements)
 - `tm1_check_cube_rule` — Validate the syntax of a TM1 cube rule WITHOUT applying it
 - `tm1_clear_cube` — Wipe every cell in a cube
 - `tm1_get_all_cube_rules` — Bulk-load rules text for every cube in one call

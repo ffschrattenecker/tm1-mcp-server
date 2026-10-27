@@ -284,6 +284,17 @@ describe("declared output schemas", () => {
       errorCount: 0,
       errors: [],
     },
+    tm1_check_all_cube_rules: {
+      cubesChecked: 2,
+      cubesWithErrors: 1,
+      cubes: [
+        {
+          cube: "Sales",
+          errorCount: 1,
+          errors: [{ lineNumber: 1, message: 'Element not found "Gone"' }],
+        },
+      ],
+    },
     tm1_check_process_code: {
       ok: false,
       processName: "_compile_check",
