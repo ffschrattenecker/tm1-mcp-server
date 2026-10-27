@@ -7,7 +7,11 @@ import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
-import { RULES_SOURCE_SCHEMA, resolveRulesText } from "./rules-source.js";
+import {
+  RULES_SOURCE_SCHEMA,
+  checkRulesText,
+  resolveRulesText,
+} from "./rules-source.js";
 
 export const registerSetCubeRules = defineTool({
   name: "tm1_set_cube_rules",
@@ -15,7 +19,7 @@ export const registerSetCubeRules = defineTool({
     "Create or replace the rules for a TM1 cube.",
     "SKIPCHECK; belongs at the top and FEEDERS; before all feeder definitions — SKIPCHECK is what makes feeders take effect, so rules with feeders need it.",
     "Pass exactly one source: rules (the full text — replaces everything), edits (find/replace patch against the current text; each find must match exactly once, else nothing is written), or filePath (full text from a host file).",
-    "The full resulting text is syntax-checked with tm1.CheckRules before anything is written: TM1 itself stores broken rules without an error, and they then silently compute nothing. Any error aborts the call with VALIDATION_ERROR, the errors with their line numbers in details, and nothing is written; preflight:false skips the check.",
+    "The full resulting text is checked before anything is written, as tm1_check_cube_rule does (tm1.CheckRules plus DB() element counts): TM1 itself stores broken rules without an error, and they then silently compute nothing. Any error aborts the call with VALIDATION_ERROR, the errors with their line numbers in details, and nothing is written; preflight:false skips the check.",
     "The stored text is read back after writing (verified.textMatches), so no separate tm1_get_cube_rules is needed; the callgraph cache is dropped automatically.",
   ],
   annotations: IDEMPOTENT_DESTRUCTIVE,
@@ -29,7 +33,7 @@ export const registerSetCubeRules = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Before writing, syntax-check the full text as it will be installed (tm1.CheckRules) and abort on any error. Default true.",
+        "Before writing, check the full text as it will be installed (tm1.CheckRules and DB() element counts) and abort on any error. Default true.",
       ),
   },
   handler: async (
@@ -50,11 +54,11 @@ export const registerSetCubeRules = defineTool({
     // computes nothing for those cells until someone notices. CheckRules is
     // the only gate, so it runs here rather than being left to the caller.
     if (preflight) {
-      const errors = await tm1Client.cubes.checkRule(cubeName, text);
+      const errors = await checkRulesText(tm1Client, cubeName, text);
       if (errors.length > 0) {
         throw new TM1Error({
           code: TM1ErrorCode.VALIDATION_ERROR,
-          message: `Rules for '${cubeName}' have ${errors.length} syntax error(s): ${errors
+          message: `Rules for '${cubeName}' have ${errors.length} error(s): ${errors
             .slice(0, 5)
             .map((e) => `line ${e.lineNumber ?? "?"}: ${e.message.trim()}`)
             .join("; ")}. Nothing was written.`,

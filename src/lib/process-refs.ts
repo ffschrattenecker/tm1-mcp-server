@@ -154,7 +154,7 @@ const ARG_SCAN_MAX_CHARS = 2000;
 // every top-level argument, or null for an unterminated call. Newlines are
 // ordinary whitespace, so multi-line calls resolve too; TI strings cannot span
 // lines, so an open string is closed at end-of-line to resync.
-function callArgs(text: string, openParen: number): string[] | null {
+export function callArgs(text: string, openParen: number): string[] | null {
   let depth = 0;
   let inStr = false;
   const args: string[] = [];
@@ -196,7 +196,7 @@ function secondArgText(text: string, openParen: number): string | null {
   return callArgs(text, openParen)?.[1] ?? null;
 }
 
-function quotedLiteral(argText: string): string | null {
+export function quotedLiteral(argText: string): string | null {
   const m = /^\s*'((?:[^']|'')+)'\s*$/.exec(argText);
   return m ? m[1]!.replace(/''/g, "'") : null;
 }

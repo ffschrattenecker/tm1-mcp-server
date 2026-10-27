@@ -1,13 +1,18 @@
 import { z } from "zod";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
-import { RULES_SOURCE_SCHEMA, resolveRulesText } from "./rules-source.js";
+import {
+  RULES_SOURCE_SCHEMA,
+  checkRulesText,
+  resolveRulesText,
+} from "./rules-source.js";
 
 export const registerCheckCubeRule = defineTool({
   name: "tm1_check_cube_rule",
   description: [
     "Validate the syntax of a TM1 cube rule WITHOUT applying it.",
-    "Returns ok:true, or ok:false with the syntax errors and their line numbers; a rule with errors is a normal result, not a tool error.",
+    "Returns ok:true, or ok:false with the errors and their line numbers; a rule with errors is a normal result, not a tool error.",
+    "Besides tm1.CheckRules it compares every DB() on a literal cube name with that cube's dimension count (Sandboxes not counted): CheckRules accepts a DB() with too few or too many elements.",
     "Takes the same sources as tm1_set_cube_rules — rules, edits or filePath — and checks the full resulting text, so an edits patch is validated exactly as it would be installed. tm1_set_cube_rules runs this check itself before writing.",
   ],
   annotations: READ_ONLY,
@@ -33,7 +38,7 @@ export const registerCheckCubeRule = defineTool({
       edits,
       filePath,
     });
-    const errors = await tm1Client.cubes.checkRule(cubeName, text);
+    const errors = await checkRulesText(tm1Client, cubeName, text);
     const ok = errors.length === 0;
     const payload = {
       ok,

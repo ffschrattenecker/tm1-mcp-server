@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   earlier in the same Prolog or Metadata tab. The insert commits only when the tab ends, so the
   write fails with "Element not found" on the run that creates the element. The preflight refuses
   both; `preflight:false` skips it.
+- `tm1_check_cube_rule` and the `tm1_set_cube_rules` preflight compare every `DB()` on a literal
+  cube name with that cube's dimension count (Sandboxes not counted). tm1.CheckRules accepts a
+  `DB()` with too few or too many elements, and the rule then reads 0 without an error.
 
 ## [10.0.0] - 2026-10-17
 
