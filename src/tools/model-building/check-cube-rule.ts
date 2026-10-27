@@ -12,7 +12,7 @@ export const registerCheckCubeRule = defineTool({
   description: [
     "Validate the syntax of a TM1 cube rule WITHOUT applying it.",
     "Returns ok:true, or ok:false with the errors and their line numbers; a rule with errors is a normal result, not a tool error.",
-    "Besides tm1.CheckRules it compares every DB() on a literal cube name with that cube's dimension count (Sandboxes not counted): CheckRules accepts a DB() with too few or too many elements.",
+    "Besides tm1.CheckRules it checks every DB() on a literal cube name, which CheckRules accepts unchecked: the cube must exist, the element count must match its dimensions (Sandboxes not counted), and each literal element must resolve in its dimension (aliases count).",
     "Takes the same sources as tm1_set_cube_rules — rules, edits or filePath — and checks the full resulting text, so an edits patch is validated exactly as it would be installed. tm1_set_cube_rules runs this check itself before writing.",
   ],
   annotations: READ_ONLY,

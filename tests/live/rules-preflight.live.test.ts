@@ -2,7 +2,8 @@
 // motivates it: the Rules PATCH stores syntactically broken text without an
 // error (verified on 11.8.03500), so CheckRules is the only gate. And the gap
 // the preflight closes on top of it: CheckRules accepts a DB() with the wrong
-// element count, and the rule then reads 0 without an error.
+// element count, a missing cube or a missing literal element, and the rule
+// then reads 0 without an error.
 //
 // Every object is SANDBOX-prefixed and removed in afterAll (sweepSandbox in
 // global-setup is the safety net).
@@ -131,5 +132,61 @@ describe.skipIf(!LIVE_ENABLED)("live: set_cube_rules preflight", () => {
       rules: dbRule(`!${ROW}`, "'Amount'"),
     });
     expect(await double()).toBe(10);
+  });
+
+  it("refuses a DB() naming a missing cube or a missing element, which CheckRules accepts", async () => {
+    const gone = `SKIPCHECK;\n['Double'] = N: DB('${SANDBOX}_RP_GONE', !${ROW}, 'Amount') * 2;\nFEEDERS;\n`;
+    const missing = dbRule(`'R9'`, "'Amount'");
+    for (const [rules, pattern] of [
+      [gone, /names a cube that does not exist/],
+      [missing, new RegExp(`element 'R9', which is not in dimension '${ROW}'`)],
+    ] as const) {
+      const check = await h.ok("tm1_check_cube_rule", {
+        cubeName: CUBE,
+        rules,
+      });
+      // The one error is ours: CheckRules itself found nothing.
+      expect(check.json).toMatchObject({ ok: false, errorCount: 1 });
+      expect(check.json.errors[0]).toMatchObject({ lineNumber: 2 });
+      expect(check.json.errors[0].message).toMatch(pattern);
+    }
+
+    const refused = await h.call("tm1_set_cube_rules", {
+      cubeName: CUBE,
+      confirm: CUBE,
+      rules: missing,
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.json).toMatchObject({ code: "VALIDATION_ERROR" });
+
+    // Stored anyway, both rules read nothing, without an error.
+    const double = () => cellValue(h, CUBE, [ROW, MEAS], ["R1", "Double"]);
+    for (const rules of [gone, missing]) {
+      await h.ok("tm1_set_cube_rules", {
+        cubeName: CUBE,
+        confirm: CUBE,
+        rules,
+        preflight: false,
+      });
+      expect(await double()).toBeNull();
+    }
+
+    // An alias resolves in DB() and passes.
+    await h.ok("tm1_rest_write", {
+      method: "POST",
+      path: `Dimensions('${ROW}')/Hierarchies('${ROW}')/ElementAttributes`,
+      body: { Name: "Code", Type: "Alias" },
+    });
+    await h.ok("tm1_update_element_attribute_value", {
+      dimensionName: ROW,
+      elementName: "R1",
+      attributeName: "Code",
+      value: "First",
+    });
+    const alias = await h.ok("tm1_check_cube_rule", {
+      cubeName: CUBE,
+      rules: dbRule(`'First'`, "'Amount'"),
+    });
+    expect(alias.json).toMatchObject({ ok: true });
   });
 });

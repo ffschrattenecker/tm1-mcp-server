@@ -654,7 +654,7 @@ async function checkElementRefs(
   const todo = [...pending.values()];
   const checked = todo.slice(0, ELEMENT_LOOKUP_MAX);
   const settled = await mapSettledWithConcurrency(checked, 8, ({ dim, el }) =>
-    resolvesInTi(elements, dim, el),
+    elementResolves(elements, dim, el),
   );
   // A lookup that failed for any reason other than "not found" (auth,
   // transport, denial) must surface, not read as a missing element.
@@ -682,8 +682,9 @@ async function checkElementRefs(
 }
 
 // TI addresses an alternate hierarchy as 'Hierarchy:Element'. A colon can also
-// be part of a plain element name, so both readings are tried.
-async function resolvesInTi(
+// be part of a plain element name, so both readings are tried. The rules DB()
+// check uses this too: trying both readings can excuse a name, never flag one.
+export async function elementResolves(
   elements: NonNullable<ObjectCatalogue["elements"]>,
   dim: string,
   el: string,
