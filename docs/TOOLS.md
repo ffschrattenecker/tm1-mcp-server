@@ -121,7 +121,7 @@ datasource (562-589).
 
 ### rest (2)
 
-- `tm1_rest_read` — GET any TM1 REST path (relative to /api/v1/), plus POST Processes('P')/tm1.Compile
+- `tm1_rest_read` — GET any TM1 REST path (relative to /api/v1/), plus POST Processes('P')/tm1.Compile and the function Cubes('C')/tm1.DimensionsStorageOrder()
 - `tm1_rest_write` — POST/PATCH/PUT/DELETE a TM1 REST path (relative to /api/v1/), e.g
 
 ### scheduling (2)

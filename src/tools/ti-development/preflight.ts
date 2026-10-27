@@ -78,25 +78,52 @@ export async function runPreflight(
   }
   const refs = await checkProcessRefs(tm1Client, p);
   if (refs.unresolved > 0) {
-    const names = [
-      ...new Set(
-        refs.issues.map((i) =>
+    const missing = new Set<string>();
+    const misused = new Set<string>();
+    const hints: string[] = [];
+    for (const i of refs.issues) {
+      if (i.kind === "elementCount") {
+        misused.add(
+          `a cell call on cube '${i.name}' passes ${i.got} element(s), the cube takes ${i.expected} (${i.tab} line ${i.line})`,
+        );
+      } else if (i.kind === "uncommittedElement") {
+        misused.add(
+          `an attribute is written on element '${i.name}' of '${i.dimension}' in the same ${i.tab} tab that inserts it (line ${i.line})`,
+        );
+      } else {
+        missing.add(
           i.kind === "element"
             ? `element '${i.name}' in dimension '${i.dimension}'`
             : `${i.kind} '${i.name}'`,
-        ),
-      ),
-    ];
+        );
+      }
+    }
+    const parts: string[] = [];
+    if (missing.size) {
+      parts.push(`${[...missing].join(", ")} not found on the server`);
+      // Deliberately not "correct the name": a near match (SalesPlan for
+      // 'Sales Plan') is a different object, and swapping it in unasked is
+      // the silent substitution this check exists to stop.
+      hints.push(
+        "Report each unresolved name to the user before changing anything — a similarly named object is a different object, not a fix. Create the object first if the code needs it.",
+      );
+    }
+    if (misused.size) parts.push(...misused);
+    if (refs.issues.some((i) => i.kind === "elementCount"))
+      hints.push(
+        "Pass one element per cube dimension, leaving out Sandboxes (the run aborts with 'Wrong Number of Dimension Elements').",
+      );
+    if (refs.issues.some((i) => i.kind === "uncommittedElement"))
+      hints.push(
+        "The insert is not committed until the tab ends, so the attribute write fails with 'Element not found' on the run that creates the element: use DimensionElementInsertDirect, or write the attribute in a later tab.",
+      );
     return {
       stage: "preflight",
       check: "references",
       processName: p.name,
       code: TM1ErrorCode.VALIDATION_ERROR,
-      message: `Preflight reference check failed: ${names.join(", ")} not found on the server.`,
-      // Deliberately not "correct the name": a near match (SalesPlan for
-      // 'Sales Plan') is a different object, and swapping it in unasked is
-      // the silent substitution this check exists to stop.
-      hint: `Report each unresolved name to the user before changing anything — a similarly named object is a different object, not a fix. Create the object first if the code needs it. ${SKIP_NOTE}`,
+      message: `Preflight reference check failed: ${parts.join("; ")}.`,
+      hint: `${hints.join(" ")} ${SKIP_NOTE}`,
       issues: refs.issues,
     };
   }

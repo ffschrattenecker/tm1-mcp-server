@@ -102,6 +102,21 @@ describe("planRead", () => {
     expect(planRead(path)).toEqual({ method: "POST", path });
   });
 
+  it.each([
+    "Cubes('C')/tm1.DimensionsStorageOrder()?$select=Name",
+    "cubes('C')/TM1.DIMENSIONSSTORAGEORDER()",
+    "Cubes('C')/ibm.tm1.api.v1.DimensionsStorageOrder()",
+  ])("GET %s (the one function)", (path) => {
+    expect(planRead(path)).toEqual({ method: "GET", path });
+  });
+
+  it.each([
+    "Cubes/tm1.DimensionsStorageOrder()",
+    "Cubes('C')/Views('V')/tm1.DimensionsStorageOrder()",
+  ])("refuses the storage-order function off a single cube: %s", (path) => {
+    expect(errorOf(() => planRead(path)).code).toBe("UNSUPPORTED_OPERATION");
+  });
+
   it("refuses query options on compile", () => {
     expect(
       errorOf(() => planRead("Processes('P')/tm1.Compile?$top=1")).code,

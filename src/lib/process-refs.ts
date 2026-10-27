@@ -29,13 +29,24 @@
 //     aliases accepted), not a string compare;
 //   - TI never passes the Sandboxes dimension (verified: a cell call that
 //     included it failed), so positions map onto the cube's other dimensions;
-//   - a call whose argument count does not match is skipped, not guessed at;
+//   - a call whose element count does not match the cube is not looked up:
+//     it is an issue of its own (kind "elementCount"). TM1 compiles it, and
+//     at run time the process aborts with "Wrong Number of Dimension
+//     Elements" (verified on 11.8.03500);
 //   - elements the same code inserts are excused, and a dimension the code
 //     inserts into with a computed name excuses every literal in it;
 //   - variables (datasource fields, parameters) are not checked — that is
 //     what the element is in most data-tab calls — and do not make the report
 //     partial.
 // Existence probes (DimIx, ElementIndex) are deliberately not element checks.
+//
+// One more element trap needs no server: DimensionElementInsert and
+// HierarchyElementInsert are not committed until the Prolog or Metadata tab
+// that calls them ends, so an AttrPut*/ElementAttrPut* on that element later
+// in the same tab fails with "Element not found" (minor error, value not
+// written; verified on 11.8.03500 in both tabs). It only bites the run that
+// creates the element, which is why it survives testing. Kind
+// "uncommittedElement"; the *Direct inserts commit at once and are not flagged.
 import { buildProcessEnv, type ProcessEnv } from "./callgraph/variableEnv.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
 
@@ -44,10 +55,16 @@ type Tab = (typeof TABS)[number];
 export type ProcessCode = Partial<Record<Tab, string>>;
 
 export interface RefIssue {
-  kind: "cube" | "dimension" | "element";
+  kind:
+    "cube" | "dimension" | "element" | "elementCount" | "uncommittedElement";
+  /** The object named; for kind "elementCount" the cube. */
   name: string;
-  /** For kind "element": the dimension it was looked up in. */
+  /** For kinds "element" and "uncommittedElement": the element's dimension. */
   dimension?: string;
+  /** For kind "elementCount": elements the cube takes (Sandboxes excluded). */
+  expected?: number;
+  /** For kind "elementCount": elements the call passes. */
+  got?: number;
   tab: Tab;
   line: number;
   context: string;
@@ -137,7 +154,7 @@ const ARG_SCAN_MAX_CHARS = 2000;
 // every top-level argument, or null for an unterminated call. Newlines are
 // ordinary whitespace, so multi-line calls resolve too; TI strings cannot span
 // lines, so an open string is closed at end-of-line to resync.
-function callArgs(text: string, openParen: number): string[] | null {
+export function callArgs(text: string, openParen: number): string[] | null {
   let depth = 0;
   let inStr = false;
   const args: string[] = [];
@@ -179,7 +196,7 @@ function secondArgText(text: string, openParen: number): string | null {
   return callArgs(text, openParen)?.[1] ?? null;
 }
 
-function quotedLiteral(argText: string): string | null {
+export function quotedLiteral(argText: string): string | null {
   const m = /^\s*'((?:[^']|'')+)'\s*$/.exec(argText);
   return m ? m[1]!.replace(/''/g, "'") : null;
 }
@@ -307,7 +324,13 @@ interface Inserts {
 function forEachCall(
   code: string,
   fnRe: RegExp,
-  fn: (name: string, args: string[], line: number, context: string) => void,
+  fn: (
+    name: string,
+    args: string[],
+    line: number,
+    context: string,
+    offset: number,
+  ) => void,
 ): void {
   const lines = code.split(/\r?\n/).map((ln) => (/^\s*#/.test(ln) ? "" : ln));
   const text = lines.join("\n");
@@ -317,8 +340,79 @@ function forEachCall(
     const args = callArgs(text, m.index + m[0].length - 1);
     if (args === null) continue;
     const line = text.slice(0, m.index).split("\n").length;
-    fn(m[1]!.toLowerCase(), args, line, lines[line - 1]!.trim().slice(0, 200));
+    fn(
+      m[1]!.toLowerCase(),
+      args,
+      line,
+      lines[line - 1]!.trim().slice(0, 200),
+      m.index,
+    );
   }
+}
+
+// Inserts that commit only when the tab ends (not the *Direct variants), and
+// the attribute writes that fail on such an element in the same tab:
+// [dimension arg, element arg] for each.
+const QUEUED_INSERT_FN_RE =
+  /\b(DimensionElementInsert|HierarchyElementInsert)\s*\(/gi;
+const ATTR_PUT_FN_RE =
+  /\b(AttrPutS|AttrPutN|ElementAttrPutS|ElementAttrPutN)\s*\(/gi;
+const ATTR_PUT_ARGS: Record<string, [number, number]> = {
+  attrputs: [1, 2],
+  attrputn: [1, 2],
+  elementattrputs: [1, 3],
+  elementattrputn: [1, 3],
+};
+const QUEUED_INSERT_TABS: ReadonlySet<Tab> = new Set(["prolog", "metadata"]);
+
+// Same-tab identity of a name argument: its literal value when it has one,
+// otherwise the expression text itself (vEl in the insert and in the AttrPut
+// is the same element on that record).
+function argKey(argText: string, env: ProcessEnv): string {
+  const lit = quotedLiteral(argText) ?? identLiteral(argText, env);
+  return lit !== null
+    ? `'${tm1Key(lit)}`
+    : argText.toLowerCase().replace(/\s+/g, "");
+}
+
+function scanUncommitted(
+  code: string,
+  tab: Tab,
+  env: ProcessEnv,
+  into: RefIssue[],
+): void {
+  if (!QUEUED_INSERT_TABS.has(tab)) return;
+  // dimension key → element key → offset of the first insert
+  const inserted = new Map<string, Map<string, number>>();
+  forEachCall(code, QUEUED_INSERT_FN_RE, (fn, args, _line, _ctx, offset) => {
+    const [dimIdx, elIdx] = INSERT_ARGS[fn]!;
+    const dimArg = args[dimIdx];
+    const elArg = args[elIdx];
+    if (dimArg === undefined || elArg === undefined) return;
+    const dk = argKey(dimArg, env);
+    if (!inserted.has(dk)) inserted.set(dk, new Map());
+    const els = inserted.get(dk)!;
+    const ek = argKey(elArg, env);
+    if (!els.has(ek)) els.set(ek, offset);
+  });
+  if (inserted.size === 0) return;
+  forEachCall(code, ATTR_PUT_FN_RE, (fn, args, line, context, offset) => {
+    const [dimIdx, elIdx] = ATTR_PUT_ARGS[fn]!;
+    const dimArg = args[dimIdx];
+    const elArg = args[elIdx];
+    if (dimArg === undefined || elArg === undefined) return;
+    const at = inserted.get(argKey(dimArg, env))?.get(argKey(elArg, env));
+    if (at === undefined || at > offset) return;
+    into.push({
+      kind: "uncommittedElement",
+      name: quotedLiteral(elArg) ?? identLiteral(elArg, env) ?? elArg.trim(),
+      dimension:
+        quotedLiteral(dimArg) ?? identLiteral(dimArg, env) ?? dimArg.trim(),
+      tab,
+      line,
+      context,
+    });
+  });
 }
 
 function scanCellCalls(
@@ -378,6 +472,7 @@ function scanProcessRefs(code: ProcessCode): {
   unresolvableArgs: number;
   cellCalls: CellCall[];
   inserts: Inserts;
+  uncommitted: RefIssue[];
 } {
   // Variable env across all tabs in runtime order: a prolog assignment
   // like sCube = 'Sales'; makes CellGetN(sCube, ...) resolvable. Params
@@ -395,6 +490,7 @@ function scanProcessRefs(code: ProcessCode): {
   const ignore: Scanner = { unresolvable: 0 };
   const tabsChecked: Tab[] = [];
   const cellCalls: CellCall[] = [];
+  const uncommitted: RefIssue[] = [];
   const inserts: Inserts = {
     literal: new Map(),
     dynamicDims: new Set(),
@@ -416,6 +512,7 @@ function scanProcessRefs(code: ProcessCode): {
     scanCode(c, tab, DIM_CREATE_IDENT_RE, createdDims, ignore, resolveIdent);
     scanCellCalls(c, tab, env, cellCalls);
     scanInserts(c, env, inserts);
+    scanUncommitted(c, tab, env, uncommitted);
   }
   const lower = (m: Found) =>
     new Set([...m.keys()].map((k) => k.toLowerCase()));
@@ -428,6 +525,7 @@ function scanProcessRefs(code: ProcessCode): {
     unresolvableArgs: scanner.unresolvable,
     cellCalls,
     inserts,
+    uncommitted,
   };
 }
 
@@ -464,7 +562,7 @@ export async function checkProcessRefs(
       issues.push({ kind: "dimension", name, ...info });
   }
   const elementCheck = await checkElementRefs(catalogue, scan, cubeNames);
-  issues.push(...elementCheck.issues);
+  issues.push(...elementCheck.issues, ...scan.uncommitted);
   const unresolvableArgs = scan.unresolvableArgs + elementCheck.overflow;
   return {
     cubeRefsScanned: scan.cubeRefs.size,
@@ -487,7 +585,7 @@ async function checkElementRefs(
   // `this`, so detaching them would lose it.
   const cubesSvc = catalogue.cubes;
   const elements = catalogue.elements;
-  if (!cubesSvc.getDimensionNames || !elements || scan.inserts.dynamicAnyDim) {
+  if (!cubesSvc.getDimensionNames) {
     return { issues: [], scanned: 0, overflow: 0 };
   }
 
@@ -515,6 +613,24 @@ async function checkElementRefs(
       );
     }),
   );
+
+  const countIssues: RefIssue[] = [];
+  for (const call of scan.cellCalls) {
+    const dims = dimsOf.get(call.cube.toLowerCase());
+    if (dims && dims.length !== call.elements.length)
+      countIssues.push({
+        kind: "elementCount",
+        name: call.cube,
+        expected: dims.length,
+        got: call.elements.length,
+        tab: call.tab,
+        line: call.line,
+        context: call.context,
+      });
+  }
+  if (!elements || scan.inserts.dynamicAnyDim) {
+    return { issues: countIssues, scanned: 0, overflow: 0 };
+  }
 
   // Distinct (dimension, element) pairs, first occurrence kept for the report.
   const pending = new Map<
@@ -546,7 +662,7 @@ async function checkElementRefs(
     if (r.status === "rejected") throw r.reason;
     return r.value;
   });
-  const issues: RefIssue[] = [];
+  const issues = countIssues;
   checked.forEach(({ dim, el, call }, i) => {
     if (!found[i])
       issues.push({

@@ -348,6 +348,19 @@ function isCompile(p: ParsedPath): boolean {
   );
 }
 
+// `Cubes('C')/tm1.DimensionsStorageOrder()`: an OData function, so a GET. It
+// is the only way to read the storage order that tm1.ReorderDimensions
+// changes; `Cubes('C')/Dimensions` is the display order.
+function isStorageOrder(p: ParsedPath): boolean {
+  const [a, b] = p.segments;
+  return (
+    p.segments.length === 2 &&
+    a!.name === "cubes" &&
+    a!.key !== undefined &&
+    b!.op === "dimensionsstorageorder"
+  );
+}
+
 const FILE_SETS = new Set(["contents", "files", "blobs"]);
 
 // A segment such as `password` in `Processes('P')/DataSource/password` or
@@ -369,7 +382,8 @@ function withMasks(plan: RestPlan, p: ParsedPath, code: boolean): RestPlan {
  * Plan a tm1_rest_read call. GET for everything, except the one read-only
  * POST `Processes('P')/tm1.Compile`. Any other operation segment is refused:
  * GET cannot invoke an action, and a namespaced segment on the read tool is
- * almost always an attempt to.
+ * almost always an attempt to. The one function allowed is
+ * `Cubes('C')/tm1.DimensionsStorageOrder()`.
  */
 export function planRead(rawPath: string): RestPlan {
   const p = parsePath(rawPath);
@@ -390,6 +404,7 @@ export function planRead(rawPath: string): RestPlan {
     p,
     (s) => s.name.startsWith("process") || s.name.endsWith("procedure"),
   );
+  if (isStorageOrder(p)) return { method: "GET", path: p.send };
   const action = p.segments.find((s) => s.name.includes("."));
   if (action) {
     throw refuse(

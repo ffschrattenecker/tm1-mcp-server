@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tm1_rest_read` reads a cube's storage dimension order:
+  `Cubes('C')/tm1.DimensionsStorageOrder()`. It was refused as an action, and without it a
+  `tm1.ReorderDimensions` write could not be checked or undone. `Cubes('C')/Dimensions` gives
+  the display order, which a reorder does not change.
+- The TI reference check (`tm1_validate_process_refs` and the install preflight of
+  `tm1_upsert_process`, `tm1_import_pro_file`, `tm1_import_process_from_git`,
+  `tm1_install_pro_bundle`) reports two run-time failures that TM1's compiler passes.
+  `elementCount`: a cell call (CellGetN/S, CellPutN/S, ...) passes a different number of
+  elements than the cube has dimensions, and the run aborts with "Wrong Number of Dimension
+  Elements". Until now such calls were silently skipped. `uncommittedElement`: an
+  AttrPut*/ElementAttrPut* on an element that DimensionElementInsert/HierarchyElementInsert added
+  earlier in the same Prolog or Metadata tab. The insert commits only when the tab ends, so the
+  write fails with "Element not found" on the run that creates the element. The preflight refuses
+  both; `preflight:false` skips it.
+- `tm1_check_cube_rule` and the `tm1_set_cube_rules` preflight compare every `DB()` on a literal
+  cube name with that cube's dimension count (Sandboxes not counted). tm1.CheckRules accepts a
+  `DB()` with too few or too many elements, and the rule then reads 0 without an error.
+
 ## [10.0.0] - 2026-10-17
 
 Merged upstream 6.0.0 and 6.1.0.

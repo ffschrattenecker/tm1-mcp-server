@@ -174,14 +174,51 @@ describe("checkProcessRefs — element literals", () => {
     expect(r.issues).toEqual([]);
   });
 
-  it("skips a call whose argument count does not match the cube", async () => {
+  it("flags a call whose element count does not match the cube, without looking its elements up", async () => {
     const lookups: string[] = [];
     const r = await checkProcessRefs(
       elementCatalogue({ cubes: SALES, members: MEMBERS, lookups }),
-      { prolog: "CellPutN(1, 'Sales', 'Base', 'Asia', 'Amount');" },
+      {
+        prolog: [
+          "CellPutN(1, 'Sales', 'Base', 'Asia', 'Amount');",
+          "x = CellGetN('Sales', 'Europe');",
+        ].join("\n"),
+      },
     );
-    expect(r.issues).toEqual([]);
+    expect(r.issues).toEqual([
+      {
+        kind: "elementCount",
+        name: "Sales",
+        expected: 2,
+        got: 3,
+        tab: "prolog",
+        line: 1,
+        context: "CellPutN(1, 'Sales', 'Base', 'Asia', 'Amount');",
+      },
+      {
+        kind: "elementCount",
+        name: "Sales",
+        expected: 2,
+        got: 1,
+        tab: "prolog",
+        line: 2,
+        context: "x = CellGetN('Sales', 'Europe');",
+      },
+    ]);
     expect(lookups).toEqual([]);
+  });
+
+  it("checks the element count even when a computed dimension name stops the element lookups", async () => {
+    const r = await checkProcessRefs(
+      elementCatalogue({ cubes: SALES, members: MEMBERS }),
+      {
+        metadata: "DimensionElementInsert(pDim, '', vEl, 'N');",
+        data: "CellPutN(vValue, 'Sales', vRegion);",
+      },
+    );
+    expect(r.issues.map((i) => [i.kind, i.expected, i.got])).toEqual([
+      ["elementCount", 2, 1],
+    ]);
   });
 
   it("reads 'Hierarchy:Element' against that hierarchy", async () => {
@@ -238,5 +275,73 @@ describe("checkProcessRefs — element literals", () => {
     );
     expect(r.issues).toEqual([]);
     expect(lookups).toEqual([]);
+  });
+});
+
+// An insert that is queued until its tab ends, then an attribute write on the
+// same element in that tab: fails on the run that creates the element.
+describe("checkProcessRefs — attribute write on an uncommitted insert", () => {
+  const noServer = catalogue([], ["Region", "Product"]);
+
+  it("flags it in the Prolog with literals and in the Metadata with variables", async () => {
+    const r = await checkProcessRefs(noServer, {
+      prolog: [
+        "DimensionElementInsert('Region', '', 'Asia', 'N');",
+        "AttrPutS('Asien', 'Region', 'Asia', 'German');",
+      ].join("\n"),
+      metadata: [
+        "HierarchyElementInsert('Product', 'Product', '', vProduct, 'N');",
+        "ElementAttrPutS(vDesc, 'Product', 'Product', vProduct, 'Description');",
+      ].join("\n"),
+    });
+    expect(r.issues).toEqual([
+      {
+        kind: "uncommittedElement",
+        name: "Asia",
+        dimension: "Region",
+        tab: "prolog",
+        line: 2,
+        context: "AttrPutS('Asien', 'Region', 'Asia', 'German');",
+      },
+      {
+        kind: "uncommittedElement",
+        name: "vProduct",
+        dimension: "Product",
+        tab: "metadata",
+        line: 2,
+        context:
+          "ElementAttrPutS(vDesc, 'Product', 'Product', vProduct, 'Description');",
+      },
+    ]);
+  });
+
+  it("matches names the way TM1 does, and through literal-bound variables", async () => {
+    const r = await checkProcessRefs(noServer, {
+      prolog: [
+        "sDim = 'Region';",
+        "DimensionElementInsert(sDim, '', 'North America', 'N');",
+        "AttrPutN(1, 'region', 'NorthAmerica', 'Flag');",
+      ].join("\n"),
+    });
+    expect(r.issues.map((i) => i.kind)).toEqual(["uncommittedElement"]);
+  });
+
+  it("does not flag a Direct insert, a later tab, an earlier write or another element", async () => {
+    const r = await checkProcessRefs(noServer, {
+      prolog: [
+        "AttrPutS('x', 'Region', 'Asia', 'German');",
+        "DimensionElementInsert('Region', '', 'Asia', 'N');",
+        "DimensionElementInsertDirect('Region', '', 'Europe', 'N');",
+        "AttrPutS('Europa', 'Region', 'Europe', 'German');",
+        "AttrPutS('x', 'Region', 'Africa', 'German');",
+      ].join("\n"),
+      metadata: "DimensionElementInsert('Product', '', vProduct, 'N');",
+      data: "AttrPutS(vDesc, 'Product', vProduct, 'Description');",
+      epilog: [
+        "DimensionElementInsert('Region', '', 'Oceania', 'N');",
+        "AttrPutS('Ozeanien', 'Region', 'Oceania', 'German');",
+      ].join("\n"),
+    });
+    expect(r.issues).toEqual([]);
   });
 });

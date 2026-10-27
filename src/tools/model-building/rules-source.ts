@@ -7,6 +7,7 @@ import { promises as fs } from "node:fs";
 import { z } from "zod";
 import type { TM1Client } from "../../tm1-client.js";
 import { applyRulesPatch, type RulesEdit } from "../../lib/rules-patch.js";
+import { checkDbElementCounts } from "../../lib/rules-db-count.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { resolveLocalPath } from "../local-file.js";
 
@@ -62,4 +63,25 @@ export async function resolveRulesText(
     };
   }
   return { text: rules!, mode: "full" };
+}
+
+/**
+ * Everything checked before rule text is installed: tm1.CheckRules, plus the
+ * DB() element counts CheckRules does not compare with the target cube.
+ * Empty = clean. Shared so tm1_check_cube_rule reports exactly what
+ * tm1_set_cube_rules would refuse.
+ */
+export async function checkRulesText(
+  tm1Client: TM1Client,
+  cubeName: string,
+  text: string,
+): Promise<Array<{ lineNumber?: number; message: string }>> {
+  const [syntax, counts] = await Promise.all([
+    tm1Client.cubes.checkRule(cubeName, text),
+    checkDbElementCounts(tm1Client.cubes, text),
+  ]);
+  return [
+    ...syntax,
+    ...counts.map((c) => ({ lineNumber: c.lineNumber, message: c.message })),
+  ];
 }
