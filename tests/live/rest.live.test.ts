@@ -258,7 +258,10 @@ describe.skipIf(!LIVE_ENABLED)("live: REST tools", () => {
       const r = await reorder([DIM2, DIM]);
       expect(typeof r.json.data.value).toBe("number");
       expect(await storage()).toEqual([DIM2, DIM]);
-      expect(await names(h, `${cube}/Dimensions`)).toEqual([DIM, DIM2]);
+      // Display order leads with Sandboxes when sandboxing is on; storage
+      // order never lists it.
+      const display = await names(h, `${cube}/Dimensions`);
+      expect(display.filter((d) => d !== "Sandboxes")).toEqual([DIM, DIM2]);
       await reorder([DIM, DIM2]);
       expect(await storage()).toEqual([DIM, DIM2]);
     });
