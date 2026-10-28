@@ -8,7 +8,11 @@ import { resolveLocalPath } from "../local-file.js";
 import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { InstallProBundleResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
-import { runPreflight, type PreflightFailure } from "./preflight.js";
+import {
+  applyDeployParts,
+  runPreflight,
+  type PreflightFailure,
+} from "./preflight.js";
 import { backupProcess, type ProcessBackup } from "./process-backup.js";
 
 interface FileResult {
@@ -270,43 +274,10 @@ export const registerInstallProBundle = defineTool({
           data: parsed.data,
           epilog: parsed.epilog,
         });
-        // On an update the file replaces the whole definition (see
-        // import-pro-file.ts): empty lists and a None datasource are applied.
-        if (exists || parsed.parameters.length > 0) {
-          await tm1Client.processes.updateParameters(
-            processName,
-            parsed.parameters,
-          );
-        }
-        if (
-          exists ||
-          parsed.variables.length > 0 ||
-          parsed.variablesUIData !== undefined
-        ) {
-          await tm1Client.processes.updateVariables(
-            processName,
-            parsed.variables,
-            parsed.variablesUIData,
-          );
-        }
-        if (exists || parsed.dataSource.type !== "None") {
-          await tm1Client.processes.updateDataSource(
-            processName,
-            parsed.dataSource,
-          );
-        }
-        // A POST does not create UIData and a PATCH without it leaves it
-        // alone, so a new process would lose the Architect action settings
-        // (line 576) and the security access flag (line 1217).
-        if (
-          parsed.uiData !== undefined ||
-          parsed.hasSecurityAccess !== undefined
-        ) {
-          await tm1Client.processes.updateDeployMeta(processName, {
-            uiData: parsed.uiData,
-            hasSecurityAccess: parsed.hasSecurityAccess,
-          });
-        }
+        await applyDeployParts(tm1Client.processes, processName, parsed, {
+          exists,
+          skipEmptyIfNew: true,
+        });
         installedNames.add(processName);
         results.push({
           file,

@@ -11,7 +11,11 @@ import {
   OVERWRITE_CONFIRM_SCHEMA,
   requireOverwriteConfirm,
 } from "../confirm.js";
-import { preflightResult, runPreflight } from "./preflight.js";
+import {
+  applyDeployParts,
+  preflightResult,
+  runPreflight,
+} from "./preflight.js";
 import { backupProcess } from "./process-backup.js";
 
 export const registerImportProFile = defineTool({
@@ -148,39 +152,15 @@ export const registerImportProFile = defineTool({
       `Code update failed after process '${processName}' was ${exists ? "located" : "created"}. PARTIAL APPLY: the process shell exists but tabs are stale/empty. Re-run tm1_import_pro_file with mode=update once root cause fixed, or tm1_rest_write DELETE Processes('${processName}') to roll back.`,
     );
 
-    // The file is the whole truth: an empty list or a None source is sent as
-    // well, because TM1 applies both (measured on 11.8 and 12.5) and skipping
-    // them left the removed parameters, variables and source on the server.
-    await withToolHint(
-      tm1Client.processes.updateParameters(processName, parsed.parameters),
-      `Parameter update failed for '${processName}'. Code applied but parameters missing. Inspect parsed parameters and re-run tm1_upsert_process with mode=update + parameters=[...] to recover.`,
-    );
-    // A file without a column-layout block leaves the server's layout as it
-    // is; one that carries it replaces it.
-    await withToolHint(
-      tm1Client.processes.updateVariables(
-        processName,
-        parsed.variables,
-        parsed.variablesUIData,
-      ),
-      `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
-    );
-    await withToolHint(
-      tm1Client.processes.updateDataSource(processName, parsed.dataSource),
-      `Datasource update failed for '${processName}' (type=${parsed.dataSource.type}). Code+params+vars applied. Verify datasource credentials/path (ASCII file existence, ODBC DSN, view name) and re-run tm1_upsert_process with mode=update + dataSource={...} to recover.`,
-    );
-    // A POST does not create UIData and a PATCH without it leaves it alone,
-    // so a new process would lose the Architect action settings (line 576)
-    // and the security access flag (line 1217).
-    if (parsed.uiData !== undefined || parsed.hasSecurityAccess !== undefined) {
-      await withToolHint(
-        tm1Client.processes.updateDeployMeta(processName, {
-          uiData: parsed.uiData,
-          hasSecurityAccess: parsed.hasSecurityAccess,
-        }),
-        `HasSecurityAccess/UIData update failed for '${processName}'. Code+params+vars+datasource applied. Re-run with mode=update once root cause fixed.`,
-      );
-    }
+    await applyDeployParts(tm1Client.processes, processName, parsed, {
+      exists,
+      hints: {
+        parameters: `Parameter update failed for '${processName}'. Code applied but parameters missing. Inspect parsed parameters and re-run tm1_upsert_process with mode=update + parameters=[...] to recover.`,
+        variables: `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
+        dataSource: `Datasource update failed for '${processName}' (type=${parsed.dataSource.type}). Code+params+vars applied. Verify datasource credentials/path (ASCII file existence, ODBC DSN, view name) and re-run tm1_upsert_process with mode=update + dataSource={...} to recover.`,
+        deployMeta: `HasSecurityAccess/UIData update failed for '${processName}'. Code+params+vars+datasource applied. Re-run with mode=update once root cause fixed.`,
+      },
+    });
 
     return {
       content: [

@@ -17,6 +17,7 @@ import type {
 } from "../../types.js";
 import { TM1ErrorCode } from "../../types.js";
 import { checkProcessRefs, type RefIssue } from "../../lib/process-refs.js";
+import { withToolHint } from "../error-format.js";
 
 export interface PreflightPayload {
   name: string;
@@ -188,4 +189,79 @@ export async function runChecks(
     syntax: { ok: check.success, errors: check.errors },
     references,
   };
+}
+
+/** Error hint per deploy step. A step without a hint passes its error through. */
+export interface DeployHints {
+  parameters: string;
+  variables: string;
+  dataSource: string;
+  deployMeta: string;
+}
+
+export interface DeployParts {
+  parameters: ProcessParameter[];
+  variables: ProcessVariable[];
+  variablesUIData?: string[];
+  dataSource: DataSource;
+  uiData?: string;
+  hasSecurityAccess?: boolean;
+}
+
+function withHint(p: Promise<void>, hint: string | undefined): Promise<void> {
+  return hint === undefined ? p : withToolHint(p, hint);
+}
+
+/**
+ * Deploy steps after the code is written: parameters, variables, datasource,
+ * then deploy meta. The file is the whole truth, so an empty list or a None
+ * source is sent too; TM1 applies both (measured on 11.8 and 12.5). With
+ * `skipEmptyIfNew`, a process this call creates skips the empty steps.
+ * Variables without a column layout keep the server's layout; with one they
+ * replace it. A POST does not create UIData and a PATCH without it leaves it
+ * alone, so deploy meta is sent only when one of its fields is set.
+ */
+export async function applyDeployParts(
+  processes: TM1Client["processes"],
+  processName: string,
+  parts: DeployParts,
+  opts: { exists: boolean; skipEmptyIfNew?: boolean; hints?: DeployHints },
+): Promise<void> {
+  const all = opts.exists || !opts.skipEmptyIfNew;
+  const hints = opts.hints;
+  if (all || parts.parameters.length > 0) {
+    await withHint(
+      processes.updateParameters(processName, parts.parameters),
+      hints?.parameters,
+    );
+  }
+  if (
+    all ||
+    parts.variables.length > 0 ||
+    parts.variablesUIData !== undefined
+  ) {
+    await withHint(
+      processes.updateVariables(
+        processName,
+        parts.variables,
+        parts.variablesUIData,
+      ),
+      hints?.variables,
+    );
+  }
+  if (all || parts.dataSource.type !== "None") {
+    await withHint(
+      processes.updateDataSource(processName, parts.dataSource),
+      hints?.dataSource,
+    );
+  }
+  if (parts.uiData !== undefined || parts.hasSecurityAccess !== undefined) {
+    await withHint(
+      processes.updateDeployMeta(processName, {
+        uiData: parts.uiData,
+        hasSecurityAccess: parts.hasSecurityAccess,
+      }),
+      hints?.deployMeta,
+    );
+  }
 }
