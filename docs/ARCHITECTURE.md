@@ -64,10 +64,7 @@ type is `z.infer` of that object. `src/types.ts` re-exports the derived types;
 where the published payload is a relaxed version of the canonical one
 (`CubeItemSchema = CubeSchema.partial({ dimensions: true })`).
 
-This replaced a hand-kept interface and a hand-kept Zod object per shape, with
-nothing linking them: `lockType` and `oDBCConnection` both sat in the read shape
-for months without ever being on the wire, and removing each meant finding two
-unrelated files. `src/schemas/` must not import from `src/tools/`,
+`src/schemas/` must not import from `src/tools/`,
 `src/tm1-client/` or `src/types.ts` — `tests/unit/schema-single-source.test.ts`
 enforces that, and fails when a new interface starts duplicating a tool schema.
 
@@ -155,11 +152,10 @@ reached **only before the first successful batch on the connection** — after
 that nothing may be called "unsupported", because the caller's fallback would
 replay sub-requests that are already committed.
 
-Note what that bounds. Because `$batch` is non-atomic, a failed envelope can
-leave sub-requests committed even on the very first call, so the rule does not
-mean "nothing was written" — it means the replay is confined to the caller's
-FIRST pass. Callers must therefore keep that first pass replay-safe;
-`ElementService.bulkUpsert` does, because its first pass is create-only.
+Because `$batch` is non-atomic, a failed envelope can leave sub-requests
+committed even on the very first call. Callers must therefore keep that first
+pass replay-safe; `ElementService.bulkUpsert` does, because its first pass is
+create-only.
 
 ### Authoring a new service
 
@@ -239,25 +235,6 @@ in a tool would bypass the service layer and reimplement paging, OData-quote
 escaping, and version branches that belong in a service.
 If a tool needs a call no service exposes yet, add the method to the relevant
 service (e.g. `ElementService.scanElementNames`) and call that.
-
-## Why service-composition instead of mixins or inheritance
-
-| Pattern                 | Pro                              | Con                                      |
-| ----------------------- | -------------------------------- | ---------------------------------------- |
-| Inheritance chain       | Zero call-site diff              | 7-deep extends becomes opaque            |
-| TS function-mixins      | Zero call-site diff              | Method-name collision risk, hard to mock |
-| **Service-composition** | TM1py-parity, sharp domain edges | One-time call-site migration cost        |
-
-The service-composition path was chosen because:
-
-1. The MCP server is targeted as a long-lived standard (multi-team,
-   multi-year). Long-term DX wins beat short-term migration cost.
-2. TM1py's API (`tm1.cubes.get()`, `tm1.processes.execute()`) is well
-   known to TM1 developers — same mental model = lower onboarding cost.
-3. Services are independently mockable (`vi.spyOn(client.cubes, …)`),
-   isolating tests from unrelated domains.
-4. Adding a new domain is a new file plus a constructor line; no
-   existing file needs to be touched.
 
 ## Tests
 

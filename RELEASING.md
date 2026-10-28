@@ -59,10 +59,7 @@ tag publishes.
    (Actions → Publish to npm → Run workflow, **ref = the tag**) — never move or
    re-push the tag. A manual `npm publish` from a machine is the last resort:
    it has no provenance and needs an interactive 2FA login.
-9. **GitHub release (optional):** the tag push already published to npm, and
-   nothing depends on a GitHub release. If you want release notes on GitHub,
-   create a release for the `vX.Y.Z` tag with the changelog section as the body
-   (title style: `vX.Y.Z — <short theme>`).
+9. **Optional:** a GitHub release for the `vX.Y.Z` tag, with the changelog section as the body.
 
 ## Guardrails already wired
 
@@ -78,10 +75,3 @@ tag publishes.
   the licence notice and the shrinkwrap ship; source, tests, docs, and secrets
   never do. `smoke:tarball` asserts this held by listing the
   real tarball, since a broken `files` entry is how credentials reach npm.
-
-## When a release branch IS worth it
-
-Not for this repo's normal single-track, solo flow. Use a dedicated
-`release/X.Y.Z` branch only when main must keep moving while a release is
-stabilized in parallel (multiple contributors, or a long QA/staging cycle).
-Otherwise a long-lived release branch just drifts from `main` for no gain.

@@ -87,7 +87,7 @@ in is decided at startup:
 | Environment                 | Connections                                   |
 | --------------------------- | --------------------------------------------- |
 | `TM1_CONNECTIONS_DIR` set   | one per `<name>/.env` folder in that dir      |
-| `TM1_BASE_URL` set (no dir) | a single connection, as before v7             |
+| `TM1_BASE_URL` set (no dir) | a single connection                           |
 | neither                     | one per `<name>/.env` in `~/.tm1/mcp-servers` |
 
 `TM1_CONNECTIONS=dev,test` narrows discovery to the named folders.
@@ -108,15 +108,16 @@ connection without a word. An explicit dir wins over `TM1_BASE_URL`:
 }
 ```
 
-Tool names no longer carry the connection (`mcp__tm1__tm1_clear_cube` for all of
+Tool names do not carry the connection (`mcp__tm1__tm1_clear_cube` for all of
 them), so a client permission granted for one connection applies to every
 connection. Keep production folders `TM1_MODE=readonly` unless writes there are
 intended: the per-call refusal is then the barrier, not the approval prompt.
 
 With more than one connection every tool gains a required `connection`
-argument (an enum of the folder names); with one, the tool schemas are exactly
-as before. `tm1_list_connections` reports each connection's mode, TM1 version,
-whether a session is open, and any configuration error. It makes no TM1 call.
+argument (an enum of the folder names); with one, the tool schemas have no
+`connection` argument. `tm1_list_connections` reports each connection's mode,
+TM1 version, whether a session is open, and any configuration error. It makes
+no TM1 call.
 
 **Per-connection settings come from the folder only.** Connection keys
 (`TM1_BASE_URL`, `TM1_USER`, `TM1_MODE`, `TM1_VERSION`, the v12 and CAM keys, …)
@@ -192,9 +193,6 @@ in markdown mode the table replaces it.
 This is not redundancy for its own sake. Clients disagree about which field to
 read (Kiro renders `content[]`, Claude Code reads `structuredContent` and drops
 `content`), so a table placed in only one of them is invisible on the other.
-Before 3.1.0 the table went out in `content[]` while `structuredContent` carried
-the JSON, which made `format: "markdown"` a silent no-op on Claude Code — it
-showed the JSON the caller had asked not to get.
 
 Consequence for schema consumers: the published `outputSchema` of these tools
 has optional top-level fields, because it must accept both shapes and MCP output
@@ -242,9 +240,8 @@ The `.ti` file holds the four tabs in TM1's **native `#region <Tab>` /
 regions inside a tab are preserved. A malformed or unbalanced blob is rejected on
 import with a clear error rather than deployed partially.
 
-**Breaking (since the previous `### TM1-TI-TAB:` format):** `.ti` files exported
-by earlier versions are no longer importable — re-export from the server to
-regenerate them.
+`.ti` files in the old `### TM1-TI-TAB:` layout are rejected on import;
+re-export them from the server.
 
 ## Process backups — `TM1_PROCESS_BACKUP_DIR`
 
