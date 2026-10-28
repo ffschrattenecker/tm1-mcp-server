@@ -86,10 +86,6 @@ function makeAuditNamingClientStub(args: AuditNamingClientStubArgs) {
     // against a response shape no server produces. Same predicate the builder
     // emits; its agreement with checkName is pinned in
     // naming-odata-filter.test.ts, and with TM1 in the live suite.
-    // A server applies the filter it was given. Deriving the version from
-    // productVersion instead would ignore versionOverride, which exists
-    // precisely to send v12 rules to a v11 server — the TAB clause is the
-    // observable difference.
     const sentFilter = qs.get("$filter");
     const matching = sentFilter
       ? names.filter((n) => matchesElementViolationFilter(n))
@@ -129,7 +125,6 @@ interface FindingGroup {
 function parseResult(raw: unknown): {
   status: string;
   detectedMajor: number;
-  appliedMajor: number;
   invalidCount: number;
   truncated: boolean;
   findings?: Array<{
@@ -173,7 +168,6 @@ describe("tm1_audit_naming tool", () => {
     const out = parseResult(await fake.getHandler()({}));
     expect(out.status).toBe("pass");
     expect(out.invalidCount).toBe(0);
-    expect(out.appliedMajor).toBe(11);
   });
 
   it("flags reserved char in cube name and control prefix", async () => {
@@ -219,7 +213,6 @@ describe("tm1_audit_naming tool", () => {
     });
     registerAuditNaming(fake.server, tm1);
     const out = parseResult(await fake.getHandler()({ scope: ["elements"] }));
-    expect(out.appliedMajor).toBe(12);
     expect(out.invalidCount).toBe(1);
     expect(out.findings?.[0]?.violations[0]?.rule).toBe("element_contains_tab");
   });
@@ -235,28 +228,8 @@ describe("tm1_audit_naming tool", () => {
     });
     registerAuditNaming(fake.server, tm1);
     const out = parseResult(await fake.getHandler()({ scope: ["elements"] }));
-    expect(out.appliedMajor).toBe(11);
     expect(out.invalidCount).toBe(1);
     expect(out.findings?.[0]?.violations[0]?.rule).toBe("element_contains_tab");
-  });
-
-  // No naming rule differs by version today, so this pins the plumbing —
-  // detected vs applied major are reported independently — rather than a
-  // version-specific verdict.
-  it("versionOverride='12' is reported as the applied major on a v11 server", async () => {
-    const fake = makeFakeServer();
-    const tm1 = makeAuditNamingClientStub({
-      productVersion: "11.8.01100",
-      dimensions: [{ name: "Region", hierarchies: ["Region"] }],
-      elementsByHier: { "Region/Region": ["a\tb"] },
-    });
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(
-      await fake.getHandler()({ scope: ["elements"], versionOverride: "12" }),
-    );
-    expect(out.detectedMajor).toBe(11);
-    expect(out.appliedMajor).toBe(12);
-    expect(out.invalidCount).toBe(1);
   });
 
   it("paginates element scan across multiple pages", async () => {

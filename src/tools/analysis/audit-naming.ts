@@ -85,14 +85,6 @@ export const registerAuditNaming = defineTool({
       .describe(
         "Cap on returned findings (default 500). Summary counters reflect the full scan.",
       ),
-    versionOverride: z
-      .enum(["11", "12"])
-      .optional()
-      .describe(
-        "Override the auto-detected TM1 major version in the report (detectedMajor stays as " +
-          "found, appliedMajor follows this). No naming rule currently differs by version, so " +
-          "this does not change which names are flagged.",
-      ),
     elementsPageSize: z
       .number()
       .int()
@@ -130,7 +122,6 @@ export const registerAuditNaming = defineTool({
       scope,
       includeControl,
       maxFindings,
-      versionOverride,
       elementsPageSize,
       maxElementsPerDim,
       summary,
@@ -145,9 +136,6 @@ export const registerAuditNaming = defineTool({
     const detectedMajor: TM1MajorVersion = parseMajorVersion(
       serverInfo.productVersion,
     );
-    const major: TM1MajorVersion = versionOverride
-      ? (Number(versionOverride) as TM1MajorVersion)
-      : detectedMajor;
 
     const findings: Finding[] = [];
     const scanned: Record<string, number> = {
@@ -376,7 +364,6 @@ export const registerAuditNaming = defineTool({
       status,
       productVersion: serverInfo.productVersion,
       detectedMajor,
-      appliedMajor: major,
       scope: activeScope,
       includeControl,
       scanned,
