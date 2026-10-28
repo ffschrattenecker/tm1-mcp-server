@@ -6,7 +6,7 @@ import { FedCellDescriptorSchema } from "../../schemas/cells.js";
 
 import { CellValueSchema } from "./items-common.js";
 
-// ── Phase 2e: analysis tools ─────────────────────────────────────────────────
+// ── Analysis tools ───────────────────────────────────────────────────────────
 
 // analyze_callgraph emits one of:
 //   - warning shape {warning, indexedProcessCount}

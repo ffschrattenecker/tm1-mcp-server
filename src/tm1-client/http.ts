@@ -29,7 +29,7 @@ const ASYNC_DEFAULT_BUDGET_MS = 3_600_000;
 const ASYNC_MAX_POLL_FAILURES = 3;
 const ASYNC_CANCEL_TIMEOUT_MS = 5000;
 
-// R2-22: any successful mutating HTTP call invalidates the callgraph
+// Any successful mutating HTTP call invalidates the callgraph
 // reference-index cache. Cheap (Map.clear()) and rebuild is lazy on next
 // read — over-invalidation on non-graph-affecting calls (write_cells,
 // upload_file, CheckRules) costs at most one rebuild. The alternative —
@@ -40,7 +40,7 @@ function isSafeHttpMethod(method: string): boolean {
 }
 
 // Per-call overrides for the global config defaults. timeoutMs caps long-running
-// execute_mdx/process/chore; signal forwards an MCP-side AbortSignal (R2-03) so
+// execute_mdx/process/chore; signal forwards an MCP-side AbortSignal so
 // `notifications/cancelled` from a client terminates the in-flight fetch.
 export interface RequestOptions {
   timeoutMs?: number;
@@ -725,7 +725,7 @@ export function classifyHttpError(
   endpoint: string,
   rawDetails?: string,
 ): TM1Error {
-  // S4/S5: sanitize ONCE, here, where the server's own text enters our error
+  // Sanitize ONCE, here, where the server's own text enters our error
   // model. Everything downstream reads the TM1Error this builds — the
   // logger.error() in handleResponse and the MCP error envelope alike — so
   // masking here covers both exits with no chance of one being forgotten.

@@ -352,7 +352,7 @@ export interface ElementCreate {
   components?: Array<{ name: string; weight: number }> | undefined;
 }
 
-// ── New domain models (Phase 1) ───────────────────────────────────────────────
+// ── Domain models ─────────────────────────────────────────────────────────────
 
 export interface RuleSyntaxError {
   message: string;

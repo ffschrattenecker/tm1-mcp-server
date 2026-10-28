@@ -1,7 +1,7 @@
 // In-process event bus for cross-cutting TM1 events.
 //
 // Currently emits only `mutation` after any successful non-safe HTTP request
-// (POST/PUT/PATCH/DELETE), used by R2-05 resource-subscription notifications
+// (POST/PUT/PATCH/DELETE), used by resource-subscription notifications
 // and as a future hook for cache layers.
 //
 // Decoupled from the HTTP layer so the MCP-side subscription registry can

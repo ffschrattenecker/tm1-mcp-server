@@ -7,7 +7,7 @@ import type {
 const HEARTBEAT_MS = 5000;
 
 /**
- * R2-02: TM1 REST exposes no mid-run progress for a TI run, so long-running
+ * TM1 REST exposes no mid-run progress for a TI run, so long-running
  * tools emit a progress notification every 5s instead. Keeps client UI alive
  * and lets users tell "still working" from "hung" — and a client that resets
  * its own timeout on progress keeps waiting instead of cancelling, which for

@@ -51,7 +51,7 @@ export class ViewService {
           private: isPrivate,
         }));
       } catch (e) {
-        // T-9: an empty list here is indistinguishable from "this cube has no
+        // An empty list here is indistinguishable from "this cube has no
         // views", so a denial must NOT be swallowed — "you may not see them" is
         // a different answer and the caller has to be told. Same reasoning the
         // transaction-log window already uses. What stays swallowed is the case

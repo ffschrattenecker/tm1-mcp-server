@@ -1,4 +1,4 @@
-// R2-07: cursor-based pagination for resources/list.
+// Cursor-based pagination for resources/list.
 //
 // The high-level McpServer.registerResource registers a default
 // ListResourcesRequestSchema handler that ignores `params.cursor` and strips

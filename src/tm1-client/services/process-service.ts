@@ -142,7 +142,7 @@ export class ProcessService {
    * `null` while unprobed — the same tri-state verdict `BatchService.supported`
    * keeps, for the same reason. Probing costs up to four full `/Processes`
    * scans, so it must be paid once per connection and not once per callgraph
-   * build (P7).
+   * build.
    */
   private callgraphShape: number | null = null;
 
@@ -538,8 +538,8 @@ export class ProcessService {
    * The discovery loop used to catch EVERY error and move on to the next,
    * broader query. That turned an expired session, a request timeout or a
    * security denial into three more full-collection scans (~4 × 30 s worst
-   * case, P7) and — worse — let a later shape that happened to answer mask the
-   * real first error (K6/T-9). Two guards now bound it:
+   * case) and — worse — let a later shape that happened to answer mask the
+   * real first error. Two guards bound it:
    *
    *   - `rethrowIfSystemicOrDenied` — transport/auth/timeout failures and
    *     permission denials leave immediately. A denial in particular must never

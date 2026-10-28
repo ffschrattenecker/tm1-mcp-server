@@ -71,7 +71,7 @@ export const CubeStatsResultSchema = z
   })
   .passthrough();
 
-// ── Phase 2i: hierarchy navigation, server snapshots, diagnostics ────────────
+// ── Hierarchy navigation, server snapshots, diagnostics ──────────────────────
 
 const DefaultMemberResolutionSchema = z.object({
   dimension: z.string(),

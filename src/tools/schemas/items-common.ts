@@ -31,7 +31,7 @@ export const CHORE_OUTCOME = z.enum([
   "indeterminate",
 ]);
 
-// ── Phase 2h: uniform mutation envelope ──────────────────────────────────────
+// ── Uniform mutation envelope ────────────────────────────────────────────────
 // Every create/update/delete/execute tool returns {success: true, ...identifying fields}
 // on success. Passthrough so per-tool extras (cellsWritten, parameterCount,
 // updatedTabs etc.) flow through without bespoke schemas.

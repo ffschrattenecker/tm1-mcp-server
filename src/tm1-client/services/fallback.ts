@@ -62,7 +62,7 @@ export function rethrowIfSystemicOrDenied(e: unknown): void {
  * Everything else is deliberately excluded. A 404 says the collection is not
  * there — no rewording of the query brings it back. A 500 is a server fault or
  * a transient, and retrying it three more times with broader queries just
- * multiplies the outage (see P7: four sequential full scans at ~30 s each).
+ * multiplies the outage (four sequential full scans at ~30 s each).
  */
 export function isUnsupportedQueryShape(e: unknown): boolean {
   if (!(e instanceof TM1Error)) return false;

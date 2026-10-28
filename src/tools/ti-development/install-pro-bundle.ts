@@ -91,7 +91,7 @@ export const registerInstallProBundle = defineTool({
     tm1Client,
     extra,
   ) => {
-    // R2-02: emit MCP progress notifications per-file so clients can show
+    // Emit MCP progress notifications per-file so clients can show
     // a moving progress bar during multi-file deploys. Only fires when the
     // client opted in by passing _meta.progressToken in the tool call;
     // sendNotification is fire-and-forget so a non-progress-aware client

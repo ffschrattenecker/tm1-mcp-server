@@ -23,13 +23,11 @@
 //     chore the marker cell written just before the abort is still there
 //     afterwards, and the chore calls it `CompletedWithMessages`. Mapping
 //     chore statuses through the process table would therefore report
-//     `rolled_back` for a run that committed — the exact fail-open T-4 closed
-//     for processes, reintroduced from the other side.
+//     `rolled_back` for a run that committed.
 //
 //  2. Chores do NOT stop at a failing step. With the failing process as step 1
 //     and a clean writer as step 2, step 2 ran and committed in every case, in
-//     both execution modes. (`tm1_execute_chore` used to tell callers the
-//     opposite.)
+//     both execution modes.
 //
 // `ProcessRollbackCalled` is the only status that reports discarded writes, and
 // how much it discards is the one place `ExecutionMode` shows through:

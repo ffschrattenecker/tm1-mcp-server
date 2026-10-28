@@ -103,11 +103,11 @@ function buildMcpServer(
   // Register MCP Resources (URI-addressable read-only views over TM1 objects).
   const resourceCatalog = registerAllResources(server, registry);
 
-  // R2-07: replace the SDK's default ListResourcesRequestSchema handler with a
+  // Replace the SDK's default ListResourcesRequestSchema handler with a
   // cursor-aware override that paginates the combined static + template list.
   installPaginatedListHandler(server, resourceCatalog, logger);
 
-  // R2-05: install subscribe/unsubscribe handlers and bridge HTTP-layer mutation
+  // Install subscribe/unsubscribe handlers and bridge HTTP-layer mutation
   // events to notifications/resources/updated for subscribers of tm1://server/state.
   const subscriptions = new SubscriptionRegistry(
     server,

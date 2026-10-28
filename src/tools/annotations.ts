@@ -2,7 +2,7 @@
 // guarantees. See https://modelcontextprotocol.io/specification on annotations.
 import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 
-// R2-21: TM1-specific annotation extension carrying machine-readable v11/v12
+// TM1-specific annotation extension carrying machine-readable v11/v12
 // compatibility metadata. MCP's ToolAnnotationsSchema is a non-strict z.object,
 // so unknown keys pass through JSON serialization to clients (Zod strips them
 // only on .parse, and the SDK serializes on send without re-parsing).

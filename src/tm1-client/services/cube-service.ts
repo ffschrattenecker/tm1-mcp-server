@@ -366,7 +366,7 @@ export class CubeService {
       //                a one-line CubeClearData prolog; not observed live.
       //   rolled back — nothing was cleared; the cube is untouched.
       //   indeterminate — no status code, or one this build cannot place
-      //                (T-4). Unverified, and for a destructive operation that
+      //                Unverified, and for a destructive operation that
       //                has to surface. A live v11/v12 server always sends the
       //                field (see tests/live/process.live.test.ts), so this is
       //                the defensive branch, not the normal path.

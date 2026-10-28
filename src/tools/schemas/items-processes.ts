@@ -88,7 +88,7 @@ export const ProcessResultSchema = z.object({
   errorLogFile: z.string().optional(),
 });
 
-// ── Phase 2d: diff/bundle/upsert ─────────────────────────────────────────────
+// ── Diff/bundle/upsert ───────────────────────────────────────────────────────
 
 export const DiffProcessResultSchema = z
   .object({

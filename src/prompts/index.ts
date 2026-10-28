@@ -23,7 +23,7 @@ function userMessage(text: string): GetPromptResult {
 
 export function registerAllPrompts(server: McpServer): void {
   // ── tm1_orientation ─────────────────────────────────────────────────
-  // R2-19: LLM onboarding. Surfaces server topology, naming conventions,
+  // LLM onboarding. Surfaces server topology, naming conventions,
   // pagination/envelope shape, and a workflow→tool map so the agent
   // doesn't have to re-derive these from individual tool descriptions.
   server.registerPrompt(

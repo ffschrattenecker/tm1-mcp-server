@@ -7,7 +7,7 @@ export function neutralizeLine(line: string): string {
     .replace(/#.*$/, "");
 }
 
-// ─── Phase 1: Bracket extraction & syntax validation ────────────────────────
+// ─── Bracket extraction & syntax validation ─────────────────────────────────
 
 /**
  * Extracts all [...] block contents from a line (from original, not neutralized).
@@ -124,7 +124,7 @@ export function parseBracketDimRefs(content: string): BracketDimRef[] {
   return result;
 }
 
-// ─── Phase 2: DB() extraction ────────────────────────────────────────────────
+// ─── DB() extraction ─────────────────────────────────────────────────────────
 
 interface DbCall {
   args: string[];

@@ -37,7 +37,7 @@ const ROLLED_BACK_STATUSES: ReadonlySet<string> = new Set([
  *
  * Two fail-open readings this closes, and they are mirror images:
  *
- *  1. An ABSENT status code is not success (T-4). The old
+ *  1. An ABSENT status code is not success. The old
  *     `?? "CompletedSuccessfully"` meant a 200 with an empty body, or a body
  *     without the field, reached the caller as a clean run.
  *  2. A present-but-not-`CompletedSuccessfully` code is not a flat failure.

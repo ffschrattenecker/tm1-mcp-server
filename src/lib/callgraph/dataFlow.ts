@@ -292,7 +292,7 @@ export function traceDataFlow(
       opts.elementAccess ?? ["source", "write", "zero-out"],
     );
 
-    // in-code (Phase 1/1.5): funcNames + subsets per process
+    // funcNames + subsets per process
     const perProc = new Map<
       string,
       { funcNames: Set<string>; subsets: Set<string> }

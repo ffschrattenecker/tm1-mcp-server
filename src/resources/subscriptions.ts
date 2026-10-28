@@ -1,4 +1,4 @@
-// R2-05: MCP resource subscription registry.
+// MCP resource subscription registry.
 //
 // Tracks which `tm1://...` URIs the client has subscribed to and, when an
 // upstream mutation event fires, pushes `notifications/resources/updated`
