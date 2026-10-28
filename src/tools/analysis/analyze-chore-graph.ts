@@ -134,7 +134,7 @@ export const registerAnalyzeChoreGraph = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Redact param values whose name matches /pass|pwd|secret|token|key|credential|auth/i to '***'. Includes chore-task params, edge params, env, and snippet. Default: true.",
+        "Redact param values whose name matches /pass|pwd|secret|token|key|credential|auth/i to '***', including chore-task params, edge params, env and snippet.",
       ),
   },
   handler: async (

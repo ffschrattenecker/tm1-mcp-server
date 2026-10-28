@@ -3,7 +3,11 @@ import path from "node:path";
 import { z } from "zod";
 import { resolveLocalPath } from "../local-file.js";
 import { serializeToPro } from "../../lib/pro-serializer.js";
-import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
+import {
+  MASK_SECRETS_DESCRIPTION,
+  maskCode,
+  resolveMaskSecrets,
+} from "../../lib/mask-secrets.js";
 import { supportsCredentialExport } from "../../lib/credential-format.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { ExportProcessToProResultSchema } from "../schemas/items.js";
@@ -34,9 +38,7 @@ export const registerExportProcessToPro = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Redact credential literals in the code returned INLINE (password arg of ODBCOpen(), quoted values assigned to credential-named " +
-          "identifiers such as pPwd or sToken). Default: true. A file written via writeToFile always holds the code unmasked, so it " +
-          "re-imports intact — treat it as containing any password literal the code has.",
+        `${MASK_SECRETS_DESCRIPTION} Inline copy only; a file written via writeToFile stays unmasked.`,
       ),
     includeDataSourcePassword: z
       .boolean()

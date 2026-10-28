@@ -8,6 +8,10 @@ const SECRET_NAME_RE =
 
 export const MASK = "***";
 
+// `maskSecrets` param text shared by every TI tool that takes it.
+export const MASK_SECRETS_DESCRIPTION =
+  "Redact credential literals to '***': the password arg of ODBCOpen() and quoted values assigned to credential-named identifiers (pPwd, sToken, …). Set false only when explicitly auditing credentials.";
+
 export function isSecretName(name: string): boolean {
   return SECRET_NAME_RE.test(name);
 }

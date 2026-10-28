@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { compileUserRegex } from "../../lib/safe-regex.js";
-import { maskCodeLine, resolveMaskSecrets } from "../../lib/mask-secrets.js";
+import {
+  MASK_SECRETS_DESCRIPTION,
+  maskCodeLine,
+  resolveMaskSecrets,
+} from "../../lib/mask-secrets.js";
 import { FORMAT_SCHEMA, wrappedPageResponse, columnsOf } from "../format.js";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
 import { READ_ONLY } from "../annotations.js";
@@ -71,9 +75,7 @@ export const registerSearchCode = defineTool({
       .boolean()
       .optional()
       .default(true)
-      .describe(
-        "Redact credential literals in match text. Masks the password arg of ODBCOpen() and quoted values assigned to credential-named identifiers (pPwd, sToken, …). Default: true. Set false only when explicitly auditing credentials.",
-      ),
+      .describe(MASK_SECRETS_DESCRIPTION),
     excludeCommented: z
       .boolean()
       .optional()

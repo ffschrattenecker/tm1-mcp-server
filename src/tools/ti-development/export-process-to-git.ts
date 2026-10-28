@@ -5,7 +5,11 @@ import { supportsCredentialExport } from "../../lib/credential-format.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { resolveLocalPath } from "../local-file.js";
 import { parseProcessFromGit } from "../../lib/git-process.js";
-import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
+import {
+  MASK_SECRETS_DESCRIPTION,
+  maskCode,
+  resolveMaskSecrets,
+} from "../../lib/mask-secrets.js";
 import { ExportProcessToGitResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -35,7 +39,7 @@ export const registerExportProcessToGit = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Redact credential literals in the .ti code returned INLINE (password arg of ODBCOpen(), quoted values assigned to credential-named identifiers such as pPwd or sToken). Default: true. Files written via writeToDir always hold the code unmasked, so they re-import intact — treat them as containing any password literal the code has.",
+        `${MASK_SECRETS_DESCRIPTION} Inline copy only; written files stay unmasked.`,
       ),
     includeDataSourcePassword: z
       .boolean()

@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
+import {
+  MASK_SECRETS_DESCRIPTION,
+  maskCode,
+  resolveMaskSecrets,
+} from "../../lib/mask-secrets.js";
 import { commentStats } from "../../lib/strip-comments.js";
 import { ProcessCodeBundleSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -91,8 +95,7 @@ export const registerGetAllProcessesCode = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Redact credential literals in every returned tab (ODBCOpen passwords, quoted values assigned to credential-named identifiers, conn-string PWD/UID pairs). " +
-          "Default: true. Set false only when explicitly auditing credentials.",
+        `${MASK_SECRETS_DESCRIPTION} Also redacts conn-string PWD/UID pairs.`,
       ),
     summary: z
       .boolean()

@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { commentStats, stripCommentBlocks } from "../../lib/strip-comments.js";
-import { maskCode, resolveMaskSecrets, MASK } from "../../lib/mask-secrets.js";
+import {
+  MASK,
+  MASK_SECRETS_DESCRIPTION,
+  maskCode,
+  resolveMaskSecrets,
+} from "../../lib/mask-secrets.js";
 import { GetProcessResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -53,10 +58,7 @@ export const registerGetProcess = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Redact credential literals in the code tabs (ODBCOpen passwords, credential-named vars) and credential pairs " +
-          "(PWD=, UID=) in the datasource's ODBC connection string. Default true; " +
-          "set false only when explicitly auditing credentials. Note: the datasource password field is always " +
-          "redacted at the service layer, so that field never reveals a real secret either way.",
+        `${MASK_SECRETS_DESCRIPTION} Also redacts PWD=/UID= pairs in the datasource's ODBC connection string. The datasource password field is always redacted.`,
       ),
     stripComments: z
       .boolean()

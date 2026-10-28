@@ -9,7 +9,11 @@ import type {
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { parseProFile } from "../../lib/pro-parser.js";
 import { ignoredColumnsOf } from "../../lib/variables-ui-data.js";
-import { maskCode, resolveMaskSecrets } from "../../lib/mask-secrets.js";
+import {
+  MASK_SECRETS_DESCRIPTION,
+  maskCode,
+  resolveMaskSecrets,
+} from "../../lib/mask-secrets.js";
 import { diffDs } from "./diff-processes.js";
 import { DiffProcessResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -146,9 +150,7 @@ export const registerDiffProcessWithFile = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Redact credential literals on BOTH sides before diffing (so a cred present on only one side can't leak via the diff). " +
-          "Masks the password arg of ODBCOpen() and quoted values assigned to credential-named identifiers (pPwd, sToken, …). " +
-          "Default: true. Set false only when explicitly auditing credentials.",
+        `${MASK_SECRETS_DESCRIPTION} Applied to both sides before diffing, so a credential on one side cannot leak through the diff.`,
       ),
   },
   handler: async (

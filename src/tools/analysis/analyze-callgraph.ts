@@ -374,7 +374,7 @@ export const registerAnalyzeCallgraph = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Redact param values whose name matches /pass|pwd|secret|token|key|credential|auth/i to '***'. Also masks the inline snippet. Default: true. Set false only when debugging credential propagation locally.",
+        "Redact param values whose name matches /pass|pwd|secret|token|key|credential|auth/i to '***', and the inline snippet. Set false only when debugging credential propagation locally.",
       ),
     rankBy: z
       .enum(["outgoing", "incoming"])
