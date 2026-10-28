@@ -509,13 +509,12 @@ function scanProcessRefs(code: ProcessCode): {
     scanInserts(c, env, inserts);
     scanUncommitted(c, tab, env, uncommitted);
   }
-  const lower = (m: Found) =>
-    new Set([...m.keys()].map((k) => k.toLowerCase()));
+  const nameKeys = (m: Found) => new Set([...m.keys()].map(tm1NameKey));
   return {
     cubeRefs,
     dimRefs,
-    createdCubes: lower(createdCubes),
-    createdDims: lower(createdDims),
+    createdCubes: nameKeys(createdCubes),
+    createdDims: nameKeys(createdDims),
     tabsChecked,
     unresolvableArgs: scanner.unresolvable,
     cellCalls,
@@ -540,19 +539,19 @@ export async function checkProcessRefs(
     new Set(
       items
         .filter((o) => includeControl || !isControlName(o.name))
-        .map((o) => o.name.toLowerCase()),
+        .map((o) => tm1NameKey(o.name)),
     );
   const cubeNames = known(cubes);
   const dimNames = known(dims);
 
   const issues: RefIssue[] = [];
   for (const [name, info] of scan.cubeRefs) {
-    const k = name.toLowerCase();
+    const k = tm1NameKey(name);
     if (!cubeNames.has(k) && !scan.createdCubes.has(k))
       issues.push({ kind: "cube", name, ...info });
   }
   for (const [name, info] of scan.dimRefs) {
-    const k = name.toLowerCase();
+    const k = tm1NameKey(name);
     if (!dimNames.has(k) && !scan.createdDims.has(k))
       issues.push({ kind: "dimension", name, ...info });
   }
@@ -592,8 +591,8 @@ async function checkElementRefs(
         .map((c) => c.cube)
         .filter(
           (c) =>
-            cubeNames.has(c.toLowerCase()) &&
-            !scan.createdCubes.has(c.toLowerCase()),
+            cubeNames.has(tm1NameKey(c)) &&
+            !scan.createdCubes.has(tm1NameKey(c)),
         ),
     ),
   ];
@@ -602,13 +601,13 @@ async function checkElementRefs(
     cubes.map(async (c) => {
       const all = await cubesSvc.getDimensionNames!(c);
       // TI's cell functions never take the Sandboxes dimension.
-      dimsOf.set(c.toLowerCase(), withoutSandboxes(all));
+      dimsOf.set(tm1NameKey(c), withoutSandboxes(all));
     }),
   );
 
   const countIssues: RefIssue[] = [];
   for (const call of scan.cellCalls) {
-    const dims = dimsOf.get(call.cube.toLowerCase());
+    const dims = dimsOf.get(tm1NameKey(call.cube));
     if (dims && dims.length !== call.elements.length)
       countIssues.push({
         kind: "elementCount",
@@ -630,7 +629,7 @@ async function checkElementRefs(
     { dim: string; el: string; call: CellCall }
   >();
   for (const call of scan.cellCalls) {
-    const dims = dimsOf.get(call.cube.toLowerCase());
+    const dims = dimsOf.get(tm1NameKey(call.cube));
     if (!dims || dims.length !== call.elements.length) continue;
     call.elements.forEach((el, i) => {
       if (el === null) return;

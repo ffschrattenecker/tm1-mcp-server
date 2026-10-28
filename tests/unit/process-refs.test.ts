@@ -345,3 +345,20 @@ describe("checkProcessRefs — attribute write on an uncommitted insert", () => 
     expect(r.issues).toEqual([]);
   });
 });
+
+describe("checkProcessRefs — TM1 name identity", () => {
+  it("matches a cube or dimension name ignoring case and spaces, as TM1 does", async () => {
+    const r = await checkProcessRefs(catalogue(["TotalYear"], ["TotalYear"]), {
+      prolog: "CellPutN(1, 'Total Year', 'a');\nDimIx('Total Year', 'a');",
+    });
+    expect(r.issues).toEqual([]);
+  });
+
+  it("excuses a name the code creates under a spelling that differs only by case and spaces", async () => {
+    const r = await checkProcessRefs(catalogue([], []), {
+      prolog:
+        "CubeCreate('Total Year', 'a', 'b');\nCellPutN(1, 'TotalYear', 'a');",
+    });
+    expect(r.issues).toEqual([]);
+  });
+});
