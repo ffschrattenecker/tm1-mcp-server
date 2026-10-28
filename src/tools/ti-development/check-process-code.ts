@@ -13,7 +13,7 @@ import { defineTool } from "../define-tool.js";
 export const registerCheckProcessCode = defineTool({
   name: "tm1_check_process_code",
   description: [
-    "Validate TI process code WITHOUT saving it on the server (POST /api/v1/CompileProcess unbound).",
+    "Validate TI process code WITHOUT saving it on the server.",
     "Pre-flight check before tm1_upsert_process to avoid create-with-rollback patterns.",
     "Returns 'valid' or a list of syntax errors with procedure (Prolog/Metadata/Data/Epilog) and line number.",
     "Omitted tabs are validated as EMPTY: the result covers only tabsChecked, and partial=true says the check did not see a whole process — validate every tab you will install.",
@@ -34,10 +34,10 @@ export const registerCheckProcessCode = defineTool({
       .describe(
         "Process name used in the synthetic body (no save). Default '_compile_check'.",
       ),
-    prolog: z.string().optional().describe("Prolog tab TI code"),
-    metadata: z.string().optional().describe("Metadata tab TI code"),
-    data: z.string().optional().describe("Data tab TI code"),
-    epilog: z.string().optional().describe("Epilog tab TI code"),
+    prolog: z.string().optional(),
+    metadata: z.string().optional(),
+    data: z.string().optional(),
+    epilog: z.string().optional(),
     parameters: z
       .array(parameterSchema)
       .optional()

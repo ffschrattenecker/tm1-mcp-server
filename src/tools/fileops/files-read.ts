@@ -62,7 +62,7 @@ function validationError(message: string, hint: string): TM1Error {
 export const registerFilesRead = defineTool({
   name: "tm1_files_read",
   description: [
-    "Read the TM1 server's file storage (TI data directory: Files on v12, Blobs on v11; auto-fallback).",
+    "Read the TM1 server's file storage.",
     "op='list': names in a folder (path). op='search': case-insensitive name match by startswith and/or contains (joined by operator). Both paginated (default 50/page).",
     "op='get': file content (fileName), truncated to maxBytes (default 64 KB, 48 KB for base64). encoding='base64' returns the bytes untouched — use it for spreadsheets and other binaries, which a text read would corrupt.",
     "container='applications' addresses the Applications tree instead; there a folder or a view reference carries no content and get refuses it by name.",

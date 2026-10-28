@@ -60,9 +60,8 @@ export const registerGetAllCubeRules = defineTool({
   description: [
     "Bulk-load rules text for every cube in one call.",
     "Cubes without rules are returned with empty rulesText.",
-    "Control cubes (names starting with '}') excluded by default.",
-    "Full-rules responses are capped at 50 cubes by default (ordered by name; truncated=true when capped — raise limit or pass limit=0 for all).",
-    "Use summary=true to replace rulesText with aggregate metrics (lineCount, ruleCount, feederCount, commentLineCount, referencedCubes) — typical 50–100x payload shrink for rules surveys; summary mode surveys ALL cubes by default.",
+    "Ordered by name; truncated=true when limit cut some.",
+    "Use summary=true for aggregate metrics per cube in place of rulesText.",
   ],
   annotations: READ_ONLY,
   output: {

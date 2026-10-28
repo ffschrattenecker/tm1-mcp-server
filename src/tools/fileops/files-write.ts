@@ -20,11 +20,11 @@ function validationError(message: string, hint: string): TM1Error {
 export const registerFilesWrite = defineTool({
   name: "tm1_files_write",
   description: [
-    "Change the TM1 server's file storage (TI data directory: Files on v12, Blobs on v11; auto-fallback).",
-    "op='upload': create or replace fileName with content (plain text, or base64 with encoding='base64' for binary). v11: flat names only; v12: nested paths OK if the folders exist.",
+    "Change the TM1 server's file storage.",
+    "op='upload' creates or replaces fileName.",
     `Hard max ${HARD_MAX_BYTES} bytes (32 MB).`,
     "op='delete': remove fileName; irreversible, NOT_FOUND if missing in both containers.",
-    "container='applications' targets the Applications tree instead, which nests on both versions; the parent folder must already exist.",
+    "container='applications': the parent folder must already exist.",
     "Both ops need confirm (upload replaces a same-named file).",
   ],
   annotations: DESTRUCTIVE,

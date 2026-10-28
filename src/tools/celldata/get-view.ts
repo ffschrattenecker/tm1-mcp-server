@@ -15,9 +15,8 @@ interface ViewEnvelope extends MdxEnvelope {
 export const registerGetView = defineTool({
   name: "tm1_get_view",
   description: [
-    "Execute a named cube view and return structured cell data with axes (page-envelope shape consistent with tm1_execute_mdx).",
-    "Cells paginate by default so wide/tall views don't flood context; fetchAll=true returns up to 5000 cells in one call; has_more/next_offset tell where to resume.",
-    "format='markdown' renders a pivot grid (2 axes, full result) or a flat coordinate table; 'json' (default) returns the structured envelope.",
+    "Execute a named cube view and return structured cell data with axes.",
+    "Cells paginate by default; has_more/next_offset tell where to resume.",
   ],
   annotations: READ_ONLY,
   output: ViewResultSchema,

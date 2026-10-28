@@ -336,7 +336,7 @@ export function globalRanking(
 export const registerAnalyzeCallgraph = defineTool({
   name: "tm1_analyze_callgraph",
   description:
-    "Build a process call graph (ExecuteProcess/RunProcess) for a TI process. direction='downstream' shows what `start` calls (with parameter env propagation: literal/passthrough/dynamic). direction='upstream' shows callers. Returns nested JSON tree. Omit `start` for a global ranking: every process ranked by outgoing (fan-out) or incoming (fan-in) call counts — answers 'which process triggers/is triggered by the most others' without a per-process traversal. ExecuteProcess/RunProcess calls whose target is a computed expression or process parameter (not statically resolvable) are surfaced per node via `unresolvedCalls` (full/compact) or `unresolvedCount` (summary) — flagged, not resolved.",
+    "Build a process call graph (ExecuteProcess/RunProcess) for a TI process. direction='downstream' shows what `start` calls (with parameter env propagation: literal/passthrough/dynamic); direction='upstream' shows callers. Omit `start` for a global ranking by fan-out or fan-in. Calls whose target is computed or a process parameter cannot be resolved; they are flagged per node via `unresolvedCalls` (full/compact) or `unresolvedCount` (summary).",
   annotations: READ_ONLY,
   output: CallgraphResultSchema,
   input: {
@@ -367,7 +367,7 @@ export const registerAnalyzeCallgraph = defineTool({
       .optional()
       .default("full")
       .describe(
-        "Output mode. 'full' returns nested tree with incomingEdge/env/effectiveParams (large for deep graphs). 'summary' returns flat per-process aggregates (occurrences, depthMin/Max, cycle/depthLimit flags) for triage. 'compact' returns the nested tree but only {process, cycle?, depthLimitReached?, children[]} — drops params, env, snippets, effectiveParams. Use compact for structural overviews where call shape matters but param values do not.",
+        "Output mode. 'full': nested tree with incomingEdge/env/effectiveParams (large for deep graphs). 'summary': flat per-process aggregates for triage. 'compact': nested tree without params, env, snippets or effectiveParams.",
       ),
     maskSecrets: z
       .boolean()

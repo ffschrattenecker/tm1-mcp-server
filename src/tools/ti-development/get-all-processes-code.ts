@@ -52,7 +52,7 @@ function summarize(p: {
 export const registerGetAllProcessesCode = defineTool({
   name: "tm1_get_all_processes_code",
   description:
-    "Bulk-load source code (Prolog/Metadata/Data/Epilog) of every TI process in one call, plus each process's HasSecurityAccess elevation flag (hasSecurityAccess) for audit. Control objects (names starting with '}') excluded by default. Credential literals in the code are masked by default (maskSecrets). Full-code responses are capped at 50 processes by default (ordered by name; truncated=true when capped — raise limit or pass limit=0 for all). Set summary=true to drop the tab bodies and get per-process line metrics instead; summary mode surveys ALL processes by default. For keyword surveys prefer tm1_search_code — it avoids dumping every process body into context.",
+    "Bulk-load source code (Prolog/Metadata/Data/Epilog) of every TI process in one call, plus each process's HasSecurityAccess elevation flag (hasSecurityAccess) for audit. Results are ordered by name; truncated=true when limit cut some. For keyword surveys prefer tm1_search_code.",
   annotations: READ_ONLY,
   output: {
     count: z
