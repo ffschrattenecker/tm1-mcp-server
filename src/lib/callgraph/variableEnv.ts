@@ -4,7 +4,6 @@
  * Classifies each assignment `var = expression;` as
  *   - literal    (string literal or numeric literal)
  *   - param      (reference to a process parameter, directly or via another local variable that is a param)
- *   - datasource (reference to a DataSource variable whose value comes from the source data at runtime)
  *   - dynamic    (everything else — CellGet, concatenation, function calls, IF, loops)
  *
  * Multi-assignment (a variable is assigned different values) → dynamic,
@@ -14,12 +13,9 @@
 import { TI_VAR } from "../ti-identifier.js";
 import { neutralizeLine } from "./rulesLinter.js";
 
-type TiVarType = "Numeric" | "String";
-
 export type VarBinding =
   | { kind: "literal"; value: string } // resolved literal value (string content without quotes, or numeric text)
-  | { kind: "param"; paramName: string; paramType?: TiVarType | undefined } // value comes directly from a process parameter
-  | { kind: "datasource"; varName: string; varType: TiVarType } // value comes from a DataSource variable (one per processed row)
+  | { kind: "param"; paramName: string } // value comes directly from a process parameter
   | { kind: "dynamic" }; // cannot resolve (computed/IF/CellGet/concat/etc.)
 
 export interface ProcessEnv {
@@ -27,10 +23,6 @@ export interface ProcessEnv {
   paramsLc: Set<string>;
   /** Original-cased param names (for display). Map from lowercase → original. */
   paramOriginal: Map<string, string>;
-  /** Parameter types (lowercase name → type). */
-  paramTypes: Map<string, TiVarType>;
-  /** DataSource variable names (lowercase → type + original casing). */
-  datasourceVars: Map<string, { name: string; type: TiVarType }>;
   /** Local variable bindings (varname lowercase → resolved binding). */
   vars: Map<string, VarBinding>;
 }
@@ -75,7 +67,7 @@ function splitTopLevelConcat(expr: string): string[] {
 /**
  * Classify a single right-hand-side expression (no surrounding whitespace).
  * Only handles simple cases:
- *   'literal', 42, varName (→ lookup), paramName (→ param-ref), dsVarName (→ datasource-ref).
+ *   'literal', 42, varName (→ lookup), paramName (→ param-ref).
  * Constant string-concatenation (all operands resolve to literals) folds to a literal.
  * Everything else (function calls, concatenation with any non-literal operand, arithmetic, IF, brackets) → dynamic.
  */
@@ -100,12 +92,7 @@ export function resolveExpression(expr: string, env: ProcessEnv): VarBinding {
       return {
         kind: "param",
         paramName: env.paramOriginal.get(lc) ?? e,
-        paramType: env.paramTypes.get(lc),
       };
-    }
-    const ds = env.datasourceVars.get(lc);
-    if (ds) {
-      return { kind: "datasource", varName: ds.name, varType: ds.type };
     }
     const bound = env.vars.get(lc);
     if (bound) {
@@ -132,62 +119,22 @@ export function resolveExpression(expr: string, env: ProcessEnv): VarBinding {
   return { kind: "dynamic" };
 }
 
-export interface BuildEnvOptions {
-  /** 0-basierte, exklusive Zeilen-Obergrenze — Env wird nur aus Zeilen `< stopAtLine` gebaut. */
-  stopAtLine?: number;
-  /** Typ-Informationen pro Parameter (Key: lowercase Name). */
-  paramTypes?: Map<string, TiVarType>;
-  /** DataSource-Variablen-Definitionen (kommen aus dem Process-Objekt). */
-  datasourceVars?: Array<{ name: string; type: TiVarType }>;
-  /**
-   * true: Mehrfach-Zuweisungen überschreiben (letzte Zuweisung gewinnt) — für Hover/Resolver-View,
-   * wo der User den aktuellen Stand an einer bestimmten Zeile sehen will.
-   * false (Default): Mehrfach-Zuweisungen mit unterschiedlichen Bindungen werden zu `dynamic` demoted —
-   * konservative Variante für Cross-Process-Referenztracking.
-   */
-  lastAssignmentWins?: boolean;
-  /**
-   * true: Flow-sensitive Auswertung (IF/ELSEIF/ELSE-Blöcke strukturell behandeln; siehe `flowSensitiveEnv.ts`).
-   * Nur sinnvoll in Kombination mit `lastAssignmentWins:true`. Bei Parse-Fehlern wird transparent
-   * auf den flow-insensitiven Pfad zurückgefallen.
-   */
-  flowSensitive?: boolean;
-}
-
 /**
  * Build a process env from TI text and the process's parameter names.
  * Processes assignments top-down; multi-assignments are demoted to dynamic.
- *
- * Overloads:
- *   buildProcessEnv(text, paramNames)
- *   buildProcessEnv(text, paramNames, stopAtLine)     — legacy positional
- *   buildProcessEnv(text, paramNames, options)
  */
 export function buildProcessEnv(
   text: string,
   paramNames: string[],
-  stopAtLineOrOptions?: number | BuildEnvOptions,
 ): ProcessEnv {
-  const opts: BuildEnvOptions =
-    typeof stopAtLineOrOptions === "number"
-      ? { stopAtLine: stopAtLineOrOptions }
-      : (stopAtLineOrOptions ?? {});
-
   const paramsLc = new Set(paramNames.map((p) => p.toLowerCase()));
   const paramOriginal = new Map(
     paramNames.map((p) => [p.toLowerCase(), p] as const),
   );
-  const paramTypes = opts.paramTypes ?? new Map<string, TiVarType>();
-  const datasourceVars = new Map<string, { name: string; type: TiVarType }>();
-  for (const dv of opts.datasourceVars ?? []) {
-    datasourceVars.set(dv.name.toLowerCase(), { name: dv.name, type: dv.type });
-  }
 
   const env: ProcessEnv = {
     paramsLc,
     paramOriginal,
-    paramTypes,
-    datasourceVars,
     vars: new Map(),
   };
 
@@ -198,12 +145,8 @@ export function buildProcessEnv(
     `^\\s*(${TI_VAR})\\s*=\\s*(.+?)\\s*;?\\s*(?:#.*)?$`,
   );
   const lines = text.split("\n");
-  const limit =
-    opts.stopAtLine !== undefined
-      ? Math.min(opts.stopAtLine, lines.length)
-      : lines.length;
 
-  for (let i = 0; i < limit; i++) {
+  for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
     const line = raw.replace(/\r$/, "");
     if (SECTION_MARKER_RE.test(line.trim()) || line.trim() === "") {
@@ -234,19 +177,10 @@ export function buildProcessEnv(
     if (paramsLc.has(lc)) {
       continue;
     }
-    // DataSource-Vars bleiben als solche erhalten — lokale Zuweisung mit demselben Namen wäre unüblich,
-    // wir ignorieren sie um die „Herkunft aus der DataSource" sichtbar zu halten.
-    if (datasourceVars.has(lc)) {
-      continue;
-    }
 
     const binding = resolveExpression(rhs, env);
 
-    if (opts.lastAssignmentWins) {
-      // Jüngste Zuweisung überschreibt — passt zur Sicht „Wert direkt vor Zeile N".
-      assignedOnce.set(lc, binding);
-      env.vars.set(lc, binding);
-    } else if (seen.has(lc)) {
+    if (seen.has(lc)) {
       const prev = assignedOnce.get(lc);
       if (prev && !bindingsEqual(prev, binding)) {
         // Konservativ: Multi-Assign mit unterschiedlichen Bindungen → dynamic.
@@ -273,9 +207,6 @@ function bindingsEqual(a: VarBinding, b: VarBinding): boolean {
   }
   if (a.kind === "param" && b.kind === "param") {
     return a.paramName.toLowerCase() === b.paramName.toLowerCase();
-  }
-  if (a.kind === "datasource" && b.kind === "datasource") {
-    return a.varName.toLowerCase() === b.varName.toLowerCase();
   }
   return a.kind === "dynamic";
 }

@@ -8,8 +8,6 @@ import { buildReferenceIndex } from "../../src/lib/callgraph/referenceIndex.js";
 const emptyEnv = (): ProcessEnv => ({
   paramsLc: new Set(),
   paramOriginal: new Map(),
-  paramTypes: new Map(),
-  datasourceVars: new Map(),
   vars: new Map(),
 });
 

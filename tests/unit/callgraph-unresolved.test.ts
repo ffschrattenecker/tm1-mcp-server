@@ -36,8 +36,6 @@ describe("extractTiReferences unresolved process calls", () => {
       {
         paramsLc: new Set(["pprocessname"]),
         paramOriginal: new Map([["pprocessname", "pProcessName"]]),
-        paramTypes: new Map(),
-        datasourceVars: new Map(),
         vars: new Map(),
       },
       undefined,

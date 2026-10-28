@@ -310,8 +310,6 @@ export function extractTiReferences(
   const baseEnv: ProcessEnv = env ?? {
     paramsLc: new Set(),
     paramOriginal: new Map(),
-    paramTypes: new Map(),
-    datasourceVars: new Map(),
     vars: new Map(),
   };
   // Flow-sensitive Var-Tracking: Basis-Env (Params/DS-Vars/cross-section-Vars) + live
@@ -346,7 +344,7 @@ export function extractTiReferences(
     const aM = assignRe.exec(line);
     if (aM && !aM[2]!.startsWith("=")) {
       const varLc = aM[1]!.toLowerCase();
-      if (!baseEnv.paramsLc.has(varLc) && !baseEnv.datasourceVars.has(varLc)) {
+      if (!baseEnv.paramsLc.has(varLc)) {
         liveVars.set(varLc, resolveExpression(aM[2]!, callerEnv));
       }
     }
