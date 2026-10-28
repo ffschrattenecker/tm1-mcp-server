@@ -1,4 +1,5 @@
 import type { TM1Client } from "../../tm1-client.js";
+import { isControlName } from "../control-name.js";
 import {
   buildReferenceIndex,
   type ReferenceIndex,
@@ -187,7 +188,7 @@ async function buildIndexInternal(
     try {
       const chs = await tm1Client.chores.list();
       return chs
-        .filter((c) => includeControl || !c.name.startsWith("}"))
+        .filter((c) => includeControl || !isControlName(c.name))
         .map((c) => {
           const tasks: ChoreTaskRef[] = c.processes.map((t, i) => ({
             step: i,

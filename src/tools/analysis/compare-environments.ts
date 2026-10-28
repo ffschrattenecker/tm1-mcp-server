@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isControlName } from "../../lib/control-name.js";
 import type { TM1Client } from "../../tm1-client.js";
 import { fingerprint } from "../../lib/fingerprint.js";
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
@@ -86,7 +87,7 @@ async function readProcesses(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
 async function readChores(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
   const chores = await c.chores.list();
   return chores
-    .filter((ch) => o.includeControl || !ch.name.startsWith("}"))
+    .filter((ch) => o.includeControl || !isControlName(ch.name))
     .map((ch) => ({
       name: ch.name,
       aspects: {
@@ -100,7 +101,7 @@ async function readChores(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
 async function readDimensions(c: TM1Client, o: ReadOpts): Promise<Entry[]> {
   const dims = (await c.dimensions.list({ includeElementCount: true })).filter(
     (d) =>
-      (o.includeControl || !d.name.startsWith("}")) &&
+      (o.includeControl || !isControlName(d.name)) &&
       (!o.regex || o.regex.test(d.name)),
   );
   const entries: Entry[] = dims.map((d) => ({

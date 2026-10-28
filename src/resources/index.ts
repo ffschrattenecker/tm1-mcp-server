@@ -6,6 +6,7 @@
 //
 // Each resource maps to an existing TM1 service call — same backend logic
 // as the read tools, different MCP entry point.
+import { isControlName } from "../lib/control-name.js";
 import {
   type McpServer,
   ResourceTemplate,
@@ -190,7 +191,7 @@ function registerConnectionResources(
         });
         return {
           resources: procs
-            .filter((p) => !p.name.startsWith("}"))
+            .filter((p) => !isControlName(p.name))
             .map((p) => ({
               name: `${ctx.key}process-code-${p.name}`,
               uri: `${ctx.base}process/${encodeURIComponent(p.name)}/code`,
@@ -211,7 +212,7 @@ function registerConnectionResources(
           return procs
             .filter(
               (p) =>
-                !p.name.startsWith("}") && p.name.toLowerCase().includes(lower),
+                !isControlName(p.name) && p.name.toLowerCase().includes(lower),
             )
             .map((p) => p.name)
             .slice(0, 100);
@@ -257,7 +258,7 @@ function registerConnectionResources(
       });
       return {
         resources: procs
-          .filter((p) => !p.name.startsWith("}"))
+          .filter((p) => !isControlName(p.name))
           .map((p) => ({
             name: `${ctx.key}process-code-${p.name}`,
             uri: `${ctx.base}process/${encodeURIComponent(p.name)}/code`,
@@ -282,7 +283,7 @@ function registerConnectionResources(
         ).cubes.list({ includeRules: true });
         return {
           resources: cubes
-            .filter((c) => !c.name.startsWith("}") && c.hasRules)
+            .filter((c) => !isControlName(c.name) && c.hasRules)
             .map((c) => ({
               name: `${ctx.key}cube-rules-${c.name}`,
               uri: `${ctx.base}cube/${encodeURIComponent(c.name)}/rules`,
@@ -299,7 +300,7 @@ function registerConnectionResources(
           return cubes
             .filter(
               (c) =>
-                !c.name.startsWith("}") && c.name.toLowerCase().includes(lower),
+                !isControlName(c.name) && c.name.toLowerCase().includes(lower),
             )
             .map((c) => c.name)
             .slice(0, 100);
@@ -342,7 +343,7 @@ function registerConnectionResources(
       ).cubes.list({ includeRules: true });
       return {
         resources: cubes
-          .filter((c) => !c.name.startsWith("}") && c.hasRules)
+          .filter((c) => !isControlName(c.name) && c.hasRules)
           .map((c) => ({
             name: `${ctx.key}cube-rules-${c.name}`,
             uri: `${ctx.base}cube/${encodeURIComponent(c.name)}/rules`,

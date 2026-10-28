@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isControlName } from "../../lib/control-name.js";
 import {
   buildIndexFromTM1,
   invalidateCallgraphCache,
@@ -159,7 +160,6 @@ export function globalRanking(
   },
 ): GlobalRankingResult {
   const { rankBy, topN, includeSystem } = opts;
-  const isSystem = (name: string) => name.startsWith("}");
   const acc = new Map<string, RankAcc>();
 
   const ensure = (name: string): RankAcc => {
@@ -183,7 +183,7 @@ export function globalRanking(
     if (ref.targetKind !== "process") continue;
     const src = ref.sourceName;
     const tgt = ref.targetName;
-    if (!includeSystem && (isSystem(src) || isSystem(tgt))) continue;
+    if (!includeSystem && (isControlName(src) || isControlName(tgt))) continue;
     totalCallEdges++;
     const s = ensure(src);
     const t = ensure(tgt);
@@ -195,7 +195,7 @@ export function globalRanking(
 
   let totalProcessesIndexed = 0;
   for (const lc of index.processParams.keys()) {
-    if (!includeSystem && isSystem(lc)) continue;
+    if (!includeSystem && isControlName(lc)) continue;
     totalProcessesIndexed++;
   }
 

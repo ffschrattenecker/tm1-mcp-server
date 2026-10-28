@@ -5,6 +5,7 @@ import type {
   CallParamResolution,
   UnresolvedCall,
 } from "./referenceIndex.js";
+import { isControlName } from "../control-name.js";
 import { lookupReferences } from "./referenceIndex.js";
 
 /**
@@ -271,7 +272,7 @@ export function buildCallGraph(
     for (const edge of edges) {
       const nextProc =
         opts.direction === "downstream" ? edge.callee : edge.caller;
-      if (!includeSystem && nextProc.startsWith("}")) {
+      if (!includeSystem && isControlName(nextProc)) {
         continue;
       }
       const childEnv =
@@ -397,7 +398,7 @@ export function buildCubeOrDimUsages(
     ) {
       continue;
     }
-    if (!includeSystem && r.sourceName.startsWith("}")) {
+    if (!includeSystem && isControlName(r.sourceName)) {
       continue;
     }
     const accessType = classifyAccess(r.funcName, r.sourceKind);

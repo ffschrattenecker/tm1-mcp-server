@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isControlName } from "../../lib/control-name.js";
 import type { TM1Client } from "../../tm1-client.js";
 import { buildIndexFromTM1 } from "../../lib/callgraph/tm1-adapter.js";
 import { buildCubeOrDimUsages } from "../../lib/callgraph/callGraph.js";
@@ -156,7 +157,7 @@ async function cubesUsingDimension(
 ): Promise<string[]> {
   const key = dimensionName.toLowerCase();
   return (await tm1Client.cubes.list())
-    .filter((c) => includeSystem || !c.name.startsWith("}"))
+    .filter((c) => includeSystem || !isControlName(c.name))
     .filter((c) => (c.dimensions ?? []).some((d) => d.toLowerCase() === key))
     .map((c) => c.name);
 }

@@ -9,6 +9,8 @@
  * "avoid" recommendations from the IBM docs are intentionally not modelled.
  */
 
+import { isControlName } from "../control-name.js";
+
 export type ObjectKind =
   | "cube"
   | "dimension"
@@ -88,7 +90,7 @@ function checkServerReservedChars(name: string): Violation | null {
 }
 
 function checkLeadingControlPrefix(name: string): Violation | null {
-  if (name.startsWith("}")) {
+  if (isControlName(name)) {
     return {
       rule: "leading_control_prefix",
       message:

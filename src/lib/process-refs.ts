@@ -44,6 +44,7 @@
 // AttrPut*/ElementAttrPut* on that element later in the same tab fails with
 // "Element not found" on the run that creates it (11.8.03500). Kind
 // "uncommittedElement"; *Direct inserts are not flagged.
+import { isControlName } from "./control-name.js";
 import { buildProcessEnv, type ProcessEnv } from "./callgraph/variableEnv.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
 import { tm1NameKey, withoutSandboxes } from "./tm1-name.js";
@@ -538,7 +539,7 @@ export async function checkProcessRefs(
   const known = (items: Array<{ name: string }>) =>
     new Set(
       items
-        .filter((o) => includeControl || !o.name.startsWith("}"))
+        .filter((o) => includeControl || !isControlName(o.name))
         .map((o) => o.name.toLowerCase()),
     );
   const cubeNames = known(cubes);

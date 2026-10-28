@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isControlName } from "../../lib/control-name.js";
 import { compileUserRegex } from "../../lib/safe-regex.js";
 import {
   FORMAT_SCHEMA,
@@ -73,7 +74,7 @@ export const registerListProcessesGrouped = defineTool({
   ) => {
     let processes = await tm1Client.processes.list();
     if (!includeControl)
-      processes = processes.filter((p) => !p.name.startsWith("}"));
+      processes = processes.filter((p) => !isControlName(p.name));
     if (excludePattern) {
       const re = compileUserRegex(excludePattern, "i", "excludePattern");
       processes = processes.filter((p) => !re.test(p.name));
