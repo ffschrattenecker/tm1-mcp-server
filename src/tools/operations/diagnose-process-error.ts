@@ -1,9 +1,9 @@
 import { z } from "zod";
 import {
+  fetchRelatedLogs,
   matchesProcessName,
-  tsFromFilename,
-  truncateTail,
   tailLines,
+  tsFromFilename,
 } from "./error-log-helpers.js";
 import { DiagnoseProcessErrorResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -121,8 +121,6 @@ export const registerDiagnoseProcessError = defineTool({
       };
     }
 
-    const windowMs = relatedWindowSec * 1000;
-
     const logs = await Promise.all(
       matching.map(async (f) => {
         let content = "";
@@ -155,49 +153,34 @@ export const registerDiagnoseProcessError = defineTool({
               files: [],
             };
           } else {
-            const candidates = allFiles
-              .filter((r) => r.filename !== f.filename)
-              .map((r) => ({
-                filename: r.filename,
-                ts: tsFromFilename(r.filename),
-              }))
-              .filter(
-                (r): r is { filename: string; ts: number } => r.ts !== null,
-              )
-              .filter((r) => Math.abs(r.ts - sourceTs) <= windowMs)
-              .sort(
-                (a, b) => Math.abs(a.ts - sourceTs) - Math.abs(b.ts - sourceTs),
-              )
-              .slice(0, relatedMaxFiles);
-
-            const related = await Promise.all(
-              candidates.map(async ({ filename: rf, ts }) => {
-                try {
-                  const raw = await tm1Client.server.getErrorLogContent(rf);
-                  const { body, truncated: rt } = truncateTail(
-                    raw,
-                    DEFAULT_RELATED_MAX_BYTES,
-                  );
-                  return {
-                    filename: rf,
-                    deltaSec: Math.round((ts - sourceTs) / 1000),
-                    truncated: rt,
-                    content: body,
-                  };
-                } catch (e) {
-                  return {
-                    filename: rf,
-                    deltaSec: Math.round((ts - sourceTs) / 1000),
-                    fetchError: (e as Error).message,
-                  };
-                }
-              }),
+            const related = await fetchRelatedLogs(
+              tm1Client.server,
+              allFiles,
+              { filename: f.filename, ts: sourceTs },
+              {
+                windowSec: relatedWindowSec,
+                maxFiles: relatedMaxFiles,
+                maxBytes: DEFAULT_RELATED_MAX_BYTES,
+              },
             );
 
             entry.related = {
               windowSec: relatedWindowSec,
-              found: candidates.length,
-              files: related,
+              found: related.found,
+              files: related.files.map((r) =>
+                "error" in r
+                  ? {
+                      filename: r.filename,
+                      deltaSec: r.deltaSec,
+                      fetchError: r.error,
+                    }
+                  : {
+                      filename: r.filename,
+                      deltaSec: r.deltaSec,
+                      truncated: r.truncated,
+                      content: r.content,
+                    },
+              ),
             };
           }
         }

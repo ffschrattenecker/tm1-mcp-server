@@ -1,3 +1,5 @@
+import type { ServerService } from "../../tm1-client/services/server-service.js";
+
 const TS_RE = /(\d{14})/;
 
 /**
@@ -66,4 +68,56 @@ export function tailLines(
     truncated: true,
     totalLines: lines.length,
   };
+}
+
+export type RelatedLogEntry =
+  | {
+      filename: string;
+      deltaSec: number;
+      totalBytes: number;
+      returnedBytes: number;
+      truncated: boolean;
+      content: string;
+    }
+  | { filename: string; deltaSec: number; error: string };
+
+/**
+ * Sibling logs whose filename timestamp lies within `windowSec` of the source,
+ * nearest first, each tail-truncated to `maxBytes`. `found` counts all
+ * candidates before the `maxFiles` cap.
+ */
+export async function fetchRelatedLogs(
+  server: Pick<ServerService, "getErrorLogContent">,
+  allFiles: ReadonlyArray<{ filename: string }>,
+  source: { filename: string; ts: number },
+  opts: { windowSec: number; maxFiles: number; maxBytes: number },
+): Promise<{ found: number; files: RelatedLogEntry[] }> {
+  const windowMs = opts.windowSec * 1000;
+  const candidates = allFiles
+    .filter((f) => f.filename !== source.filename)
+    .map((f) => ({ filename: f.filename, ts: tsFromFilename(f.filename) }))
+    .filter((f): f is { filename: string; ts: number } => f.ts !== null)
+    .filter((f) => Math.abs(f.ts - source.ts) <= windowMs)
+    .sort((a, b) => Math.abs(a.ts - source.ts) - Math.abs(b.ts - source.ts));
+
+  const files = await Promise.all(
+    candidates.slice(0, opts.maxFiles).map(async ({ filename, ts }) => {
+      const deltaSec = Math.round((ts - source.ts) / 1000);
+      try {
+        const raw = await server.getErrorLogContent(filename);
+        const { body, truncated } = truncateTail(raw, opts.maxBytes);
+        return {
+          filename,
+          deltaSec,
+          totalBytes: Buffer.byteLength(raw, "utf8"),
+          returnedBytes: Buffer.byteLength(body, "utf8"),
+          truncated,
+          content: body,
+        };
+      } catch (e) {
+        return { filename, deltaSec, error: (e as Error).message };
+      }
+    }),
+  );
+  return { found: candidates.length, files };
 }
