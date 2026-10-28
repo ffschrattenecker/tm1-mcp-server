@@ -60,7 +60,10 @@ export const registerSetCubeRules = defineTool({
           code: TM1ErrorCode.VALIDATION_ERROR,
           message: `Rules for '${cubeName}' have ${errors.length} error(s): ${errors
             .slice(0, 5)
-            .map((e) => `line ${e.lineNumber ?? "?"}: ${e.message.trim()}`)
+            .map(
+              (e) =>
+                `line ${e.lineNumber ?? "?"}: ${e.message.trim().replace(/\.$/, "")}`,
+            )
             .join("; ")}. Nothing was written.`,
           hint: "Fix the reported lines and retry (line numbers are in the full resulting text, after edits are applied). preflight:false writes the text anyway; TM1 stores it, but the broken statements compute nothing.",
           details: JSON.stringify({ stage: "preflight", errors }),
