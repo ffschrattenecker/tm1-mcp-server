@@ -119,7 +119,7 @@ export async function checkDbReferences(
       issues.push({
         lineNumber: c.line,
         cube: c.cube,
-        message: `DB('${c.cube}', ...) names a cube that does not exist. CheckRules accepts this, and the rule then reads 0 without an error.`,
+        message: `DB('${c.cube}', ...) names a cube that does not exist.`,
       });
       continue;
     }
@@ -128,7 +128,7 @@ export async function checkDbReferences(
       issues.push({
         lineNumber: c.line,
         cube: c.cube,
-        message: `DB('${c.cube}', ...) passes ${c.elements.length} element(s), the cube takes ${dims.length} (Sandboxes not counted). CheckRules accepts this, and the rule then reads 0 without an error.`,
+        message: `DB('${c.cube}', ...) passes ${c.elements.length} element(s), the cube takes ${dims.length} (Sandboxes not counted).`,
       });
       continue;
     }
@@ -157,7 +157,7 @@ export async function checkDbReferences(
       issues.push({
         lineNumber: c.line,
         cube: c.cube,
-        message: `DB('${c.cube}', ...) names element '${el}', which is not in dimension '${dim}'. CheckRules accepts this, and the rule then reads 0 without an error.`,
+        message: `DB('${c.cube}', ...) names element '${el}', which is not in dimension '${dim}'.`,
       });
   });
   return issues.sort((a, b) => a.lineNumber - b.lineNumber);
