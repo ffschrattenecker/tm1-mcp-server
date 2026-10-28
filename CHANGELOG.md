@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Shorter tool descriptions and error messages for the DB() rules checks; the checks are
+  listed once, in `tm1_check_cube_rule`.
+
 ## [10.1.0] - 2026-10-27
 
 ### Added
