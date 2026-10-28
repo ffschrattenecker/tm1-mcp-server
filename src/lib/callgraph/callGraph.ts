@@ -69,11 +69,11 @@ export interface BuildCallGraphOptions {
   direction: Direction;
   maxDepth?: number; // default 20, hard safety cap
   /**
-   * Include system objects (names starting with `}`) as children/ancestors.
+   * Include control objects (names starting with `}`) as children/ancestors.
    * The root node is always shown regardless of this flag.
-   * Default: true.
+   * Default: false.
    */
-  includeSystem?: boolean;
+  includeControl?: boolean;
 }
 
 function lc(s: string): string {
@@ -236,7 +236,7 @@ export function buildCallGraph(
   opts: BuildCallGraphOptions,
 ): CallGraphNode {
   const maxDepth = opts.maxDepth ?? 20;
-  const includeSystem = opts.includeSystem ?? true;
+  const includeControl = opts.includeControl ?? false;
   const rootEnv =
     opts.direction === "downstream" ? buildInitialEnv(start, index) : undefined;
   const root: CallGraphNode = {
@@ -272,7 +272,7 @@ export function buildCallGraph(
     for (const edge of edges) {
       const nextProc =
         opts.direction === "downstream" ? edge.callee : edge.caller;
-      if (!includeSystem && isControlName(nextProc)) {
+      if (!includeControl && isControlName(nextProc)) {
         continue;
       }
       const childEnv =

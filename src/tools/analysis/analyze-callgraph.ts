@@ -157,10 +157,10 @@ export function globalRanking(
   opts: {
     rankBy: "outgoing" | "incoming";
     topN: number;
-    includeSystem: boolean;
+    includeControl: boolean;
   },
 ): GlobalRankingResult {
-  const { rankBy, topN, includeSystem } = opts;
+  const { rankBy, topN, includeControl } = opts;
   const acc = new Map<string, RankAcc>();
 
   const ensure = (name: string): RankAcc => {
@@ -184,7 +184,7 @@ export function globalRanking(
     if (ref.targetKind !== "process") continue;
     const src = ref.sourceName;
     const tgt = ref.targetName;
-    if (!includeSystem && (isControlName(src) || isControlName(tgt))) continue;
+    if (!includeControl && (isControlName(src) || isControlName(tgt))) continue;
     totalCallEdges++;
     const s = ensure(src);
     const t = ensure(tgt);
@@ -196,7 +196,7 @@ export function globalRanking(
 
   let totalProcessesIndexed = 0;
   for (const lc of index.processParams.keys()) {
-    if (!includeSystem && isControlName(lc)) continue;
+    if (!includeControl && isControlName(lc)) continue;
     totalProcessesIndexed++;
   }
 
@@ -248,19 +248,12 @@ export const registerAnalyzeCallgraph = defineTool({
       ),
     direction: z.enum(["downstream", "upstream"]).default("downstream"),
     maxDepth: z.number().int().min(1).max(50).optional().default(20),
-    includeSystem: z
-      .boolean()
-      .optional()
-      .default(false)
-      .describe(
-        "Include TM1 control objects (names starting with '}') in graph. Default: false.",
-      ),
     includeControl: z
       .boolean()
       .optional()
       .default(false)
       .describe(
-        "Index control processes/cubes/chores (broader graph). Default: false.",
+        "Include TM1 control objects ('}' names): index control processes, cubes and chores, and show '}' objects in the graph. Default: false.",
       ),
     mode: z
       .enum(["full", "summary", "compact"])
@@ -306,7 +299,6 @@ export const registerAnalyzeCallgraph = defineTool({
       start,
       direction,
       maxDepth,
-      includeSystem,
       includeControl,
       mode,
       maskSecrets: maskSecretsRequested,
@@ -329,7 +321,7 @@ export const registerAnalyzeCallgraph = defineTool({
     });
 
     if (start === undefined || start === "") {
-      const result = globalRanking(index, { rankBy, topN, includeSystem });
+      const result = globalRanking(index, { rankBy, topN, includeControl });
       return jsonResult({ mode: "globalRanking", ...result });
     }
 
@@ -347,7 +339,7 @@ export const registerAnalyzeCallgraph = defineTool({
     const tree = buildCallGraph(index, start, {
       direction,
       maxDepth,
-      includeSystem,
+      includeControl,
     });
     let payload: Record<string, unknown>;
     if (mode === "summary") {

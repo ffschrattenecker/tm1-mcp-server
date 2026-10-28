@@ -226,7 +226,7 @@ describe("CallgraphResultSchema — validates every emitted shape", () => {
     const result = globalRanking(index, {
       rankBy: "outgoing",
       topN: 50,
-      includeSystem: false,
+      includeControl: false,
     });
     const payload = { mode: "globalRanking", ...result };
     const parsed = CallgraphResultSchema.safeParse(roundTrip(payload));
