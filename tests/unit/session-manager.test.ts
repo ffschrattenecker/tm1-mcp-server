@@ -417,6 +417,62 @@ describe("SessionManager", () => {
     });
   });
 
+  describe("re-auth and logout ordering (regression)", () => {
+    it("re-auth with an existing cookie sends one DELETE then logs in (no self-await deadlock)", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(
+          mockFetchResponse({ ok: true, setCookie: "TM1SessionId=c1; Path=/" }),
+        )
+        .mockResolvedValueOnce(mockFetchResponse({ ok: true })) // DELETE of c1
+        .mockResolvedValueOnce(
+          mockFetchResponse({ ok: true, setCookie: "TM1SessionId=c2; Path=/" }),
+        );
+
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
+      await sm.authenticate();
+      const second = await sm.authenticate("c1");
+
+      expect(second).toBe("c2");
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+      const [deleteUrl, deleteOpts] = fetchSpy.mock.calls[1] as [
+        string,
+        { method: string; headers: Record<string, string> },
+      ];
+      expect(deleteUrl).toBe("https://tm1server:8010/api/v1/ActiveSession");
+      expect(deleteOpts.method).toBe("DELETE");
+      expect(deleteOpts.headers.Cookie).toBe("TM1SessionId=c1");
+    });
+
+    it("logout() during an in-flight login waits for it and deletes the new session", async () => {
+      let resolveLogin!: (res: Response) => void;
+      const heldLogin = new Promise<Response>((resolve) => {
+        resolveLogin = resolve;
+      });
+      fetchSpy
+        .mockImplementationOnce(() => heldLogin)
+        .mockResolvedValueOnce(mockFetchResponse({ ok: true })); // DELETE
+
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
+      const authPromise = sm.authenticate();
+      const logoutPromise = sm.logout();
+
+      resolveLogin(
+        mockFetchResponse({ ok: true, setCookie: "TM1SessionId=late; Path=/" }),
+      );
+      await Promise.all([authPromise, logoutPromise]);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      const [deleteUrl, deleteOpts] = fetchSpy.mock.calls[1] as [
+        string,
+        { method: string; headers: Record<string, string> },
+      ];
+      expect(deleteUrl).toBe("https://tm1server:8010/api/v1/ActiveSession");
+      expect(deleteOpts.method).toBe("DELETE");
+      expect(deleteOpts.headers.Cookie).toBe("TM1SessionId=late");
+      expect(sm.isSessionActive()).toBe(false);
+    });
+  });
+
   describe("keepAlive()", () => {
     it("clears the session cookie on keep-alive timeout to force re-auth", async () => {
       // Initial auth succeeds.
