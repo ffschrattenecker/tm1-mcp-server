@@ -3,6 +3,7 @@ import { withToolHint } from "../error-format.js";
 import { CalculationTraceResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { COORD_ELEMENTS_DESCRIPTION } from "./member-ref.js";
 import type { CalculationTraceNode } from "../../types.js";
 
 export const registerTraceCellCalculation = defineTool({
@@ -11,18 +12,13 @@ export const registerTraceCellCalculation = defineTool({
     "Trace how a cell value is calculated: recursive component tree with per-component type (Consolidation/Rule/Simple), status (Null/Data/Error), value, and the rule statements that populate it — answers 'why is this cell X / empty?'.",
     "The tree is truncated client-side via maxDepth/maxComponents; truncated=true marks cut branches (re-run with the branch tuple as new start cell to drill deeper).",
     "Rule statements are listed once in statementTable; each node's statementRefs index into it (a long rule would otherwise repeat on every node). dedupeStatements=false restores per-node statements.",
-    "Elements are given in cube dimension order (read them with tm1_rest_read Cubes('C')/Dimensions?$select=Name). Write Hierarchy:Element for an alternate hierarchy; the first colon splits, so in dimension Region 'Region:A:B' is element 'A:B' of the default one.",
     "Related: tm1_check_feeders / tm1_trace_feeders for feeder issues, tm1_get_cube_rules for the full rule text.",
   ],
   annotations: READ_ONLY,
   output: CalculationTraceResultSchema,
   input: {
     cubeName: z.string().describe("Name of the TM1 cube"),
-    elements: z
-      .array(z.string())
-      .describe(
-        "Element names for each dimension of the cube, in cube dimension order. Sandboxes may be left out (bound to Base). Prefix with a hierarchy to leave the default one: 'AltHier:Elem'.",
-      ),
+    elements: z.array(z.string()).describe(COORD_ELEMENTS_DESCRIPTION),
     maxDepth: z
       .number()
       .int()

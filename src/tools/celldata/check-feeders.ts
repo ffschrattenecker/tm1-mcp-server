@@ -3,24 +3,20 @@ import { withToolHint } from "../error-format.js";
 import { CheckFeedersResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { COORD_ELEMENTS_DESCRIPTION } from "./member-ref.js";
 
 export const registerCheckFeeders = defineTool({
   name: "tm1_check_feeders",
   description: [
     "Check the feeders of a cell: verifies feeder coverage for the cells underlying this cell and returns the problematic ones with a fed flag — fed=false marks a broken or missing feeder (the classic cause of empty consolidated/rule cells). An empty result means no feeder problems were detected (live-verified on 11.8: fully-fed areas return []).",
     "Per-cell runtime check; complements tm1_audit_feeders (static rule analysis).",
-    "Elements are given in cube dimension order (read them with tm1_rest_read Cubes('C')/Dimensions?$select=Name). Write Hierarchy:Element for an alternate hierarchy; the first colon splits, so in dimension Region 'Region:A:B' is element 'A:B' of the default one.",
     "Related: tm1_trace_feeders (statements involved), tm1_trace_cell_calculation (why has this cell value X).",
   ],
   annotations: READ_ONLY,
   output: CheckFeedersResultSchema,
   input: {
     cubeName: z.string().describe("Name of the TM1 cube"),
-    elements: z
-      .array(z.string())
-      .describe(
-        "Element names for each dimension of the cube, in cube dimension order. Sandboxes may be left out (bound to Base). Prefix with a hierarchy to leave the default one: 'AltHier:Elem'.",
-      ),
+    elements: z.array(z.string()).describe(COORD_ELEMENTS_DESCRIPTION),
     timeoutMs: z
       .number()
       .int()

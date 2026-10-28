@@ -64,3 +64,7 @@ export function memberRef(
     element: parts?.length === 1 ? parts[0]! : element,
   };
 }
+
+// `elements` param text shared by the cube-cell tools that address one cell.
+export const COORD_ELEMENTS_DESCRIPTION =
+  "Element names for each dimension of the cube, in cube dimension order. Sandboxes may be left out (bound to Base). Prefix with a hierarchy to leave the default one: 'AltHier:Elem' (the first colon splits).";
