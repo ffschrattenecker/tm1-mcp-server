@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
 import { withoutSandboxes } from "../../lib/tm1-name.js";
+import { resolveHierarchy } from "../hierarchy.js";
 import {
   FORMAT_SCHEMA,
   payloadResponse,
@@ -85,7 +86,12 @@ export const registerSearchElements = defineTool({
       ? withoutSandboxes(await tm1Client.cubes.getDimensionNames(cubeName)).map(
           (d) => [d, d] as const,
         )
-      : [[dimensionName!, hierarchyName ?? dimensionName!] as const];
+      : [
+          [
+            dimensionName!,
+            resolveHierarchy(dimensionName!, hierarchyName),
+          ] as const,
+        ];
     const settled = await mapSettledWithConcurrency(targets, 4, ([dim, hier]) =>
       tm1Client.elements.searchElements(
         dim,

@@ -6,6 +6,7 @@ import {
   isEmptyHierarchyDiff,
 } from "../../lib/hierarchy-diff.js";
 import { tm1NameEquals, tm1NameKey } from "../../lib/tm1-name.js";
+import { resolveHierarchy } from "../hierarchy.js";
 import { DiffHierarchyResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -81,8 +82,8 @@ export const registerDiffHierarchy = defineTool({
     { a, b },
   ) => {
     const dimensionB = dimensionBArg ?? dimension;
-    const hierarchyA = hierarchy ?? dimension;
-    const hierarchyB = hierarchy ?? dimensionB;
+    const hierarchyA = resolveHierarchy(dimension, hierarchy);
+    const hierarchyB = resolveHierarchy(dimensionB, hierarchy);
     if (
       includeAttributeValues &&
       (!tm1NameEquals(hierarchyA, dimension) ||
