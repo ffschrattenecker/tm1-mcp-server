@@ -8,7 +8,7 @@ import { COORD_ELEMENTS_DESCRIPTION } from "./member-ref.js";
 export const registerCheckFeeders = defineTool({
   name: "tm1_check_feeders",
   description: [
-    "Check the feeders of a cell: verifies feeder coverage for the cells underlying this cell and returns the problematic ones with a fed flag — fed=false marks a broken or missing feeder (the classic cause of empty consolidated/rule cells). An empty result means no feeder problems were detected (live-verified on 11.8: fully-fed areas return []).",
+    "Check the feeders of a cell: verifies feeder coverage for the cells underlying this cell and returns the problematic ones with a fed flag — fed=false marks a broken or missing feeder (the classic cause of empty consolidated/rule cells). An empty result means no feeder problems were detected.",
     "Per-cell runtime check; complements tm1_audit_feeders (static rule analysis).",
     "Related: tm1_trace_feeders (statements involved), tm1_trace_cell_calculation (why has this cell value X).",
   ],

@@ -20,7 +20,7 @@ export const registerDiagnoseProcessError = defineTool({
   description: [
     "One-call error diagnosis for a failed TI process: lists matching error logs, fetches their content,",
     "and optionally includes cascade-related sibling logs (same timestamp window) in a single response.",
-    "Replaces the manual sequence tm1_list_error_logs → tm1_get_error_log_content (× N). Returns logs newest-first.",
+    "Returns logs newest-first.",
   ],
   annotations: READ_ONLY,
   output: DiagnoseProcessErrorResultSchema,

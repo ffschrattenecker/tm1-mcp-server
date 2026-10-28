@@ -26,7 +26,7 @@ interface FileResult {
 export const registerInstallProBundle = defineTool({
   name: "tm1_install_pro_bundle",
   description:
-    "Install all .pro files from a directory in one call. Iterates the directory (non-recursive by default), applies tm1_import_pro_file logic per file, and reports per-file outcome. Stops on first failure unless continueOnError=true. Useful for Bedrock or library deployments.",
+    "Install all .pro files from a directory in one call. Iterates the directory (non-recursive by default), applies tm1_import_pro_file logic per file, and reports per-file outcome. Stops on first failure unless continueOnError=true.",
   annotations: IDEMPOTENT_DESTRUCTIVE,
   output: InstallProBundleResultSchema,
   input: {

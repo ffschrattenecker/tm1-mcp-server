@@ -19,7 +19,6 @@ export const registerSearchRules = defineTool({
     "Regex search across cube rules text.",
     "Returns matches with cube name and line number.",
     "Use tm1_get_cube_rules on a hit to inspect the full rules.",
-    "Analogue of tm1_search_code for TI processes.",
   ],
   annotations: READ_ONLY,
   output: SearchRulesResultSchema,

@@ -23,7 +23,7 @@ export const registerGetCubeStats = defineTool({
     "Read }StatsByCube metrics for one or more cubes (memory, populated cells, fed cells, feeder efficiency).",
     "Well-known metrics are mapped to typed fields; the full element-name → value map is also returned under `raw` so server-side renames don't break the tool.",
     "Per-cube errors are reported as items[].error without failing the whole call.",
-    "The }Stats* control cubes are not always there: v12 has none at all, and v11 keeps them only while statistics collection is switched on. That case, and an account not allowed to read them, return `statsUnavailable` {reason: absent|denied} instead of a raw error.",
+    "}Stats* cubes are absent on v12, and on v11 unless statistics collection is on. Then, or when the account may not read them, return `statsUnavailable` {reason: absent|denied} instead of a raw error.",
   ],
   annotations: READ_ONLY,
   output: CubeStatsResultSchema,

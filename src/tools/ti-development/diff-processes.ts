@@ -166,7 +166,7 @@ export const registerDiffProcesses = defineTool({
     "Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog), on one connection or across two (connectionB, e.g. DEV vs PROD).",
     "Returns per-tab identical flag, line counts, and unified diff hunks for changed tabs.",
     "Also diffs parameters, variables, and datasource.",
-    "Analogue of tm1_diff_process_with_file but server-side — no .pro file needed.",
+    "Server-side: no .pro file needed.",
   ],
   annotations: READ_ONLY,
   peer: true,

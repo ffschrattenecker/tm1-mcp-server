@@ -121,7 +121,7 @@ export const registerAuditFeeders = defineTool({
       .optional()
       .default(50)
       .describe(
-        "Runtime: flag cube (severity hint) when fedCells / populatedNumeric ≥ this value. Default 50 — community rule of thumb for 'suspicious' (tm1forum/Cubewise; some use 20). Raise to 100 to only flag definite overfeeding.",
+        "Runtime: flag cube (severity hint) when fedCells / populatedNumeric ≥ this value. Default 50. Raise to 100 to only flag definite overfeeding.",
       ),
     fedRatioEvidenceThreshold: z
       .number()
@@ -129,7 +129,7 @@ export const registerAuditFeeders = defineTool({
       .optional()
       .default(100)
       .describe(
-        "Runtime: escalate cube_high_fed_ratio to severity 'evidence' when fedCells / populatedNumeric ≥ this value. Default 100 — community consensus for definite overfeeding. Must be ≥ fedRatioThreshold to take effect.",
+        "Runtime: escalate cube_high_fed_ratio to severity 'evidence' when fedCells / populatedNumeric ≥ this value. Default 100. Must be ≥ fedRatioThreshold to take effect.",
       ),
     memoryThresholdMb: z
       .number()

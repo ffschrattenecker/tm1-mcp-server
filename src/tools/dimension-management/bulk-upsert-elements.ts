@@ -24,7 +24,7 @@ const ElementSchema = z.object({
     )
     .optional()
     .describe(
-      "Child elements for a Consolidated element. REPLACES the full existing child set (verified live: passing [X,Y] drops any current children not in the list — it does not append). Omit or pass an empty array to leave existing children unchanged. To add one child, list the complete intended set.",
+      "Child elements for a Consolidated element. REPLACES the full existing child set. Omit or pass an empty array to leave existing children unchanged. To add one child, list the complete intended set.",
     ),
 });
 

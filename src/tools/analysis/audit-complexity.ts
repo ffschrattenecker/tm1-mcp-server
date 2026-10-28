@@ -113,7 +113,7 @@ export const registerAuditComplexity = defineTool({
         "Override v2 score weights (only affects scoreV2). Defaults: " +
           "loopBase=2, nestMult=3, ifBase=1, hotPenalty=2, commentDiscountMax=0. " +
           "Set commentDiscountMax (0..1) to discount scoreV2 by comment ratio " +
-          "(capped); 0 = off. Use to recalibrate without code changes.",
+          "(capped); 0 = off.",
       ),
     cellGetDimThreshold: z
       .number()

@@ -10,7 +10,7 @@ export const registerExecuteChore = defineTool({
   description: [
     "Execute a TM1 chore immediately, bypassing its schedule. The call returns when the chore is done; the run is polled, so long chains need no timeoutMs raise.",
     "Non-idempotent: runs every chained process. Before: tm1_analyze_chore_graph to preview the call chain.",
-    "Chores do NOT stop at a failing step (measured): later steps still run and still commit. Read `outcome`, not `success` alone — `completed_with_errors` means a step failed AND the chore's writes were committed, so re-running duplicates them. A step that aborts commits inside a chore, unlike the same process run on its own.",
+    "Chores do NOT stop at a failing step: later steps still run and still commit. Read `outcome`, not `success` alone — `completed_with_errors` means a step failed AND the chore's writes were committed, so re-running duplicates them.",
     "`rolled_back` (ChoreExecuteStatusCode ProcessRollbackCalled) discards the whole chore so far under ExecutionMode SingleCommit, only the rolling-back step under MultipleCommit.",
     "`statusUnavailable: true` means the server cannot report chore status (v11, and v12 before 12.5.0): the chore ran, the outcome is unknown.",
     "On failure: tm1_diagnose_process_error for the failing step.",

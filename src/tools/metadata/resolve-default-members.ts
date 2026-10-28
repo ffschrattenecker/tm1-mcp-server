@@ -8,8 +8,6 @@ export const registerResolveDefaultMembers = defineTool({
   name: "tm1_resolve_default_members",
   description: [
     "Resolve N hierarchies' effective default members in parallel from one tool call; pass items:[{dimensionName}] with a single entry for a one-off lookup.",
-    "Designed for view-construction workflows where 8+ slicer dimensions previously required dozens of sequential round-trips.",
-    "Each result carries its own source/confidence/alternatives so callers can audit per-dimension reliability.",
     "Per-item failures surface as result entries with an `error` field instead of `resolved`; the call itself does not fail unless input is empty/invalid.",
   ],
   annotations: READ_ONLY,

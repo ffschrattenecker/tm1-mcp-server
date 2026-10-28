@@ -48,7 +48,7 @@ const variableSchema = z.object({
 export const registerUpsertProcess = defineTool({
   name: "tm1_upsert_process",
   description:
-    "Atomic-style create-or-update for a TI process. Bundles createProcess (if missing) + updateProcessCode + updateProcessParameters + updateProcessVariables + updateProcessDataSource into a single MCP call. NOTE: TM1 itself does not support a real transaction — on partial failure, the steps that already succeeded are not rolled back. The tool reports which step failed.",
+    "Create-or-update for a TI process: createProcess (if missing), then code, parameters, variables and datasource. TM1 has no transaction: on partial failure the steps that already succeeded are not rolled back, and the tool reports which step failed.",
   annotations: IDEMPOTENT_DESTRUCTIVE,
   output: UpsertProcessResultSchema,
   input: {
@@ -98,7 +98,7 @@ export const registerUpsertProcess = defineTool({
       .optional()
       .default(false)
       .describe(
-        "Write nothing. Run the syntax AND reference check on the process as it would be after this call (both reported, neither stops the other) and diff it against the installed version (credentials masked). Needs no confirm and is not one: the real call still needs it. Replaces a separate check_process_code + validate_process_refs + diff before the risk assessment.",
+        "Write nothing. Run the syntax AND reference check on the process as it would be after this call (both reported, neither stops the other) and diff it against the installed version (credentials masked). Needs no confirm and is not one: the real call still needs it.",
       ),
   },
   handler: async (

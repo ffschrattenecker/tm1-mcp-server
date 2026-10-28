@@ -18,7 +18,7 @@ export const registerImportProcessFromGit = defineTool({
   name: "tm1_import_process_from_git",
   description: [
     "Deploy a TM1 process from the tm1-git two-file layout ('{name}.json' + '{name}.ti'). Provide the pair inline (jsonContent + tiContent) or as host paths (jsonPath + tiPath). The .json is the server's REST payload (as tm1_export_process_to_git and the VS Code extension write it); files in the older lowercase layout are read too.",
-    "Reverse of tm1_export_process_to_git. Modes: 'create' (fail if exists), 'update' (fail if missing), 'upsert' (default).",
+    "Modes: 'create' (fail if exists), 'update' (fail if missing), 'upsert' (default).",
     "If the source datasource is ODBC, pass dataSourcePassword to re-inject the credential that export strips.",
   ],
   annotations: IDEMPOTENT_DESTRUCTIVE,

@@ -100,8 +100,7 @@ export const registerAuditNaming = defineTool({
       .optional()
       .default(25000)
       .describe(
-        "Page size for paging through violating elements. Bounded to keep each response " +
-          "well below the V8 string limit (~512 MB). Default 25000.",
+        "Page size for paging through violating elements. Default 25000.",
       ),
     maxElementsPerDim: z
       .number()
@@ -110,10 +109,8 @@ export const registerAuditNaming = defineTool({
       .optional()
       .default(100000)
       .describe(
-        "Per-(dimension, hierarchy) cap on VIOLATING elements returned. The server checks " +
-          "every element against the rules, so the whole hierarchy is always examined; this " +
-          "bounds how many offenders come back. A hit of the cap is reported under " +
-          "`elementsTruncated`. Default 100000.",
+        "Per-(dimension, hierarchy) cap on VIOLATING elements returned; the whole hierarchy is still examined. " +
+          "A hit of the cap is reported under `elementsTruncated`. Default 100000.",
       ),
     summary: z
       .boolean()
@@ -123,9 +120,7 @@ export const registerAuditNaming = defineTool({
         "Aggregate findings instead of returning per-object detail. When true, " +
           "swaps the `findings` array for `findingsByGroup` — one entry per " +
           "(objectKind, parent) group with `ruleBreakdown`, `sampleNames` (up to 3), " +
-          "and `totalCount`. Recommended for audit reports on large models (e.g. dims " +
-          "with thousands of element findings) where per-object detail is not needed " +
-          "and `maxFindings`-capped output would be misleading. `truncated` is " +
+          "and `totalCount`. `truncated` is " +
           "always false in summary mode since no findings are dropped.",
       ),
   },
