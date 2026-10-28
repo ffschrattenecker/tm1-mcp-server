@@ -19,7 +19,8 @@ For the recommended `npx` install, put a `.env` in the project directory you
 start your MCP client from, or point `DOTENV_CONFIG_PATH` at one via the MCP
 config's `env` block. **Do not put `TM1_PASSWORD` in `.mcp.json` or
 `settings.json`** — those files are routinely shared or committed. Keep secrets
-in a `.env` that stays out of version control, or better, in the OS keychain.
+in a `.env` that stays out of version control, or better, in the
+[OS keychain](#secrets-in-the-os-keychain--tm1_secretskeychain).
 
 ## Secrets in the OS keychain — `TM1_SECRETS=keychain`
 
@@ -337,6 +338,16 @@ v12 also replaced threads with jobs — read `Threads` (v11) or `Jobs` (v12) wit
 `tm1_rest_read`. The file service auto-falls back from the v12
 `Files` root to the v11 `Blobs` root.
 
+Other v11/v12 differences:
+
+- Some metadata-write paths assume 11.x semantics.
+- v12 serves `MessageLogEntries`, `AuditLogEntries` and
+  `TransactionLogEntries` empty.
+- v12 dropped demand load, so `tm1.Unload` has no successor there.
+- v12 ships no `}Stats*` control cubes, so `tm1_get_cube_stats` and
+  `tm1_audit_feeders` in `mode` `runtime`/`both` report the statistics as
+  unavailable (static feeder analysis is unaffected).
+
 ## CAM (Cognos Access Manager) / LDAP
 
 Set `TM1_NAMESPACE` to your CAM namespace and the client logs in with
@@ -396,20 +407,11 @@ curl -X POST http://127.0.0.1:3000/mcp \
 
 The bearer token authenticates the _endpoint_, not the caller. Everyone who
 reaches it shares the same TM1 credential, session, caches and audit identity.
-The "fresh MCP server per request" wording in `src/http-transport.ts` describes
-request isolation inside the process — it is not a security boundary between
-users.
+Each request gets a fresh MCP server object inside the process; that is request
+isolation, not a boundary between users.
 
-Credential hygiene, same as for stdio:
-
-- Keep `TM1_PASSWORD` and any other secret only in `.env` (gitignored).
-- `.mcp.json` and `~/.claude/settings.json` are often shared/committed —
-  passing `env: { TM1_PASSWORD: "..." }` there leaks the credential into
-  team configs, dotfile repos, and Claude Code session logs.
-- If you must override per-host, use a per-host `.env` file rather than
-  inline `env` blocks in client config.
-- Need multiple TM1 environments? Use one folder per connection (see
-  [Several TM1 connections](#several-tm1-connections)).
+Credentials follow the same rules as for stdio: see
+[Where credentials are read from](#where-credentials-are-read-from).
 
 ### autoApprove
 
@@ -456,10 +458,8 @@ service account); confirm the server's `IntegratedSecurityMode` in `tm1s.cfg` or
 The MCP cannot read it: `ActiveConfiguration/Access/Authentication` is masked
 wholesale.
 
-**v11 vs v12 feature errors** (`DataSource.usesUnicode`, hierarchy/`Files`
-endpoints): set `TM1_VERSION=11.8` (or your `11.x`) so v12-only paths are
-disabled. The file service auto-falls back from the v12 `Files` root to the v11
-`Blobs` root.
+**v11 vs v12 feature errors** (hierarchy and `Files` endpoints): set
+`TM1_VERSION=11.8` (or your `11.x`) so v12-only paths are disabled. See [Tools that differ by version](#tools-that-differ-by-version).
 
 **Transaction-log reads are slow or time out:** the TM1 transaction log is a
 full scan. Always bound `TransactionLogEntries` with a tight TimeStamp filter
