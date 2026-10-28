@@ -252,6 +252,7 @@ describe("stripDefaultPhrase", () => {
       false,
       "Load the .ti and the .json",
     ],
+    ["A (default: 5) and B (default: 5) too", 5, "A and B too"],
   ])("drops a phrase restating the emitted default: %s", (text, value, out) => {
     expect(stripDefaultPhrase(text, value)).toBe(out);
   });
