@@ -49,6 +49,7 @@
 // "uncommittedElement"; the *Direct inserts commit at once and are not flagged.
 import { buildProcessEnv, type ProcessEnv } from "./callgraph/variableEnv.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
+import { withoutSandboxes } from "./tm1-name.js";
 
 const TABS = ["prolog", "metadata", "data", "epilog"] as const;
 type Tab = (typeof TABS)[number];
@@ -106,7 +107,6 @@ export interface ObjectCatalogue {
 // counted as unchecked (partial) rather than turning one validation into
 // hundreds of requests.
 const ELEMENT_LOOKUP_MAX = 200;
-const SANDBOX_DIMENSION = "sandboxes";
 
 const CUBE_ARG1_FNS =
   "CellGetN|CellGetS|CellIsUpdateable|ViewCreate|ViewDestroy|ViewZeroOut|CubeClearData|SubsetCreatebyMDX|ViewSubsetAssign|DBR|DBS|DBSS|CubeProcessFeeders|CubeUnload|CubeLockOverride|CubeSetLogChanges";
@@ -607,10 +607,7 @@ async function checkElementRefs(
     cubes.map(async (c) => {
       const all = await cubesSvc.getDimensionNames!(c);
       // TI's cell functions never take the Sandboxes dimension.
-      dimsOf.set(
-        c.toLowerCase(),
-        all.filter((d) => d.toLowerCase() !== SANDBOX_DIMENSION),
-      );
+      dimsOf.set(c.toLowerCase(), withoutSandboxes(all));
     }),
   );
 

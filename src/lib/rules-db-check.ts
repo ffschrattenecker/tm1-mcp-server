@@ -21,6 +21,7 @@ import { TM1Error, TM1ErrorCode } from "../types.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
 import { callArgs, elementResolves, quotedLiteral } from "./process-refs.js";
 import { neutralizeLine } from "./callgraph/rulesLinter.js";
+import { withoutSandboxes } from "./tm1-name.js";
 
 export interface DbCheckIssue {
   lineNumber: number;
@@ -34,8 +35,6 @@ export interface DbCheckLookups {
     exists: (dim: string, hierarchy: string, el: string) => Promise<boolean>;
   };
 }
-
-const SANDBOX_DIMENSION = "sandboxes";
 
 interface DbCall {
   cube: string;
@@ -78,10 +77,7 @@ export async function checkDbReferences(
   for (const cube of new Set(calls.map((c) => c.cube))) {
     try {
       const dims = await lookups.cubes.getDimensionNames(cube);
-      dimsOf.set(
-        cube,
-        dims.filter((d) => d.toLowerCase() !== SANDBOX_DIMENSION),
-      );
+      dimsOf.set(cube, withoutSandboxes(dims));
     } catch (e) {
       if (e instanceof TM1Error && e.code === TM1ErrorCode.NOT_FOUND)
         dimsOf.set(cube, null);
