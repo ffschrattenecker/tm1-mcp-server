@@ -7,15 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [10.2.0] - 2026-10-28
+
 ### Changed
 
+- Shorter tool descriptions: a fact repeated across tools is said once, and text that restated
+  a tool's own parameters or told version history is gone (tools/list about 9 KB smaller).
 - Shorter tool descriptions and error messages for the DB() rules checks; the checks are
   listed once, in `tm1_check_cube_rule`.
+
+### Fixed
+
+- The TI reference check matched cube and dimension names case-insensitively but not
+  space-insensitively, so a reference to `Total Year` was reported missing when the server
+  had `TotalYear`. It now uses TM1 name rules, as it already did for elements.
+- `tm1_diagnose_process_error`: `since` never excluded a log. It now filters on the
+  filename timestamp, as `tm1_list_error_logs` does.
+- Parameter texts on the wire lost the space before a dot (`the.json`) and kept stray
+  punctuation where a "Default" phrase was stripped.
 
 ### Removed
 
 - `fetchAll` on the paged tools (`tm1_execute_mdx`, `tm1_get_view`, `tm1_files_read`, `tm1_search_rules`, `tm1_list_error_logs`, `tm1_search_code`): use `limit=0` (all rows, capped at 5000).
-- `versionOverride` and the `appliedMajor` field on `tm1_audit_naming`: no replacement. `detectedMajor` is the server's version, and no naming rule depends on it.
+- `versionOverride` and the `appliedMajor` field on `tm1_audit_naming`: no replacement. `detectedMajor` is the server version, and no naming rule depends on it.
 
 ## [10.1.0] - 2026-10-27
 
@@ -414,7 +428,8 @@ response-size guard, the per-connection caches) are unchanged.
 Older history (before 8.0.0): see the git tags and the upstream repository,
 https://github.com/flameY3T1/tm1-mcp-server.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.1.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.2.0...HEAD
+[10.2.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.1.0...v10.2.0
 [10.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.0.0...v10.1.0
 [10.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.3.0...v10.0.0
 [9.3.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.2.0...v9.3.0
