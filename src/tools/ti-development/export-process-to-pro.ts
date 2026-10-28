@@ -20,8 +20,8 @@ export const registerExportProcessToPro = defineTool({
     "Reverse of tm1_import_pro_file: serialize a TM1 process back to a .pro file body.",
     "Fetches code (Prolog/Metadata/Data/Epilog), parameters, variables (including the columns set to Ignore), and datasource in parallel.",
     "Returns the .pro content inline by default; pass writeToFile to also persist to an absolute path on the MCP host.",
-    "A file written via writeToFile is round-trip safe with tm1_import_pro_file — useful for syncing live server state into a Git repo. The inline copy has credential literals masked by default and is for reading, not re-importing.",
-    "NOT a drop-in replacement for the .pro file in TM1's Datadir: the output omits TM1's BOM, its '601' version header and CRLF line endings. Measured on 11.8: TM1 does load such a file at startup and rewrites it in its own dialect, but it decodes slot 565 with its own scheme — a password written here becomes garbage that TM1 then persists, so the process looks configured and fails at runtime. Deploy via tm1_import_pro_file, not by copying into the Datadir.",
+    "A file written via writeToFile re-imports with tm1_import_pro_file.",
+    "NOT a drop-in for the .pro file in TM1's Datadir: the output omits the BOM, the '601' header and CRLF. TM1 garbles a password written this way and then persists it, so the process looks configured and fails at runtime. Deploy via tm1_import_pro_file instead.",
   ],
   annotations: READ_ONLY,
   output: ExportProcessToProResultSchema,
@@ -45,10 +45,7 @@ export const registerExportProcessToPro = defineTool({
       .optional()
       .default(false)
       .describe(
-        "Write the ODBC datasource password into the file (slot 565). Off by default, and v12 ONLY — on v11 it is refused, because the " +
-          "credential v11 hands out expires with the server run and would leave a file that looks complete and fails at connect time; clone " +
-          "with tm1_copy_process instead, or deploy with tm1_import_pro_file's dataSourcePassword. On v12 the value written is the PLAIN " +
-          "password. Requires writeToFile, so it never enters the inline response. Do not commit such a file.",
+        "Write the ODBC datasource password into the file. v12 ONLY (v11 refuses it). Requires writeToFile. The value written is the PLAIN password: do not commit such a file.",
       ),
   },
   handler: async (

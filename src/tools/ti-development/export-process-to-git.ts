@@ -19,10 +19,9 @@ export const registerExportProcessToGit = defineTool({
   name: "tm1_export_process_to_git",
   description: [
     "Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' — the server's own REST payload for the process without the code (Name, HasSecurityAccess, UIData, VariablesUIData, DataSource, Parameters, Variables; server key order, no renamed fields) — plus a '{name}.ti' (Prolog/Metadata/Data/Epilog as plain code).",
-    "The .ti holds the code in TM1's native `Code` representation (#region <Tab> / #endregion, CRLF, empty tabs omitted); the .json holds the structure. Code lives outside the JSON so Git diffs stay readable.",
-    "Returns both file bodies (json + ti) inline by default. Pass writeToDir to persist them to disk instead: the code is then written to files and omitted from the response to avoid duplicating it into the context window; only metadata (filenames, counts, writtenTo paths) comes back. Files written via writeToDir are round-trip safe with tm1_import_process_from_git; the inline .ti has credential literals masked by default and is for reading, not re-importing.",
-    "Security: the ODBC datasource password is stripped unless includeDataSourcePassword is set (which also requires writeToDir); credential literals in the TI code are masked in the inline response when maskSecrets is on, never in written files (those must re-import intact); credentialsOmitted=true flags when a password was stripped.",
-    "includeDataSourcePassword is v12-only: what v11 hands out expires with the server run, so exporting it would produce a file that looks complete and fails later.",
+    "The .ti holds the code in TM1's native `Code` representation (#region <Tab> / #endregion, CRLF, empty tabs omitted); the .json holds the structure.",
+    "Returns both file bodies (json + ti) inline by default. With writeToDir they go to disk instead and the response carries only metadata (filenames, counts, writtenTo paths). Files written via writeToDir re-import with tm1_import_process_from_git.",
+    "Security: the ODBC datasource password is stripped unless includeDataSourcePassword is set (which also requires writeToDir); credentialsOmitted=true flags when one was stripped.",
   ],
   annotations: READ_ONLY,
   output: ExportProcessToGitResultSchema,
@@ -46,7 +45,7 @@ export const registerExportProcessToGit = defineTool({
       .optional()
       .default(false)
       .describe(
-        "Write the ODBC datasource password into the .json. Off by default, and v12 ONLY — on v11 it is refused, because the credential v11 hands out expires with the server run and would leave a .json that looks complete and fails at connect time; clone with tm1_copy_process instead, or deploy with tm1_import_process_from_git's dataSourcePassword. On v12 the value written is the PLAIN password, in a layout meant for version control — requires writeToDir, and do not commit the result.",
+        "Write the ODBC datasource password into the .json. v12 ONLY (v11 refuses it). Requires writeToDir. The value written is the PLAIN password: do not commit the result.",
       ),
   },
   handler: async (
