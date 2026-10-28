@@ -22,9 +22,11 @@ Two things the raw list does not show:
   name verbatim — `tm1_rest_write` (DELETE and cancel actions),
   `tm1_files_write`, `tm1_delete_elements`, `tm1_clear_cube`,
   `tm1_execute_process`, `tm1_execute_chore`, `tm1_write_cells`,
-  `tm1_set_cube_rules`, and the create-or-update tools once the target exists.
-  It is misuse protection against a mis-fired call, not
-  access control.
+  `tm1_set_cube_rules`. The create-or-update tools (`tm1_upsert_process`,
+  `tm1_import_pro_file`, `tm1_import_process_from_git`,
+  `tm1_install_pro_bundle`) need it once the target exists, and
+  `tm1_bulk_upsert_elements` when its plan would remove children. It is misuse
+  protection against a mis-fired call, not access control.
 - **With several connections, every tool takes `connection`**, and the comparison
   tools (`tm1_compare_environments`, `tm1_diff_cube_rules`, `tm1_diff_hierarchy`,
   `tm1_diff_processes`) also take an optional `connectionB` to compare against.

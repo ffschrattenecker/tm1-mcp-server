@@ -111,10 +111,9 @@ TM1_MODE=readonly                   # readonly (default) | readwrite
 # TM1_LOCAL_FILE_ROOT=/srv/tm1-git  # optional; confines host-disk file params to this dir
 ```
 
-`TM1_RESPONSE_MODE=structured` drops the text block and ships `structuredContent`
-alone — half the wire bytes, but clients that read `content[]` (Kiro's IDE among
-them) then see nothing. Worth it only for clients that copy the whole result into
-the model prompt. [`.env.example`](.env.example) lists every variable with
+`TM1_RESPONSE_MODE=structured` halves the wire bytes but hides results from
+clients that read `content[]`; read [Wire format](docs/CONFIGURATION.md#wire-format--tm1_response_mode)
+before turning it on. [`.env.example`](.env.example) lists every variable with
 inline comments; [docs/CONFIGURATION.md](docs/CONFIGURATION.md) covers the ones
 needing more than a comment line — CAM/LDAP login, the TM1 v12 (Planning
 Analytics Engine) connection and its auth modes, host-disk file access.
@@ -129,22 +128,8 @@ Analytics Engine) connection and its auth modes, host-disk file access.
 
 ### Several TM1 servers — one process
 
-Give each connection its own folder with a `.env` under `~/.tm1/mcp-servers/`
-(or the folder named by `TM1_CONNECTIONS_DIR`) and leave `TM1_BASE_URL` unset:
-
-```text
-~/.tm1/mcp-servers/
-  dev/.env        # TM1_BASE_URL=…  TM1_MODE=readwrite
-  prod/.env       # TM1_BASE_URL=…  (readonly: the default)
-```
-
-One server then serves them all: every tool takes a `connection` argument and
-`tm1_list_connections` shows what is configured. Each folder sets its own
-`TM1_MODE` — a write against a readonly connection is refused per call — and
-no connection logs in before its first use. Folders added or edited later are picked up without
-a restart (`tm1_list_connections` rescans), and the server also starts with none. One entry replaces one MCP server
-per TM1 instance, so the client carries one tool list instead of N.
-[docs/CONFIGURATION.md](docs/CONFIGURATION.md#several-tm1-connections) has the details.
+One server process can serve any number of TM1 connections, one `.env` folder
+each. See [Several TM1 connections](docs/CONFIGURATION.md#several-tm1-connections).
 
 ### Positioning — this is a single-user tool
 
@@ -152,46 +137,30 @@ The server holds **one TM1 identity per process** and every call runs with it.
 That is the design, not a limitation to work around, and it has consequences
 worth stating plainly:
 
-- **The HTTP transport is single-tenant.** A bearer token authenticates the
-  _endpoint_, not a caller. Everyone who reaches it shares the same TM1
-  credential, session, caches and audit identity. The "fresh MCP server per
-  request" wording in the architecture notes describes request isolation inside
-  the process — it is not a security boundary between users.
+- **The HTTP transport is single-tenant.** Everyone who reaches its endpoint
+  shares one TM1 identity; see [HTTP transport](docs/CONFIGURATION.md#http-transport).
 - **`TM1_MODE=readwrite` with an admin account is a developer configuration**,
   not a production recommendation. In production, point the server at an account
   whose TM1 rights already match what the agent should be able to do — the
   server enforces no per-caller authorization of its own.
 - **The confirmation guards are misuse protection, not access control.**
   Destructive tools require a `confirm` argument repeating the target name
-  verbatim: `tm1_rest_write` (every DELETE and cancel action),
-  `tm1_files_write`, `tm1_delete_elements`, `tm1_clear_cube`,
-  `tm1_execute_process`, `tm1_execute_chore`, `tm1_write_cells` and
-  `tm1_set_cube_rules`; the create-or-update tools ask for it once the target
-  exists. Anything that can call such a tool can also supply its
-  `confirm` value — the guard only stops an auto-approving client firing an
-  irreversible action without naming the target.
+  verbatim; [docs/TOOLS.md](docs/TOOLS.md) lists them. Anything that can call
+  such a tool can also supply its `confirm` value — the guard only stops an
+  auto-approving client firing an irreversible action without naming the target.
 
 If you need multi-user access with per-caller identity, run one process per
 identity behind your own front end rather than sharing one.
 
 ### Secrets — `TM1_ALLOW_UNMASKED_SECRETS`
 
-Credential masking is on by default everywhere it applies. Several tools take a
-`maskSecrets` parameter, and a **model** can set it to `false` — an opt-out of a
-security control chosen by the thing being guarded against. That request is
-ignored unless the operator sets `TM1_ALLOW_UNMASKED_SECRETS=true`. The default
-degrades to "mask anyway" rather than failing the call, so an audit still gets
-its report, just redacted.
+Unmasking needs the operator's opt-in. See [Secrets](docs/CONFIGURATION.md#secrets--tm1_allow_unmasked_secrets).
 
 ## Use with Claude Code
 
 Copy `mcp.json.example` to `.mcp.json` (project-local) or merge it into
-`~/.claude/settings.json`. **Do not put `TM1_PASSWORD` in either file** — those
-are routinely shared or committed; keep it in a gitignored `.env`
-([where the server looks for one](docs/CONFIGURATION.md#where-credentials-are-read-from)),
-or out of files altogether in the OS keychain with
-`npx -y @ffschrattenecker/tm1-mcp-server secrets migrate <connection>`
-([details](docs/CONFIGURATION.md#secrets-in-the-os-keychain--tm1_secretskeychain)).
+`~/.claude/settings.json`. Where credentials belong is in
+[CONFIGURATION](docs/CONFIGURATION.md#where-credentials-are-read-from).
 
 For the `npx` install:
 
@@ -214,27 +183,18 @@ build** uses `"command": "node"` with
 ## HTTP transport
 
 The default transport is **stdio**, and that is the normal way to run this. For
-remote or multi-client setups, `TM1_MCP_TRANSPORT=http` switches to MCP
-Streamable HTTP (stateless, single `POST /mcp` endpoint). It is single-tenant:
-its optional bearer token authenticates the endpoint, not the caller. Setup,
-security notes and the `autoApprove` allowlist:
+remote or multi-client setups, `TM1_MCP_TRANSPORT=http` switches to Streamable
+HTTP; setup and security notes are in
 [docs/CONFIGURATION.md](docs/CONFIGURATION.md#http-transport).
 
 ## Compatibility
 
 - Node.js >= 22.19
-- TM1 11.8 / Planning Analytics 2.0 — the primary target; some metadata-write
-  paths assume 11.x semantics, and v12-only fields (e.g.
-  `DataSource.usesUnicode`) are dropped when `TM1_VERSION` says `11.x`
+- TM1 11.8 / Planning Analytics 2.0 — the primary target.
 - TM1 12.5 / Planning Analytics Engine — via `TM1_INSTANCE` + `TM1_DATABASE`,
-  live-validated with `s2s` auth only. `tm1_save_data` is v11-only. Through
-  `tm1_rest_read`/`tm1_rest_write`: running work is `Threads` on v11 and `Jobs`
-  on v12; v12 serves `MessageLogEntries`, `AuditLogEntries` and
-  `TransactionLogEntries` empty; v12 dropped demand load, so `tm1.Unload` has no
-  successor there;
-  v12 ships no `}Stats*` control cubes, so `tm1_get_cube_stats` and
-  `tm1_audit_feeders` in `mode` `runtime`/`both` report the statistics as
-  unavailable instead of returning metrics (static feeder analysis is unaffected)
+  live-validated with `s2s` auth only.
+- The v11/v12 differences (tool registration, log endpoints, `}Stats*` cubes):
+  [Tools that differ by version](docs/CONFIGURATION.md#tools-that-differ-by-version).
 
 <!-- TOOLS-AUTOGEN:START -->
 

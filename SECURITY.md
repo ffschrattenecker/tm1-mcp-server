@@ -33,10 +33,10 @@ bounty — this is a personal fork maintained on a best-effort basis.
 This server bridges an MCP client (an LLM) to a live IBM Planning Analytics / TM1
 instance over the TM1 REST API. Keep the following in mind before reporting:
 
-- **Credentials belong in `.env` only.** `TM1_PASSWORD` and other secrets must
-  never be placed in `.mcp.json`, `settings.json`, or any committed config —
-  those files are frequently shared and would leak the credential. This is
-  documented behaviour, not a vulnerability.
+- **Credential placement** is covered in
+  [docs/CONFIGURATION.md](docs/CONFIGURATION.md#where-credentials-are-read-from).
+  A secret placed in a shared config file is documented misuse, not a
+  vulnerability.
 - **`readonly` is the default mode.** Destructive tools (cube/dimension
   deletion, cell writes, process execution) are disabled unless you explicitly
   opt in with `TM1_MODE=readwrite`. Enabling `readwrite` against production by
