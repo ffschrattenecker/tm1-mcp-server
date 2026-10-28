@@ -20,6 +20,7 @@
 import { TM1Error, TM1ErrorCode } from "../types.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
 import { callArgs, elementResolves, quotedLiteral } from "./process-refs.js";
+import { neutralizeLine } from "./callgraph/rulesLinter.js";
 
 export interface DbCheckIssue {
   lineNumber: number;
@@ -36,24 +37,6 @@ export interface DbCheckLookups {
 
 const SANDBOX_DIMENSION = "sandboxes";
 
-// Blank everything from a '#' outside a string to the end of its line, keeping
-// offsets, so DB( inside a comment is not found and line numbers still hold.
-function maskComments(text: string): string {
-  return text
-    .split("\n")
-    .map((line) => {
-      let inStr = false;
-      for (let i = 0; i < line.length; i++) {
-        const ch = line[i];
-        if (ch === "'") inStr = !inStr;
-        else if (ch === "#" && !inStr)
-          return line.slice(0, i) + " ".repeat(line.length - i);
-      }
-      return line;
-    })
-    .join("\n");
-}
-
 interface DbCall {
   cube: string;
   elements: Array<string | null>; // null = not a string literal
@@ -61,25 +44,24 @@ interface DbCall {
 }
 
 function findDbCalls(rulesText: string): DbCall[] {
-  const text = maskComments(rulesText.replace(/\r\n/g, "\n"));
+  const lines = rulesText.replace(/\r\n/g, "\n").split("\n");
+  // Strings blanked and comments cut, offsets unchanged: DB( is searched here.
+  const neutral = lines.map(neutralizeLine);
+  // The same lines with only the comment cut, for reading the arguments.
+  const code = lines.map((l, i) => l.slice(0, neutral[i]!.length)).join("\n");
+  const searched = neutral.join("\n");
   const calls: DbCall[] = [];
   const re = /\bDB\s*\(/gi;
-  let inStr = false;
-  let scanned = 0;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    // Skip a DB( inside a string literal: count quotes up to the match.
-    for (; scanned < m.index; scanned++)
-      if (text[scanned] === "'") inStr = !inStr;
-    if (inStr) continue;
-    const args = callArgs(text, m.index + m[0].length - 1);
+  while ((m = re.exec(searched)) !== null) {
+    const args = callArgs(code, m.index + m[0].length - 1);
     if (args === null || args.length === 0) continue;
     const cube = quotedLiteral(args[0]!);
     if (cube === null) continue;
     calls.push({
       cube,
       elements: args.slice(1).map((a) => quotedLiteral(a)),
-      line: text.slice(0, m.index).split("\n").length,
+      line: searched.slice(0, m.index).split("\n").length,
     });
   }
   return calls;

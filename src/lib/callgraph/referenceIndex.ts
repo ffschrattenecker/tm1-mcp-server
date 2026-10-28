@@ -4,6 +4,7 @@ import {
   extractBracketRefs,
   parseBracketDimRefs,
   validateBracketRefSyntax,
+  neutralizeLine,
 } from "./rulesLinter.js";
 import { joinContinuationLines } from "./tiParser.js";
 import {
@@ -161,12 +162,6 @@ export interface ReferenceIndex {
 }
 
 // ─── Helpers (subset of rulesLinter/tiServerLinter internals) ────────────────
-
-function neutralizeLine(line: string): string {
-  return line
-    .replace(/'[^']*'/g, (s) => " ".repeat(s.length))
-    .replace(/#.*$/, "");
-}
 
 export function splitArgs(argsStr: string): string[] {
   if (!argsStr.trim()) {

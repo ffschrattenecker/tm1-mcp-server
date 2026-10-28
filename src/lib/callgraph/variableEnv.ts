@@ -12,6 +12,7 @@
  */
 
 import { TI_VAR } from "../ti-identifier.js";
+import { neutralizeLine } from "./rulesLinter.js";
 
 type TiVarType = "Numeric" | "String";
 
@@ -37,12 +38,6 @@ export interface ProcessEnv {
 const STRING_LITERAL_RE = /^'([^']*)'$/;
 const NUMERIC_LITERAL_RE = /^-?\d+(?:\.\d+)?$/;
 const IDENTIFIER_RE = new RegExp(`^${TI_VAR}$`);
-
-function neutralizeLine(line: string): string {
-  return line
-    .replace(/'[^']*'/g, (s) => " ".repeat(s.length))
-    .replace(/#.*$/, "");
-}
 
 const SECTION_MARKER_RE = /^57[2345],\d*$/;
 
