@@ -1,24 +1,15 @@
 // Single-site tool definition.
 //
-// Historically a tool's metadata lived in four places: the `server.tool(...)`
-// call in its own file, an entry in ANNOTATION_MAP, an entry in
-// OUTPUT_SCHEMA_MAP, and (for format-capable tools) a name in
-// MARKDOWN_CAPABLE_TOOLS. Four of the repo's lint gates exist only to keep
-// those name-keyed maps in step with the registrations. `defineTool` collapses
-// the four into one literal at the definition site; the maps become fallbacks
-// for the not-yet-migrated tools and shrink to nothing as migration proceeds.
+// A tool's metadata (title, annotations, output schema, markdown support) lives
+// in one defineTool() literal next to its handler. defineTool stores the spec
+// and then registers through `server.tool(name, description, input, cb)`, the
+// call the Proxy in ./with-annotations.ts intercepts. The Proxy reads the spec
+// with `specFor`.
 //
-// Migration is file-by-file on purpose. A `defineTool` tool still registers
-// through the same `server.tool(name, description, input, cb)` call the Proxy
-// in ./with-annotations.ts intercepts — nothing about the wrapping, error
-// normalization, readonly filtering or structuredContent handling changes.
-// The Proxy simply looks the spec up here first (see `specFor`) and falls back
-// to the maps when there is none.
-//
-// Two things the maps required by hand are now DERIVED and can no longer drift:
+// Derived from the shapes, so they cannot drift:
 //   - markdown capability: an input shape carrying `format` (i.e. one that
 //     spread FORMAT_SCHEMA) gets `markdownCapable()` applied to its output
-//     schema automatically — no MARKDOWN_CAPABLE_TOOLS membership to forget.
+//     schema automatically.
 //   - passthrough handling: a full ZodObject output is routed through
 //     `asOutputSchema()`, so `.passthrough()` / `.catchall()` schemas keep
 //     `additionalProperties: true` without the caller remembering the helper.

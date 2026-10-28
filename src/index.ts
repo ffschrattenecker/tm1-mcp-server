@@ -77,8 +77,8 @@ function buildMcpServer(
     },
   );
 
-  // Register all tools — wrap the server so each registration receives the
-  // annotation hint from ANNOTATION_MAP without editing call sites. In readonly
+  // Register all tools — wrap the server so each registration takes its
+  // annotations from its defineTool spec without editing call sites. In readonly
   // mode the proxy silently drops write/destructive tools so they never appear
   // in the tool listing — no autoApprove lists needed. With several
   // connections, write tools are listed when ANY connection is readwrite and

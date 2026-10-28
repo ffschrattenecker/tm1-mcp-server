@@ -1,9 +1,6 @@
 // Cube domain service. Owns the OData calls under /api/v1/Cubes(...) — listing,
-// creating, deleting, rules, clear, unload. Held as `TM1Client.cubes` and
-// reachable from there so call sites read like `client.cubes.list()` rather
-// than `client.getCubes()`. The flat `getCubes/...` methods on TM1Client remain
-// as deprecated wrappers during the migration period (Phase 1 of the
-// god-class split — see docs/ARCHITECTURE.md).
+// creating, deleting, rules, clear, unload. Held as `TM1Client.cubes`, so call
+// sites read like `client.cubes.list()`.
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type { Cube, CubeRules, RuleSyntaxError } from "../../types.js";
 import type { RequestOptions, TM1HttpClient } from "../http.js";

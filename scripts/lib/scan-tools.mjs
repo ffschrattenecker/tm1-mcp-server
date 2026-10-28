@@ -10,9 +10,7 @@
 //     …
 //   })
 //
-// Annotations and output schema live in the same literal, which is why the
-// map-sync gates this file used to feed are gone: the TypeScript type is the
-// only thing that has to agree with the code.
+// Annotations and output schema live in the same literal.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 

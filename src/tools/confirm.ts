@@ -1,8 +1,5 @@
-// Confirmation guard for destructive tool calls (R2-10 from MCP best-
-// practices review). LLMs occasionally fire delete_* / clear_* tools
-// without sufficient evidence the action is intended. Requiring the
-// caller to repeat the target name as a second argument forces explicit
-// intent and makes "auto-approve all" clients safer.
+// Confirmation guard for destructive tool calls. The caller repeats the
+// target name as a second argument, which forces explicit intent.
 //
 // Pattern in a tool registration:
 //
@@ -20,8 +17,8 @@
 //     ...
 //   }
 //
-// requireConfirm throws TM1Error(VALIDATION_ERROR) on mismatch; the
-// Proxy in src/index.ts catches and reformats to the uniform error shape.
+// requireConfirm throws TM1Error(VALIDATION_ERROR) on mismatch; the tool
+// wrapper in with-annotations.ts reformats it to the uniform error shape.
 import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../types.js";
 

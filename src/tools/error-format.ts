@@ -1,6 +1,5 @@
-// Centralized MCP error result formatting. Closes audit gaps 5 (actionable
-// hints) and 6 (uniform error shape) without per-tool edits — the index.ts
-// Proxy invokes these helpers so every tool emits the same JSON shape:
+// Centralized MCP error result formatting. The Proxy in ./with-annotations.ts
+// invokes these helpers so every tool emits the same JSON shape:
 //
 //   { code, message, httpStatus?, endpoint?, details?, hint }
 //

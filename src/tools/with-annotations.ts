@@ -22,8 +22,7 @@ const TITLE_CASING: Record<string, string> = {
 };
 
 // Derive a human-readable title from a snake_case tool name:
-// "tm1_get_process" → "Get Process". Single point of derivation —
-// no per-tool overrides in ANNOTATION_MAP.
+// "tm1_get_process" → "Get Process".
 export function deriveTitle(toolName: string): string {
   return toolName
     .replace(/^tm1_/, "")
@@ -33,7 +32,7 @@ export function deriveTitle(toolName: string): string {
     .join(" ");
 }
 
-// OUTPUT_SCHEMA_MAP entries are either a raw shape or a full Zod schema
+// An output schema is either a raw shape or a full Zod schema
 // (passthrough/catchall). Normalize to a parseable schema.
 function isZodSchema(entry: ZodRawShape | ZodTypeAny): entry is ZodTypeAny {
   return "_def" in entry;
@@ -372,19 +371,18 @@ export function withAnnotations(
             //
             // COVERAGE BOUNDARY: this guard only bites schemas that can actually
             // fail safeParse. A `.passthrough()` object or a `z.unknown()` field
-            // accepts anything, so tools whose OUTPUT_SCHEMA_MAP entry is
-            // permissive (e.g. MutationResultSchema.passthrough(), audit/feeder
-            // schemas) get no structural drift protection here — extra/renamed
-            // fields slip through silently. Prefer a strict, fully-modelled
-            // schema for any new output whose shape you want enforced (the
-            // callgraph tree was tightened for exactly this reason).
+            // accepts anything, so permissive output schemas (e.g.
+            // MutationResultSchema.passthrough(), audit/feeder schemas) get no
+            // structural drift protection here — extra/renamed fields slip
+            // through silently. Prefer a strict, fully-modelled schema for any
+            // new output whose shape you want enforced.
             //
             // Variant pick is made from the RESPONSE, not from the requested
             // `format`: a handler may legitimately fall back to JSON while
             // format:"markdown" was asked for (unavailable stats, empty
             // result), and branching on the input would reject that. No JSON
-            // payload in OUTPUT_SCHEMA_MAP carries a top-level `markdown`
-            // string, so the discriminator is unambiguous.
+            // payload carries a top-level `markdown` string, so the
+            // discriminator is unambiguous.
             const effectiveSchema = variants
               ? isMarkdownPayload(withStructured.structuredContent)
                 ? variants.markdown

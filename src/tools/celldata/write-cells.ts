@@ -136,8 +136,8 @@ export const registerWriteCells = defineTool({
     }
     // writeCells throws a TM1Error carrying its own partial-commit accounting
     // (written / failed / notAttempted) + a targeted hint, so we let it
-    // propagate to the index.ts Proxy unwrapped — wrapping it here would
-    // clobber that hint with a generic one.
+    // propagate to the Proxy unwrapped — wrapping it here would clobber that
+    // hint with a generic one.
     await tm1Client.cells.writeCells(cubeName, dimensions, cells);
     // Read back a bounded sample: each read is its own MDX round trip. The
     // write has landed by now, so a failed read-back is reported, not thrown.
