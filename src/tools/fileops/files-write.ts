@@ -25,7 +25,7 @@ export const registerFilesWrite = defineTool({
     `Hard max ${HARD_MAX_BYTES} bytes (32 MB).`,
     "op='delete': remove fileName; irreversible, NOT_FOUND if missing in both containers.",
     "container='applications' targets the Applications tree instead, which nests on both versions; the parent folder must already exist.",
-    "Safety: both ops need confirm=<fileName verbatim>.",
+    "Both ops need confirm (upload replaces a same-named file).",
   ],
   annotations: DESTRUCTIVE,
   output: MutationResultSchema,

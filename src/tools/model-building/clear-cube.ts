@@ -11,7 +11,6 @@ export const registerClearCube = defineTool({
     "Wipe every cell in a cube. There is no region or slice option — the server offers no selective clear, so this always empties the whole cube.",
     "FINAL — treat the data as gone. TM1 has no undo for it, and there is no dependable way back: any SaveDataAll or CubeSaveData that follows writes the empty cube to disk. Cleared cells read as zero/empty.",
     "Prefer TI for reproducible loads — this is for ad-hoc resets. To empty part of a cube, run a TI process with tm1_execute_process instead.",
-    "Safety: pass confirm=<cube name verbatim>. Mismatched confirm rejects the call.",
     "Before: tm1_get_cube_stats to see how much data you are about to wipe.",
   ],
   annotations: DESTRUCTIVE,

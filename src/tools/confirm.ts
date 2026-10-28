@@ -29,7 +29,7 @@ export const CONFIRM_SCHEMA = {
   confirm: z
     .string()
     .describe(
-      "Repeat the target name verbatim to confirm this irreversible action; a mismatch rejects the call.",
+      "Repeat the target name verbatim to confirm this irreversible action.",
     ),
 };
 
@@ -61,7 +61,7 @@ export const OVERWRITE_CONFIRM_SCHEMA = {
     .string()
     .optional()
     .describe(
-      "Required only when the target already exists (an overwrite): repeat its name verbatim. Not needed to create. The replaced version is saved first; result.backup names the .json/.ti pair (restore: tm1_import_process_from_git).",
+      "Required only to overwrite an existing target: repeat its name verbatim. The replaced version is saved first; result.backup names the .json/.ti pair (restore: tm1_import_process_from_git).",
     ),
 };
 
