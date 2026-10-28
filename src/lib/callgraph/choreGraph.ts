@@ -43,7 +43,7 @@ export function buildChoreGraph(
   const taskTrees: ChoreTaskTree[] = tasks.map((t) => {
     const tree = buildCallGraph(index, t.processName, {
       direction: "downstream",
-      includeControl: includeSystem,
+      includeSystem,
     });
     if (tree.env) {
       for (const p of t.params) {

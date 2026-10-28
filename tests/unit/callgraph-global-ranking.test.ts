@@ -1,7 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { globalRanking } from "../../src/tools/analysis/analyze-callgraph.js";
-import { buildCallGraph } from "../../src/lib/callgraph/callGraph.js";
-import { buildReferenceIndex } from "../../src/lib/callgraph/referenceIndex.js";
 import type {
   ReferenceIndex,
   TmReference,
@@ -69,7 +67,7 @@ describe("globalRanking", () => {
     const res = globalRanking(index, {
       rankBy: "outgoing",
       topN: 50,
-      includeControl: false,
+      includeSystem: false,
     });
 
     expect(res.ranking[0].process).toBe("Orchestrator");
@@ -96,14 +94,14 @@ describe("globalRanking", () => {
     const res = globalRanking(index, {
       rankBy: "incoming",
       topN: 50,
-      includeControl: false,
+      includeSystem: false,
     });
     expect(res.ranking[0].process).toBe("Hub");
     expect(res.ranking[0].incomingCalls).toBe(2);
     expect(res.ranking[0].incomingDistinct).toBe(2);
   });
 
-  it("excludes control processes unless includeControl", () => {
+  it("excludes control processes unless includeSystem", () => {
     const index = mkIndex(
       [procRef("}bedrock.server.wait", "A"), procRef("Real", "A")],
       ["}bedrock.server.wait", "Real", "A"],
@@ -111,7 +109,7 @@ describe("globalRanking", () => {
     const off = globalRanking(index, {
       rankBy: "outgoing",
       topN: 50,
-      includeControl: false,
+      includeSystem: false,
     });
     expect(off.ranking.some((r) => r.process.startsWith("}"))).toBe(false);
     expect(off.totalProcessesIndexed).toBe(2); // Real + A only
@@ -119,7 +117,7 @@ describe("globalRanking", () => {
     const on = globalRanking(index, {
       rankBy: "outgoing",
       topN: 50,
-      includeControl: true,
+      includeSystem: true,
     });
     expect(on.ranking.some((r) => r.process.startsWith("}"))).toBe(true);
   });
@@ -136,7 +134,7 @@ describe("globalRanking", () => {
     const res = globalRanking(mkIndex(refs, names), {
       rankBy: "outgoing",
       topN: 3,
-      includeControl: false,
+      includeSystem: false,
     });
     expect(res.ranking.length).toBe(3);
     expect(res.truncated).toBe(true);
@@ -149,59 +147,10 @@ describe("globalRanking", () => {
     const res = globalRanking(index, {
       rankBy: "outgoing",
       topN: 50,
-      includeControl: false,
+      includeSystem: false,
     });
     const loop = res.ranking.find((r) => r.process === "Loop")!;
     expect(loop.outgoingCalls).toBe(1);
     expect(loop.incomingCalls).toBe(1);
-  });
-});
-
-describe("buildCallGraph — includeControl", () => {
-  const indexWithControlCall = () =>
-    buildReferenceIndex({
-      fetchProcesses: async () => [
-        {
-          name: "Parent",
-          prolog:
-            "ExecuteProcess('}bedrock.server.wait');\nExecuteProcess('Real');",
-          metadata: "",
-          data: "",
-          epilog: "",
-          parameters: [],
-        },
-        {
-          name: "}bedrock.server.wait",
-          prolog: "",
-          metadata: "",
-          data: "",
-          epilog: "",
-          parameters: [],
-        },
-        {
-          name: "Real",
-          prolog: "",
-          metadata: "",
-          data: "",
-          epilog: "",
-          parameters: [],
-        },
-      ],
-      fetchCubesWithRules: async () => [],
-      fetchChores: async () => [],
-    });
-
-  it("hides '}' children by default and shows them with includeControl", async () => {
-    const index = await indexWithControlCall();
-    const hidden = buildCallGraph(index, "Parent", { direction: "downstream" });
-    expect(hidden.children.map((c) => c.process)).toEqual(["Real"]);
-
-    const shown = buildCallGraph(index, "Parent", {
-      direction: "downstream",
-      includeControl: true,
-    });
-    expect(shown.children.map((c) => c.process).sort()).toEqual(
-      ["Real", "}bedrock.server.wait"].sort(),
-    );
   });
 });
