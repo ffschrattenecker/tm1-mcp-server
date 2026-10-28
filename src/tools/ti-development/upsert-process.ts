@@ -16,7 +16,7 @@ import {
   type PreflightPayload,
 } from "./preflight.js";
 import { diffDs, diffParams, diffVars } from "./diff-processes.js";
-import { tabCodeDiff } from "../../lib/line-diff.js";
+import { normalizeText, tabCodeDiff } from "../../lib/line-diff.js";
 import type { DataSource } from "../../types.js";
 import { maskCode } from "../../lib/mask-secrets.js";
 import { backupProcess } from "./process-backup.js";
@@ -311,10 +311,8 @@ export const registerUpsertProcess = defineTool({
       { codeMatches: boolean; mismatchedTabs: string[] } | undefined;
     if (sentTabs.length > 0) {
       const stored = await tm1Client.processes.getCode(processName);
-      const norm = (x: string | undefined) =>
-        (x ?? "").replace(/\r\n/g, "\n").trimEnd();
       const mismatchedTabs = sentTabs.filter(
-        (t) => norm(stored[t]) !== norm(sent[t]),
+        (t) => normalizeText(stored[t] ?? "") !== normalizeText(sent[t] ?? ""),
       );
       verified = { codeMatches: mismatchedTabs.length === 0, mismatchedTabs };
     }

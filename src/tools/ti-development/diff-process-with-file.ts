@@ -9,6 +9,7 @@ import type {
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { parseProFile } from "../../lib/pro-parser.js";
 import { ignoredColumnsOf } from "../../lib/variables-ui-data.js";
+import { normalizeText } from "../../lib/line-diff.js";
 import {
   MASK_SECRETS_DESCRIPTION,
   maskCode,
@@ -31,12 +32,11 @@ function tabDiff(
   installed: string,
   file: string,
 ): TabDiff {
-  const norm = (s: string) => s.replace(/\r\n/g, "\n").trimEnd();
   return {
     tab: name,
-    installedLines: norm(installed).split("\n").length,
-    fileLines: norm(file).split("\n").length,
-    identical: norm(installed) === norm(file),
+    installedLines: normalizeText(installed).split("\n").length,
+    fileLines: normalizeText(file).split("\n").length,
+    identical: normalizeText(installed) === normalizeText(file),
   };
 }
 

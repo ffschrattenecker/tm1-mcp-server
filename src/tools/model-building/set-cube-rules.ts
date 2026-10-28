@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { invalidateCallgraphCache } from "../../lib/callgraph/tm1-adapter.js";
+import { normalizeText } from "../../lib/line-diff.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { withToolHint } from "../error-format.js";
 import { actionResponse } from "../format.js";
@@ -76,11 +77,12 @@ export const registerSetCubeRules = defineTool({
     );
     // Read back what TM1 stored, compared with line endings normalized. The
     // write has landed by now, so a failed read-back is reported, not thrown.
-    const norm = (x: string) => x.replace(/\r\n/g, "\n").trimEnd();
     let verified: { textMatches: boolean } | { readBackError: string };
     try {
       const stored = (await tm1Client.cubes.getRules(cubeName)).rulesText;
-      verified = { textMatches: norm(stored) === norm(text) };
+      verified = {
+        textMatches: normalizeText(stored) === normalizeText(text),
+      };
     } catch (e) {
       verified = { readBackError: (e as Error).message };
     }
