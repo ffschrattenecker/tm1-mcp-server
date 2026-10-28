@@ -15,6 +15,13 @@ const PLAIN = ["Version", "Row", "Measure"];
 const SANDBOXED = ["Sandboxes", "Row", "Measure"];
 
 describe("bindLeftOutSandbox", () => {
+  it("finds the Sandboxes dimension whatever its case and spacing", () => {
+    expect(bindLeftOutSandbox(["Row", "Sand boxes"], ["R1"])).toEqual([
+      "R1",
+      "Base",
+    ]);
+  });
+
   it("puts Base at the Sandboxes position of a coordinate one short", () => {
     expect(bindLeftOutSandbox(SANDBOXED, ["R1", "Amount"])).toEqual([
       "Base",

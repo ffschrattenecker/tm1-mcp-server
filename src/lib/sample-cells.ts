@@ -5,7 +5,7 @@ import type { MdxResult, CellValue } from "../types.js";
 import { TM1Error, TM1ErrorCode } from "../types.js";
 import { escapeMdxName } from "./mdx.js";
 import { BASE_SANDBOX } from "./cell-address.js";
-import { SANDBOX_DIMENSION } from "./tm1-name.js";
+import { SANDBOX_DIMENSION, tm1NameEquals } from "./tm1-name.js";
 
 export type SampleCellFilter = string | string[];
 
@@ -106,10 +106,7 @@ export function buildSampleCellsMdx(
   for (const dim of dimensions) {
     if (dim === columnDim) continue;
     let f = filters[dim];
-    if (
-      f === undefined &&
-      dim.toLowerCase() === SANDBOX_DIMENSION.toLowerCase()
-    ) {
+    if (f === undefined && tm1NameEquals(dim, SANDBOX_DIMENSION)) {
       f = BASE_SANDBOX;
       sandboxPin = { dimension: dim, element: BASE_SANDBOX };
     }

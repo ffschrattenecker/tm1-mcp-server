@@ -18,15 +18,13 @@
 // a regular dimension that happens to be named Sandboxes but has no `Base`
 // fails loudly with TM1's "member not found", never silently.
 import { TM1Error, TM1ErrorCode } from "../types.js";
-import { SANDBOX_DIMENSION } from "./tm1-name.js";
+import { SANDBOX_DIMENSION, tm1NameEquals } from "./tm1-name.js";
 
 export const BASE_SANDBOX = "Base";
 
 /** Index of the cube's `Sandboxes` dimension, or -1. */
 export function sandboxPosition(cubeDimensions: readonly string[]): number {
-  return cubeDimensions.findIndex(
-    (d) => d.toLowerCase() === SANDBOX_DIMENSION.toLowerCase(),
-  );
+  return cubeDimensions.findIndex((d) => tm1NameEquals(d, SANDBOX_DIMENSION));
 }
 
 /**
