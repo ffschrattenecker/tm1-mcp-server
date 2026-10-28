@@ -45,7 +45,7 @@ Everything below describes this fork's state. For the real project, read the
   toucher of an element as source, write or zero-out.
 - **Model audits.** Naming conventions (IBM PA 2.0/3.1), TI and rule complexity,
   feeder overfeeding (static heuristics plus `}StatsByCube` runtime evidence),
-  v12 readiness, orphan dimensions.
+  v12 readiness.
 - **Validation before you write.** Unbound compile of process code or a cube
   rule without saving; a check that every cube/dimension named in TI resolves
   live; a coordinate check that catches the silent no-op of writing to a
@@ -58,7 +58,7 @@ Everything below describes this fork's state. For the real project, read the
   in chat, plus five starting-point prompts.
 
 > **Token tip:** every registered tool's name + input schema costs context on
-> *each* turn, so exposing all 113 is wasteful when a session needs a slice.
+> *each* turn, so exposing every tool is wasteful when a session needs a slice.
 > Narrow the surface with your client's tool filter; `TM1_MODE=readonly` already
 > trims it to read-only tools.
 

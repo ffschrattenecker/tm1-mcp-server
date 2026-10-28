@@ -73,7 +73,8 @@ enforces that, and fails when a new interface starts duplicating a tool schema.
 
 ## Transports and the readonly/readwrite gate
 
-`src/index.ts` is the entry point. It builds one `McpServer`, registers the
+`src/index.ts` is the entry point. It builds an `McpServer` (one for stdio, a
+fresh one per request for HTTP; see `src/http-transport.ts`), registers the
 tools/prompts/resources, and connects it to a transport:
 
 | Transport           | When                               | Notes                                                     |

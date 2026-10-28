@@ -30,23 +30,6 @@ Two things the raw list does not show:
   `tm1_diff_processes`) also take an optional `connectionB` to compare against.
   Only read-only tools accept a second connection.
 
-## Categories
-
-| Category               | What it covers                                                                                                                                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `metadata`             | list cubes / dimensions / processes / chores, hierarchy read, ancestors and descendants, default-member resolution                                                                                |
-| `model-building`       | create/delete/clear/unload cube, get/set/check cube rules, bulk read of all rules, regex search across rules                                                                                      |
-| `dimension-management` | dimension + hierarchy CRUD, element CRUD, bulk element upsert, element-attribute definitions and values                                                                                           |
-| `subsets`              | list / get / create / update / delete subsets                                                                                                                                                     |
-| `views`                | list views, create MDX or native (subset-based) view, delete view                                                                                                                                 |
-| `celldata`             | execute MDX (with `format=markdown` pivot render), read a view, get a cell, write cells, sample cells, pre-write coordinate check (N-level + rule-overlap warning), feeder check and feeder trace |
-| `ti-development`       | process CRUD and upsert, compile, unbound pre-save check, get/update code (single + bulk), datasource, variables, parameters, regex search across all TI, reference validation, process diff      |
-| `scheduling`           | chore CRUD, execute now, activate/deactivate                                                                                                                                                      |
-| `security`             | client and group CRUD, group assignment                                                                                                                                                           |
-| `operations`           | server info and state, message / transaction / audit logs, error logs, threads (v11) or jobs (v12), sessions, save data (v11), cube stats                                                         |
-| `fileops`              | list, search, read, upload and delete server-side files                                                                                                                                           |
-| `analysis`             | process callgraph (tree, summary mode, global fan-in/fan-out ranking), object usage, chore graph, data-flow trace, naming / complexity / feeder audits, v12-readiness scan, orphan dimensions     |
-
 The `.pro` and git round-trip tools (`tm1_import_pro_file`,
 `tm1_export_process_to_pro`, `tm1_install_pro_bundle`,
 `tm1_diff_process_with_file`, `tm1_export_process_to_git`,

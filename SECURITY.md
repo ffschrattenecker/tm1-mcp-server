@@ -2,12 +2,7 @@
 
 ## Supported Versions
 
-| Version | Supported |
-| ------- | --------- |
-| 6.x     | ✅        |
-| < 6.0   | ❌        |
-
-Only the latest `6.x` release line receives security fixes.
+Only the latest published release receives security fixes.
 
 ## Reporting a Vulnerability
 
@@ -31,7 +26,7 @@ Please include:
 - any suggested remediation
 
 You can expect an initial acknowledgement within **7 days**. There is no bug
-bounty — this is a community project maintained on a best-effort basis.
+bounty — this is a personal fork maintained on a best-effort basis.
 
 ## Scope & Threat Model
 
