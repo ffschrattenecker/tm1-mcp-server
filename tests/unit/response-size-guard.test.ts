@@ -49,7 +49,7 @@ function wire(
     withAnnotations(server, mockLogger, "readwrite", responseMode, maxChars),
     {} as TM1Client,
   );
-  return (limit: number) => cb!({ limit, offset: 0, fetchAll: false }, {});
+  return (limit: number) => cb!({ limit, offset: 0 }, {});
 }
 
 describe("response size guard", () => {

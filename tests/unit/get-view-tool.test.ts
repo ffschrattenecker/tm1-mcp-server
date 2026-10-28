@@ -125,12 +125,12 @@ describe("tm1_get_view tool", () => {
     const res = await getHandler()({
       cubeName: "C",
       viewName: "V",
-      fetchAll: true,
+      limit: 0,
       format: "markdown",
     });
     const md = res.content[0].text;
 
-    // fetchAll is the documented 5000-cell slab, pushed down to TM1.
+    // limit 0 is the documented 5000-cell slab, pushed down to TM1.
     expect(paths[0]).toContain("$top=5000;$skip=0");
     expect(md).toContain("| Version | Jan | Feb |");
     expect(md).toContain("| Plan | 10 | 20 |");

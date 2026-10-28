@@ -41,9 +41,9 @@ describe("paginate", () => {
     expect(page.offset).toBe(10);
   });
 
-  describe("fetchAll", () => {
-    it("returns every item ignoring limit/offset", () => {
-      const page = paginate(items, 3, 7, true);
+  describe("limit 0", () => {
+    it("returns every item ignoring offset", () => {
+      const page = paginate(items, 0, 7);
       expect(page.items).toEqual(items);
       expect(page.count).toBe(10);
       expect(page.total).toBe(10);
@@ -53,16 +53,10 @@ describe("paginate", () => {
     });
 
     it("returns empty page on empty input", () => {
-      const page = paginate([], 50, 0, true);
+      const page = paginate([], 0, 0);
       expect(page.items).toEqual([]);
       expect(page.total).toBe(0);
       expect(page.has_more).toBe(false);
-    });
-
-    it("default-false keeps existing pagination behavior", () => {
-      const page = paginate(items, 4, 0);
-      expect(page.items).toHaveLength(4);
-      expect(page.has_more).toBe(true);
     });
   });
 });
@@ -71,16 +65,13 @@ describe("paginate", () => {
 // their serialized form is paid 19x in every tools/list payload. These pin the
 // contract two ways: the parse behaviour agents rely on (unchanged), and the
 // description budget (kept short on purpose — see the notes in the source).
-// K4/T2: fetchAll and limit=0 escape the PAGE SIZE, not every bound. Before
-// this cap a 200k-element dimension serialized 200k rows into one response.
-describe("paginate — unbounded modes stay bounded", () => {
+// limit=0 escapes the PAGE SIZE, not every bound. Before this cap a 200k-element
+// dimension serialized 200k rows into one response.
+describe("paginate — unbounded mode stays bounded", () => {
   const big = Array.from({ length: UNBOUNDED_MAX_ITEMS + 250 }, (_, i) => i);
 
-  it.each([
-    ["fetchAll", () => paginate(big, 50, 0, true)],
-    ["limit=0", () => paginate(big, 0, 0, false)],
-  ])("%s caps at UNBOUNDED_MAX_ITEMS and signals the rest", (_name, run) => {
-    const page = run();
+  it("limit=0 caps at UNBOUNDED_MAX_ITEMS and signals the rest", () => {
+    const page = paginate(big, 0, 0);
     expect(page.count).toBe(UNBOUNDED_MAX_ITEMS);
     expect(page.items).toHaveLength(UNBOUNDED_MAX_ITEMS);
     // total stays truthful, so the caller can see what was left out...
@@ -91,8 +82,8 @@ describe("paginate — unbounded modes stay bounded", () => {
   });
 
   it("resuming from next_offset reaches the remainder", () => {
-    const first = paginate(big, 0, 0, false);
-    const rest = paginate(big, 500, first.next_offset as number, false);
+    const first = paginate(big, 0, 0);
+    const rest = paginate(big, 500, first.next_offset as number);
     expect(rest.items[0]).toBe(UNBOUNDED_MAX_ITEMS);
     expect(rest.count).toBe(250);
     expect(rest.has_more).toBe(false);
@@ -100,7 +91,7 @@ describe("paginate — unbounded modes stay bounded", () => {
 
   it("a collection under the cap is unaffected", () => {
     const small = Array.from({ length: 3 }, (_, i) => i);
-    const page = paginate(small, 0, 0, true);
+    const page = paginate(small, 0, 0);
     expect(page.count).toBe(3);
     expect(page.has_more).toBe(false);
     expect(page.next_offset).toBeNull();
@@ -112,7 +103,7 @@ describe("shared paging/format input schemas", () => {
   const format = z.object(FORMAT_SCHEMA);
 
   it("applies the documented defaults when the params are omitted", () => {
-    expect(paging.parse({})).toEqual({ limit: 50, offset: 0, fetchAll: false });
+    expect(paging.parse({})).toEqual({ limit: 50, offset: 0 });
     expect(format.parse({})).toEqual({ format: "json" });
   });
 

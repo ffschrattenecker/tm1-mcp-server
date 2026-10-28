@@ -27,11 +27,11 @@ export const registerGetView = defineTool({
     ...FORMAT_SCHEMA,
   },
   handler: async (
-    { cubeName, viewName, limit, offset, fetchAll, format },
+    { cubeName, viewName, limit, offset, format },
     tm1Client,
     extra,
   ) => {
-    const all = fetchAll === true || limit === 0;
+    const all = limit === 0;
     // "All" is the documented first slab of UNBOUNDED_MAX_ITEMS, pushed down
     // to TM1 as $top — not the whole cellset. has_more/next_offset then say
     // where to resume, exactly as for any other page.

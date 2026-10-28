@@ -90,7 +90,6 @@ export const registerSearchRules = defineTool({
       maxTotalMatches,
       limit,
       offset,
-      fetchAll,
       format,
     },
     tm1Client,
@@ -151,7 +150,7 @@ export const registerSearchRules = defineTool({
       }
     }
 
-    const page = paginate(matches, limit, offset, fetchAll);
+    const page = paginate(matches, limit, offset);
     const wrapper = {
       pattern,
       caseSensitive,

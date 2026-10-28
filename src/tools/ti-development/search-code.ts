@@ -117,7 +117,6 @@ export const registerSearchCode = defineTool({
       groupBy,
       limit,
       offset,
-      fetchAll,
       format,
     },
     tm1Client,
@@ -154,7 +153,7 @@ export const registerSearchCode = defineTool({
       const groups = [...counts.entries()]
         .map(([key, matchCount]) => ({ [groupBy]: key, matchCount }))
         .sort((a, b) => b.matchCount - a.matchCount);
-      const groupPage = paginate(groups, limit, offset, fetchAll);
+      const groupPage = paginate(groups, limit, offset);
       const groupWrapper = {
         pattern,
         caseSensitive,
@@ -226,7 +225,7 @@ export const registerSearchCode = defineTool({
       deduplicated = true;
     }
 
-    const page = paginate(matches, limit, offset, fetchAll);
+    const page = paginate(matches, limit, offset);
     const wrapper = {
       pattern,
       caseSensitive,

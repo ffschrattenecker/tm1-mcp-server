@@ -140,9 +140,9 @@ export const registerFilesRead = defineTool({
     }
 
     if (op === "list") {
-      const { path, limit, offset, fetchAll, format } = args;
+      const { path, limit, offset, format } = args;
       const files = await tm1Client.files.list(path, container);
-      const pageData = paginate(files, limit, offset, fetchAll);
+      const pageData = paginate(files, limit, offset);
       const wrapper = { path: path ?? "", ...pageData };
       type Row = (typeof files)[number];
       const columns = columnsOf<Row>([{ header: "filename", get: (f) => f }]);
@@ -153,16 +153,8 @@ export const registerFilesRead = defineTool({
     }
 
     if (op === "search") {
-      const {
-        startswith,
-        contains,
-        operator,
-        path,
-        limit,
-        offset,
-        fetchAll,
-        format,
-      } = args;
+      const { startswith, contains, operator, path, limit, offset, format } =
+        args;
       const names = await tm1Client.files.search({
         startswith,
         contains,
@@ -170,7 +162,7 @@ export const registerFilesRead = defineTool({
         path,
         container,
       });
-      const pageData = paginate(names, limit, offset, fetchAll);
+      const pageData = paginate(names, limit, offset);
       // Echo the filters so callers can correlate matches with the request.
       const wrapper = {
         path: path ?? "",

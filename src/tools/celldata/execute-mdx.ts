@@ -122,11 +122,11 @@ export const registerExecuteMdx = defineTool({
       ),
   },
   handler: async (
-    { mdx, limit, offset, fetchAll, format, timeoutMs },
+    { mdx, limit, offset, format, timeoutMs },
     tm1Client,
     extra,
   ) => {
-    const all = fetchAll === true || limit === 0;
+    const all = limit === 0;
     // "All" is the documented first slab of UNBOUNDED_MAX_ITEMS, pushed down
     // to TM1 as $top — not the whole cellset. has_more/next_offset then say
     // where to resume, exactly as for any other page.

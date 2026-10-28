@@ -60,7 +60,7 @@ export function registerAllPrompts(server: McpServer): void {
           "```json",
           '{ "total": N, "count": K, "offset": O, "has_more": bool, "next_offset": O+K|null, "items": [...] }',
           "```",
-          'Override with `fetchAll=true` (entire dataset) or `format="markdown"` (human-readable table, structuredContent still attached).',
+          'Override with `limit=0` (all, capped at 5000) or `format="markdown"` (human-readable table, structuredContent still attached).',
           "",
           "## Workflow → tool map",
           "| Goal | Sequence |",

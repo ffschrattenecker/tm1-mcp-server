@@ -177,10 +177,10 @@ describe("tm1_execute_mdx axes clipping", () => {
     expect(env.axes_clipped).toBe(true);
   });
 
-  it("small view (fetchAll) is unchanged — full axes, no flag", async () => {
+  it("small view (limit 0) is unchanged — full axes, no flag", async () => {
     const { server, run } = fakeServer();
     registerExecuteMdx(server, mdxClient());
-    const res = await run({ mdx: "SELECT ...", fetchAll: true });
+    const res = await run({ mdx: "SELECT ...", limit: 0 });
     const env = JSON.parse(res.content[0].text);
 
     expect(env.axes[1].tuples).toHaveLength(5);
@@ -229,10 +229,10 @@ describe("tm1_get_view axes clipping", () => {
     expect(env.axes_clipped).toBe(true);
   });
 
-  it("fetchAll keeps full axes and omits the flag", async () => {
+  it("limit 0 keeps full axes and omits the flag", async () => {
     const { server, run } = fakeServer();
     registerGetView(server, viewClient());
-    const res = await run({ cubeName: "C", viewName: "V", fetchAll: true });
+    const res = await run({ cubeName: "C", viewName: "V", limit: 0 });
     const env = JSON.parse(res.content[0].text);
 
     expect(env.axes[1].tuples).toHaveLength(5);
@@ -240,9 +240,9 @@ describe("tm1_get_view axes clipping", () => {
   });
 });
 
-// D4 — fetchAll / limit:0 promised "Capped 5000" but pulled and shipped the
+// D4 — limit:0 promised "Capped 5000" but pulled and shipped the
 // whole cellset (20 000 cells measured as 2 MB of JSON).
-describe("fetchAll honours the 5000-cell cap", () => {
+describe("limit 0 honours the 5000-cell cap", () => {
   const N = 12_000;
   function bigHttp(paths: string[]) {
     return {
@@ -275,7 +275,7 @@ describe("fetchAll honours the 5000-cell cap", () => {
     } as unknown as ConstructorParameters<typeof CellService>[0];
   }
 
-  it.each([{ fetchAll: true }, { limit: 0 }])("%o", async (args) => {
+  it("limit 0 pushes down a 5000-row slab", async () => {
     const paths: string[] = [];
     const { server, run } = fakeServer();
     registerExecuteMdx(
@@ -285,7 +285,7 @@ describe("fetchAll honours the 5000-cell cap", () => {
       } as unknown as TM1Client),
     );
     const env = JSON.parse(
-      (await run({ mdx: "SELECT ...", ...args })).content[0].text,
+      (await run({ mdx: "SELECT ...", limit: 0 })).content[0].text,
     );
     expect(paths[0]).toContain("$top=5000");
     expect(env.count).toBe(5000);

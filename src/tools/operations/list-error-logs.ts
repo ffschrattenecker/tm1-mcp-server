@@ -133,7 +133,7 @@ export const registerListErrorLogs = defineTool({
     ...FORMAT_SCHEMA,
   },
   handler: async (
-    { processName, since, groupBy, limit, offset, fetchAll, format },
+    { processName, since, groupBy, limit, offset, format },
     tm1Client,
   ) => {
     // Pull a generous slice from the server (top=500); pagination is applied client-side
@@ -178,7 +178,7 @@ export const registerListErrorLogs = defineTool({
         .sort(
           (a, b) => b.count - a.count || a.process.localeCompare(b.process),
         );
-      const groupPage = paginate(allGroups, limit, offset, fetchAll);
+      const groupPage = paginate(allGroups, limit, offset);
       const wrapper = {
         groupBy: "process",
         processName,
@@ -201,7 +201,7 @@ export const registerListErrorLogs = defineTool({
       });
     }
 
-    const page = paginate(files, limit, offset, fetchAll);
+    const page = paginate(files, limit, offset);
     type Row = (typeof files)[number];
     const columns = columnsOf<Row>([
       "filename",
