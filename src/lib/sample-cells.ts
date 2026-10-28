@@ -4,7 +4,8 @@
 import type { MdxResult, CellValue } from "../types.js";
 import { TM1Error, TM1ErrorCode } from "../types.js";
 import { escapeMdxName } from "./mdx.js";
-import { BASE_SANDBOX, SANDBOX_DIMENSION } from "./cell-address.js";
+import { BASE_SANDBOX } from "./cell-address.js";
+import { SANDBOX_DIMENSION } from "./tm1-name.js";
 
 export type SampleCellFilter = string | string[];
 

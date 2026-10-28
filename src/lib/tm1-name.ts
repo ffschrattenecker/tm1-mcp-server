@@ -10,12 +10,14 @@ export const tm1NameKey = (name: string): string =>
 export const tm1NameEquals = (a: string, b: string): boolean =>
   tm1NameKey(a) === tm1NameKey(b);
 
+export const SANDBOX_DIMENSION = "Sandboxes";
+
 /**
  * A cube's dimensions without the leading `Sandboxes` dimension that
  * EnableSandboxDimension adds to every cube, so cubes compare equal across
  * servers with the setting on and off.
  */
 export const withoutSandboxes = (dims: readonly string[]): string[] =>
-  dims.length > 0 && tm1NameEquals(dims[0]!, "Sandboxes")
+  dims.length > 0 && tm1NameEquals(dims[0]!, SANDBOX_DIMENSION)
     ? dims.slice(1)
     : [...dims];

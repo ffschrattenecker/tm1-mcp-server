@@ -9,11 +9,8 @@
 // cube's dimension order, names the uncovered positions, and `details` pairs
 // every dimension with the element that landed on it.
 import { TM1Error, TM1ErrorCode } from "../types.js";
-import {
-  BASE_SANDBOX,
-  SANDBOX_DIMENSION,
-  sandboxPosition,
-} from "./cell-address.js";
+import { BASE_SANDBOX, sandboxPosition } from "./cell-address.js";
+import { SANDBOX_DIMENSION } from "./tm1-name.js";
 
 export function dimensionCountMismatch(
   cubeName: string,
