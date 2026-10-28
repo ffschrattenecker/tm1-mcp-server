@@ -49,7 +49,7 @@
 // "uncommittedElement"; the *Direct inserts commit at once and are not flagged.
 import { buildProcessEnv, type ProcessEnv } from "./callgraph/variableEnv.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
-import { withoutSandboxes } from "./tm1-name.js";
+import { tm1NameKey, withoutSandboxes } from "./tm1-name.js";
 
 const TABS = ["prolog", "metadata", "data", "epilog"] as const;
 type Tab = (typeof TABS)[number];
@@ -300,9 +300,6 @@ const INSERT_ARGS: Record<string, [number, number]> = {
   hierarchyelementinsert: [0, 3],
 };
 
-/** TM1 compares names ignoring case and spaces. */
-const tm1Key = (s: string): string => s.toLowerCase().replace(/\s+/g, "");
-
 interface CellCall {
   cube: string;
   /** One entry per element argument: the literal, or null if not literal. */
@@ -313,7 +310,7 @@ interface CellCall {
 }
 
 interface Inserts {
-  /** tm1Key(dimension) → tm1Key(element) the code inserts. */
+  /** tm1NameKey(dimension) → tm1NameKey(element) the code inserts. */
   literal: Map<string, Set<string>>;
   /** Dimensions the code inserts a computed element name into. */
   dynamicDims: Set<string>;
@@ -371,7 +368,7 @@ const QUEUED_INSERT_TABS: ReadonlySet<Tab> = new Set(["prolog", "metadata"]);
 function argKey(argText: string, env: ProcessEnv): string {
   const lit = quotedLiteral(argText) ?? identLiteral(argText, env);
   return lit !== null
-    ? `'${tm1Key(lit)}`
+    ? `'${tm1NameKey(lit)}`
     : argText.toLowerCase().replace(/\s+/g, "");
 }
 
@@ -452,13 +449,13 @@ function scanInserts(code: string, env: ProcessEnv, into: Inserts): void {
       return;
     }
     const el = quotedLiteral(elArg) ?? identLiteral(elArg, env);
-    const k = tm1Key(dim);
+    const k = tm1NameKey(dim);
     if (!el) {
       into.dynamicDims.add(k);
       return;
     }
     if (!into.literal.has(k)) into.literal.set(k, new Set());
-    into.literal.get(k)!.add(tm1Key(el));
+    into.literal.get(k)!.add(tm1NameKey(el));
   });
 }
 
@@ -640,10 +637,10 @@ async function checkElementRefs(
     call.elements.forEach((el, i) => {
       if (el === null) return;
       const dim = dims[i]!;
-      const dk = tm1Key(dim);
+      const dk = tm1NameKey(dim);
       if (scan.inserts.dynamicDims.has(dk)) return;
-      if (scan.inserts.literal.get(dk)?.has(tm1Key(el))) return;
-      const key = `${dk}\u0000${tm1Key(el)}`;
+      if (scan.inserts.literal.get(dk)?.has(tm1NameKey(el))) return;
+      const key = `${dk}\u0000${tm1NameKey(el)}`;
       if (!pending.has(key)) pending.set(key, { dim, el, call });
     });
   }
