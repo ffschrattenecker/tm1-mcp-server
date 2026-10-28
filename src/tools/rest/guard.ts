@@ -1,7 +1,7 @@
 // Path guard for tm1_rest_read / tm1_rest_write. Pure: no I/O, no client.
 //
-// The two generic REST tools must not become a way around the tools that are
-// kept for their safety nets (tm1_upsert_process's preflight/backup/rollback,
+// The two generic REST tools must not become a way around the tools that carry
+// safety nets (tm1_upsert_process's preflight/backup/rollback,
 // tm1_execute_process's never-retry heartbeat, tm1_set_cube_rules's check
 // loop, tm1_write_cells's coordinate validation, …). Every request is
 // therefore normalized and classified here before anything is sent; a refusal

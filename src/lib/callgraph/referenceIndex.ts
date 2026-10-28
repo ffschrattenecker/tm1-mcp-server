@@ -312,11 +312,11 @@ export function extractTiReferences(
     paramOriginal: new Map(),
     vars: new Map(),
   };
-  // Flow-sensitive Var-Tracking: Basis-Env (Params/DS-Vars/cross-section-Vars) + live
-  // aktualisierte lokale Vars. Jede Zuweisung überschreibt (last-assignment-wins), so dass
-  // Orchestrator-Muster wie `sProc='A'; RUNPROCESS(sProc,…); sProc='B'; RUNPROCESS(sProc,…);`
-  // beide Calls als eigene Refs auflösen statt auf `dynamic` zu demovieren.
-  // sharedLiveVars wird über Sections hinweg durchgereicht (Prolog-Zuweisung sichtbar in Data/Epilog).
+  // Flow-sensitive var tracking: base env (params, DS vars, cross-section vars)
+  // plus live local vars. Each assignment overwrites (last assignment wins), so
+  // orchestrator patterns like `sProc='A'; RUNPROCESS(sProc,…); sProc='B'; RUNPROCESS(sProc,…);`
+  // resolve both calls as separate refs instead of demoting them to `dynamic`.
+  // sharedLiveVars is passed across sections (a Prolog assignment is visible in Data/Epilog).
   const liveVars = sharedLiveVars ?? new Map(baseEnv.vars);
   const callerEnv: ProcessEnv = { ...baseEnv, vars: liveVars };
   const refs: RawTiRef[] = [];
@@ -709,8 +709,8 @@ export async function buildReferenceIndex(
     // Prolog are visible to ExecuteProcess calls in Data/Epilog (mirrors TI runtime behavior).
     const combinedText = [p.prolog, p.metadata, p.data, p.epilog].join("\n");
     const env = buildProcessEnv(combinedText, p.parameters ?? []);
-    // Shared liveVars über alle 4 Sections — Prolog-Zuweisungen bleiben in Data/Epilog sichtbar
-    // und die flow-sensitive Auswertung funktioniert auch über Section-Grenzen hinweg.
+    // Shared liveVars across all 4 sections: Prolog assignments stay visible in
+    // Data/Epilog, and the flow-sensitive evaluation works across section boundaries.
     const sharedLiveVars = new Map(env.vars);
 
     pushTi(p.name, "prolog", p.prolog, env, sharedLiveVars);

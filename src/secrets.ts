@@ -18,7 +18,7 @@
 // used (ConnectionRegistry.get). Listing connections therefore never touches
 // the keychain, and a missing entry fails that one connection, not startup.
 //
-// What this protects: the secret no longer sits in a file that gets synced,
+// What this protects: the secret is not kept in a file that gets synced,
 // backed up, committed, pasted or read into an agent's context. What it does
 // not: any process running as the same OS user can read the store too.
 import { TM1Error, TM1ErrorCode } from "./types.js";

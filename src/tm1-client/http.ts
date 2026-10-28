@@ -851,8 +851,7 @@ function isNetworkErrorImpl(error: unknown): boolean {
     }
 
     // Last-resort backstop: an error that stringified a network failure into its
-    // message without exposing a code or cause (rare, but the old code matched
-    // it — kept so nothing is silently dropped). Not the primary classifier.
+    // message without exposing a code or cause. Not the primary classifier.
     if (error instanceof Error) {
       const msg = error.message.toLowerCase();
       return (
@@ -904,9 +903,8 @@ function errorCodeOf(value: unknown): string | undefined {
  * Pull the message out of an OData error body. TM1 writes it two ways —
  * `error.message` as a plain string, or `error.message.value` — so both are
  * read, and anything else yields undefined so the caller can fall back to the
- * raw body. Returning only strings matters: the previous chained-optional
- * version could hand a whole object to a `string` field when `message` was an
- * object without `value`.
+ * raw body. Returning only strings matters: a chained optional could hand a
+ * whole object to a `string` field when `message` was an object without `value`.
  */
 function odataErrorText(parsed: unknown): string | undefined {
   if (typeof parsed !== "object" || parsed === null) return undefined;

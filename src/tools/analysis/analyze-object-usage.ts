@@ -78,10 +78,9 @@ export const registerAnalyzeObjectUsage = defineTool({
     },
     tm1Client,
   ) => {
-    // An omitted `limit` used to mean "no limit at all" — on a large model
-    // that is a full-model dump into one response. It now means "as much as
-    // is still readable", and `truncated` says when that bound bit, so the
-    // audit use-case still gets bulk output without an unbounded worst case.
+    // An omitted `limit` means USAGE_MAX_ITEMS, not "no limit": on a large
+    // model that would be a full-model dump in one response. `truncated` says
+    // when that bound applied, so audits still get bulk output.
     const effectiveLimit = limit ?? USAGE_MAX_ITEMS;
 
     const [index, usedInCubes] = await Promise.all([

@@ -66,8 +66,8 @@ export const CalculationTraceResultSchema = z
 // only annotates, it never changes parsing.
 
 // Zod 4 emits `z.number().int()` as {type:integer, minimum:-2^53+1, maximum:2^53-1}.
-// Those sentinel bounds no longer reach the wire — `slimJsonSchema()` strips them
-// at tools/list time — so an inlined int costs 18 bytes, LESS than the 28-byte
+// `slimJsonSchema()` strips those sentinel bounds at tools/list time, so an
+// inlined int costs 18 bytes, LESS than the 28-byte
 // `$ref` a shared id would cost. Hence no id here (measured on the shipped,
 // slimmed payload: id-off 4770 vs id-on 5043 bytes). Re-add the id only if that
 // slimmer is ever removed. The EffectiveValue id below pays off either way.
@@ -167,8 +167,8 @@ const CompactNodeBase = z.object({
 type CompactNode = z.infer<typeof CompactNodeBase> & {
   children: CompactNode[];
 };
-// Strict for the same reason as FullNodeSchema above — this is the variant that
-// used to swallow every stray key in the union.
+// Strict for the same reason as FullNodeSchema above: this variant would
+// otherwise swallow every stray key in the union.
 const CompactNodeSchema: z.ZodType<CompactNode> = CompactNodeBase.extend({
   children: z.lazy(() => z.array(CompactNodeSchema)),
 }).strict();
@@ -202,7 +202,7 @@ const RankEntrySchema = z.object({
   incomingDistinct: IntSchema,
 });
 
-// One permissive top-level object whose optional fields are now precisely
+// One permissive top-level object whose optional fields are precisely
 // typed — every real payload validates, and the typed fields are enforced.
 // `tree` accepts both full and compact nodes (full is tried first; a compact
 // node fails FullNode because `cycle`/`incomingEdge` are required there).

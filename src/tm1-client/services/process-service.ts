@@ -365,8 +365,8 @@ export class ProcessService {
   async getParameters(processName: string): Promise<ProcessParameter[]> {
     const path = `/api/v1/Processes('${odataKey(processName)}')/Parameters`;
     // TM1 v11 returns Type as the decoded string "Numeric" / "String"
-    // (not the legacy int code 1 / 2). The old `=== 1` check silently
-    // classified every Numeric parameter as String.
+    // (not the legacy int code 1 / 2): a `=== 1` check would classify every
+    // Numeric parameter as String.
     const response = await this.http.request<{
       value: Array<{
         Name: string;
@@ -535,11 +535,11 @@ export class ProcessService {
    * Run the callgraph fetch against the query shape this connection accepts,
    * discovering it on first use.
    *
-   * The discovery loop used to catch EVERY error and move on to the next,
-   * broader query. That turned an expired session, a request timeout or a
-   * security denial into three more full-collection scans (~4 × 30 s worst
-   * case) and — worse — let a later shape that happened to answer mask the
-   * real first error. Two guards bound it:
+   * Only a TM1 refusal of the query shape moves on to the next, broader
+   * query. Any other error must stop the loop: otherwise an expired session,
+   * a timeout or a denial would cost ~4 × 30 s of full-collection scans, and a
+   * later shape that happened to answer would mask the real first error. Two
+   * guards bound it:
    *
    *   - `rethrowIfSystemicOrDenied` — transport/auth/timeout failures and
    *     permission denials leave immediately. A denial in particular must never

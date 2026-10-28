@@ -1,7 +1,7 @@
 // tm1_rest_write: guarded generic POST/PATCH/PUT/DELETE against /api/v1/.
 //
-// Replaces the one-request create/update/delete tools. ./guard.ts refuses
-// whatever a kept tool owns (process writes, execution, rules, cells, files,
+// ./guard.ts refuses whatever a dedicated tool owns (process writes,
+// execution, rules, cells, files,
 // $batch, SaveData/Clear) and names that tool; DELETE and cancel/close
 // actions need confirm = the key of the object they hit. Non-GET requests are
 // never retried by the transport, so a dropped call is not replayed — and its

@@ -2,8 +2,8 @@
 // every tool that addresses a cell positionally (get_cell_value, write_cells,
 // check_writable_coords).
 //
-// The bare count ("4 given, 5 expected") was the least useful part of the old
-// messages: the caller already knows it passed four. What it lacks is WHICH
+// The bare count ("4 given, 5 expected") is the least useful part of the
+// message: the caller already knows it passed four. What it lacks is WHICH
 // dimension it forgot — typically one it does not think of as part of the cube,
 // such as a `Sandboxes` or `Version` dimension. So the message spells out the
 // cube's dimension order, names the uncovered positions, and `details` pairs

@@ -99,7 +99,7 @@ function parseHeaderFields(lines: string[]): HeaderFields {
       continue;
     }
     const m = line.match(/^(\d{3}),/);
-    // First occurrence wins, mirroring the old first-match lookup.
+    // First occurrence wins.
     if (m && !scalars.has(m[1]!)) {
       scalars.set(m[1]!, stripQuotes(lineValue(line)));
       rawScalars.set(m[1]!, lineValue(line));

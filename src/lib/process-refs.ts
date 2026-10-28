@@ -4,9 +4,8 @@
 // One core for two callers: tm1_validate_process_refs (the read-only
 // validator) and the install tools' preflight (import_pro_file,
 // import_process_from_git, install_pro_bundle, upsert_process), which run it
-// on the EXACT payload they are about to install. Before this was shared, the
-// preflight ran the syntax check only, so a deploy could validate cleanly and
-// still install code that names a cube that does not exist.
+// on the EXACT payload they are about to install, so a deploy cannot validate
+// cleanly and still install code that names a cube that does not exist.
 //
 // TM1 lets syntactically valid code reference non-existent objects — the
 // compiler never resolves names — so this catches the gap between compile and

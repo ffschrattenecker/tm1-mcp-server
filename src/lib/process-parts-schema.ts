@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // Shared Zod schemas for the deployable parts of a TI process (parameters,
-// variables, datasource). Used to validate untrusted input at two boundaries:
+// variables, datasource). They validate untrusted input at two boundaries:
 //   - tm1_check_process_code tool input (already Zod-validated by the SDK)
 //   - parseProcessFromGit, which parses a user-authored {name}.json file
 // Keeping one definition prevents the git path from accepting shapes the tool

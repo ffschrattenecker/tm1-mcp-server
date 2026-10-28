@@ -211,9 +211,8 @@ export interface ViewDefinition {
 
 /**
  * Result of a TI execution. A discriminated union rather than a flat record so
- * the states the server cannot actually be in are not expressible: before this,
- * `{success: true, processErrorStatus: "Aborted"}` typechecked, and nothing but
- * a code comment kept `success` and the status in agreement.
+ * the states the server cannot be in are not expressible: `{success: true,
+ * processErrorStatus: "Aborted"}` does not typecheck.
  *
  * `success` and `outcome` are literal-typed per variant, so they cannot drift
  * apart; either one narrows the union.

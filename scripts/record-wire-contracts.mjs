@@ -22,7 +22,7 @@
 //                narrows every union it did not re-observe, and nothing turns
 //                red afterwards. Use it only for a deliberate fresh start,
 //                such as a new server version, and read the diff. (--merge is
-//                still accepted; it is the default now.)
+//                still accepted; it is the default.)
 //   --read-only  run only the read-only sweep, so the target server is never
 //                written to. Required in practice for anything but a test
 //                instance.

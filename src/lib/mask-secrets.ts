@@ -50,9 +50,8 @@ export function maskSecretValues(text: string): string {
 
 // Whether a caller may switch credential masking OFF.
 //
-// `maskSecrets: false` is a MODEL-controlled opt-out of a security control —
-// the LLM can ask for raw credentials and, before this gate, got them. Now the
-// operator has to allow it out-of-band. Default is deny, so the tool parameter
+// `maskSecrets: false` is a MODEL-controlled opt-out of a security control, so
+// the operator has to allow it out-of-band. Default is deny, so the tool parameter
 // degrades to "mask anyway" rather than failing the call: an audit that asked
 // for unmasked output still gets its report, just redacted.
 export function resolveMaskSecrets(requested: boolean | undefined): boolean {
@@ -104,8 +103,8 @@ export function maskCode(code: string): string {
 
 // Deep-mask an arbitrary JSON-ish value: any object entry whose KEY name looks
 // like a credential (isSecretName) has its value replaced with MASK; primitives
-// stay as-is and nested objects/arrays are walked recursively. Used to sanitize
-// raw config dumps (e.g. the full TM1 /Configuration object surfaced under
+// stay as-is and nested objects/arrays are walked recursively. Sanitizes raw
+// config dumps (e.g. the full TM1 /Configuration object surfaced under
 // `_raw`) before they leave the server, so a password sitting under
 // Access.LDAP.Password or Access.Authentication.* never leaks unmasked.
 export function maskSecretsDeep(value: unknown): unknown {

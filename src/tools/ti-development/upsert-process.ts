@@ -22,9 +22,7 @@ import { maskCode } from "../../lib/mask-secrets.js";
 import { backupProcess } from "./process-backup.js";
 
 // The same data source shape the git round-trip and check_process_code use.
-// This tool used to carry its own copy, which had drifted: it was missing
-// `query`, so an ODBC source could be created here but its SQL could not —
-// while tm1_get_process reads it back.
+// Accepts `query` too: an ODBC source's SQL is read back by tm1_get_process.
 // Strict, so a misspelled field is rejected instead of silently dropped.
 const dataSourceSchema = sharedDataSourceSchema.strict();
 

@@ -147,7 +147,7 @@ function checkElementLeadingArithmetic(name: string): Violation | null {
 // TAB is a hygiene problem on every version, not a v12 one. Measured on 11.8
 // and 12.5 alike: the element is created, the name round-trips verbatim, no
 // alias attribute appears, and MDX addresses it exactly like a plain element.
-// So the rule no longer keys off the server version — it flags a character
+// So the rule does not key off the server version — it flags a character
 // that is invisible in every UI, ambiguous against surrounding whitespace, and
 // splits the name in TI and CSV round trips. Planning Analytics 3.1 is also
 // reported to reserve TAB as the name/alias separator; that is a documented

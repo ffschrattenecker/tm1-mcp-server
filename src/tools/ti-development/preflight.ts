@@ -8,10 +8,7 @@
 //   2. references — every literal cube/dimension name resolves on the server,
 //      or is created by the same code (tm1_validate_process_refs)
 //
-// Before 5.0.0 the preflight ran the syntax check only. A deploy could compile
-// cleanly and still install code that names a cube that does not exist — TM1
-// never resolves names at compile time — which is how "validated a fragment,
-// installed more" and silent cube substitution got through.
+// Checks references as well as syntax (see src/lib/process-refs.ts).
 import type { TM1Client } from "../../tm1-client.js";
 import type {
   DataSource,

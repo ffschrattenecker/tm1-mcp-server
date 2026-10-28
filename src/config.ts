@@ -155,8 +155,8 @@ export function loadServerSettings(
 
   const logFile = env.TM1_LOG_FILE || undefined;
 
-  // A typo here used to start on stdio without a word: the expected /mcp port
-  // never bound and the operator saw only a client that could not connect.
+  // An unknown value fails startup: falling back to stdio would leave the
+  // expected /mcp port unbound and the operator with no message.
   const transportRaw = (env.TM1_MCP_TRANSPORT ?? "stdio").trim().toLowerCase();
   if (
     !VALID_TRANSPORTS.includes(

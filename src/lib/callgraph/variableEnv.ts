@@ -7,7 +7,7 @@
  *   - dynamic    (everything else — CellGet, concatenation, function calls, IF, loops)
  *
  * Multi-assignment (a variable is assigned different values) → dynamic,
- * because the value is no longer unambiguous at any given call site.
+ * because the value is ambiguous at any given call site.
  */
 
 import { TI_VAR } from "../ti-identifier.js";
@@ -183,11 +183,11 @@ export function buildProcessEnv(
     if (seen.has(lc)) {
       const prev = assignedOnce.get(lc);
       if (prev && !bindingsEqual(prev, binding)) {
-        // Konservativ: Multi-Assign mit unterschiedlichen Bindungen → dynamic.
+        // Conservative: multiple assignments with different bindings → dynamic.
         assignedOnce.set(lc, { kind: "dynamic" });
         env.vars.set(lc, { kind: "dynamic" });
       }
-      // else: identische Bindung, Zustand bleibt
+      // else: identical binding, state unchanged
     } else {
       seen.add(lc);
       assignedOnce.set(lc, binding);

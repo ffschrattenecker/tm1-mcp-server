@@ -1,12 +1,8 @@
 // Named TM1 connections served by ONE server process.
 //
-// Before v7 every TM1 connection was its own server: one `.env` per folder
-// under ~/.tm1/mcp-servers/, one process, one full copy of the tool list. With
-// N connections a client carried N × ~113 tool names in context every turn,
-// spawned N processes and held N sessions + keepalives open. The registry keeps
-// the same folders as the source of truth (they are also what the tm1-api
-// skill reads) but serves them all from one tool list: every tool takes a
-// `connection` argument, and each connection's TM1Client is built on first use.
+// Each connection is a folder with a `.env` under ~/.tm1/mcp-servers/ (the
+// tm1-api skill reads the same folders). Every tool takes a `connection`
+// argument, and each connection's TM1Client is built on first use.
 //
 // Selection:
 //   TM1_CONNECTIONS_DIR set          → discover that folder

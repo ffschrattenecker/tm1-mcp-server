@@ -47,8 +47,7 @@ export class DimensionService {
    * When opts.includeElementCount is true, the expand also requests
    * `Elements($count=true;$top=0)` so each Hierarchy returns
    * `Elements@odata.count` without paying for the full element list.
-   * Single round-trip — drop-in for audit workflows that previously
-   * called getHierarchy() N times just to size dimensions.
+   * Single round-trip, so sizing many dimensions costs one request.
    *
    * When opts.includeElementStats is true, the expand fetches every
    * Element's Type+Level so we can aggregate per-Type counts and maxLevel

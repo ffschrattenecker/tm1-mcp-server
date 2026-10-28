@@ -9,7 +9,7 @@ import { FilenameItemSchema } from "../schemas/items.js";
 import { pageShapeFor } from "../schemas/common.js";
 
 // Below the server's 80k-character response limit (TM1_MAX_RESPONSE_CHARS)
-// once JSON escaping is added; the old 256 KB default could never be returned.
+// once JSON escaping is added.
 const DEFAULT_MAX_BYTES = 64 * 1024;
 // base64 grows the body by 4/3: 48 KB comes out at 64k characters, where the
 // text default would come out at ~87k and be refused by the size guard.

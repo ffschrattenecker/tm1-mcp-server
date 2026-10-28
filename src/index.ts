@@ -169,9 +169,9 @@ async function main(): Promise<void> {
     }
   }
 
-  // A single connection keeps the old behavior of logging in at startup, in
-  // the background: request() re-authenticates on every call anyway, so a
-  // failed login here only delays the error to the first tool call.
+  // A single connection logs in at startup, in the background: request()
+  // re-authenticates on every call anyway, so a failed login here only delays
+  // the error to the first tool call.
   if (registry.isSingle) {
     void registry.get(undefined);
   }

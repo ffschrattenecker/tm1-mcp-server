@@ -3,15 +3,12 @@
 // names out of TI calls.
 //
 // Provenance: derived from KNOWN_SIGNATURES (485 TI function signatures) in the
-// vscode-tm1-ti repo, src/tiLogicVisualizer/tiSignatures.ts, last synced here in
-// 0ffd998 (2026-06-12) and pruned of invented functions in dbd26ae (2026-06-30).
+// vscode-tm1-ti repo, src/tiLogicVisualizer/tiSignatures.ts.
 // For each signature, the 0-based index of the first parameter whose name
 // matches (case-insensitively) CubeName / DimensionName / ProcessName /
 // ElementName / SubsetName was recorded under the lowercased function name.
 // Key order follows the original signature order — FUNC_RE's alternation is
 // built from it. tests/unit/callgraph-arg-index.test.ts pins the result.
-// This replaces the vendored 6k-line signature copy, of which only the
-// parameter names were ever read.
 //
 // To add a function: append `functionnamelowercase: argIndex` to each table
 // whose parameter it takes.

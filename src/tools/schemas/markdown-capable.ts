@@ -26,7 +26,7 @@
 import { z, type ZodObject, type ZodRawShape, type ZodTypeAny } from "zod";
 
 export interface StrictVariants {
-  /** Full payload shape, exactly as before the loosening. */
+  /** Strict JSON payload shape. */
   json: ZodTypeAny;
   /** The only shape a markdown response may take. */
   markdown: ZodTypeAny;

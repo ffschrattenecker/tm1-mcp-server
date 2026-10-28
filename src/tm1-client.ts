@@ -26,8 +26,8 @@ import { registerCallgraphCacheInvalidation } from "./lib/callgraph/tm1-adapter.
 export class TM1Client {
   private connected = false;
 
-  // Transport is HELD, not inherited. Because TM1Client no longer `extends`
-  // TM1HttpClient, its public type does not expose `request()/requestRaw()/
+  // Transport is HELD, not inherited. TM1Client does not extend TM1HttpClient,
+  // so its public type does not expose `request()/requestRaw()/
   // requestBinary()`, so a tool typed on TM1Client cannot call raw REST — that
   // is a compile error (`tsc`).
   // Services that legitimately need transport receive `this.http` explicitly.
@@ -64,9 +64,8 @@ export class TM1Client {
     this.http = new TM1HttpClient(config, sessionManager, logger);
     this.sessionManager = sessionManager;
     this.logger = logger;
-    // Explicitly wire the callgraph cache-invalidation listener to tm1Events
-    // "mutation" notifications. Replaces the former import-time side-effect in
-    // http.ts — now the coupling is a visible, idempotent call at construction.
+    // Wire the callgraph cache-invalidation listener to tm1Events "mutation"
+    // notifications. An explicit, idempotent call at construction.
     registerCallgraphCacheInvalidation();
     this.batch = new BatchService(this.http);
     // One dimension-order cache per connection, shared by cubes and cells.

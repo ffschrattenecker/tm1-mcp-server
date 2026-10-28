@@ -19,9 +19,8 @@ import { rethrowIfSystemic } from "../../tm1-client/services/fallback.js";
 // these endpoints touches any of that.
 //
 // This matters more than it looks: `ExecuteMDX` is a POST, so the HTTP layer
-// classifies every ordinary MDX *read* as a mutation. Before this filter a
-// single tm1_execute_mdx call threw away the whole callgraph index and forced
-// a full rebuild on the next analysis call.
+// classifies every ordinary MDX *read* as a mutation. The allowlist below keeps
+// one tm1_execute_mdx call from discarding the whole callgraph index.
 //
 // Deliberately an allowlist of known-inert paths, not a denylist of
 // code-relevant ones: anything unrecognised keeps invalidating, so a new

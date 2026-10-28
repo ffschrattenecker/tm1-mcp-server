@@ -35,15 +35,13 @@ const ROLLED_BACK_STATUSES: ReadonlySet<string> = new Set([
 /**
  * Turn TM1's `ProcessExecuteStatusCode` into a `ProcessResult`.
  *
- * Two fail-open readings this closes, and they are mirror images:
+ * Two ways a status could be misread, mirror images of each other:
  *
- *  1. An ABSENT status code is not success. The old
- *     `?? "CompletedSuccessfully"` meant a 200 with an empty body, or a body
- *     without the field, reached the caller as a clean run.
+ *  1. An ABSENT status code is not success: a 200 with an empty body, or a
+ *     body without the field, must not reach the caller as a clean run.
  *  2. A present-but-not-`CompletedSuccessfully` code is not a flat failure.
- *     Collapsing all five remaining members into `failed` told a caller that
- *     an `ItemReject`ed run had failed when its writes were already committed —
- *     an invitation to re-run a process that has posted its data once.
+ *     An `ItemReject`ed run has its writes already committed, so reporting it
+ *     as failed would invite a re-run that posts the data twice.
  *
  * An UNRECOGNISED code (a seventh member in some future TM1, or a server
  * spelling we have never seen) is `indeterminate`, never a guess: the whole

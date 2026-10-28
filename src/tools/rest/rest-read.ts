@@ -1,6 +1,6 @@
 // tm1_rest_read: guarded generic GET against the TM1 REST API (/api/v1/).
 //
-// Replaces the one-request list/get tools. READ_ONLY, so it stays registered
+// READ_ONLY, so it stays registered
 // on readonly connections — which is also why Processes('P')/tm1.Compile, the
 // single read-only POST, is routed through here and not tm1_rest_write.
 // What may be requested is decided by ./guard.ts; ./shape.ts strips, masks

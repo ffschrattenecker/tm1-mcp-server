@@ -124,8 +124,7 @@ export class CellService {
       // yields one cell — an empty one comes back as a cell with a null Value.
       // No cell at all means a member did not resolve. v11 refuses that MDX
       // outright ("member not found (rte 81)"); v12 answers 200 with an empty
-      // cellset, and returning null there reported "this cell is empty" for a
-      // coordinate that does not exist. Both versions now fail the same way.
+      // cellset. Both fail the same way, never as an empty cell.
       throw new TM1Error({
         code: TM1ErrorCode.NOT_FOUND,
         message: `No cell resolved for cube '${cubeName}' at (${elements.join(", ")}). At least one element name does not exist in its dimension — check spelling and case with tm1_rest_read Dimensions('D')/Hierarchies('D')/Elements?$select=Name.`,
@@ -293,7 +292,7 @@ export class CellService {
         // CubeCellWriteStatusElementIsConsolidated). The error names the
         // status, never the coordinate, so the only way to tell the caller
         // WHICH cell was refused is to re-walk this chunk one cell at a time.
-        // That is the old cost, paid only on the failing path.
+        // That re-walk is paid only on the failing path.
         bulkFailed = true;
       } finally {
         try {
