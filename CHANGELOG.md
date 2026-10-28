@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shorter tool descriptions and error messages for the DB() rules checks; the checks are
   listed once, in `tm1_check_cube_rule`.
 
+### Removed
+
+- `fetchAll` on the paged tools (`tm1_execute_mdx`, `tm1_get_view`, `tm1_files_read`, `tm1_search_rules`, `tm1_list_error_logs`, `tm1_search_code`): use `limit=0` (all rows, capped at 5000).
+- `includeSystem` on `tm1_analyze_callgraph`: use `includeControl`, which now also shows `}` objects.
+
 ## [10.1.0] - 2026-10-27
 
 ### Added
