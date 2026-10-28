@@ -81,7 +81,7 @@ export const registerAuditComplexity = defineTool({
       .default(0)
       .describe(
         "Filter: only include entries whose score is >= this value (applied " +
-          "alongside topN, against the rankBy score). Default 0 (no filter). " +
+          "alongside topN, against the rankBy score). " +
           "When > 0, surviving " +
           "process/rules entries also drive status='fail'; at 0, status is " +
           "informational and only consistency issues (variable clusters, " +

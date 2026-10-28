@@ -245,6 +245,13 @@ describe("stripDefaultPhrase", () => {
       "reads stay single request.",
     ],
     ["Mode (default: upsert)", "upsert", "Mode"],
+    // Whitespace before a dot inside a word is part of the text, not a gap.
+    ["Read the .json (default: true).", true, "Read the .json."],
+    [
+      "Load the .ti and the .json (default: false)",
+      false,
+      "Load the .ti and the .json",
+    ],
   ])("drops a phrase restating the emitted default: %s", (text, value, out) => {
     expect(stripDefaultPhrase(text, value)).toBe(out);
   });

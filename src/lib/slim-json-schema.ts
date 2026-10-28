@@ -55,17 +55,21 @@ export function stripDefaultPhrase(
     return description;
   }
   const value = escapeRegExp(String(defaultValue));
+  // Each cut leaves a marker, so the punctuation fix below touches only the
+  // spot where a phrase was removed (not other text such as " .json").
+  const gap = "";
   return (
     description
-      .replace(new RegExp(String.raw`\s*\(default:?\s*${value}\)`, "gi"), "")
+      .replace(new RegExp(String.raw`\s*\(default:?\s*${value}\)`, "gi"), gap)
       .replace(
         new RegExp(
           String.raw`\s*\bDefault:?\s*${value}(?:[.;]|(?=\s)|$)`,
           "gi",
         ),
-        "",
+        gap,
       )
-      .replace(/\s+([.,;])/g, "$1")
+      .replace(new RegExp(`${gap}\\s*([.,;])`, "g"), "$1")
+      .replace(gap, "")
       .trim()
       // A phrase that opened the sentence leaves its trailing dash behind.
       .replace(/^[—–-]\s*/, "")
