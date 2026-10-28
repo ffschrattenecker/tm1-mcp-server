@@ -41,12 +41,10 @@
 // Existence probes (DimIx, ElementIndex) are deliberately not element checks.
 //
 // One more element trap needs no server: DimensionElementInsert and
-// HierarchyElementInsert are not committed until the Prolog or Metadata tab
-// that calls them ends, so an AttrPut*/ElementAttrPut* on that element later
-// in the same tab fails with "Element not found" (minor error, value not
-// written; verified on 11.8.03500 in both tabs). It only bites the run that
-// creates the element, which is why it survives testing. Kind
-// "uncommittedElement"; the *Direct inserts commit at once and are not flagged.
+// HierarchyElementInsert commit only when the Prolog/Metadata tab ends, so an
+// AttrPut*/ElementAttrPut* on that element later in the same tab fails with
+// "Element not found" on the run that creates it (11.8.03500). Kind
+// "uncommittedElement"; *Direct inserts are not flagged.
 import { buildProcessEnv, type ProcessEnv } from "./callgraph/variableEnv.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
 import { tm1NameKey, withoutSandboxes } from "./tm1-name.js";

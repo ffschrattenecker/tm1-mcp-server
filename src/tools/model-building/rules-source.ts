@@ -69,12 +69,9 @@ export async function resolveRulesText(
 }
 
 /**
- * Everything checked before rule text is installed: tm1.CheckRules, plus the
- * DB() cube, element count and literal elements, which CheckRules does not
- * check against the target cube.
- * Empty = clean. Shared so tm1_check_cube_rule reports exactly what
- * tm1_set_cube_rules would refuse. `lookups` lets a whole-model check share
- * cached cube and element lookups across cubes.
+ * tm1.CheckRules plus the DB() checks; empty = clean. Shared so
+ * tm1_check_cube_rule reports what tm1_set_cube_rules refuses. `lookups` lets
+ * a whole-model check cache lookups.
  */
 export async function checkRulesText(
   tm1Client: TM1Client,

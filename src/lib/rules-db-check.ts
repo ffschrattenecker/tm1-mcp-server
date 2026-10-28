@@ -1,22 +1,11 @@
-// DB() checks for cube rules: the mistakes in a DB() call that tm1.CheckRules
-// lets through. CheckRules resolves the elements of a [...] reference ("Element
-// not found"), but a DB() is only a call with string arguments to it
-// (verified on 11.8.03500, in rules and in feeders alike):
-//   - a cube that does not exist passes;
-//   - a literal element that does not exist in its dimension passes;
-//   - a wrong element count passes. DB() takes a cube's worth of elements and
-//     CheckRules never compares that with the cube: DB('Cube', !A, !B) on a
-//     three-dimension cube passes.
-// In all three the stored rule then reads 0 with no error anywhere (same
-// build), so the mistake shows only as a wrong number.
-// Rules address a cube without its Sandboxes dimension, the same as TI cell
-// calls, so that dimension is not counted and positions map onto the others.
-//
-// Only DB() calls whose cube is a string literal are checked, and of their
-// elements only string literals: !Dim, ATTRS(...) and nested DB() are what the
-// rule computes, and a computed cube name is left to the run. Elements are
-// looked up with TM1's own name resolution (case/space-insensitive, aliases),
-// so a name TM1 resolves is never reported.
+// DB() checks for cube rules: what tm1.CheckRules lets through. CheckRules does
+// not check DB() calls against the target cube: a missing cube, a missing
+// literal element and a wrong element count all pass, in rules and feeders,
+// and the rule then reads 0 without an error (verified 11.8.03500).
+// Sandboxes is not counted, as in TI.
+// Only DB() with a literal cube and literal elements are checked, using TM1's
+// own name resolution (case/space-insensitive, aliases), so a name TM1 resolves
+// is never reported.
 import { TM1Error, TM1ErrorCode } from "../types.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
 import { callArgs, elementResolves, quotedLiteral } from "./process-refs.js";

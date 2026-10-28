@@ -1,8 +1,6 @@
-// Re-check the rules TM1 already stores. Rules that passed every check when
-// they were written can break afterwards: TM1 lets an element or cube that a
-// stored rule names be deleted (verified on 11.8.03500), keeps the rule text
-// as it was, and the rule then fails CheckRules and computes nothing, without
-// an error anywhere. Only a check of the stored text shows it.
+// Re-check the rules TM1 already stores. TM1 lets an element or cube a stored
+// rule names be deleted and keeps the text (11.8.03500); only re-checking the
+// stored text shows it.
 import { z } from "zod";
 import type { DbCheckLookups } from "../../lib/rules-db-check.js";
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
