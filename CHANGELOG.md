@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `fetchAll` on the paged tools (`tm1_execute_mdx`, `tm1_get_view`, `tm1_files_read`, `tm1_search_rules`, `tm1_list_error_logs`, `tm1_search_code`): use `limit=0` (all rows, capped at 5000).
 - `includeSystem` on `tm1_analyze_callgraph`: use `includeControl`, which now also shows `}` objects.
+- `versionOverride` and the `appliedMajor` field on `tm1_audit_naming`: no replacement. `detectedMajor` is the server's version, and no naming rule depends on it.
 
 ## [10.1.0] - 2026-10-27
 
