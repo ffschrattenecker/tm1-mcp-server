@@ -15,39 +15,40 @@ import { checkRulesText } from "./rules-source.js";
 // lookups not cached yet.
 const CONCURRENCY = 4;
 
+// Promises are cached, so concurrent checks share one request.
+function memo<A extends string[], R>(
+  fn: (...args: A) => Promise<R>,
+  cache = new Map<string, Promise<R>>(),
+): (...args: A) => Promise<R> {
+  return (...args) => {
+    const k = args.join("\u0000").toLowerCase();
+    let p = cache.get(k);
+    if (!p) {
+      p = fn(...args);
+      cache.set(k, p);
+    }
+    return p;
+  };
+}
+
 // The DB() lookups for one sweep, cached: many cubes DB() into the same few
 // cubes, and a whole-model check would otherwise ask for them once per cube.
-// Promises are cached, so concurrent checks share one request.
 function cachedLookups(
   tm1Client: TM1Client,
   knownDims: Map<string, string[]>,
 ): DbCheckLookups {
-  const dims = new Map<string, Promise<string[]>>();
+  const dimsCache = new Map<string, Promise<string[]>>();
   for (const [cube, names] of knownDims)
-    dims.set(cube.toLowerCase(), Promise.resolve(names));
-  const elements = new Map<string, Promise<boolean>>();
+    dimsCache.set(cube.toLowerCase(), Promise.resolve(names));
   return {
     cubes: {
-      getDimensionNames: (cube) => {
-        const k = cube.toLowerCase();
-        let p = dims.get(k);
-        if (!p) {
-          p = tm1Client.cubes.getDimensionNames(cube);
-          dims.set(k, p);
-        }
-        return p;
-      },
+      getDimensionNames: memo(
+        (cube) => tm1Client.cubes.getDimensionNames(cube),
+        dimsCache,
+      ),
     },
     elements: {
-      exists: (dim, hier, el) => {
-        const k = [dim, hier, el].join("\u0000").toLowerCase();
-        let p = elements.get(k);
-        if (!p) {
-          p = tm1Client.elements.exists(dim, hier, el);
-          elements.set(k, p);
-        }
-        return p;
-      },
+      exists: memo((dim, hier, el) => tm1Client.elements.exists(dim, hier, el)),
     },
   };
 }
