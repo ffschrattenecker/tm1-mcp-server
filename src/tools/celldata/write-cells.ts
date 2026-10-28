@@ -24,7 +24,7 @@ export const registerWriteCells = defineTool({
     "Leaf (N-level) coordinates only: a consolidated one aborts the whole call before anything is sent, whatever the account's rights.",
     "A dimension left out would land on its default member, so the call is refused; Sandboxes left out bind to Base (reported as sandboxDefaulted). A named sandbox is addressable only once its IncludeInSandboxDimension is true.",
     "Before: tm1_check_writable_coords to validate that target coordinates are leaf-level and addressable.",
-    "The written cells are read back (up to 20; verified.mismatches lists any that differ, e.g. a rule or spread overriding the value), .",
+    "The written cells are read back (up to 20; verified.mismatches lists any that differ, e.g. a rule or spread overriding the value).",
     "Related: tm1_clear_cube for bulk wipe.",
   ],
   annotations: DESTRUCTIVE,
