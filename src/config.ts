@@ -49,24 +49,15 @@ export interface TM1Config {
   modeReason?: string | undefined;
   // How a successful tool result is put on the wire.
   //
-  //   "legacy" (default) — the JSON body ships BOTH ways: as content[0].text and
-  //                  as structuredContent. What the spec recommends: a tool
-  //                  returning structured content SHOULD also return the
-  //                  serialized JSON in a TextContent block.
-  //   "structured" — structuredContent only; the text block is dropped. Halves
-  //                  the wire bytes and is spec-legal precisely because an
-  //                  outputSchema is declared (CallToolResult.content "may be
-  //                  empty" then), but a client that reads content[0] and
-  //                  ignores structuredContent sees NO OUTPUT.
+  //   "legacy" (default) — the JSON body ships both as content[0].text and as
+  //                  structuredContent, as the MCP spec recommends.
+  //   "structured" — structuredContent only. Halves the wire bytes, but a
+  //                  client that reads content[] alone (Kiro's IDE client) sees
+  //                  an empty result.
   //
-  // "legacy" is the default because the saving "structured" promises does not
-  // exist on the clients that can read structuredContent: Claude Code
-  // de-duplicates, so both-ways costs one copy of context, not two (measured
-  // byte-identical tool_result at 1 KB and 23 KB). It is real only for clients
-  // that serialize the entire CallToolResult into the prompt (Q DEV CLI / Kiro
-  // CLI) — and those are never the ones that break. Meanwhile Kiro's IDE client
-  // reads content[] exclusively, so "structured" renders as an empty result
-  // there. Cost measured, benefit measured, default follows.
+  // Claude Code de-duplicates the two copies (byte-identical tool_result at
+  // 1 KB and 23 KB), so the saving is real only for clients that put the whole
+  // CallToolResult into the prompt (Q DEV CLI / Kiro CLI).
   responseMode: "legacy" | "structured";
   // Upper bound on a successful tool result, in characters of what the client
   // receives. Past it the result is replaced by a RESPONSE_TOO_LARGE error that

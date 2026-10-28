@@ -534,7 +534,7 @@ export const registerAuditFeeders = defineTool({
 /**
  * Cross-cube DB-feeder: the feeder line writes into another cube via DB(...).
  * Static-scan can't pair these with a local rule because the rule lives in
- * the *target* cube, not the source. S5 (db_feeder_without_skipcheck) already
+ * the *target* cube, not the source. S4 (db_feeder_without_skipcheck) already
  * covers their DB-feeder risk profile, so S1 skips them.
  */
 function isCrossCubeDbFeeder(lineText: string): boolean {

@@ -233,20 +233,10 @@ export const registerAuditNaming = defineTool({
     }
 
     // ── Elements (per-dim/per-hierarchy, filtered server-side) ─────────
-    // Every element rule is character-based, so TM1 evaluates them: the
-    // scan asks for the names that MIGHT violate one and checks only those
-    // (see src/lib/naming/odata-filter.ts). Downloading every name cost
-    // 15.2 MB on a single 171k-element dimension and 66 MB across a real
-    // model, and capped the audit at maxElementsPerDim — beyond which it
-    // examined a prefix of the dimension and said so. Now the server looks
-    // at all of them, and the cap bounds the number of REPORTED violations
-    // instead of the number examined.
-    //
-    // The filter is a prefilter, never the verdict: checkName still decides
-    // on every candidate, so an over-wide filter costs rows and nothing
-    // more. Its soundness — never omitting a name checkName would flag — is
-    // pinned by tests/unit/naming-odata-filter.test.ts and by the live
-    // suite, which plants a violating element and expects it back.
+    // Element rules are character-based, so TM1 evaluates them: the scan asks
+    // for the names that might violate one and checks only those (see
+    // src/lib/naming/odata-filter.ts). The server looks at all of them; the cap
+    // bounds the reported violations, not the names examined.
     const elementsTruncated: TruncatedElementGroup[] = [];
     let totalElementsInScope = 0;
     if (want("elements") && dimensionsForChildren) {
@@ -267,7 +257,7 @@ export const registerAuditNaming = defineTool({
               : {}),
           });
           totalElementsInScope += total;
-          // `scanned` counts what was EXAMINED, which is now the whole
+          // `scanned` counts what was EXAMINED, which is the whole
           // hierarchy — the server applied the rules to every element and
           // returned the candidates. Counting the candidates instead would
           // report "5 elements scanned" for a 171k dimension with 5

@@ -242,29 +242,11 @@ export function withAnnotations(
   type ToolCallback = (...cbArgs: unknown[]) => unknown;
 
   // Handlers return their payload as a JSON string in content[0].text. Parsing
-  // it into structuredContent is what satisfies the declared outputSchema — but
-  // leaving the text block in place means the identical JSON crosses the wire
-  // TWICE. Every tool declares an outputSchema, so in "legacy" mode that
-  // doubling applies to every successful response.
-  //
-  // In "structured" mode the now-redundant text block is dropped. That is
-  // spec-legal only because an outputSchema is declared: CallToolResult.content
-  // "may be empty" then (see CallToolResultSchema in the SDK). It is NOT the
-  // default, and must not become one — the spec says a tool returning
-  // structured content SHOULD also return the serialized JSON in a TextContent
-  // block, and clients take that literally. Kiro's MCP layer (bundled TS SDK,
-  // protocolVersion 2025-11-25, clientInfo {name:"kiro"}) parses results with
-  //   const items = Array.isArray(r.content) ? r.content : []
-  // and never reads structuredContent, so an empty content array renders as no
-  // output at all.
-  //
-  // Dropping the text block also buys nothing on the clients that do read
-  // structuredContent: Claude Code de-duplicates, so an identical payload sent
-  // both ways costs exactly one copy of context (measured byte-identical
-  // tool_result at 1 KB and at 23 KB, and the >25k-token offload-to-file path
-  // behaves the same either way). The saving is real only for clients that
-  // serialize the whole CallToolResult into the model prompt — Q DEV CLI /
-  // Kiro CLI do this — which is who this mode is still here for.
+  // it into structuredContent satisfies the declared outputSchema, but leaving
+  // the text block in place sends the same JSON twice. In "structured" mode the
+  // text block is dropped: spec-legal only because an outputSchema is declared
+  // (CallToolResult.content may then be empty). Why "legacy" is the default:
+  // see responseMode in src/config.ts.
   //
   // A non-JSON text block (markdown mode, where the handler already attached
   // structuredContent itself) is left alone in both modes: there the text is

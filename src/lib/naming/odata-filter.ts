@@ -1,8 +1,8 @@
 // Server-side prefilter for the element naming audit.
 //
-// Auditing element names used to mean downloading them all: 15.2 MB for a
-// single 171k-element dimension, 66 MB across a real model, and — worse — a
-// cap (`maxElementsPerDim`) beyond which the audit silently checked only a
+// Without a filter, auditing element names means downloading them all:
+// 15.2 MB for a single 171k-element dimension, 66 MB across a real model, and
+// — worse — a cap (`maxElementsPerDim`) beyond which the audit silently checked only a
 // prefix of the dimension.
 //
 // Every element rule in ./rules.ts is character-based, and TM1 implements the
