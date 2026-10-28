@@ -3,7 +3,7 @@ import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
 import { slimJsonSchema } from "../lib/slim-json-schema.js";
-import { specFor } from "./define-tool.js";
+import { specFor, type ResolvedSpec } from "./define-tool.js";
 import { DEFAULT_MAX_RESPONSE_CHARS } from "../config.js";
 import { TM1Error, TM1ErrorCode } from "../types.js";
 import { strictVariants } from "./schemas/markdown-capable.js";
@@ -422,27 +422,12 @@ export function withAnnotations(
       if (prop !== "tool")
         return Reflect.get(target, prop, receiver) as unknown;
       return (...args: unknown[]) => {
-        const isFourArg =
-          args.length === 4 &&
-          typeof args[0] === "string" &&
-          typeof args[1] === "string" &&
-          typeof args[3] === "function";
-        if (!isFourArg) {
-          throw new Error(
-            "withAnnotations Proxy expects server.tool(name, description, inputSchema, cb). " +
-              "Other tool() overloads are deprecated and not supported here.",
-          );
-        }
         const name = args[0] as string;
         const description = args[1] as string;
         const inputSchema = args[2];
-        const spec = specFor(name);
-        const annot = spec?.annotations;
-        if (!annot) {
-          throw new Error(
-            `Tool "${name}" registered without a spec — build it with defineTool() (src/tools/define-tool.ts) instead of calling server.tool directly.`,
-          );
-        }
+        // defineTool() stores the spec before it calls server.tool, so it is always there.
+        const spec = specFor(name) as ResolvedSpec;
+        const annot = spec.annotations;
         if (mode === "readonly" && !annot.readOnlyHint) {
           return;
         }
