@@ -43,7 +43,7 @@ export const registerListProcessesGrouped = defineTool({
       .optional()
       .default(false)
       .describe(
-        "Add processes[] array of names to each group. Default false — summary only.",
+        "Add processes[] array of names to each group; without it only the summary is returned.",
       ),
     minCount: z
       .number()
