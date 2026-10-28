@@ -337,7 +337,6 @@ describe("declared output schemas", () => {
       items: [
         {
           filename: "Load.Sales_20260504_123045.log",
-          lastUpdated: "2026-05-04T12:30:45Z",
         },
       ],
     },

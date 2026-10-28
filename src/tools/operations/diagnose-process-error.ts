@@ -99,10 +99,6 @@ export const registerDiagnoseProcessError = defineTool({
     const allFiles = await tm1Client.server.listErrorLogFiles({ top: 500 });
     const matching = allFiles
       .filter((f) => matchesProcessName(f.filename, processName))
-      .filter((f) => {
-        if (!since) return true;
-        return !f.lastUpdated || f.lastUpdated >= since;
-      })
       .slice(0, maxLogs);
 
     if (matching.length === 0) {
@@ -143,7 +139,6 @@ export const registerDiagnoseProcessError = defineTool({
 
         const entry: Record<string, unknown> = {
           filename: f.filename,
-          lastUpdated: f.lastUpdated,
           totalLines,
           truncated,
           ...(fetchError ? { fetchError } : { content }),

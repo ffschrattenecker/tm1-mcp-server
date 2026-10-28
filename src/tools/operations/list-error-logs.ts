@@ -207,8 +207,7 @@ export const registerListErrorLogs = defineTool({
       "filename",
       {
         header: "lastUpdated",
-        get: (f) =>
-          f.lastUpdated ?? formatTs(parseLogName(f.filename).ts) ?? "",
+        get: (f) => formatTs(parseLogName(f.filename).ts) ?? "",
       },
     ]);
     return pageResponse(page, format, { title: "Error logs", columns });
