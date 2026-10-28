@@ -55,8 +55,8 @@ function cachedLookups(
 export const registerCheckAllCubeRules = defineTool({
   name: "tm1_check_all_cube_rules",
   description: [
-    "Check the stored rules of every cube with the same checks as tm1_check_cube_rule (tm1.CheckRules plus the DB() cube, element count and literal elements). Returns only the cubes with errors.",
-    "Finds rules that broke after they were written: TM1 lets an element or cube that a stored rule names be deleted, keeps the rule text, and the rule then computes nothing without an error. Run it after deleting or renaming elements, dimensions or cubes.",
+    "Run tm1_check_cube_rule's checks on the stored rules of every cube; returns only the cubes with errors.",
+    "Run it after deleting or renaming elements, dimensions or cubes: TM1 keeps rule text that names them, and those rules then compute nothing without an error.",
   ],
   annotations: READ_ONLY,
   output: {

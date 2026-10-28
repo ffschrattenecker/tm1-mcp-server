@@ -19,7 +19,7 @@ export const registerSetCubeRules = defineTool({
     "Create or replace the rules for a TM1 cube.",
     "SKIPCHECK; belongs at the top and FEEDERS; before all feeder definitions — SKIPCHECK is what makes feeders take effect, so rules with feeders need it.",
     "Pass exactly one source: rules (the full text — replaces everything), edits (find/replace patch against the current text; each find must match exactly once, else nothing is written), or filePath (full text from a host file).",
-    "The full resulting text is checked before anything is written, as tm1_check_cube_rule does (tm1.CheckRules plus the DB() cube, element count and literal elements): TM1 itself stores broken rules without an error, and they then silently compute nothing. Any error aborts the call with VALIDATION_ERROR, the errors with their line numbers in details, and nothing is written; preflight:false skips the check.",
+    "The full resulting text is checked before anything is written, as tm1_check_cube_rule does: TM1 itself stores broken rules without an error, and they then silently compute nothing. Any error aborts the call with VALIDATION_ERROR, the errors with their line numbers in details, and nothing is written; preflight:false skips the check.",
     "The stored text is read back after writing (verified.textMatches), so no separate tm1_get_cube_rules is needed; the callgraph cache is dropped automatically.",
   ],
   annotations: IDEMPOTENT_DESTRUCTIVE,
@@ -33,7 +33,7 @@ export const registerSetCubeRules = defineTool({
       .optional()
       .default(true)
       .describe(
-        "Before writing, check the full text as it will be installed (tm1.CheckRules and the DB() checks) and abort on any error. Default true.",
+        "Before writing, run tm1_check_cube_rule's checks on the full text as it will be installed and abort on any error. Default true.",
       ),
   },
   handler: async (

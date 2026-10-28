@@ -102,7 +102,7 @@ datasource (562-589).
 
 ### model-building (7)
 
-- `tm1_check_all_cube_rules` — Check the stored rules of every cube with the same checks as tm1_check_cube_rule (tm1.CheckRules plus the DB() cube, element count and literal elements)
+- `tm1_check_all_cube_rules` — Run tm1_check_cube_rule's checks on the stored rules of every cube; returns only the cubes with errors
 - `tm1_check_cube_rule` — Validate the syntax of a TM1 cube rule WITHOUT applying it
 - `tm1_clear_cube` — Wipe every cell in a cube
 - `tm1_get_all_cube_rules` — Bulk-load rules text for every cube in one call
