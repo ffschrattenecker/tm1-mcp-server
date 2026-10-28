@@ -20,6 +20,7 @@ import { normalizeText, tabCodeDiff } from "../../lib/line-diff.js";
 import type { DataSource } from "../../types.js";
 import { maskCode } from "../../lib/mask-secrets.js";
 import { backupProcess } from "./process-backup.js";
+import { jsonResult } from "../format.js";
 
 // The same data source shape the git round-trip and check_process_code use.
 // Accepts `query` too: an ODBC source's SQL is read back by tm1_get_process.
@@ -206,28 +207,21 @@ export const registerUpsertProcess = defineTool({
         params.identical &&
         (vars?.identical ?? true) &&
         (ds?.identical ?? true);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              processName,
-              dryRun: true,
-              action: exists ? "wouldUpdate" : "wouldCreate",
-              appliedSteps: [],
-              overwritesExisting: exists,
-              checks,
-              diff: {
-                identical,
-                tabs,
-                parameters: params,
-                ...(vars ? { variables: vars } : {}),
-                ...(ds ? { dataSource: ds } : {}),
-              },
-            }),
-          },
-        ],
-      };
+      return jsonResult({
+        processName,
+        dryRun: true,
+        action: exists ? "wouldUpdate" : "wouldCreate",
+        appliedSteps: [],
+        overwritesExisting: exists,
+        checks,
+        diff: {
+          identical,
+          tabs,
+          parameters: params,
+          ...(vars ? { variables: vars } : {}),
+          ...(ds ? { dataSource: ds } : {}),
+        },
+      });
     }
 
     // Replacing an installed process is not undoable through the API.

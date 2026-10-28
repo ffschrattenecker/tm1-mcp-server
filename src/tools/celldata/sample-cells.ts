@@ -7,6 +7,7 @@ import {
 import { READ_ONLY } from "../annotations.js";
 import { SampleCellsResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 const FilterValueSchema: z.ZodType<SampleCellFilter> = z.union([
   z.string(),
@@ -122,8 +123,6 @@ export const registerSampleCells = defineTool({
       ...(hint ? { hint } : {}),
     };
 
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(payload) }],
-    };
+    return jsonResult(payload);
   },
 });

@@ -7,6 +7,7 @@ import { buildCubeOrDimUsages } from "../../lib/callgraph/callGraph.js";
 import { ObjectUsageResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 // Backstop for the bulk/audit path, mirroring UNBOUNDED_MAX_ITEMS in
 // pagination.ts. Usage rows are small, so this sits higher than the list-tool
@@ -104,45 +105,31 @@ export const registerAnalyzeObjectUsage = defineTool({
       const sources = sumTruncated
         ? allSources.slice(0, effectiveLimit)
         : allSources;
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              kind,
-              name: objectName,
-              accessMode,
-              mode,
-              ...cubesField,
-              count: all.length,
-              sourceCount: allSources.length,
-              returned: sources.length,
-              truncated: sumTruncated,
-              sources,
-            }),
-          },
-        ],
-      };
+      return jsonResult({
+        kind,
+        name: objectName,
+        accessMode,
+        mode,
+        ...cubesField,
+        count: all.length,
+        sourceCount: allSources.length,
+        returned: sources.length,
+        truncated: sumTruncated,
+        sources,
+      });
     }
     const truncated = all.length > effectiveLimit;
     const usages = truncated ? all.slice(0, effectiveLimit) : all;
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            kind,
-            name: objectName,
-            accessMode,
-            ...cubesField,
-            count: all.length,
-            returned: usages.length,
-            truncated,
-            usages,
-          }),
-        },
-      ],
-    };
+    return jsonResult({
+      kind,
+      name: objectName,
+      accessMode,
+      ...cubesField,
+      count: all.length,
+      returned: usages.length,
+      truncated,
+      usages,
+    });
   },
 });
 

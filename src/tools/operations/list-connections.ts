@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineTool } from "../define-tool.js";
 import { READ_ONLY } from "../annotations.js";
 import { NAME, VERSION } from "../../version.js";
+import { jsonResult } from "../format.js";
 
 const ConnectionSchema = z.object({
   name: z.string(),
@@ -38,21 +39,14 @@ export const registerListConnections = defineTool({
         error: c.configError ?? c.lastError,
       }),
     }));
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            server: { name: NAME, version: VERSION },
-            connections,
-            ...(connections.length === 0 && {
-              hint:
-                `No TM1 connection configured under ${registry.dir ?? "(none)"}. ` +
-                "Create <name>/.env there (TM1_BASE_URL, TM1_USER, TM1_SECRETS=keychain), then run secrets set <name>; no restart needed.",
-            }),
-          }),
-        },
-      ],
-    };
+    return jsonResult({
+      server: { name: NAME, version: VERSION },
+      connections,
+      ...(connections.length === 0 && {
+        hint:
+          `No TM1 connection configured under ${registry.dir ?? "(none)"}. ` +
+          "Create <name>/.env there (TM1_BASE_URL, TM1_USER, TM1_SECRETS=keychain), then run secrets set <name>; no restart needed.",
+      }),
+    });
   },
 });

@@ -140,6 +140,14 @@ interface TextResult {
   structuredContent?: { [k: string]: unknown };
 }
 
+// The text block every JSON result carries. Plain JSON.stringify, no indent:
+// the bytes a client gets are part of the contract, so change them here only.
+export function jsonResult(payload: unknown): TextResult {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+  };
+}
+
 // The rendered table goes out twice on purpose: once as the text block, once
 // as structuredContent. Which of the two a client reads is not negotiable from
 // here — Kiro renders `content` and ignores structuredContent, Claude Code
@@ -164,9 +172,7 @@ export function pageResponse<T>(
   if (format === "markdown") {
     return markdownResult(renderPage(page, opts));
   }
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(page) }],
-  };
+  return jsonResult(page);
 }
 
 // Same as pageResponse but for tools that wrap the page envelope with extra
@@ -182,9 +188,7 @@ export function wrappedPageResponse<T>(
   if (format === "markdown") {
     return markdownResult(renderPage(page, opts));
   }
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(wrapper) }],
-  };
+  return jsonResult(wrapper);
 }
 
 // Generic JSON-or-Markdown response for non-paginated payloads.
@@ -197,9 +201,7 @@ export function payloadResponse<T>(
   if (format === "markdown") {
     return markdownResult(renderMarkdown(payload));
   }
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(payload) }],
-  };
+  return jsonResult(payload);
 }
 
 // Action-result helper for non-paginated mutation tools (delete/clear/
@@ -209,7 +211,7 @@ export function payloadResponse<T>(
 // is satisfied without the Proxy re-parsing the JSON body.
 export function actionResponse<T extends object>(payload: T): TextResult {
   return {
-    content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+    ...jsonResult(payload),
     structuredContent: payload as unknown as { [k: string]: unknown },
   };
 }

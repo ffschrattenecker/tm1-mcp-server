@@ -9,6 +9,7 @@ import {
 import { GetProcessResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 const TABS = ["prolog", "metadata", "data", "epilog"] as const;
 const HEAVY_MIN_LINES = 20;
@@ -179,8 +180,6 @@ export const registerGetProcess = defineTool({
       payload.hasSecurityAccess = deployMeta.hasSecurityAccess;
     if (hint) payload.hint = hint;
 
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(payload) }],
-    };
+    return jsonResult(payload);
   },
 });

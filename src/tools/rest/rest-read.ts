@@ -11,6 +11,7 @@ import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { planRead } from "./guard.js";
 import { dataBudget, ENVELOPE_CHARS, shapeBody } from "./shape.js";
+import { jsonResult } from "../format.js";
 
 const DEFAULT_MAX_CHARS = 30_000;
 // Schema bound against the default limit. The effective budget is also capped
@@ -66,18 +67,11 @@ export const registerRestRead = defineTool({
       plan.method === "POST"
         ? await tm1Client.rest.send("POST", plan.path, undefined, opts)
         : await tm1Client.rest.get(plan.path, opts);
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            shapeBody(body, dataBudget(maxChars, ENVELOPE_CHARS), {
-              code: plan.maskCode === true,
-              secret: plan.maskSecret === true,
-            }),
-          ),
-        },
-      ],
-    };
+    return jsonResult(
+      shapeBody(body, dataBudget(maxChars, ENVELOPE_CHARS), {
+        code: plan.maskCode === true,
+        secret: plan.maskSecret === true,
+      }),
+    );
   },
 });

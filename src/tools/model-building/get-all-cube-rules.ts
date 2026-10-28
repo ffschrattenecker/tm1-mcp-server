@@ -3,6 +3,7 @@ import type { CubeRules } from "../../types.js";
 import { CubeRulesSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 // Default cap for full-rules responses. Whole-model rule dumps flood the
 // context window; 50 cubes is plenty for a first look, and the response
@@ -157,19 +158,12 @@ export const registerGetAllCubeRules = defineTool({
           ...summarize(c.rulesText),
         }))
       : sliced;
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            count,
-            countIsExact,
-            returned: cubes.length,
-            truncated,
-            cubes,
-          }),
-        },
-      ],
-    };
+    return jsonResult({
+      count,
+      countIsExact,
+      returned: cubes.length,
+      truncated,
+      cubes,
+    });
   },
 });

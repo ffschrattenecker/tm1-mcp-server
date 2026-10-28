@@ -9,6 +9,7 @@ import { membersFromAxis } from "../../lib/callgraph/mdxMembers.js";
 import { DataFlowResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 // Per-direction ceiling. Flow rows carry a process name plus cube/element
 // arrays, so they are heavier than a list row — this sits well below the
@@ -186,8 +187,6 @@ export const registerTraceDataFlow = defineTool({
       ...(truncated ? { truncated } : {}),
       ...(hint ? { hint } : {}),
     };
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(payload) }],
-    };
+    return jsonResult(payload);
   },
 });

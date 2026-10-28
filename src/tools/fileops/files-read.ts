@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
-import { FORMAT_SCHEMA, wrappedPageResponse, columnsOf } from "../format.js";
+import {
+  FORMAT_SCHEMA,
+  wrappedPageResponse,
+  columnsOf,
+  jsonResult,
+} from "../format.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
@@ -254,8 +259,6 @@ export const registerFilesRead = defineTool({
       encoding,
       content: body,
     };
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(payload) }],
-    };
+    return jsonResult(payload);
   },
 });

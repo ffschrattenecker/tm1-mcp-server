@@ -22,6 +22,7 @@ import {
 import { AuditComplexityResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 const SCOPE_VALUES = [
   "processes",
   "rules",
@@ -264,80 +265,63 @@ export const registerAuditComplexity = defineTool({
         ? "fail"
         : "pass";
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            status,
-            productVersion: serverInfo.productVersion,
-            scope: activeScope,
-            includeControl,
-            rankBy,
-            scanned: {
-              processes: processesScanned,
-              rules: rulesScanned,
-            },
-            summary: {
-              processes: {
-                totalLoc: processMetrics.reduce((a, m) => a + m.totals.loc, 0),
-                totalBranches: processMetrics.reduce(
-                  (a, m) => a + m.totals.branches,
-                  0,
-                ),
-                maxNesting: processMetrics.reduce(
-                  (a, m) => Math.max(a, m.totals.maxNesting),
-                  0,
-                ),
-                avgCommentRatio:
-                  processesScanned === 0
-                    ? 0
-                    : processMetrics.reduce(
-                        (a, m) => a + m.totals.commentRatio,
-                        0,
-                      ) / processesScanned,
-                totalDeadCodeLines: processMetrics.reduce(
-                  (a, m) => a + m.totals.deadCodeLines,
-                  0,
-                ),
-                avgDeadCodeRatio:
-                  processesScanned === 0
-                    ? 0
-                    : processMetrics.reduce(
-                        (a, m) => a + m.totals.deadCodeRatio,
-                        0,
-                      ) / processesScanned,
-              },
-              rules: {
-                totalRulesLoc: rulesMetrics.reduce((a, m) => a + m.rulesLoc, 0),
-                totalRuleCount: rulesMetrics.reduce(
-                  (a, m) => a + m.ruleCount,
-                  0,
-                ),
-                totalDbCalls: rulesMetrics.reduce(
-                  (a, m) => a + m.dbCallCount,
-                  0,
-                ),
-                totalDeadCodeLines: rulesMetrics.reduce(
-                  (a, m) => a + m.deadCodeLines,
-                  0,
-                ),
-                cubesWithoutSkipcheck: rulesMetrics
-                  .filter((m) => !m.hasSkipcheck && m.rulesLoc > 0)
-                  .map((m) => m.cube),
-              },
-            },
-            topProcesses,
-            topRules,
-            consistency,
-            antipatterns,
-            truncated: {
-              processes: processMetrics.length > topProcesses.length,
-              rules: rulesMetrics.length > topRules.length,
-            },
-          }),
+    return jsonResult({
+      status,
+      productVersion: serverInfo.productVersion,
+      scope: activeScope,
+      includeControl,
+      rankBy,
+      scanned: {
+        processes: processesScanned,
+        rules: rulesScanned,
+      },
+      summary: {
+        processes: {
+          totalLoc: processMetrics.reduce((a, m) => a + m.totals.loc, 0),
+          totalBranches: processMetrics.reduce(
+            (a, m) => a + m.totals.branches,
+            0,
+          ),
+          maxNesting: processMetrics.reduce(
+            (a, m) => Math.max(a, m.totals.maxNesting),
+            0,
+          ),
+          avgCommentRatio:
+            processesScanned === 0
+              ? 0
+              : processMetrics.reduce((a, m) => a + m.totals.commentRatio, 0) /
+                processesScanned,
+          totalDeadCodeLines: processMetrics.reduce(
+            (a, m) => a + m.totals.deadCodeLines,
+            0,
+          ),
+          avgDeadCodeRatio:
+            processesScanned === 0
+              ? 0
+              : processMetrics.reduce((a, m) => a + m.totals.deadCodeRatio, 0) /
+                processesScanned,
         },
-      ],
-    };
+        rules: {
+          totalRulesLoc: rulesMetrics.reduce((a, m) => a + m.rulesLoc, 0),
+          totalRuleCount: rulesMetrics.reduce((a, m) => a + m.ruleCount, 0),
+          totalDbCalls: rulesMetrics.reduce((a, m) => a + m.dbCallCount, 0),
+          totalDeadCodeLines: rulesMetrics.reduce(
+            (a, m) => a + m.deadCodeLines,
+            0,
+          ),
+          cubesWithoutSkipcheck: rulesMetrics
+            .filter((m) => !m.hasSkipcheck && m.rulesLoc > 0)
+            .map((m) => m.cube),
+        },
+      },
+      topProcesses,
+      topRules,
+      consistency,
+      antipatterns,
+      truncated: {
+        processes: processMetrics.length > topProcesses.length,
+        rules: rulesMetrics.length > topRules.length,
+      },
+    });
   },
 });

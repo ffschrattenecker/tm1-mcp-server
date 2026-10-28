@@ -10,6 +10,7 @@ import {
 import { ChoreGraphResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 function maskChoreParams<T extends Record<string, unknown>>(
   params: readonly T[] | undefined,
@@ -64,21 +65,14 @@ export const registerAnalyzeChoreGraph = defineTool({
     const index = await buildIndexFromTM1(tm1Client, { includeControl });
     const graph = buildChoreGraph(index, choreName, { includeSystem });
     if (!graph) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              // Same top-level shape as the success branch so the strict
-              // output schema accepts the not-found payload.
-              choreName,
-              tasks: [],
-              warning: `Chore "${choreName}" not found.`,
-              indexedChoreCount: index.choreTasks.size,
-            }),
-          },
-        ],
-      };
+      return jsonResult({
+        // Same top-level shape as the success branch so the strict
+        // output schema accepts the not-found payload.
+        choreName,
+        tasks: [],
+        warning: `Chore "${choreName}" not found.`,
+        indexedChoreCount: index.choreTasks.size,
+      });
     }
     return {
       content: [

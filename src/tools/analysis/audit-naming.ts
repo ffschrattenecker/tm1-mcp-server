@@ -11,6 +11,7 @@ import { isControlName } from "../../lib/control-name.js";
 import { AuditNamingResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 interface Finding {
   objectKind: ObjectKind;
@@ -394,14 +395,7 @@ export const registerAuditNaming = defineTool({
       payload.findings = trimmed;
     }
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(payload),
-        },
-      ],
-    };
+    return jsonResult(payload);
   },
 });
 

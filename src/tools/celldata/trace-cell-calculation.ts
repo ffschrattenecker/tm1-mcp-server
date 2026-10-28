@@ -5,6 +5,7 @@ import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { COORD_ELEMENTS_DESCRIPTION } from "./member-ref.js";
 import type { CalculationTraceNode } from "../../types.js";
+import { jsonResult } from "../format.js";
 
 export const registerTraceCellCalculation = defineTool({
   name: "tm1_trace_cell_calculation",
@@ -79,9 +80,7 @@ export const registerTraceCellCalculation = defineTool({
       `TraceCellCalculation failed for cube '${cubeName}'. Verify dimension order/elements via tm1_rest_read Cubes('${cubeName}')/Dimensions?$select=Name.`,
     );
     const out = dedupeStatements === false ? tree : withStatementTable(tree);
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(out) }],
-    };
+    return jsonResult(out);
   },
 });
 

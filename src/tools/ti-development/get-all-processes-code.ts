@@ -8,6 +8,7 @@ import { commentStats } from "../../lib/strip-comments.js";
 import { ProcessCodeBundleSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 // Default cap for full-code responses. Whole-model code dumps flood the
 // context window; 50 processes is plenty for a first look, and the response
@@ -142,19 +143,12 @@ export const registerGetAllProcessesCode = defineTool({
             epilog: maskCode(p.epilog),
           }))
         : kept;
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            count,
-            countIsExact,
-            returned: processes.length,
-            truncated,
-            processes,
-          }),
-        },
-      ],
-    };
+    return jsonResult({
+      count,
+      countIsExact,
+      returned: processes.length,
+      truncated,
+      processes,
+    });
   },
 });

@@ -14,6 +14,7 @@ import { resolveMaskSecrets } from "../../lib/mask-secrets.js";
 import { CallgraphResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 interface CompactNode {
   process: string;
@@ -329,14 +330,7 @@ export const registerAnalyzeCallgraph = defineTool({
 
     if (start === undefined || start === "") {
       const result = globalRanking(index, { rankBy, topN, includeSystem });
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({ mode: "globalRanking", ...result }),
-          },
-        ],
-      };
+      return jsonResult({ mode: "globalRanking", ...result });
     }
 
     const lc = start.toLowerCase();
@@ -345,17 +339,10 @@ export const registerAnalyzeCallgraph = defineTool({
       !index.bySourceProcess.has(lc) &&
       !index.byProcess.has(lc)
     ) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              warning: `Process "${start}" not found in index.`,
-              indexedProcessCount: index.processParams.size,
-            }),
-          },
-        ],
-      };
+      return jsonResult({
+        warning: `Process "${start}" not found in index.`,
+        indexedProcessCount: index.processParams.size,
+      });
     }
     const tree = buildCallGraph(index, start, {
       direction,
@@ -382,13 +369,6 @@ export const registerAnalyzeCallgraph = defineTool({
         tree: serializeNode(tree, maskSecrets, { unresolvedCalls: true }),
       };
     }
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(payload),
-        },
-      ],
-    };
+    return jsonResult(payload);
   },
 });

@@ -3,6 +3,7 @@ import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { DefaultMembersBulkResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 export const registerResolveDefaultMembers = defineTool({
   name: "tm1_resolve_default_members",
@@ -47,8 +48,6 @@ export const registerResolveDefaultMembers = defineTool({
         error: { code, message },
       };
     });
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify({ results }) }],
-    };
+    return jsonResult({ results });
   },
 });

@@ -8,6 +8,7 @@ import {
 import { ErrorLogContentResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 const DEFAULT_MAX_BYTES = 64 * 1024;
 const HARD_MAX_BYTES = 4 * 1024 * 1024;
@@ -164,8 +165,6 @@ export const registerGetErrorLogContent = defineTool({
       }
     }
 
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(payload) }],
-    };
+    return jsonResult(payload);
   },
 });

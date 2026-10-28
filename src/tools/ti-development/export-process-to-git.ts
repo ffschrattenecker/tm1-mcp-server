@@ -14,6 +14,7 @@ import { ExportProcessToGitResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { readProcessAsGit } from "./process-backup.js";
+import { jsonResult } from "../format.js";
 
 export const registerExportProcessToGit = defineTool({
   name: "tm1_export_process_to_git",
@@ -122,28 +123,21 @@ export const registerExportProcessToGit = defineTool({
       writtenTo.ti = tiPath;
     }
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            processName,
-            jsonFileName,
-            tiFileName,
-            parameterCount: pair.parameterCount,
-            variableCount: pair.variableCount,
-            dataSourceType: pair.dataSourceType,
-            credentialsOmitted,
-            hasSecurityAccess: pair.hasSecurityAccess,
-            writtenTo,
-            ...(warning ? { warning } : {}),
-            // Echo the file bodies inline only when NOT persisting to disk. With
-            // writeToDir the caller already has the files, so returning the code
-            // would just duplicate thousands of tokens into the context window.
-            ...(writeToDir ? {} : { json, ti: inlineTi }),
-          }),
-        },
-      ],
-    };
+    return jsonResult({
+      processName,
+      jsonFileName,
+      tiFileName,
+      parameterCount: pair.parameterCount,
+      variableCount: pair.variableCount,
+      dataSourceType: pair.dataSourceType,
+      credentialsOmitted,
+      hasSecurityAccess: pair.hasSecurityAccess,
+      writtenTo,
+      ...(warning ? { warning } : {}),
+      // Echo the file bodies inline only when NOT persisting to disk. With
+      // writeToDir the caller already has the files, so returning the code
+      // would just duplicate thousands of tokens into the context window.
+      ...(writeToDir ? {} : { json, ti: inlineTi }),
+    });
   },
 });

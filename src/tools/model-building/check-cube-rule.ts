@@ -6,6 +6,7 @@ import {
   checkRulesText,
   resolveRulesText,
 } from "./rules-source.js";
+import { jsonResult } from "../format.js";
 
 export const registerCheckCubeRule = defineTool({
   name: "tm1_check_cube_rule",
@@ -52,8 +53,6 @@ export const registerCheckCubeRule = defineTool({
     };
     // A rule with syntax errors is the answer to the question, not a failed
     // call: flagging it isError would drop structuredContent for the payload.
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(payload) }],
-    };
+    return jsonResult(payload);
   },
 });

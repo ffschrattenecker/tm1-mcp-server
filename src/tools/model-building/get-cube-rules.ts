@@ -8,6 +8,7 @@ import {
   sliceLines,
   splitLines,
 } from "../../lib/rules-outline.js";
+import { jsonResult } from "../format.js";
 
 export const registerGetCubeRules = defineTool({
   name: "tm1_get_cube_rules",
@@ -69,8 +70,6 @@ export const registerGetCubeRules = defineTool({
         lineRange: [slice.from, slice.to],
       };
     }
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(output) }],
-    };
+    return jsonResult(output);
   },
 });

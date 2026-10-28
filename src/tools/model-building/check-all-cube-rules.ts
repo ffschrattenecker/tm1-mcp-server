@@ -8,6 +8,7 @@ import type { TM1Client } from "../../tm1-client.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { checkRulesText } from "./rules-source.js";
+import { jsonResult } from "../format.js";
 
 // Cubes checked at once: each check is one CheckRules POST plus the DB()
 // lookups not cached yet.
@@ -126,8 +127,6 @@ export const registerCheckAllCubeRules = defineTool({
       cubesWithErrors: cubes.length,
       cubes,
     };
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(payload) }],
-    };
+    return jsonResult(payload);
   },
 });

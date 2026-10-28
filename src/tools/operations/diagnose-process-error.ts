@@ -8,6 +8,7 @@ import {
 import { DiagnoseProcessErrorResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 const DEFAULT_TAIL_LINES = 60;
 const DEFAULT_MAX_LOGS = 3;
@@ -105,20 +106,13 @@ export const registerDiagnoseProcessError = defineTool({
       .slice(0, maxLogs);
 
     if (matching.length === 0) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              processName,
-              since: since ?? null,
-              logsFound: 0,
-              logsReturned: 0,
-              logs: [],
-            }),
-          },
-        ],
-      };
+      return jsonResult({
+        processName,
+        since: since ?? null,
+        logsFound: 0,
+        logsReturned: 0,
+        logs: [],
+      });
     }
 
     const logs = await Promise.all(
@@ -189,19 +183,12 @@ export const registerDiagnoseProcessError = defineTool({
       }),
     );
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            processName,
-            since: since ?? null,
-            logsFound: matching.length,
-            logsReturned: logs.length,
-            logs,
-          }),
-        },
-      ],
-    };
+    return jsonResult({
+      processName,
+      since: since ?? null,
+      logsFound: matching.length,
+      logsReturned: logs.length,
+      logs,
+    });
   },
 });

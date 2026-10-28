@@ -14,6 +14,7 @@ import {
   type PreflightFailure,
 } from "./preflight.js";
 import { backupProcess, type ProcessBackup } from "./process-backup.js";
+import { jsonResult } from "../format.js";
 
 interface FileResult {
   file: string;
@@ -136,14 +137,7 @@ export const registerInstallProBundle = defineTool({
 
     const files = (await collect(safeDir)).sort();
     if (files.length === 0) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({ directory, filesFound: 0, results: [] }),
-          },
-        ],
-      };
+      return jsonResult({ directory, filesFound: 0, results: [] });
     }
 
     const installed = await tm1Client.processes.list();
@@ -317,8 +311,6 @@ export const registerInstallProBundle = defineTool({
       },
       results,
     };
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify(summary) }],
-    };
+    return jsonResult(summary);
   },
 });

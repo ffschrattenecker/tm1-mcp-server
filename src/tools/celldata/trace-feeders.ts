@@ -4,6 +4,7 @@ import { READ_ONLY } from "../annotations.js";
 import { TraceFeedersResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { COORD_ELEMENTS_DESCRIPTION } from "./member-ref.js";
+import { jsonResult } from "../format.js";
 
 export const registerTraceFeeders = defineTool({
   name: "tm1_trace_feeders",
@@ -35,13 +36,6 @@ export const registerTraceFeeders = defineTool({
       }),
       `TraceFeeders failed for cube '${cubeName}'. Verify dimension order/elements via tm1_rest_read Cubes('${cubeName}')/Dimensions?$select=Name.`,
     );
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({ count: result.fedCells.length, ...result }),
-        },
-      ],
-    };
+    return jsonResult({ count: result.fedCells.length, ...result });
   },
 });

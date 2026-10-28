@@ -13,6 +13,7 @@ import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { ExportProcessToProResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 export const registerExportProcessToPro = defineTool({
   name: "tm1_export_process_to_pro",
@@ -124,24 +125,17 @@ export const registerExportProcessToPro = defineTool({
       writtenTo = target;
     }
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            processName,
-            byteLength: Buffer.byteLength(proContent, "utf8"),
-            writtenTo,
-            parameterCount: parameters.length,
-            variableCount: layout.variables.length,
-            dataSourceType: dataSource.type,
-            credentialsIncluded,
-            // Written to disk only when credentials are in play — otherwise
-            // the caller already has the body and it stays out of the context.
-            ...(includeDataSourcePassword ? {} : { content: inlineContent }),
-          }),
-        },
-      ],
-    };
+    return jsonResult({
+      processName,
+      byteLength: Buffer.byteLength(proContent, "utf8"),
+      writtenTo,
+      parameterCount: parameters.length,
+      variableCount: layout.variables.length,
+      dataSourceType: dataSource.type,
+      credentialsIncluded,
+      // Written to disk only when credentials are in play — otherwise
+      // the caller already has the body and it stays out of the context.
+      ...(includeDataSourcePassword ? {} : { content: inlineContent }),
+    });
   },
 });
