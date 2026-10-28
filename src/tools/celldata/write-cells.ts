@@ -22,7 +22,7 @@ export const registerWriteCells = defineTool({
     "Write one or more cell values directly to a TM1 cube via REST.",
     "IMPORTANT: TI processes are the standard path for data loads — use this tool only for ad-hoc writes or when explicitly requested.",
     "Leaf (N-level) coordinates only: a consolidated one aborts the whole call before anything is sent, whatever the account's rights.",
-    "Sandboxes left out bind to Base (reported as sandboxDefaulted). A named sandbox is addressable only once its IncludeInSandboxDimension is true.",
+    "A dimension left out would land on its default member, so the call is refused; Sandboxes left out bind to Base (reported as sandboxDefaulted). A named sandbox is addressable only once its IncludeInSandboxDimension is true.",
     "Before: tm1_check_writable_coords to validate that target coordinates are leaf-level and addressable.",
     "The written cells are read back (up to 20; verified.mismatches lists any that differ, e.g. a rule or spread overriding the value), .",
     "Related: tm1_clear_cube for bulk wipe.",
