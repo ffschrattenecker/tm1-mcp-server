@@ -1,69 +1,15 @@
 import { z } from "zod";
 import { buildIndexFromTM1 } from "../../lib/callgraph/tm1-adapter.js";
 import { buildChoreGraph } from "../../lib/callgraph/choreGraph.js";
-import type {
-  CallGraphNode,
-  EffectiveValue,
-} from "../../lib/callgraph/callGraph.js";
-import type { CallParam } from "../../lib/callgraph/referenceIndex.js";
+import { serializeNode } from "../../lib/callgraph/serialize.js";
 import {
   isSecretName,
   MASK,
-  maskCodeLine,
   resolveMaskSecrets,
 } from "../../lib/mask-secrets.js";
 import { ChoreGraphResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
-
-function maskParams(params: readonly CallParam[]): CallParam[] {
-  return params.map((p) =>
-    isSecretName(p.name)
-      ? {
-          ...p,
-          valueRaw: MASK,
-          resolution:
-            p.resolution.kind === "literal"
-              ? { kind: "literal" as const, value: MASK }
-              : p.resolution,
-        }
-      : p,
-  );
-}
-
-function maskEffective(
-  eff: ReadonlyArray<{
-    name: string;
-    effective: EffectiveValue;
-    valueRaw: string;
-  }>,
-): Array<{ name: string; effective: EffectiveValue; valueRaw: string }> {
-  return eff.map((e) =>
-    isSecretName(e.name)
-      ? {
-          ...e,
-          valueRaw: MASK,
-          effective:
-            e.effective.kind === "literal"
-              ? { kind: "literal" as const, value: MASK }
-              : e.effective,
-        }
-      : e,
-  );
-}
-
-function maskEnv(
-  env: Map<string, EffectiveValue>,
-): Record<string, EffectiveValue> {
-  const out: Record<string, EffectiveValue> = {};
-  for (const [k, v] of env.entries()) {
-    out[k] =
-      isSecretName(k) && v.kind === "literal"
-        ? { kind: "literal", value: MASK }
-        : v;
-  }
-  return out;
-}
 
 function maskChoreParams<T extends Record<string, unknown>>(
   params: readonly T[] | undefined,
@@ -73,40 +19,6 @@ function maskChoreParams<T extends Record<string, unknown>>(
     const name = (p.Name ?? p.name) as string | undefined;
     return name && isSecretName(name) ? { ...p, Value: MASK, value: MASK } : p;
   });
-}
-
-function serializeNode(node: CallGraphNode, mask: boolean): unknown {
-  return {
-    process: node.process,
-    cycle: node.cycle,
-    depthLimitReached: node.depthLimitReached,
-    incomingEdge: node.incomingEdge
-      ? {
-          caller: node.incomingEdge.caller,
-          callee: node.incomingEdge.callee,
-          section: node.incomingEdge.section,
-          line: node.incomingEdge.line,
-          funcName: node.incomingEdge.funcName,
-          snippet: mask
-            ? maskCodeLine(node.incomingEdge.snippet)
-            : node.incomingEdge.snippet,
-          params: mask
-            ? maskParams(node.incomingEdge.params)
-            : node.incomingEdge.params,
-          effectiveParams: node.incomingEdge.effectiveParams
-            ? mask
-              ? maskEffective(node.incomingEdge.effectiveParams)
-              : node.incomingEdge.effectiveParams
-            : undefined,
-        }
-      : null,
-    env: node.env
-      ? mask
-        ? maskEnv(node.env)
-        : Object.fromEntries(node.env.entries())
-      : undefined,
-    children: node.children.map((c) => serializeNode(c, mask)),
-  };
 }
 
 export const registerAnalyzeChoreGraph = defineTool({

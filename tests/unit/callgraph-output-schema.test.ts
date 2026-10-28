@@ -2,78 +2,22 @@ import { describe, it, expect } from "vitest";
 import {
   buildReferenceIndex,
   type ReferenceIndex,
-  type CallParam,
 } from "../../src/lib/callgraph/referenceIndex.js";
 import {
   buildCallGraph,
   type CallGraphNode,
-  type EffectiveValue,
 } from "../../src/lib/callgraph/callGraph.js";
+import { serializeNode } from "../../src/lib/callgraph/serialize.js";
 import { globalRanking } from "../../src/tools/analysis/analyze-callgraph.js";
 import { CallgraphResultSchema } from "../../src/tools/schemas/items.js";
-import {
-  isSecretName,
-  MASK,
-  maskCodeLine,
-} from "../../src/lib/mask-secrets.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The serializers (serializeNode / serializeCompact / summarize) live private
-// inside src/tools/analysis/analyze-callgraph.ts. To keep the change to two
-// files (schema + this test) and NOT touch handler code, they are mirrored
-// VERBATIM below. If the real serializers change, this copy must change with
-// them — the round-trip assertion is only as faithful as this mirror.
-// (globalRanking IS exported and is used directly — no copy needed.)
+// serializeCompact and summarize live private inside
+// src/tools/analysis/analyze-callgraph.ts, so they are mirrored VERBATIM below.
+// If the real ones change, this copy must change with them. serializeNode is
+// imported from src/lib/callgraph/serialize.ts. globalRanking is exported and
+// used directly.
 // ─────────────────────────────────────────────────────────────────────────────
-
-function maskParams(params: readonly CallParam[]): CallParam[] {
-  return params.map((p) =>
-    isSecretName(p.name)
-      ? {
-          ...p,
-          valueRaw: MASK,
-          resolution:
-            p.resolution.kind === "literal"
-              ? { kind: "literal" as const, value: MASK }
-              : p.resolution,
-        }
-      : p,
-  );
-}
-
-function maskEffective(
-  eff: ReadonlyArray<{
-    name: string;
-    effective: EffectiveValue;
-    valueRaw: string;
-  }>,
-): Array<{ name: string; effective: EffectiveValue; valueRaw: string }> {
-  return eff.map((e) =>
-    isSecretName(e.name)
-      ? {
-          ...e,
-          valueRaw: MASK,
-          effective:
-            e.effective.kind === "literal"
-              ? { kind: "literal" as const, value: MASK }
-              : e.effective,
-        }
-      : e,
-  );
-}
-
-function maskEnv(
-  env: Map<string, EffectiveValue>,
-): Record<string, EffectiveValue> {
-  const out: Record<string, EffectiveValue> = {};
-  for (const [k, v] of env.entries()) {
-    out[k] =
-      isSecretName(k) && v.kind === "literal"
-        ? { kind: "literal", value: MASK }
-        : v;
-  }
-  return out;
-}
 
 interface CompactNode {
   process: string;
@@ -106,50 +50,6 @@ function serializeCompact(node: CallGraphNode): CompactNode {
     }));
   }
   return out;
-}
-
-function serializeNode(node: CallGraphNode, mask: boolean): unknown {
-  return {
-    process: node.process,
-    cycle: node.cycle,
-    depthLimitReached: node.depthLimitReached,
-    incomingEdge: node.incomingEdge
-      ? {
-          caller: node.incomingEdge.caller,
-          callee: node.incomingEdge.callee,
-          section: node.incomingEdge.section,
-          line: node.incomingEdge.line,
-          funcName: node.incomingEdge.funcName,
-          snippet: mask
-            ? maskCodeLine(node.incomingEdge.snippet)
-            : node.incomingEdge.snippet,
-          params: mask
-            ? maskParams(node.incomingEdge.params)
-            : node.incomingEdge.params,
-          effectiveParams: node.incomingEdge.effectiveParams
-            ? mask
-              ? maskEffective(node.incomingEdge.effectiveParams)
-              : node.incomingEdge.effectiveParams
-            : undefined,
-        }
-      : null,
-    env: node.env
-      ? mask
-        ? maskEnv(node.env)
-        : Object.fromEntries(node.env.entries())
-      : undefined,
-    unresolvedCalls: node.unresolvedCalls
-      ? node.unresolvedCalls.map((u) => ({
-          section: u.section,
-          line: u.line,
-          funcName: u.funcName,
-          expr: u.expr,
-          snippet: mask ? maskCodeLine(u.snippet) : u.snippet,
-          reason: u.reason,
-        }))
-      : undefined,
-    children: node.children.map((c) => serializeNode(c, mask)),
-  };
 }
 
 interface SummaryEntry {
@@ -260,7 +160,7 @@ describe("CallgraphResultSchema — validates every emitted shape", () => {
       direction: "downstream",
       mode: "full",
       maskSecrets: false,
-      tree: serializeNode(tree, false),
+      tree: serializeNode(tree, false, { unresolvedCalls: true }),
     };
     const parsed = CallgraphResultSchema.safeParse(roundTrip(payload));
     expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
@@ -274,7 +174,7 @@ describe("CallgraphResultSchema — validates every emitted shape", () => {
       direction: "downstream",
       mode: "full",
       maskSecrets: true,
-      tree: serializeNode(tree, true),
+      tree: serializeNode(tree, true, { unresolvedCalls: true }),
     };
     const parsed = CallgraphResultSchema.safeParse(roundTrip(payload));
     expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
@@ -301,7 +201,7 @@ describe("CallgraphResultSchema — validates every emitted shape", () => {
       direction: "upstream",
       mode: "full",
       maskSecrets: false,
-      tree: serializeNode(tree, false),
+      tree: serializeNode(tree, false, { unresolvedCalls: true }),
     };
     const parsed = CallgraphResultSchema.safeParse(roundTrip(payload));
     expect(parsed.success, JSON.stringify(parsed.error?.issues)).toBe(true);
