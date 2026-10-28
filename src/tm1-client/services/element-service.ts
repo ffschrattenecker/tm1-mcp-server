@@ -445,7 +445,7 @@ export class ElementService {
     for (let i = 0; i < names.length; i += CONSOLIDATED_PROBE_CHUNK) {
       const clause = names
         .slice(i, i + CONSOLIDATED_PROBE_CHUNK)
-        .map((n) => `Name eq '${n.replace(/'/g, "''")}'`)
+        .map((n) => `Name eq '${escapeOdataLiteral(n)}'`)
         .join(" or ");
       const filter = encodeURIComponent(`Type eq 3 and (${clause})`);
       const page = await this.http.request<{ value: Array<{ Name: string }> }>(
