@@ -42,6 +42,21 @@ function asZodSchema(entry: ZodRawShape | ZodTypeAny): ZodTypeAny {
   return isZodSchema(entry) ? entry : z.object(entry);
 }
 
+// The SDK wraps a raw input shape in a plain z.object, which drops unknown keys
+// without an error. A misspelt or misplaced argument then runs the call with
+// the argument ignored, so the caller gets an unfiltered result and no reason.
+// Reject unknown keys instead, and name the ones that are accepted.
+function strictInputSchema(shape: ZodRawShape): ZodTypeAny {
+  const accepted = Object.keys(shape);
+  const list = accepted.length > 0 ? accepted.join(", ") : "none";
+  return z.strictObject(shape, {
+    error: (iss) =>
+      iss.code === "unrecognized_keys"
+        ? `Unknown parameter(s): ${iss.keys.join(", ")}. Accepted: ${list}.`
+        : undefined,
+  });
+}
+
 // A markdown response carries exactly one key. Anything else is the JSON path.
 function isMarkdownPayload(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
@@ -426,7 +441,7 @@ export function withAnnotations(
         const config: Record<string, unknown> = {
           title: deriveTitle(name),
           description,
-          inputSchema,
+          inputSchema: strictInputSchema(inputSchema as ZodRawShape),
           annotations: annot,
         };
         if (outputSchema) config.outputSchema = outputSchema;

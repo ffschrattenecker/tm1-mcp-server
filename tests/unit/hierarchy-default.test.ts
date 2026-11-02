@@ -5,7 +5,7 @@ import type { TM1Client } from "../../src/tm1-client.js";
 import { registerAllTools } from "../../src/tools/index.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import { resolveHierarchy } from "../../src/tools/hierarchy.js";
-import { mockLogger } from "../helpers/client-harness.js";
+import { mockLogger, shapeOf } from "../helpers/client-harness.js";
 
 function collectInputSchemas(): Map<string, Record<string, ZodTypeAny>> {
   const server = new McpServer({ name: "test", version: "0.0.0" });
@@ -13,7 +13,7 @@ function collectInputSchemas(): Map<string, Record<string, ZodTypeAny>> {
   const original = server.registerTool.bind(server);
   server.registerTool = (...args: unknown[]) => {
     const config = args[1] as { inputSchema?: Record<string, ZodTypeAny> };
-    schemas.set(args[0] as string, config?.inputSchema ?? {});
+    schemas.set(args[0] as string, shapeOf(config?.inputSchema ?? {}));
     return (original as (...a: unknown[]) => unknown)(...args) as ReturnType<
       typeof server.registerTool
     >;

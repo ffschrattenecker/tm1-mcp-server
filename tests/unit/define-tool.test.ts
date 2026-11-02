@@ -15,7 +15,7 @@ import { strictVariants } from "../../src/tools/schemas/markdown-capable.js";
 import { FORMAT_SCHEMA } from "../../src/tools/format.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import { ConnectionRegistry } from "../../src/connections.js";
-import { mockLogger } from "../helpers/client-harness.js";
+import { mockLogger, shapeOf } from "../helpers/client-harness.js";
 
 const fakeClient = {} as TM1Client;
 const ok = () => ({ content: [{ type: "text" as const, text: "{}" }] });
@@ -229,7 +229,7 @@ describe("defineTool with several connections", () => {
     })(wrapped, registry);
 
     const tool = tools.get("tm1_spec_multi_route")!;
-    const input = tool.config.inputSchema as z.ZodRawShape;
+    const input = shapeOf(tool.config.inputSchema);
     expect(Object.keys(input)).toEqual(["cubeName", "connection"]);
     expect(
       (input.connection as unknown as { options: string[] }).options,
@@ -321,7 +321,7 @@ describe("defineTool with several connections", () => {
     })(wrapped, registry);
 
     const tool = tools.get("tm1_spec_peer")!;
-    const input = tool.config.inputSchema as z.ZodRawShape;
+    const input = shapeOf(tool.config.inputSchema);
     expect(Object.keys(input)).toEqual([
       "cubeName",
       "connection",
@@ -376,7 +376,7 @@ describe("defineTool with several connections", () => {
     })(wrapped, ConnectionRegistry.single(v11));
 
     const tool = tools.get("tm1_spec_peer_single")!;
-    expect(Object.keys(tool.config.inputSchema as object)).toEqual([]);
+    expect(Object.keys(shapeOf(tool.config.inputSchema))).toEqual([]);
     await tool.cb({});
     expect(sides?.a.client).toBe(v11);
     expect(sides?.b.client).toBe(v11);
@@ -426,7 +426,7 @@ describe("connectionless tools", () => {
       },
     })(withAnnotations(server, mockLogger, "readwrite"), registry);
 
-    expect(Object.keys(config?.inputSchema as object)).toEqual([]);
+    expect(Object.keys(shapeOf(config?.inputSchema))).toEqual([]);
     await cb?.({});
     expect(seen).toBe(registry);
   });

@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerAllTools } from "../../src/tools/index.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
-import { mockLogger } from "../helpers/client-harness.js";
+import { mockLogger, shapeOf } from "../helpers/client-harness.js";
 
 // Capture each registered tool's inputSchema (the raw zod shape) by intercepting
 // registerTool, mirroring tests/unit/tool-registration.test.ts.
@@ -14,7 +14,7 @@ function collectInputSchemas(): Map<string, Record<string, unknown>> {
   server.registerTool = (...args: unknown[]) => {
     const name = args[0] as string;
     const config = args[1] as { inputSchema?: Record<string, unknown> };
-    schemas.set(name, config?.inputSchema ?? {});
+    schemas.set(name, shapeOf(config?.inputSchema ?? {}));
     return (original as (...a: unknown[]) => unknown)(...args) as ReturnType<
       typeof server.registerTool
     >;

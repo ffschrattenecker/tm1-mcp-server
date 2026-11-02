@@ -23,6 +23,7 @@ import { recordingClient } from "./service-recorder.js";
 import { registerAllTools } from "../../src/tools/index.js";
 import type { McpToolResult } from "../../src/tools/error-format.js";
 import type { TestContext } from "vitest";
+import { shapeOf } from "../helpers/client-harness.js";
 
 /** True only when the environment is configured to reach a live TM1 server. */
 export const LIVE_ENABLED = Boolean(
@@ -107,7 +108,10 @@ async function build(): Promise<LiveHarness> {
       cfg: { inputSchema?: ZodRawShape },
       cb: (...args: unknown[]) => Promise<McpToolResult>,
     ) {
-      registry.set(name, { inputSchema: cfg.inputSchema ?? {}, handler: cb });
+      registry.set(name, {
+        inputSchema: shapeOf(cfg.inputSchema ?? {}),
+        handler: cb,
+      });
     },
     // Two things reach through to the low-level server:
     //   sendLoggingMessage — wrapCb's slow-tool warnings

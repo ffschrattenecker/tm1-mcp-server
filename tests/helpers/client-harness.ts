@@ -2,7 +2,7 @@
 // layers) against a stubbed fetch, or a single tool handler directly.
 import { vi } from "vitest";
 import type pino from "pino";
-import { z, type ZodRawShape } from "zod";
+import { z, ZodObject, type ZodRawShape, type ZodTypeAny } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TM1Config } from "../../src/config.js";
 import { SessionManager } from "../../src/session-manager.js";
@@ -68,6 +68,17 @@ export type ToolCb<A = Record<string, unknown>> = (
   isError?: boolean;
   content: Array<{ type: string; text: string }>;
 }>;
+
+/**
+ * The raw shape behind a registered input. withAnnotations hands the SDK a
+ * strict z.object (unknown keys are rejected), so a test that reads a
+ * registration unwraps it here rather than reading the object's own fields.
+ */
+export function shapeOf(input: unknown): Record<string, ZodTypeAny> {
+  return input instanceof ZodObject
+    ? input.shape
+    : (input as Record<string, ZodTypeAny>);
+}
 
 /**
  * Register one tool against a fake server and hand back what the SDK would
