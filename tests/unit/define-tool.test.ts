@@ -359,7 +359,7 @@ describe("defineTool with several connections", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it("a single connection exposes no connectionB and compares it with itself", async () => {
+  it("a single connection takes an optional connection and connectionB, both naming it", async () => {
     const { wrapped, tools } = capture();
     let sides:
       { a: { client: TM1Client }; b: { client: TM1Client } } | undefined;
@@ -376,7 +376,10 @@ describe("defineTool with several connections", () => {
     })(wrapped, ConnectionRegistry.single(v11));
 
     const tool = tools.get("tm1_spec_peer_single")!;
-    expect(Object.keys(shapeOf(tool.config.inputSchema))).toEqual([]);
+    expect(Object.keys(shapeOf(tool.config.inputSchema))).toEqual([
+      "connection",
+      "connectionB",
+    ]);
     await tool.cb({});
     expect(sides?.a.client).toBe(v11);
     expect(sides?.b.client).toBe(v11);

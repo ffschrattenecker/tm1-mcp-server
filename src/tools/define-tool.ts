@@ -112,9 +112,9 @@ interface PeerSide {
 
 /**
  * A read-only tool that compares two connections (DEV vs PROD). Besides
- * `connection` it takes an optional `connectionB` — present only when more
- * than one connection exists — that defaults to `connection`, so every such
- * tool also works on a single server (comparing two objects on it).
+ * `connection` it takes an optional `connectionB` that defaults to
+ * `connection`, so every such tool also works on a single server (comparing
+ * two objects on it).
  */
 interface PeerToolSpec<I extends ZodRawShape> extends ToolSpecBase<I> {
   connectionless?: false;
@@ -219,26 +219,30 @@ export function defineTool<I extends ZodRawShape>(
     ) {
       return;
     }
-    // One connection: the input shape is exactly what the tool declares. More
-    // than one: every tool takes a `connection` naming the target.
+    // More than one: every tool takes a `connection` naming the target.
+    // One: `connection` is optional, but the enum still pins it to that name.
+    // Callers often pass the name anyway, and a strict input would reject that.
     // Empty at startup: a plain string, since the enum cannot be empty and
     // would go stale once a connection is added.
     const names = registry.usableNames as [string, ...string[]];
     const connectionSchema = empty ? z.string() : z.enum(names);
+    const peerConnection = connectionSchema
+      .optional()
+      .describe(
+        "Second connection to compare against (e.g. PROD vs DEV). Default: the same as connection.",
+      );
     const input = registry.isSingle
-      ? spec.input
+      ? {
+          ...spec.input,
+          connection: connectionSchema
+            .optional()
+            .describe("Target TM1 connection (optional: there is only one)."),
+          ...(spec.peer ? { connectionB: peerConnection } : {}),
+        }
       : {
           ...spec.input,
           connection: connectionSchema.describe("Target TM1 connection."),
-          ...(spec.peer
-            ? {
-                connectionB: connectionSchema
-                  .optional()
-                  .describe(
-                    "Second connection to compare against (e.g. PROD vs DEV). Default: the same as connection.",
-                  ),
-              }
-            : {}),
+          ...(spec.peer ? { connectionB: peerConnection } : {}),
         };
     const gate = (connection: string | undefined) => {
       const info = registry.resolveInfo(connection);

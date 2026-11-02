@@ -160,3 +160,72 @@ describe("unknown tool arguments are rejected", () => {
     await server.close();
   });
 });
+
+describe("single connection: connection is optional and pinned to that name", () => {
+  // ConnectionRegistry.single names its one client "default".
+  async function singleServer() {
+    const { client: tm1, sent } = fakeClient();
+    const server = new McpServer({ name: "t", version: "0.0.0" });
+    const wrapped = withAnnotations(server, mockLogger, "readwrite");
+    registerRestRead(wrapped, ConnectionRegistry.single(tm1));
+    const client = await connect(server);
+    return { client, server, sent };
+  }
+
+  it("runs a call that names the one connection", async () => {
+    const { client, server, sent } = await singleServer();
+
+    const text = await callText(client, "tm1_rest_read", {
+      connection: "default",
+      path: "Dimensions",
+    });
+
+    expect(text).not.toContain("Input validation error");
+    expect(sent).toEqual(["GET Dimensions"]);
+    await client.close();
+    await server.close();
+  });
+
+  it("runs a call that omits connection", async () => {
+    const { client, server, sent } = await singleServer();
+
+    const text = await callText(client, "tm1_rest_read", {
+      path: "Dimensions",
+    });
+
+    expect(text).not.toContain("Input validation error");
+    expect(sent).toEqual(["GET Dimensions"]);
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects a connection name that is not the one connection, before the handler runs", async () => {
+    const { client, server, sent } = await singleServer();
+
+    const text = await callText(client, "tm1_rest_read", {
+      connection: "nope",
+      path: "Dimensions",
+    });
+
+    expect(text).toContain(`MCP error ${ErrorCode.InvalidParams}`);
+    expect(text).toContain("connection");
+    expect(sent).toEqual([]);
+    await client.close();
+    await server.close();
+  });
+
+  it("still names unknown keys, and lists connection among the accepted ones", async () => {
+    const { client, server, sent } = await singleServer();
+
+    const text = await callText(client, "tm1_rest_read", {
+      path: "Dimensions",
+      query: "$select=Name",
+    });
+
+    expect(text).toMatch(/Unknown parameter\(s\): query/);
+    expect(text).toContain("Accepted: path, maxChars, connection.");
+    expect(sent).toEqual([]);
+    await client.close();
+    await server.close();
+  });
+});
