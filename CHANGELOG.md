@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Unknown tool arguments are rejected with the list of accepted ones: a silently dropped `query` made `tm1_rest_read` return the same unfiltered list three times.
+
 ## [10.2.0] - 2026-10-28
 
 ### Changed
