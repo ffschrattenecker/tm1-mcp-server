@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [10.3.0] - 2026-11-02
+
+### ⚠️ Behavior change
 
 - Unknown tool arguments are rejected with the list of accepted ones: a silently dropped `query` made `tm1_rest_read` return the same unfiltered list three times.
 
@@ -432,7 +434,8 @@ response-size guard, the per-connection caches) are unchanged.
 Older history (before 8.0.0): see the git tags and the upstream repository,
 https://github.com/flameY3T1/tm1-mcp-server.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.2.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.3.0...HEAD
+[10.3.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.2.0...v10.3.0
 [10.2.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.1.0...v10.2.0
 [10.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.0.0...v10.1.0
 [10.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v9.3.0...v10.0.0
