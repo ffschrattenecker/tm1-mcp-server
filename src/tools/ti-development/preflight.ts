@@ -128,14 +128,6 @@ export async function runPreflight(
   return undefined;
 }
 
-/** The isError tool result for a failed preflight. */
-export function preflightResult(failure: PreflightFailure) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(failure) }],
-    isError: true as const,
-  };
-}
-
 export interface PreflightChecks {
   ok: boolean;
   syntax: {

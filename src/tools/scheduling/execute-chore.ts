@@ -3,6 +3,7 @@ import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { ChoreResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 import { startHeartbeat } from "../heartbeat.js";
 
 export const registerExecuteChore = defineTool({
@@ -45,7 +46,7 @@ export const registerExecuteChore = defineTool({
       stopHeartbeat();
     }
     return {
-      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+      ...jsonResult(result),
       // Same rule as tm1_execute_process: a chore that ran and reported failure
       // is a tool failure, not a successful call carrying success:false.
       //

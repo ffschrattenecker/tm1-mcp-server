@@ -9,6 +9,7 @@ import {
 import { CompileErrorSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 export const registerCheckProcessCode = defineTool({
   name: "tm1_check_process_code",
@@ -119,8 +120,8 @@ export const registerCheckProcessCode = defineTool({
           }),
     };
     return {
+      ...jsonResult(payload),
       isError: !result.success || undefined,
-      content: [{ type: "text" as const, text: JSON.stringify(payload) }],
     };
   },
 });

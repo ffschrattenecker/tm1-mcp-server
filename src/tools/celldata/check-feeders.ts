@@ -4,6 +4,7 @@ import { CheckFeedersResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { COORD_ELEMENTS_DESCRIPTION } from "./member-ref.js";
+import { jsonResult } from "../format.js";
 
 export const registerCheckFeeders = defineTool({
   name: "tm1_check_feeders",
@@ -35,21 +36,10 @@ export const registerCheckFeeders = defineTool({
       }),
       `CheckFeeders failed for cube '${cubeName}'. Verify dimension order/elements via tm1_rest_read Cubes('${cubeName}')/Dimensions?$select=Name.`,
     );
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              count: fedCells.length,
-              unfedCount: fedCells.filter((c) => !c.fed).length,
-              fedCells,
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      count: fedCells.length,
+      unfedCount: fedCells.filter((c) => !c.fed).length,
+      fedCells,
+    });
   },
 });

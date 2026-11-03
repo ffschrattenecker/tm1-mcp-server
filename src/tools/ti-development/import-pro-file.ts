@@ -11,12 +11,9 @@ import {
   OVERWRITE_CONFIRM_SCHEMA,
   requireOverwriteConfirm,
 } from "../confirm.js";
-import {
-  applyDeployParts,
-  preflightResult,
-  runPreflight,
-} from "./preflight.js";
+import { applyDeployParts, runPreflight } from "./preflight.js";
 import { backupProcess } from "./process-backup.js";
+import { jsonError, jsonResult } from "../format.js";
 
 export const registerImportProFile = defineTool({
   name: "tm1_import_pro_file",
@@ -108,7 +105,7 @@ export const registerImportProFile = defineTool({
         variables: parsed.variables,
         dataSource: parsed.dataSource,
       });
-      if (failure) return preflightResult(failure);
+      if (failure) return jsonError(failure);
     }
 
     const allProcs = await tm1Client.processes.list({ namesOnly: true });
@@ -162,30 +159,19 @@ export const registerImportProFile = defineTool({
       },
     });
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              action,
-              processName,
-              ...(backup ? { backup } : {}),
-              parsed: {
-                prologLines: parsed.prolog.split("\n").length,
-                metadataLines: parsed.metadata.split("\n").length,
-                dataLines: parsed.data.split("\n").length,
-                epilogLines: parsed.epilog.split("\n").length,
-                parameterCount: parsed.parameters.length,
-                variableCount: parsed.variables.length,
-                dataSourceType: parsed.dataSource.type,
-              },
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      action,
+      processName,
+      ...(backup ? { backup } : {}),
+      parsed: {
+        prologLines: parsed.prolog.split("\n").length,
+        metadataLines: parsed.metadata.split("\n").length,
+        dataLines: parsed.data.split("\n").length,
+        epilogLines: parsed.epilog.split("\n").length,
+        parameterCount: parsed.parameters.length,
+        variableCount: parsed.variables.length,
+        dataSourceType: parsed.dataSource.type,
+      },
+    });
   },
 });

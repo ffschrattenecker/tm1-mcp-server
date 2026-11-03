@@ -8,6 +8,7 @@ import { tm1NameKey, withoutSandboxes } from "../../lib/tm1-name.js";
 import { CompareEnvironmentsResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 const OBJECT_TYPES = ["cubes", "dimensions", "processes", "chores"] as const;
 type ObjectType = (typeof OBJECT_TYPES)[number];
@@ -263,22 +264,11 @@ export const registerCompareEnvironments = defineTool({
       results[type] = { ...r, ...(drillDown ? { drillDown } : {}) };
     }
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              connectionA: a.name,
-              connectionB: b.name,
-              identical,
-              ...results,
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      connectionA: a.name,
+      connectionB: b.name,
+      identical,
+      ...results,
+    });
   },
 });

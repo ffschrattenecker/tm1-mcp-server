@@ -24,6 +24,7 @@ import { isControlName } from "../../lib/control-name.js";
 import { AuditFeedersResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 type FindingRule =
   | "wildcard_bracket"
@@ -489,45 +490,34 @@ export const registerAuditFeeders = defineTool({
       status = findings.length > 0 ? "fail" : "pass";
     }
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              status,
-              productVersion: serverInfo.productVersion,
-              mode,
-              includeControl,
-              s1MinPinnedRatio,
-              fedRatioThreshold,
-              fedRatioEvidenceThreshold,
-              memoryThresholdMb,
-              severityThreshold,
-              scanned: {
-                cubes: cubesScanned,
-                feederLines: feederLinesScanned,
-                dimResolveFailures,
-                runtimeAvailable: runtimeAvailableCount,
-                runtimeFailures: runtimeFailureCount,
-              },
-              invalidCount: findings.length,
-              summary: { byRule, bySeverity, byCube },
-              truncated: { findings: truncated },
-              findings: trimmed,
-              runtimeUnavailable,
-              runtimeStats: wantsRuntime ? runtimeStats : undefined,
-              rulesetSource:
-                "Static heuristics S1 (feeder_broader_than_rule), S2 (feeder_to_consolidated), " +
-                "S3 (wildcard_bracket), S4 (db_feeder_without_skipcheck), S5 (orphan_feeder). " +
-                "Runtime evidence: cube_high_fed_ratio + cube_high_memory via }StatsByCube.",
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      status,
+      productVersion: serverInfo.productVersion,
+      mode,
+      includeControl,
+      s1MinPinnedRatio,
+      fedRatioThreshold,
+      fedRatioEvidenceThreshold,
+      memoryThresholdMb,
+      severityThreshold,
+      scanned: {
+        cubes: cubesScanned,
+        feederLines: feederLinesScanned,
+        dimResolveFailures,
+        runtimeAvailable: runtimeAvailableCount,
+        runtimeFailures: runtimeFailureCount,
+      },
+      invalidCount: findings.length,
+      summary: { byRule, bySeverity, byCube },
+      truncated: { findings: truncated },
+      findings: trimmed,
+      runtimeUnavailable,
+      runtimeStats: wantsRuntime ? runtimeStats : undefined,
+      rulesetSource:
+        "Static heuristics S1 (feeder_broader_than_rule), S2 (feeder_to_consolidated), " +
+        "S3 (wildcard_bracket), S4 (db_feeder_without_skipcheck), S5 (orphan_feeder). " +
+        "Runtime evidence: cube_high_fed_ratio + cube_high_memory via }StatsByCube.",
+    });
   },
 });
 

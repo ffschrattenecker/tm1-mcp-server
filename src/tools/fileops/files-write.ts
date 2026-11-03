@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { withToolHint } from "../error-format.js";
-import { actionResponse } from "../format.js";
+import { actionResponse, jsonError } from "../format.js";
 import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
@@ -82,23 +82,11 @@ export const registerFilesWrite = defineTool({
         : Buffer.from(content, "utf8");
 
     if (bytes.byteLength > HARD_MAX_BYTES) {
-      return {
-        isError: true,
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                code: "VALIDATION_ERROR",
-                message: `File too large: ${bytes.byteLength} bytes (hard max ${HARD_MAX_BYTES})`,
-                hint: "Split the file or upload a smaller subset. Multipart upload is not yet supported.",
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return jsonError({
+        code: "VALIDATION_ERROR",
+        message: `File too large: ${bytes.byteLength} bytes (hard max ${HARD_MAX_BYTES})`,
+        hint: "Split the file or upload a smaller subset. Multipart upload is not yet supported.",
+      });
     }
 
     const result = await withToolHint(

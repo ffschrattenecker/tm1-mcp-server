@@ -7,6 +7,7 @@ import { checkProcessRefs, type ProcessCode } from "../../lib/process-refs.js";
 import { READ_ONLY } from "../annotations.js";
 import { ValidateProcessRefsResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 export const registerValidateProcessRefs = defineTool({
   name: "tm1_validate_process_refs",
@@ -71,17 +72,6 @@ export const registerValidateProcessRefs = defineTool({
 
     const report = await checkProcessRefs(tm1Client, code, { includeControl });
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            { processName: resolvedName, ...report },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({ processName: resolvedName, ...report });
   },
 });

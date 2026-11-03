@@ -14,6 +14,7 @@ import { DiffProcessesResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { tabCodeDiff } from "../../lib/line-diff.js";
+import { jsonResult } from "../format.js";
 
 // ── param / var / datasource diff ────────────────────────────────────────────
 
@@ -245,28 +246,17 @@ export const registerDiffProcesses = defineTool({
       ignoredColumns.identical &&
       dataSource.identical;
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              processA,
-              processB,
-              connectionA: a.name,
-              connectionB: b.name,
-              identical,
-              tabs: tabResults,
-              parameters,
-              variables,
-              ignoredColumns,
-              dataSource,
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      processA,
+      processB,
+      connectionA: a.name,
+      connectionB: b.name,
+      identical,
+      tabs: tabResults,
+      parameters,
+      variables,
+      ignoredColumns,
+      dataSource,
+    });
   },
 });

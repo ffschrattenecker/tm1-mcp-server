@@ -6,6 +6,7 @@ import {
 import { READ_ONLY } from "../annotations.js";
 import { V12ReadinessResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 const RULESET_SOURCE =
   "vscode-tm1-ti@cf73b93 / tiSignatures.ts (synced 2026-05-12)";
@@ -151,27 +152,16 @@ export const registerCheckV12Readiness = defineTool({
 
     const trimmed = findings.slice(0, maxFindings);
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              scope,
-              includeControl,
-              scannedProcesses,
-              scannedCubes,
-              findingsCount: findings.length,
-              readinessScore,
-              summary: { byCategory, bySeverity, topFunctions },
-              findings: trimmed,
-              rulesetSource: RULESET_SOURCE,
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      scope,
+      includeControl,
+      scannedProcesses,
+      scannedCubes,
+      findingsCount: findings.length,
+      readinessScore,
+      summary: { byCategory, bySeverity, topFunctions },
+      findings: trimmed,
+      rulesetSource: RULESET_SOURCE,
+    });
   },
 });

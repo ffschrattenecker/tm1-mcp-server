@@ -148,6 +148,11 @@ export function jsonResult(payload: unknown): TextResult {
   };
 }
 
+// A failed tool call whose body is still a JSON payload (code, message, hint).
+export function jsonError(payload: unknown): TextResult & { isError: true } {
+  return { ...jsonResult(payload), isError: true };
+}
+
 // The rendered table goes out twice on purpose: once as the text block, once
 // as structuredContent. Which of the two a client reads is not negotiable from
 // here — Kiro renders `content` and ignores structuredContent, Claude Code

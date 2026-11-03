@@ -10,6 +10,7 @@ import { resolveHierarchy } from "../hierarchy.js";
 import { DiffHierarchyResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 // Attribute values are read a window at a time; one MDX per window.
 const ATTRIBUTE_PAGE = 5000;
@@ -194,28 +195,17 @@ export const registerDiffHierarchy = defineTool({
       edges: s.edges.length,
     });
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              a: side(a.name, dimension, hierarchyA, structA),
-              b: side(b.name, dimensionB, hierarchyB, structB),
-              identical,
-              counts,
-              ...Object.fromEntries(
-                Object.entries(lists)
-                  .filter(([, v]) => v.length > 0)
-                  .map(([k, v]) => [k, v.slice(0, limit)]),
-              ),
-              ...(truncated ? { truncated: true } : {}),
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      a: side(a.name, dimension, hierarchyA, structA),
+      b: side(b.name, dimensionB, hierarchyB, structB),
+      identical,
+      counts,
+      ...Object.fromEntries(
+        Object.entries(lists)
+          .filter(([, v]) => v.length > 0)
+          .map(([k, v]) => [k, v.slice(0, limit)]),
+      ),
+      ...(truncated ? { truncated: true } : {}),
+    });
   },
 });

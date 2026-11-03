@@ -74,30 +74,19 @@ export const registerAnalyzeChoreGraph = defineTool({
         indexedChoreCount: index.choreTasks.size,
       });
     }
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              choreName: graph.choreName,
-              maskSecrets,
-              tasks: graph.tasks.map((t) => ({
-                step: t.step,
-                processName: t.processName,
-                choreParams: maskSecrets
-                  ? maskChoreParams(
-                      t.choreParams as unknown as Record<string, unknown>[],
-                    )
-                  : t.choreParams,
-                tree: serializeNode(t.tree, maskSecrets),
-              })),
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      choreName: graph.choreName,
+      maskSecrets,
+      tasks: graph.tasks.map((t) => ({
+        step: t.step,
+        processName: t.processName,
+        choreParams: maskSecrets
+          ? maskChoreParams(
+              t.choreParams as unknown as Record<string, unknown>[],
+            )
+          : t.choreParams,
+        tree: serializeNode(t.tree, maskSecrets),
+      })),
+    });
   },
 });

@@ -19,6 +19,7 @@ import { diffDs } from "./diff-processes.js";
 import { DiffProcessResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 interface TabDiff {
   tab: "prolog" | "metadata" | "data" | "epilog";
@@ -211,25 +212,14 @@ export const registerDiffProcessWithFile = defineTool({
       ignoredColumns.identical &&
       dataSource.identical;
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              processName: name,
-              identical: allIdentical,
-              tabs,
-              parameters: params,
-              variables,
-              ignoredColumns,
-              dataSource,
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      processName: name,
+      identical: allIdentical,
+      tabs,
+      parameters: params,
+      variables,
+      ignoredColumns,
+      dataSource,
+    });
   },
 });

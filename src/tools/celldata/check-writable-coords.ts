@@ -10,6 +10,7 @@ import {
   bindLeftOutSandbox,
   resolveCellAddress,
 } from "../../lib/cell-address.js";
+import { jsonResult } from "../format.js";
 
 interface CoordCheck {
   dimension: string;
@@ -154,25 +155,14 @@ export const registerCheckWritableCoords = defineTool({
     const allNLevel = checks.every((c) => c.isNLevel);
     const writable = allExist && allNLevel;
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              cube: cubeName,
-              writable,
-              allElementsExist: allExist,
-              allElementsNLevel: allNLevel,
-              coords: checks,
-              ruleOverlapWarn,
-              ...(sandboxDefaulted ? { sandboxDefaulted } : {}),
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      cube: cubeName,
+      writable,
+      allElementsExist: allExist,
+      allElementsNLevel: allNLevel,
+      coords: checks,
+      ruleOverlapWarn,
+      ...(sandboxDefaulted ? { sandboxDefaulted } : {}),
+    });
   },
 });

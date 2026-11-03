@@ -4,6 +4,7 @@ import { tm1NameEquals, withoutSandboxes } from "../../lib/tm1-name.js";
 import { DiffCubeRulesResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { jsonResult } from "../format.js";
 
 const FEEDERS = /^\s*FEEDERS\s*;/im;
 
@@ -59,38 +60,27 @@ export const registerDiffCubeRules = defineTool({
       coreA.length === coreB.length &&
       coreA.every((d, i) => tm1NameEquals(d, coreB[i]!));
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              cubeA: cube,
-              cubeB,
-              connectionA: a.name,
-              connectionB: b.name,
-              identical: diff.identical && dimensionsIdentical,
-              dimensions: {
-                identical: dimensionsIdentical,
-                a: dimsA,
-                b: dimsB,
-              },
-              skipCheck: { a: rulesA.skipCheck, b: rulesB.skipCheck },
-              feeders: {
-                a: FEEDERS.test(rulesA.rulesText),
-                b: FEEDERS.test(rulesB.rulesText),
-              },
-              rules: {
-                ...diff,
-                hunks: diff.hunks.slice(0, maxHunks),
-                ...(hunksOmitted > 0 ? { hunksOmitted } : {}),
-              },
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      cubeA: cube,
+      cubeB,
+      connectionA: a.name,
+      connectionB: b.name,
+      identical: diff.identical && dimensionsIdentical,
+      dimensions: {
+        identical: dimensionsIdentical,
+        a: dimsA,
+        b: dimsB,
+      },
+      skipCheck: { a: rulesA.skipCheck, b: rulesB.skipCheck },
+      feeders: {
+        a: FEEDERS.test(rulesA.rulesText),
+        b: FEEDERS.test(rulesB.rulesText),
+      },
+      rules: {
+        ...diff,
+        hunks: diff.hunks.slice(0, maxHunks),
+        ...(hunksOmitted > 0 ? { hunksOmitted } : {}),
+      },
+    });
   },
 });

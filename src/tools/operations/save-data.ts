@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TM1ErrorCode } from "../../types.js";
 import { withToolHint } from "../error-format.js";
+import { jsonResult } from "../format.js";
 import { IDEMPOTENT_WRITE, withVersion } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
@@ -52,12 +53,7 @@ export const registerSaveData = defineTool({
       stopHeartbeat();
     }
     return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({ ...result, scope: cube ?? "all" }),
-        },
-      ],
+      ...jsonResult({ ...result, scope: cube ?? "all" }),
       // A failed SaveData is a data-persistence failure (in-memory data not
       // written to disk) — surface it as an MCP error, not a success payload
       // carrying success:false, so the caller can't silently miss data loss.

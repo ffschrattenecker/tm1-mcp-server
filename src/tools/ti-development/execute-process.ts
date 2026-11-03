@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { withToolHint } from "../error-format.js";
+import { jsonResult } from "../format.js";
 import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { ProcessResultSchema } from "../schemas/items.js";
@@ -109,15 +110,10 @@ export const registerExecuteProcess = defineTool({
         ? await fetchErrorLog(tm1Client, result.errorLogFile)
         : undefined;
       return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              ...result,
-              ...(errorLog ? { errorLog } : {}),
-            }),
-          },
-        ],
+        ...jsonResult({
+          ...result,
+          ...(errorLog ? { errorLog } : {}),
+        }),
         // A TI process that ran but reported failure is a tool failure, not a
         // successful call carrying success:false. Flag isError so agents that
         // branch on the MCP error signal don't silently treat it as success;

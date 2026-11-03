@@ -9,18 +9,13 @@ import {
   OVERWRITE_CONFIRM_SCHEMA,
   requireOverwriteConfirm,
 } from "../confirm.js";
-import {
-  preflightResult,
-  runChecks,
-  runPreflight,
-  type PreflightPayload,
-} from "./preflight.js";
+import { runChecks, runPreflight, type PreflightPayload } from "./preflight.js";
 import { diffDs, diffParams, diffVars } from "./diff-processes.js";
 import { normalizeText, tabCodeDiff } from "../../lib/line-diff.js";
 import type { DataSource } from "../../types.js";
 import { maskCode } from "../../lib/mask-secrets.js";
 import { backupProcess } from "./process-backup.js";
-import { jsonResult } from "../format.js";
+import { jsonError, jsonResult } from "../format.js";
 
 // The same data source shape the git round-trip and check_process_code use.
 // Accepts `query` too: an ODBC source's SQL is read back by tm1_get_process.
@@ -229,7 +224,7 @@ export const registerUpsertProcess = defineTool({
 
     if (preflight) {
       const failure = await runPreflight(tm1Client, await resolve());
-      if (failure) return preflightResult(failure);
+      if (failure) return jsonError(failure);
     }
 
     // Last step before the first write: a failed backup throws, nothing is written.
@@ -323,26 +318,15 @@ export const registerUpsertProcess = defineTool({
       trail.push("compileProcess");
     }
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              processName,
-              action: exists ? "updated" : "created",
-              appliedSteps: trail,
-              callgraphEntriesCleared,
-              ...(backup ? { backup } : {}),
-              ...(verified !== undefined ? { verified } : {}),
-              ...(compile !== undefined ? { compile } : {}),
-              ...(warning !== undefined ? { warning } : {}),
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      processName,
+      action: exists ? "updated" : "created",
+      appliedSteps: trail,
+      callgraphEntriesCleared,
+      ...(backup ? { backup } : {}),
+      ...(verified !== undefined ? { verified } : {}),
+      ...(compile !== undefined ? { compile } : {}),
+      ...(warning !== undefined ? { warning } : {}),
+    });
   },
 });

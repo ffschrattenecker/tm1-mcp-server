@@ -11,12 +11,9 @@ import {
   OVERWRITE_CONFIRM_SCHEMA,
   requireOverwriteConfirm,
 } from "../confirm.js";
-import {
-  applyDeployParts,
-  preflightResult,
-  runPreflight,
-} from "./preflight.js";
+import { applyDeployParts, runPreflight } from "./preflight.js";
 import { backupProcess } from "./process-backup.js";
+import { jsonError, jsonResult } from "../format.js";
 
 export const registerImportProcessFromGit = defineTool({
   name: "tm1_import_process_from_git",
@@ -135,7 +132,7 @@ export const registerImportProcessFromGit = defineTool({
         variables: parsed.variables,
         dataSource,
       });
-      if (failure) return preflightResult(failure);
+      if (failure) return jsonError(failure);
     }
 
     const exists = await tm1Client.processes.exists(processName);
@@ -190,33 +187,22 @@ export const registerImportProcessFromGit = defineTool({
       },
     );
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify(
-            {
-              action,
-              processName,
-              ...(backup ? { backup } : {}),
-              ...(parsed.hasSecurityAccess !== undefined
-                ? { hasSecurityAccess: parsed.hasSecurityAccess }
-                : {}),
-              parsed: {
-                prologLines: parsed.prolog.split("\n").length,
-                metadataLines: parsed.metadata.split("\n").length,
-                dataLines: parsed.data.split("\n").length,
-                epilogLines: parsed.epilog.split("\n").length,
-                parameterCount: parsed.parameters.length,
-                variableCount: parsed.variables.length,
-                dataSourceType: dataSource.type,
-              },
-            },
-            null,
-            2,
-          ),
-        },
-      ],
-    };
+    return jsonResult({
+      action,
+      processName,
+      ...(backup ? { backup } : {}),
+      ...(parsed.hasSecurityAccess !== undefined
+        ? { hasSecurityAccess: parsed.hasSecurityAccess }
+        : {}),
+      parsed: {
+        prologLines: parsed.prolog.split("\n").length,
+        metadataLines: parsed.metadata.split("\n").length,
+        dataLines: parsed.data.split("\n").length,
+        epilogLines: parsed.epilog.split("\n").length,
+        parameterCount: parsed.parameters.length,
+        variableCount: parsed.variables.length,
+        dataSourceType: dataSource.type,
+      },
+    });
   },
 });
