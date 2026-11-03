@@ -4,7 +4,7 @@ import type {
   ProcessVariable,
 } from "../types.js";
 
-export interface ParsedPro {
+export interface ParsedProcess {
   name: string | null;
   prolog: string;
   metadata: string;
@@ -366,7 +366,7 @@ function parseFooter(lines: string[]): {
   return out;
 }
 
-export function parseProFile(content: string): ParsedPro {
+export function parseProFile(content: string): ParsedProcess {
   const lines = content
     // TM1 writes .pro files with a UTF-8 BOM.
     .replace(/^\uFEFF/, "")

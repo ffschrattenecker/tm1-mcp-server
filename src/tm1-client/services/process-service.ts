@@ -40,7 +40,23 @@ interface RawProcessVariable {
   EndByte?: number;
 }
 
-function decodeVariable(v: RawProcessVariable): ProcessVariable {
+interface RawProcessParameter {
+  Name: string;
+  Type: string;
+  Value: string | number;
+  Prompt?: string;
+}
+
+function paramFromRest(p: RawProcessParameter): ProcessParameter {
+  return {
+    name: p.Name,
+    type: p.Type === "Numeric" ? "Numeric" : "String",
+    defaultValue: p.Value,
+    ...(p.Prompt ? { prompt: p.Prompt } : {}),
+  };
+}
+
+function varFromRest(v: RawProcessVariable): ProcessVariable {
   return {
     name: v.Name,
     type: v.Type === "Numeric" ? "Numeric" : "String",
@@ -158,23 +174,13 @@ export class ProcessService {
       const response = await this.http.request<{
         value: Array<{
           Name: string;
-          Parameters?: Array<{
-            Name: string;
-            Type: string;
-            Value: string | number;
-            Prompt?: string;
-          }>;
+          Parameters?: RawProcessParameter[];
         }>;
       }>("GET", "/api/v1/Processes?$select=Name,Parameters");
 
       return response.value.map((p) => ({
         name: p.Name,
-        parameters: (p.Parameters ?? []).map((param): ProcessParameter => ({
-          name: param.Name,
-          type: param.Type === "Numeric" ? "Numeric" : "String",
-          defaultValue: param.Value,
-          ...(param.Prompt ? { prompt: param.Prompt } : {}),
-        })),
+        parameters: (p.Parameters ?? []).map(paramFromRest),
       }));
     } catch (e) {
       rethrowIfSystemic(e);
@@ -324,20 +330,10 @@ export class ProcessService {
     // (not the legacy int code 1 / 2): a `=== 1` check would classify every
     // Numeric parameter as String.
     const response = await this.http.request<{
-      value: Array<{
-        Name: string;
-        Type: string;
-        Value: string | number;
-        Prompt?: string;
-      }>;
+      value: RawProcessParameter[];
     }>("GET", path);
 
-    return response.value.map((param): ProcessParameter => ({
-      name: param.Name,
-      type: param.Type === "Numeric" ? "Numeric" : "String",
-      defaultValue: param.Value,
-      ...(param.Prompt ? { prompt: param.Prompt } : {}),
-    }));
+    return response.value.map(paramFromRest);
   }
 
   /**
@@ -988,7 +984,7 @@ export class ProcessService {
         VariablesUIData?: string[];
       }>("GET", path);
       return {
-        variables: (r.Variables ?? []).map(decodeVariable),
+        variables: (r.Variables ?? []).map(varFromRest),
         ignoredColumns: ignoredColumnsOf(r.VariablesUIData),
         ...(r.VariablesUIData !== undefined
           ? { variablesUIData: r.VariablesUIData }
@@ -1003,7 +999,7 @@ export class ProcessService {
         value: RawProcessVariable[];
       }>("GET", `/api/v1/Processes('${odataKey(processName)}')/Variables`);
       return {
-        variables: response.value.map(decodeVariable),
+        variables: response.value.map(varFromRest),
         ignoredColumns: [],
       };
     }
@@ -1045,7 +1041,7 @@ export class ProcessService {
     for (const p of response.value) {
       // A process without variables comes back with the property omitted
       // rather than as an empty array.
-      byProcess.set(p.Name, (p.Variables ?? []).map(decodeVariable));
+      byProcess.set(p.Name, (p.Variables ?? []).map(varFromRest));
     }
     return byProcess;
   }

@@ -4,6 +4,7 @@ import type {
   ProcessParameter,
   ProcessVariable,
 } from "../types.js";
+import type { ParsedProcess } from "./pro-parser.js";
 import {
   DataSourceInputSchema,
   DataSourceSchema,
@@ -62,21 +63,6 @@ export interface GitProcessJson {
   json: string;
   /** True when an ODBC password was present and stripped from the JSON. */
   credentialsOmitted: boolean;
-}
-
-export interface ParsedGitProcess {
-  name: string;
-  prolog: string;
-  metadata: string;
-  data: string;
-  epilog: string;
-  parameters: ProcessParameter[];
-  variables: ProcessVariable[];
-  variablesUIData?: string[];
-  /** Architect action settings; absent in files written before 2026-10-10. */
-  uiData?: string;
-  dataSource: DataSource;
-  hasSecurityAccess?: boolean;
 }
 
 /**
@@ -144,7 +130,7 @@ function isLegacyLayout(ti: string): boolean {
  * layout (`#region prolog` … `#endregion prolog`) is rebuilt from the parsed
  * tabs instead: TM1 refuses those closes ("mismatched regions").
  */
-export function toCodeBlob(ti: string, parsed: ParsedGitProcess): string {
+export function toCodeBlob(ti: string, parsed: ParsedProcess): string {
   if (!isLegacyLayout(ti)) return ti.replace(/\r?\n/g, "\r\n");
   const blob = TI_TABS.filter((t) => parsed[t] !== "")
     .map((t) => `#region ${TITLE[t]}\n${parsed[t]}\n#endregion`)
@@ -385,7 +371,7 @@ function fromNative(n: Record<string, unknown>): Record<string, unknown> {
 export function parseProcessFromGit(
   jsonContent: string,
   tiContent: string,
-): ParsedGitProcess {
+): ParsedProcess {
   type Meta = {
     name?: unknown;
     hasSecurityAccess?: unknown;

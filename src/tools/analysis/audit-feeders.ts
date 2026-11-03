@@ -19,6 +19,7 @@ import {
   computeFeederMemoryRatio,
   fetchCubeStats,
   CubeStatsUnavailableError,
+  sharedUnavailability,
   type CubeStatsItem,
   type StatsUnavailableReason,
 } from "../../lib/cube-stats/fetcher.js";
@@ -335,11 +336,6 @@ export const registerAuditFeeders = defineTool({
         10,
         (name) => fetchCubeStats(tm1Client, name),
       );
-      // Tracks a failure that is about the server/account rather than the
-      // cube, so it can be reported once (see runtimeUnavailable below).
-      const unavailableReasons = new Set<StatsUnavailableReason>();
-      let unavailableSample: CubeStatsUnavailableError | undefined;
-      let unavailableCount = 0;
 
       for (let i = 0; i < settled.length; i++) {
         const cubeName = scannedCubeNames[i]!;
@@ -349,11 +345,6 @@ export const registerAuditFeeders = defineTool({
           const err: unknown = r.reason;
           const unavailable =
             err instanceof CubeStatsUnavailableError ? err : null;
-          if (unavailable) {
-            unavailableReasons.add(unavailable.reason);
-            unavailableSample ??= unavailable;
-            unavailableCount++;
-          }
           runtimeStats[cubeName] = {
             available: false,
             memoryTotal: null,
@@ -427,15 +418,12 @@ export const registerAuditFeeders = defineTool({
       // Every cube failed the same server- or account-wide way: say it once
       // and drop the N identical per-cube copies. The static half (mode
       // 'both') is untouched — it needs no stats cube.
-      if (
-        unavailableSample &&
-        unavailableCount === scannedCubeNames.length &&
-        unavailableReasons.size === 1
-      ) {
+      const shared = sharedUnavailability(settled);
+      if (shared) {
         runtimeUnavailable = {
-          reason: unavailableSample.reason,
-          message: unavailableSample.message,
-          cubes: unavailableCount,
+          reason: shared.reason,
+          message: shared.message,
+          cubes: scannedCubeNames.length,
         };
         for (const name of scannedCubeNames) delete runtimeStats[name];
       }

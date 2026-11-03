@@ -10,8 +10,8 @@ import {
 import {
   fetchCubeStats,
   CubeStatsUnavailableError,
+  sharedUnavailability,
   type CubeStatsItem,
-  type StatsUnavailableReason,
 } from "../../lib/cube-stats/fetcher.js";
 import { CubeStatsResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -83,7 +83,10 @@ export const registerGetCubeStats = defineTool({
     // only when EVERY target failed for the same server-wide reason, so a
     // one-off per-cube failure never gets generalised into a claim about
     // the server.
-    const statsUnavailable = serverWideUnavailability(settled);
+    const shared = sharedUnavailability(settled);
+    const statsUnavailable = shared
+      ? { reason: shared.reason, message: shared.message }
+      : undefined;
     const payload = {
       count: items.length,
       items,
@@ -107,27 +110,3 @@ export const registerGetCubeStats = defineTool({
     );
   },
 });
-
-interface StatsUnavailable {
-  reason: StatsUnavailableReason;
-  message: string;
-}
-
-/**
- * Collapse per-cube failures into one server-wide verdict — but only when
- * every requested cube failed the same way. A mixed result stays per-cube.
- */
-function serverWideUnavailability(
-  settled: PromiseSettledResult<CubeStatsItem>[],
-): StatsUnavailable | undefined {
-  if (settled.length === 0) return undefined;
-  let first: CubeStatsUnavailableError | undefined;
-  for (const r of settled) {
-    if (r.status !== "rejected") return undefined;
-    const err: unknown = r.reason;
-    if (!(err instanceof CubeStatsUnavailableError)) return undefined;
-    first ??= err;
-    if (err.reason !== first.reason) return undefined;
-  }
-  return first ? { reason: first.reason, message: first.message } : undefined;
-}

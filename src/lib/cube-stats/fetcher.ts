@@ -86,6 +86,25 @@ export class CubeStatsUnavailableError extends Error {
   }
 }
 
+/**
+ * The unavailability every settled cube failed with, when they all failed the
+ * same server- or account-wide way. Undefined when one cube succeeded, when one
+ * failed for another reason, or when there were no cubes at all.
+ */
+export function sharedUnavailability(
+  settled: PromiseSettledResult<unknown>[],
+): CubeStatsUnavailableError | undefined {
+  let first: CubeStatsUnavailableError | undefined;
+  for (const r of settled) {
+    if (r.status !== "rejected") return undefined;
+    const err: unknown = r.reason;
+    if (!(err instanceof CubeStatsUnavailableError)) return undefined;
+    first ??= err;
+    if (err.reason !== first.reason) return undefined;
+  }
+  return first;
+}
+
 /** The cube the MDX reads. Probed by name when the query fails. */
 const STATS_CUBE = "}StatsByCube";
 
