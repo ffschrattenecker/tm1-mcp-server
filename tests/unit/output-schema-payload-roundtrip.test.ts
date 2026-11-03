@@ -205,6 +205,20 @@ describe("strict outputSchemas accept real handler payloads", () => {
     expect(() => schema.parse(payload)).not.toThrow();
   });
 
+  // Live-sweep regression 2026-07-12: the not-found branch omitted choreName/
+  // tasks and was rejected by the strict output schema. Both branches must conform.
+  it("tm1_analyze_chore_graph: not-found warning payload", () => {
+    const schema = schemaOf("tm1_analyze_chore_graph");
+    expect(() =>
+      schema.parse({
+        choreName: "ZZZ_missing",
+        tasks: [],
+        warning: 'Chore "ZZZ_missing" not found.',
+        indexedChoreCount: 12,
+      }),
+    ).not.toThrow();
+  });
+
   it("tm1_get_all_cube_rules: summary payload (count, returned, truncated, summary metrics)", () => {
     const schema = schemaOf("tm1_get_all_cube_rules");
     const payload = {

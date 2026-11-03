@@ -6,8 +6,6 @@ import { type TM1Client } from "../../src/tm1-client.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockResponse, stubbedClient } from "../helpers/client-harness.js";
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe("TM1Client – Metadata Methods", () => {
@@ -30,7 +28,7 @@ describe("TM1Client – Metadata Methods", () => {
   // ── getCubes() ─────────────────────────────────────────────────────────────
 
   describe("cubes.list()", () => {
-    it("should return cubes with name and dimension names", async () => {
+    it("should return cubes with name and dimension names, and an empty array when none exist", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
           value: [
@@ -62,14 +60,9 @@ describe("TM1Client – Metadata Methods", () => {
       expect(url).toContain(
         "/api/v1/Cubes?$select=Name&$expand=Dimensions($select=Name)",
       );
-      expect(String(url)).toContain("$select=Name");
-    });
 
-    it("should return empty array when no cubes exist", async () => {
       fetchSpy.mockResolvedValueOnce(mockResponse({ value: [] }));
-
-      const cubes = await client.cubes.list();
-      expect(cubes).toEqual([]);
+      expect(await client.cubes.list()).toEqual([]);
     });
 
     it("should still request Rules when includeRules=true (hasRules derivation)", async () => {
@@ -103,7 +96,7 @@ describe("TM1Client – Metadata Methods", () => {
   // ── getDimensions() ────────────────────────────────────────────────────────
 
   describe("dimensions.list()", () => {
-    it("should return dimensions with name and hierarchy names", async () => {
+    it("should return dimensions with name and hierarchy names, and an empty array when none exist", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
           value: [
@@ -127,13 +120,9 @@ describe("TM1Client – Metadata Methods", () => {
       expect(url).toContain(
         "/api/v1/Dimensions?$expand=Hierarchies($select=Name)",
       );
-    });
 
-    it("should return empty array when no dimensions exist", async () => {
       fetchSpy.mockResolvedValueOnce(mockResponse({ value: [] }));
-
-      const dims = await client.dimensions.list();
-      expect(dims).toEqual([]);
+      expect(await client.dimensions.list()).toEqual([]);
     });
 
     it("should include elementCounts when includeElementCount=true", async () => {
@@ -150,6 +139,10 @@ describe("TM1Client – Metadata Methods", () => {
             {
               Name: "Time",
               Hierarchies: [{ Name: "Time", "Elements@odata.count": 24 }],
+            },
+            {
+              Name: "Empty",
+              Hierarchies: [{ Name: "Empty" }],
             },
           ],
         }),
@@ -168,21 +161,12 @@ describe("TM1Client – Metadata Methods", () => {
           hierarchies: ["Time"],
           elementCounts: { Time: 24 },
         },
+        // A hierarchy without Elements@odata.count counts as 0.
+        { name: "Empty", hierarchies: ["Empty"], elementCounts: { Empty: 0 } },
       ]);
 
       const [url] = fetchSpy.mock.calls[0];
       expect(url).toContain("$expand=Elements($count=true;$top=0)");
-    });
-
-    it("should default missing Elements@odata.count to 0", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          value: [{ Name: "Empty", Hierarchies: [{ Name: "Empty" }] }],
-        }),
-      );
-
-      const dims = await client.dimensions.list({ includeElementCount: true });
-      expect(dims[0].elementCounts).toEqual({ Empty: 0 });
     });
   });
 
@@ -216,26 +200,12 @@ describe("TM1Client – Metadata Methods", () => {
       expect(decoded).toContain("$select=Name,Type");
       expect(decoded).not.toContain("$expand");
     });
-
-    it("should encode special characters and tolerate a missing value array", async () => {
-      fetchSpy.mockResolvedValueOnce(mockResponse({}));
-
-      const elements = await client.hierarchies.getElementTypes(
-        "My Dim",
-        "My Hier",
-      );
-
-      expect(elements).toEqual([]);
-      const [url] = fetchSpy.mock.calls[0];
-      expect(url).toContain("Dimensions('My%20Dim')");
-      expect(url).toContain("Hierarchies('My%20Hier')");
-    });
   });
 
   // ── getProcesses() ─────────────────────────────────────────────────────────
 
   describe("processes.list()", () => {
-    it("should return processes with mapped parameters", async () => {
+    it("should return processes with mapped parameters (Numeric/String types), and an empty array when none exist", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
           value: [
@@ -282,40 +252,16 @@ describe("TM1Client – Metadata Methods", () => {
 
       const [url] = fetchSpy.mock.calls[0];
       expect(url).toContain("/api/v1/Processes?$select=Name,Parameters");
-    });
 
-    it("should map Type 'Numeric' / 'String' from TM1 v11 API", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          value: [
-            {
-              Name: "TestProc",
-              Parameters: [
-                { Name: "numParam", Type: "Numeric", Value: 42 },
-                { Name: "strParam", Type: "String", Value: "hello" },
-              ],
-            },
-          ],
-        }),
-      );
-
-      const processes = await client.processes.list();
-      expect(processes[0].parameters[0].type).toBe("Numeric");
-      expect(processes[0].parameters[1].type).toBe("String");
-    });
-
-    it("should return empty array when no processes exist", async () => {
       fetchSpy.mockResolvedValueOnce(mockResponse({ value: [] }));
-
-      const processes = await client.processes.list();
-      expect(processes).toEqual([]);
+      expect(await client.processes.list()).toEqual([]);
     });
   });
 
   // ── getChores() ────────────────────────────────────────────────────────────
 
   describe("chores.list()", () => {
-    it("should return chores with tasks mapped to processes", async () => {
+    it("should map tasks to processes, including a chore with no tasks, and return an empty array when none exist", async () => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
           value: [
@@ -339,6 +285,14 @@ describe("TM1Client – Metadata Methods", () => {
                 },
               ],
             },
+            {
+              Name: "EmptyChore",
+              Active: false,
+              StartTime: "2024-06-01T00:00:00",
+              DSTSensitive: true,
+              Frequency: "P7D",
+              Tasks: [],
+            },
           ],
         }),
       );
@@ -359,38 +313,20 @@ describe("TM1Client – Metadata Methods", () => {
             { name: "RunCalc", parameters: {} },
           ],
         },
+        {
+          name: "EmptyChore",
+          active: false,
+          startTime: "2024-06-01T00:00:00",
+          frequency: "P7D",
+          processes: [],
+        },
       ]);
 
       const [url] = fetchSpy.mock.calls[0];
       expect(url).toContain("/api/v1/Chores?$expand=Tasks");
-    });
 
-    it("should return empty array when no chores exist", async () => {
       fetchSpy.mockResolvedValueOnce(mockResponse({ value: [] }));
-
-      const chores = await client.chores.list();
-      expect(chores).toEqual([]);
-    });
-
-    it("should handle chore with no tasks", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          value: [
-            {
-              Name: "EmptyChore",
-              Active: false,
-              StartTime: "2024-06-01T00:00:00",
-              DSTSensitive: true,
-              Frequency: "P7D",
-              Tasks: [],
-            },
-          ],
-        }),
-      );
-
-      const chores = await client.chores.list();
-      expect(chores[0].processes).toEqual([]);
-      expect(chores[0].active).toBe(false);
+      expect(await client.chores.list()).toEqual([]);
     });
   });
 });

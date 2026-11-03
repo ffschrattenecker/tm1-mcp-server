@@ -43,7 +43,7 @@ async function fetchCallsFor(
   }
 }
 
-describe("Watch-item #5: isNetworkError classifies via err.cause.code", () => {
+describe("isNetworkError classifies via err.cause.code", () => {
   let client: TM1HttpClient;
 
   beforeEach(() => {

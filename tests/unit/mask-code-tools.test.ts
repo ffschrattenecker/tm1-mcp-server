@@ -137,186 +137,191 @@ function clientWith(
   } as unknown as TM1Client);
 }
 
-describe("tm1_get_process masks inline ODBC credentials", () => {
-  const client = clientWith({ "Load.Sales": { prolog: ODBC("S3cr3t_Pw!") } });
+const SALES_SECRET = "S3cr3t_Pw!";
+const SALES = clientWith({ "Load.Sales": { prolog: ODBC(SALES_SECRET) } });
 
-  it("masks the password by default", async () => {
-    const text = await run(registerGetProcess, client, {
-      processName: "Load.Sales",
-    });
-    expect(text).not.toContain("S3cr3t_Pw!");
-    expect(text).toContain("***");
-  });
-
-  it("returns raw code when maskSecrets=false", async () => {
-    const text = await run(registerGetProcess, client, {
-      processName: "Load.Sales",
-      maskSecrets: false,
-    });
-    expect(text).toContain("S3cr3t_Pw!");
-  });
+// Same ODBC password on both sides; a nearby non-secret change forces the
+// ODBCOpen line into the diff as a context line.
+const DIFF_SECRET = "S3cr3t_Pw!";
+const DIFF = clientWith({
+  A: { prolog: `${ODBC(DIFF_SECRET)}\nsX = 1;` },
+  B: { prolog: `${ODBC(DIFF_SECRET)}\nsX = 2;` },
 });
 
-describe("tm1_export_process_to_pro masks inline ODBC credentials", () => {
-  const client = clientWith({ "Load.Sales": { prolog: ODBC("S3cr3t_Pw!") } });
+// Audit 2026-07-12: the bulk code tool was the sole code-returning tool that
+// skipped masking.
+const BULK_SECRET = "Bulk_Pw!";
+const BULK = bulkCodeClient([
+  {
+    name: "Load.Sales",
+    prolog: ODBC(BULK_SECRET),
+    metadata: "",
+    data: "",
+    epilog: "",
+    hasSecurityAccess: false,
+  },
+]);
 
-  it("masks the password in the returned .pro content by default", async () => {
-    const text = await run(registerExportProcessToPro, client, {
-      processName: "Load.Sales",
-    });
-    expect(text).not.toContain("S3cr3t_Pw!");
-    expect(text).toContain("***");
-  });
+// [tool, register, client, input, secret that must not leak by default]
+const MASKED_TOOLS: Array<
+  [
+    string,
+    (server: McpServer, client: TM1Client) => void,
+    TM1Client,
+    Record<string, unknown>,
+    string,
+  ]
+> = [
+  [
+    "tm1_get_process",
+    registerGetProcess,
+    SALES,
+    { processName: "Load.Sales" },
+    SALES_SECRET,
+  ],
+  [
+    "tm1_export_process_to_pro (.pro content)",
+    registerExportProcessToPro,
+    SALES,
+    { processName: "Load.Sales" },
+    SALES_SECRET,
+  ],
+  [
+    "tm1_export_process_to_git (.ti content)",
+    registerExportProcessToGit,
+    SALES,
+    { processName: "Load.Sales" },
+    SALES_SECRET,
+  ],
+  [
+    "tm1_diff_processes (hunk lines)",
+    registerDiffProcesses,
+    DIFF,
+    { processA: "A", processB: "B" },
+    DIFF_SECRET,
+  ],
+  [
+    "tm1_get_all_processes_code (every tab)",
+    registerGetAllProcessesCode,
+    BULK,
+    {},
+    BULK_SECRET,
+  ],
+];
 
-  it("returns raw content when maskSecrets=false", async () => {
-    const text = await run(registerExportProcessToPro, client, {
-      processName: "Load.Sales",
-      maskSecrets: false,
-    });
-    expect(text).toContain("S3cr3t_Pw!");
-  });
+describe("code-reading tools mask inline ODBC credentials", () => {
+  it.each(MASKED_TOOLS)(
+    "%s masks the password by default",
+    async (_name, register, client, input, secret) => {
+      const text = await run(register, client, input);
+      expect(text).not.toContain(secret);
+      expect(text).toContain("***");
+    },
+  );
+
+  it.each(MASKED_TOOLS)(
+    "%s returns the raw password when maskSecrets=false",
+    async (_name, register, client, input, secret) => {
+      const text = await run(register, client, {
+        ...input,
+        maskSecrets: false,
+      });
+      expect(text).toContain(secret);
+    },
+  );
 });
 
-describe("tm1_export_process_to_git masks inline ODBC credentials", () => {
-  const client = clientWith({ "Load.Sales": { prolog: ODBC("S3cr3t_Pw!") } });
+describe("tm1_export_process_to_git writeToDir and writeToFile persistence", () => {
+  const client = SALES;
+  let root: string;
+  let prevRoot: string | undefined;
 
-  it("masks the password in the returned .ti by default", async () => {
+  beforeEach(async () => {
+    prevRoot = process.env.TM1_LOCAL_FILE_ROOT;
+    root = await fs.mkdtemp(path.join(os.tmpdir(), "tm1-git-mask-"));
+    process.env.TM1_LOCAL_FILE_ROOT = root;
+  });
+  afterEach(async () => {
+    if (prevRoot === undefined) delete process.env.TM1_LOCAL_FILE_ROOT;
+    else process.env.TM1_LOCAL_FILE_ROOT = prevRoot;
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  // The written file is the deployable copy. Masking it made a re-import deploy
+  // ODBCOpen(..., '***'), so the file keeps the code as is; masking applies to
+  // the inline copy that goes to the model.
+  it("writes the unmasked .ti to disk so it re-imports intact", async () => {
+    await run(registerExportProcessToGit, client, {
+      processName: "Load.Sales",
+      writeToDir: root,
+    });
+    const onDisk = await fs.readFile(path.join(root, "Load.Sales.ti"), "utf8");
+    expect(onDisk).toContain(SALES_SECRET);
+    expect(onDisk).not.toContain("***");
+  });
+
+  // When persisting to disk the caller has the files, so the full code bodies
+  // must NOT be echoed back — otherwise every export doubles into the context
+  // window. Metadata (filenames, counts, writtenTo paths) still comes back.
+  it("omits json/ti from the response when writeToDir is set", async () => {
+    const text = await run(registerExportProcessToGit, client, {
+      processName: "Load.Sales",
+      writeToDir: root,
+    });
+    const res = JSON.parse(text) as Record<string, unknown>;
+    expect(res.json).toBeUndefined();
+    expect(res.ti).toBeUndefined();
+    expect(res.jsonFileName).toBe("Load.Sales.json");
+    expect(res.tiFileName).toBe("Load.Sales.ti");
+    expect(res.writtenTo).toMatchObject({
+      json: path.join(root, "Load.Sales.json"),
+      ti: path.join(root, "Load.Sales.ti"),
+    });
+  });
+
+  // A not-yet-existing subdir below the root must be created (mkdir -p) after
+  // confinement instead of surfacing a raw ENOENT.
+  it("creates a missing subdirectory below the root before writing", async () => {
+    const nested = path.join(root, "exports", "sales");
+    const text = await run(registerExportProcessToGit, client, {
+      processName: "Load.Sales",
+      writeToDir: nested,
+    });
+    const res = JSON.parse(text) as Record<string, unknown>;
+    expect(res.writtenTo).toMatchObject({
+      json: path.join(nested, "Load.Sales.json"),
+      ti: path.join(nested, "Load.Sales.ti"),
+    });
+    const onDisk = await fs.readFile(
+      path.join(nested, "Load.Sales.ti"),
+      "utf8",
+    );
+    expect(onDisk).toContain(SALES_SECRET);
+  });
+
+  // The same ENOENT gap existed on tm1_export_process_to_pro's writeToFile.
+  it("tm1_export_process_to_pro creates missing parent dirs for writeToFile", async () => {
+    const target = path.join(root, "pro", "deep", "Load.Sales.pro");
+    const text = await run(registerExportProcessToPro, client, {
+      processName: "Load.Sales",
+      writeToFile: target,
+    });
+    const res = JSON.parse(text) as Record<string, unknown>;
+    expect(res.writtenTo).toBe(target);
+    const onDisk = await fs.readFile(target, "utf8");
+    expect(onDisk).toContain(SALES_SECRET);
+    // ...while the inline copy the model sees stays masked.
+    expect(String(res.content)).not.toContain(SALES_SECRET);
+  });
+
+  it("echoes json/ti inline when writeToDir is omitted", async () => {
     const text = await run(registerExportProcessToGit, client, {
       processName: "Load.Sales",
     });
-    expect(text).not.toContain("S3cr3t_Pw!");
-    expect(text).toContain("***");
-  });
-
-  it("returns raw .ti when maskSecrets=false", async () => {
-    const text = await run(registerExportProcessToGit, client, {
-      processName: "Load.Sales",
-      maskSecrets: false,
-    });
-    expect(text).toContain("S3cr3t_Pw!");
-  });
-
-  describe("writeToDir persistence", () => {
-    let root: string;
-    let prevRoot: string | undefined;
-
-    beforeEach(async () => {
-      prevRoot = process.env.TM1_LOCAL_FILE_ROOT;
-      root = await fs.mkdtemp(path.join(os.tmpdir(), "tm1-git-mask-"));
-      process.env.TM1_LOCAL_FILE_ROOT = root;
-    });
-    afterEach(async () => {
-      if (prevRoot === undefined) delete process.env.TM1_LOCAL_FILE_ROOT;
-      else process.env.TM1_LOCAL_FILE_ROOT = prevRoot;
-      await fs.rm(root, { recursive: true, force: true });
-    });
-
-    // A5: the written file is the deployable copy. Masking it made a
-    // re-import deploy ODBCOpen(..., '***'), so the file keeps the code as is;
-    // masking applies to the inline copy that goes to the model.
-    it("writes the unmasked .ti to disk so it re-imports intact", async () => {
-      await run(registerExportProcessToGit, client, {
-        processName: "Load.Sales",
-        writeToDir: root,
-      });
-      const onDisk = await fs.readFile(
-        path.join(root, "Load.Sales.ti"),
-        "utf8",
-      );
-      expect(onDisk).toContain("S3cr3t_Pw!");
-      expect(onDisk).not.toContain("***");
-    });
-
-    // When persisting to disk the caller has the files, so the full code bodies
-    // must NOT be echoed back — otherwise every export doubles into the context
-    // window. Metadata (filenames, counts, writtenTo paths) still comes back.
-    it("omits json/ti from the response when writeToDir is set", async () => {
-      const text = await run(registerExportProcessToGit, client, {
-        processName: "Load.Sales",
-        writeToDir: root,
-      });
-      const res = JSON.parse(text) as Record<string, unknown>;
-      expect(res.json).toBeUndefined();
-      expect(res.ti).toBeUndefined();
-      expect(res.jsonFileName).toBe("Load.Sales.json");
-      expect(res.tiFileName).toBe("Load.Sales.ti");
-      expect(res.writtenTo).toMatchObject({
-        json: path.join(root, "Load.Sales.json"),
-        ti: path.join(root, "Load.Sales.ti"),
-      });
-    });
-
-    // A not-yet-existing subdir below the root must be created (mkdir -p) after
-    // confinement instead of surfacing a raw ENOENT.
-    it("creates a missing subdirectory below the root before writing", async () => {
-      const nested = path.join(root, "exports", "sales");
-      const text = await run(registerExportProcessToGit, client, {
-        processName: "Load.Sales",
-        writeToDir: nested,
-      });
-      const res = JSON.parse(text) as Record<string, unknown>;
-      expect(res.writtenTo).toMatchObject({
-        json: path.join(nested, "Load.Sales.json"),
-        ti: path.join(nested, "Load.Sales.ti"),
-      });
-      const onDisk = await fs.readFile(
-        path.join(nested, "Load.Sales.ti"),
-        "utf8",
-      );
-      expect(onDisk).toContain("S3cr3t_Pw!");
-    });
-
-    // Same ENOENT gap existed on tm1_export_process_to_pro's writeToFile.
-    it("tm1_export_process_to_pro creates missing parent dirs for writeToFile", async () => {
-      const target = path.join(root, "pro", "deep", "Load.Sales.pro");
-      const text = await run(registerExportProcessToPro, client, {
-        processName: "Load.Sales",
-        writeToFile: target,
-      });
-      const res = JSON.parse(text) as Record<string, unknown>;
-      expect(res.writtenTo).toBe(target);
-      const onDisk = await fs.readFile(target, "utf8");
-      expect(onDisk).toContain("S3cr3t_Pw!");
-      // ...while the inline copy the model sees stays masked.
-      expect(String(res.content)).not.toContain("S3cr3t_Pw!");
-    });
-
-    it("echoes json/ti inline when writeToDir is omitted", async () => {
-      const text = await run(registerExportProcessToGit, client, {
-        processName: "Load.Sales",
-      });
-      const res = JSON.parse(text) as Record<string, unknown>;
-      expect(typeof res.json).toBe("string");
-      expect(typeof res.ti).toBe("string");
-      expect(res.writtenTo).toMatchObject({ json: null, ti: null });
-    });
-  });
-});
-
-describe("tm1_diff_processes masks credentials in diff hunks", () => {
-  // Same ODBC password on both sides; a nearby non-secret change forces the
-  // ODBCOpen line into the diff as a context line.
-  const client = clientWith({
-    A: { prolog: `${ODBC("S3cr3t_Pw!")}\nsX = 1;` },
-    B: { prolog: `${ODBC("S3cr3t_Pw!")}\nsX = 2;` },
-  });
-
-  it("masks the password in emitted hunk lines by default", async () => {
-    const text = await run(registerDiffProcesses, client, {
-      processA: "A",
-      processB: "B",
-    });
-    expect(text).not.toContain("S3cr3t_Pw!");
-    expect(text).toContain("***");
-  });
-
-  it("emits the raw password when maskSecrets=false", async () => {
-    const text = await run(registerDiffProcesses, client, {
-      processA: "A",
-      processB: "B",
-      maskSecrets: false,
-    });
-    expect(text).toContain("S3cr3t_Pw!");
+    const res = JSON.parse(text) as Record<string, unknown>;
+    expect(typeof res.json).toBe("string");
+    expect(typeof res.ti).toBe("string");
+    expect(res.writtenTo).toMatchObject({ json: null, ti: null });
   });
 });
 
@@ -358,34 +363,6 @@ describe("tm1_diff_process_with_file masks both sides before diffing", () => {
     };
     const prolog = parsed.tabs.find((t) => t.tab === "prolog")!;
     expect(prolog.identical).toBe(false);
-  });
-});
-
-// Audit 2026-07-12 H1: the bulk code tool was the sole code-returning tool
-// that skipped masking.
-describe("tm1_get_all_processes_code masks inline ODBC credentials", () => {
-  const client = bulkCodeClient([
-    {
-      name: "Load.Sales",
-      prolog: ODBC("Bulk_Pw!"),
-      metadata: "",
-      data: "",
-      epilog: "",
-      hasSecurityAccess: false,
-    },
-  ]);
-
-  it("masks passwords in every returned tab by default", async () => {
-    const text = await run(registerGetAllProcessesCode, client, {});
-    expect(text).not.toContain("Bulk_Pw!");
-    expect(text).toContain("***");
-  });
-
-  it("returns raw code when maskSecrets=false", async () => {
-    const text = await run(registerGetAllProcessesCode, client, {
-      maskSecrets: false,
-    });
-    expect(text).toContain("Bulk_Pw!");
   });
 });
 
@@ -495,50 +472,27 @@ describe("tm1_get_all_processes_code default cap", () => {
     expect(parsed.countIsExact).toBe(false);
   });
 
-  it("explicit limit overrides the default cap", async () => {
+  it.each([
+    ["an explicit limit overrides the default cap", { limit: 10 }, 10, true],
+    ["limit=0 returns everything uncapped", { limit: 0 }, 60, false],
+    [
+      "summary mode surveys all processes by default",
+      { summary: true },
+      60,
+      false,
+    ],
+    [
+      "an explicit limit also caps summary mode",
+      { summary: true, limit: 5 },
+      5,
+      true,
+    ],
+  ])("%s", async (_label, input, returned, truncated) => {
     const parsed = JSON.parse(
-      await run(registerGetAllProcessesCode, client, { limit: 10 }),
-    ) as {
-      count: number;
-      returned: number;
-      truncated: boolean;
-    };
-    expect(parsed.returned).toBe(10);
-    expect(parsed.truncated).toBe(true);
-    expect(parsed.count).toBe(60);
-  });
-
-  it("limit=0 returns everything uncapped", async () => {
-    const parsed = JSON.parse(
-      await run(registerGetAllProcessesCode, client, { limit: 0 }),
-    ) as {
-      returned: number;
-      truncated: boolean;
-    };
-    expect(parsed.returned).toBe(60);
-    expect(parsed.truncated).toBe(false);
-  });
-
-  it("summary mode surveys all processes by default (no cap)", async () => {
-    const parsed = JSON.parse(
-      await run(registerGetAllProcessesCode, client, { summary: true }),
-    ) as {
-      returned: number;
-      truncated: boolean;
-    };
-    expect(parsed.returned).toBe(60);
-    expect(parsed.truncated).toBe(false);
-  });
-
-  it("explicit limit also caps summary mode", async () => {
-    const parsed = JSON.parse(
-      await run(registerGetAllProcessesCode, client, {
-        summary: true,
-        limit: 5,
-      }),
-    ) as { returned: number; truncated: boolean; count: number };
-    expect(parsed.returned).toBe(5);
-    expect(parsed.truncated).toBe(true);
+      await run(registerGetAllProcessesCode, client, input),
+    ) as { count: number; returned: number; truncated: boolean };
+    expect(parsed.returned).toBe(returned);
+    expect(parsed.truncated).toBe(truncated);
     expect(parsed.count).toBe(60);
   });
 });
@@ -546,29 +500,16 @@ describe("tm1_get_all_processes_code default cap", () => {
 // S8 end-to-end: the gate has to bite at the TOOL boundary, not only inside the
 // helper. Without operator consent a model asking for raw credentials gets
 // masked output anyway — and the call still succeeds, so an audit is degraded
-// rather than broken.
-describe("maskSecrets=false is ignored without operator consent (S8)", () => {
-  const codeClient = clientWith({
-    "Load.Sales": { prolog: ODBC("S3cr3t_Pw!") },
-  });
-
+// rather than broken. The gate's value handling is covered in mask-secrets.test.ts.
+describe("maskSecrets=false is ignored without operator consent", () => {
   it("masks anyway when TM1_ALLOW_UNMASKED_SECRETS is unset", async () => {
     delete process.env.TM1_ALLOW_UNMASKED_SECRETS;
-    const text = await run(registerGetProcess, codeClient, {
+    const text = await run(registerGetProcess, SALES, {
       processName: "Load.Sales",
       maskSecrets: false,
     });
-    expect(text).not.toContain("S3cr3t_Pw!");
+    expect(text).not.toContain(SALES_SECRET);
     expect(text).toContain("***");
-  });
-
-  it("masks anyway when the variable holds anything other than 'true'", async () => {
-    process.env.TM1_ALLOW_UNMASKED_SECRETS = "yes";
-    const text = await run(registerGetProcess, codeClient, {
-      processName: "Load.Sales",
-      maskSecrets: false,
-    });
-    expect(text).not.toContain("S3cr3t_Pw!");
   });
 });
 

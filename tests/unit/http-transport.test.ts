@@ -85,7 +85,7 @@ describe("startHttpTransport (stateless, per-request)", () => {
     });
   }
 
-  it("answers multiple sequential requests without a 500 on the second (H1 regression)", async () => {
+  it("answers multiple sequential requests without a 500 on the second", async () => {
     const port = await freePort();
     close = await startHttpTransport(
       buildServer,
@@ -131,7 +131,7 @@ describe("startHttpTransport (stateless, per-request)", () => {
     expect(ok.status).toBe(200);
   });
 
-  it("answers GET and DELETE with 405 instead of holding a server open (M1)", async () => {
+  it("answers GET and DELETE with 405 instead of holding a server open", async () => {
     const port = await freePort();
     let builds = 0;
     close = await startHttpTransport(
@@ -154,7 +154,7 @@ describe("startHttpTransport (stateless, per-request)", () => {
     expect(builds).toBe(0);
   });
 
-  it("answers 500 when building the server throws (M11)", async () => {
+  it("answers 500 when building the server throws", async () => {
     const port = await freePort();
     close = await startHttpTransport(
       () => {
@@ -183,7 +183,7 @@ describe("startHttpTransport (stateless, per-request)", () => {
     expect(res.status).toBe(404);
   });
 
-  it("does not route /mcp-prefixed siblings like /mcpFoo (M3: exact-path match)", async () => {
+  it("does not route /mcp-prefixed siblings like /mcpFoo (exact-path match)", async () => {
     const port = await freePort();
     close = await startHttpTransport(
       buildServer,

@@ -173,6 +173,13 @@ describe("tm1_set_cube_rules sources", () => {
     ).rejects.toThrow(/confirm mismatch/);
   });
 
+  it("checks confirm before spending the preflight request", async () => {
+    await expect(
+      call({ cubeName: "Sales", confirm: "Other", rules: "SKIPCHECK;" }),
+    ).rejects.toThrow(/confirm mismatch/);
+    expect(checked).toEqual([]);
+  });
+
   it("preflight checks the full patched text and a failure writes nothing", async () => {
     checkErrors = [{ lineNumber: 2, message: "Syntax error" }];
     const err = await call({

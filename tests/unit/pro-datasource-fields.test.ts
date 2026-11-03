@@ -71,19 +71,123 @@ const REAL_SUBSET_PRO = [
   `575,0`,
 ].join("\n");
 
+const FIXED_WIDTH_PRO = [
+  `602,"Fixed_Width_Load"`,
+  `562,"POSITIONDELIMITED"`,
+  `586,"C:\tmp\fx.txt"`,
+  `585,`,
+  `566,0`,
+  `569,0`,
+  `572,0`,
+].join("\n");
+
+const EMPTY_CLIENT_VIEW_PRO = [
+  `602,"P"`,
+  `562,"VIEW"`,
+  `586,"Sales"`,
+  `585,`,
+  `570,MyView`,
+  `572,0`,
+].join("\n");
+
+const COMMA_VIEW_PRO = [
+  `602,"P"`,
+  `562,"VIEW"`,
+  `586,"Sales"`,
+  `585,`,
+  `570,Ansicht, mit "Komma"`,
+  `572,0`,
+].join("\n");
+
+const LEGACY_PRO = [
+  `602,"Legacy"`,
+  `562,SUBSET`,
+  `585,"CostCenter"`,
+  `570,"All"`,
+  `572,`,
+  `sVal = 'x';`,
+  `573,`,
+  `574,`,
+  `575,`,
+].join("\n");
+
 describe("pro-parser: real TM1 line codes", () => {
   // 559 is the ODBC unicode-interface flag. Measured on 11.8: patching
   // usesUnicode:false rewrites the line to "559,0" and back to "559,1" for
   // true, and a plain GET returns the property. It used to be discarded on
   // both sides of the round trip.
-  it("reads the ODBC unicode flag from line 559", () => {
-    const ds = parseProFile(REAL_ODBC_PRO).dataSource;
-    expect(ds?.usesUnicode).toBe(true);
-  });
-
-  it("reads 559,0 as unicode off", () => {
-    const off = REAL_ODBC_PRO.replace("559,1", "559,0");
-    expect(parseProFile(off).dataSource?.usesUnicode).toBe(false);
+  it.each([
+    [
+      "reads the ODBC unicode flag from line 559",
+      REAL_ODBC_PRO,
+      { usesUnicode: true },
+    ],
+    [
+      "reads 559,0 as unicode off",
+      REAL_ODBC_PRO.replace("559,1", "559,0"),
+      { usesUnicode: false },
+    ],
+    [
+      "reads the ODBC query from the 566 block",
+      REAL_ODBC_PRO,
+      {
+        type: "ODBC",
+        query: "SELECT Period, Amount\n  FROM dbo.Sales\n WHERE Year = 2026",
+      },
+    ],
+    [
+      "maps 586 to the server name, 585 to the client name, and reads the user",
+      REAL_ODBC_PRO,
+      {
+        dataSourceNameForServer: "SALES_DWH",
+        dataSourceNameForClient: "SALES_DWH_CLIENT",
+        userName: "etl_reader",
+      },
+    ],
+    [
+      "reads the subset name from 571",
+      REAL_SUBSET_PRO,
+      {
+        type: "TM1DimensionSubset",
+        dataSourceNameForServer: "CostCenter",
+        subset: "N-Elements",
+      },
+    ],
+    [
+      "reads a fixed-width ASCII source (562 = POSITIONDELIMITED)",
+      FIXED_WIDTH_PRO,
+      {
+        type: "ASCII",
+        dataSourceNameForServer: "C:\tmp\fx.txt",
+        asciiDelimiterType: "FixedWidth",
+      },
+    ],
+    [
+      "keeps an empty client name empty instead of copying the server name",
+      EMPTY_CLIENT_VIEW_PRO,
+      {
+        dataSourceNameForServer: "Sales",
+        dataSourceNameForClient: "",
+        view: "MyView",
+      },
+    ],
+    [
+      "reads an unquoted view name containing commas and quotes verbatim",
+      COMMA_VIEW_PRO,
+      { view: `Ansicht, mit "Komma"` },
+    ],
+    [
+      "still reads files this serializer wrote before the fix (585 only, subset in 570)",
+      LEGACY_PRO,
+      {
+        type: "TM1DimensionSubset",
+        dataSourceNameForServer: "CostCenter",
+        dataSourceNameForClient: "CostCenter",
+        subset: "All",
+      },
+    ],
+  ])("%s", (_name, pro, expected) => {
+    expect(parseProFile(pro).dataSource).toMatchObject(expected);
   });
 
   it("leaves usesUnicode unset when the file has no 559 line", () => {
@@ -112,33 +216,9 @@ describe("pro-parser: real TM1 line codes", () => {
     }
   });
 
-  it("reads the ODBC query from the 566 block", () => {
-    const ds = parseProFile(REAL_ODBC_PRO).dataSource;
-    expect(ds.type).toBe("ODBC");
-    expect(ds.query).toBe(
-      "SELECT Period, Amount\n  FROM dbo.Sales\n WHERE Year = 2026",
-    );
-  });
-
-  it("maps 586 to the server name and 585 to the client name", () => {
-    const ds = parseProFile(REAL_ODBC_PRO).dataSource;
-    expect(ds.dataSourceNameForServer).toBe("SALES_DWH");
-    expect(ds.dataSourceNameForClient).toBe("SALES_DWH_CLIENT");
-    expect(ds.userName).toBe("etl_reader");
-  });
-
   it("never carries the encrypted password blob into the datasource", () => {
     const ds = parseProFile(REAL_ODBC_PRO).dataSource;
     expect(ds.password).toBeUndefined();
-  });
-
-  it("reads the subset name from 571", () => {
-    const ds = parseProFile(REAL_SUBSET_PRO).dataSource;
-    expect(ds).toMatchObject({
-      type: "TM1DimensionSubset",
-      dataSourceNameForServer: "CostCenter",
-      subset: "N-Elements",
-    });
   });
 
   it("does not mistake the query body for header codes", () => {
@@ -150,71 +230,6 @@ describe("pro-parser: real TM1 line codes", () => {
     const ds = parseProFile(pro).dataSource;
     expect(ds.type).toBe("ODBC");
     expect(ds.query).toContain(`570,Sales`);
-  });
-
-  it("reads a fixed-width ASCII source (562 = POSITIONDELIMITED)", () => {
-    const pro = [
-      `602,"Fixed_Width_Load"`,
-      `562,"POSITIONDELIMITED"`,
-      `586,"C:\\tmp\\fx.txt"`,
-      `585,`,
-      `566,0`,
-      `569,0`,
-      `572,0`,
-    ].join("\n");
-    expect(parseProFile(pro).dataSource).toMatchObject({
-      type: "ASCII",
-      dataSourceNameForServer: "C:\\tmp\\fx.txt",
-      asciiDelimiterType: "FixedWidth",
-    });
-  });
-
-  it("keeps an empty client name empty instead of copying the server name", () => {
-    const pro = [
-      `602,"P"`,
-      `562,"VIEW"`,
-      `586,"Sales"`,
-      `585,`,
-      `570,MyView`,
-      `572,0`,
-    ].join("\n");
-    expect(parseProFile(pro).dataSource).toMatchObject({
-      dataSourceNameForServer: "Sales",
-      dataSourceNameForClient: "",
-      view: "MyView",
-    });
-  });
-
-  it("reads an unquoted view name containing commas and quotes verbatim", () => {
-    const pro = [
-      `602,"P"`,
-      `562,"VIEW"`,
-      `586,"Sales"`,
-      `585,`,
-      `570,Ansicht, mit "Komma"`,
-      `572,0`,
-    ].join("\n");
-    expect(parseProFile(pro).dataSource.view).toBe(`Ansicht, mit "Komma"`);
-  });
-
-  it("still reads files this serializer wrote before the fix (585 only, subset in 570)", () => {
-    const legacy = [
-      `602,"Legacy"`,
-      `562,SUBSET`,
-      `585,"CostCenter"`,
-      `570,"All"`,
-      `572,`,
-      `sVal = 'x';`,
-      `573,`,
-      `574,`,
-      `575,`,
-    ].join("\n");
-    expect(parseProFile(legacy).dataSource).toMatchObject({
-      type: "TM1DimensionSubset",
-      dataSourceNameForServer: "CostCenter",
-      dataSourceNameForClient: "CostCenter",
-      subset: "All",
-    });
   });
 });
 

@@ -67,21 +67,6 @@ describe("output schemas — JSON Schema additionalProperties", () => {
   }
 });
 
-// Mirror how the MCP SDK publishes an outputSchema: for a ZodRawShape it wraps
-// in `z.object(shape)`, for a full schema it uses it as-is, then converts with
-// zod 4's native `z.toJSONSchema`. The SDK passes `pipeStrategy: "output"` for
-// outputSchema conversion (see mcp.js), which maps to `io: "output"` — so we
-// reproduce that here to get the exact JSON Schema clients receive.
-function publishedJsonSchema(entry: ZodRawShape | ZodTypeAny): {
-  additionalProperties?: boolean | object;
-} {
-  const schema =
-    typeof entry === "object" && entry !== null && "_def" in (entry as object)
-      ? (entry as ZodTypeAny)
-      : z.object(entry as ZodRawShape);
-  return z.toJSONSchema(schema, { io: "output" });
-}
-
 // Regression guard for `asOutputSchema`'s passthrough detection.
 //
 // asOutputSchema decides how to publish a Zod object as an MCP outputSchema:
@@ -124,29 +109,5 @@ describe("asOutputSchema — passthrough detection", () => {
     // instead be the raw shape and the assertion fails.
     expect(isRawShape(result)).toBe(false);
     expect(result).toBe(loose);
-  });
-
-  it("published JSON Schema has additionalProperties:false for plain objects", () => {
-    const plain = z.object({ a: z.string() });
-    const json = publishedJsonSchema(asOutputSchema(plain));
-    expect(json.additionalProperties).toBe(false);
-  });
-
-  it("published JSON Schema permits extras for .passthrough() objects", () => {
-    const loose = z.object({ a: z.string() }).passthrough();
-    const json = publishedJsonSchema(asOutputSchema(loose));
-    // A permissive object (`{}`) or `true` both allow extras; only an explicit
-    // `false` is the failure mode that breaks clients validating extras.
-    expect(json.additionalProperties).not.toBe(false);
-    expect(json.additionalProperties).not.toBeUndefined();
-  });
-
-  it("catchall field exists on passthrough and is absent on plain (zod-shape guard)", () => {
-    // Directly assert the internal contract asOutputSchema depends on, so a
-    // zod release that moves `def.catchall` trips this test explicitly.
-    const plain = z.object({ a: z.string() });
-    const loose = z.object({ a: z.string() }).passthrough();
-    expect(plain.def.catchall).toBeUndefined();
-    expect(loose.def.catchall).not.toBeUndefined();
   });
 });

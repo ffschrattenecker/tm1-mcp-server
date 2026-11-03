@@ -5,7 +5,7 @@ import { makeTestConfig } from "../helpers/tm1-config.js";
 import { tm1Events, type Tm1MutationEvent } from "../../src/lib/tm1-events.js";
 import { mockLogger } from "../helpers/client-harness.js";
 
-describe("R2-05: HTTP layer emits mutation events", () => {
+describe("HTTP layer emits mutation events", () => {
   let client: TM1HttpClient;
   let events: Tm1MutationEvent[];
   let listener: (e: Tm1MutationEvent) => void;

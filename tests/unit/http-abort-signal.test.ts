@@ -5,7 +5,7 @@ import { SessionManager } from "../../src/session-manager.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockLogger } from "../helpers/client-harness.js";
 
-describe("R2-03: AbortSignal propagation through HTTP layer", () => {
+describe("AbortSignal propagation through HTTP layer", () => {
   let client: TM1HttpClient;
 
   beforeEach(() => {

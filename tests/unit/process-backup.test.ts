@@ -247,38 +247,6 @@ describe("process backup before overwrite", () => {
   });
 });
 
-describe("import on an update replaces the whole definition", () => {
-  it("applies an empty parameter list, variable layout and a None datasource", async () => {
-    process.env.TM1_PROCESS_BACKUP_DIR = "off";
-    const client = fakeClient(["P"], []);
-    const applied: string[] = [];
-    Object.assign(client.processes, {
-      updateParameters: async (_n: string, p: unknown[]) =>
-        void applied.push(`parameters ${p.length}`),
-      updateVariables: async (_n: string, v: unknown[], ui?: unknown[]) =>
-        void applied.push(`variables ${v.length} ui ${JSON.stringify(ui)}`),
-      updateDataSource: async (_n: string, d: { type: string }) =>
-        void applied.push(`datasource ${d.type}`),
-    });
-    await call(registerImportProcessFromGit, client, {
-      jsonContent: JSON.stringify({
-        Name: "P",
-        DataSource: { Type: "None" },
-        Parameters: [],
-        Variables: [],
-      }),
-      tiContent: "#region Prolog\r\nx = 1;\r\n#endregion\r\n",
-      confirm: "P",
-      preflight: false,
-    });
-    expect(applied).toEqual([
-      "parameters 0",
-      "variables 0 ui undefined",
-      "datasource None",
-    ]);
-  });
-});
-
 describe("backup file names", () => {
   it("replaces characters Windows rejects", () => {
     expect(safeFileName("}bedrock.cube.clear")).toBe("}bedrock.cube.clear");

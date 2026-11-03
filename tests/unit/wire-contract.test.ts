@@ -8,53 +8,56 @@ import {
   mergeShapes,
   endpointKey,
   diffAgainstShape,
+  type CheckOptions,
   type Shape,
 } from "../helpers/wire-contract.js";
 
 describe("shapeOf", () => {
-  it("records primitive types, not values", () => {
-    expect(shapeOf({ Name: "Sales", Cells: 42, Ok: true })).toEqual({
-      Cells: "number",
-      Name: "string",
-      Ok: "boolean",
-    });
-  });
-
-  it("marks an array key with [] and merges its elements", () => {
-    expect(shapeOf({ value: [{ Name: "a" }, { Name: "b" }] })).toEqual({
-      "value[]": { Name: "string" },
-    });
-  });
-
-  it("makes a key optional when some element lacks it", () => {
+  it.each([
+    [
+      "records primitive types, not values",
+      { Name: "Sales", Cells: 42, Ok: true },
+      { Cells: "number", Name: "string", Ok: "boolean" },
+    ],
+    [
+      "marks an array key with [] and merges its elements",
+      { value: [{ Name: "a" }, { Name: "b" }] },
+      { "value[]": { Name: "string" } },
+    ],
     // This is the whole reason arrays are merged rather than sampled: TM1
     // omits keys per row (Attributes present on one element, absent on the
     // next), and a contract built from element 0 alone would call the second
     // element a violation.
-    expect(
-      shapeOf({ value: [{ Name: "a" }, { Name: "b", Alias: "x" }] }),
-    ).toEqual({ "value[]": { "Alias?": "string", Name: "string" } });
-  });
-
-  it("unions differing primitive types", () => {
-    expect(shapeOf([{ V: 1 }, { V: null }])).toEqual({
-      "[]": { V: "null|number" },
-    });
-  });
-
-  it("keeps a root-level array recognisable as an array", () => {
+    [
+      "makes a key optional when some element lacks it",
+      { value: [{ Name: "a" }, { Name: "b", Alias: "x" }] },
+      { "value[]": { "Alias?": "string", Name: "string" } },
+    ],
+    [
+      "unions differing primitive types",
+      [{ V: 1 }, { V: null }],
+      { "[]": { V: "null|number" } },
+    ],
     // Inside an object the `[]` rides on the key; at the root there is no key,
     // so a service returning `CubeRules[]` would otherwise be indistinguishable
     // from one returning a single CubeRules.
-    expect(shapeOf([{ Name: "a" }])).toEqual({ "[]": { Name: "string" } });
-  });
-
-  it("omits keys whose value is undefined", () => {
-    expect(shapeOf({ a: 1, b: undefined })).toEqual({ a: "number" });
-  });
-
-  it("represents an empty array as unknown rather than guessing", () => {
-    expect(shapeOf({ items: [] })).toEqual({ "items[]": "unknown" });
+    [
+      "keeps a root-level array recognisable as an array",
+      [{ Name: "a" }],
+      { "[]": { Name: "string" } },
+    ],
+    [
+      "omits keys whose value is undefined",
+      { a: 1, b: undefined },
+      { a: "number" },
+    ],
+    [
+      "represents an empty array as unknown rather than guessing",
+      { items: [] },
+      { "items[]": "unknown" },
+    ],
+  ])("%s", (_name, input, expected) => {
+    expect(shapeOf(input)).toEqual(expected);
   });
 
   it("sorts keys so re-recording produces a readable diff", () => {
@@ -63,54 +66,76 @@ describe("shapeOf", () => {
 });
 
 describe("mergeShapes", () => {
-  it("drops `unknown` once a real observation exists", () => {
-    expect(mergeShapes("unknown", "string")).toBe("string");
-  });
-
-  it("lets a real element shape supersede the empty-array marker", () => {
-    // An empty `Parents: []` on one element and a populated one on the next is
-    // the norm in TM1. Merging these into the union "object" would erase the
-    // element shape and make every later check pass vacuously.
-    expect(mergeShapes("unknown", { Name: "string" })).toEqual({
-      Name: "string",
-    });
-    expect(mergeShapes({ Name: "string" }, "unknown")).toEqual({
-      Name: "string",
-    });
-  });
-
-  it("keeps a key optional once either side saw it optional", () => {
-    const a: Shape = { "X?": "string", Y: "number" };
-    const b: Shape = { X: "string", Y: "number" };
-    expect(mergeShapes(a, b)).toEqual({ "X?": "string", Y: "number" });
-  });
-
-  it("surfaces a primitive/object clash as a union instead of picking one", () => {
-    expect(mergeShapes("string", { a: "number" })).toBe("object|string");
+  // An empty `Parents: []` on one element and a populated one on the next is
+  // the norm in TM1. Merging these into the union "object" would erase the
+  // element shape and make every later check pass vacuously.
+  it.each<[string, Shape | string, Shape | string, Shape | string]>([
+    [
+      "drops `unknown` once a real observation exists",
+      "unknown",
+      "string",
+      "string",
+    ],
+    [
+      "lets a real element shape supersede the empty-array marker",
+      "unknown",
+      { Name: "string" },
+      { Name: "string" },
+    ],
+    [
+      "lets a real element shape supersede the marker on either side",
+      { Name: "string" },
+      "unknown",
+      { Name: "string" },
+    ],
+    [
+      "keeps a key optional once either side saw it optional",
+      { "X?": "string", Y: "number" },
+      { X: "string", Y: "number" },
+      { "X?": "string", Y: "number" },
+    ],
+    [
+      "surfaces a primitive/object clash as a union instead of picking one",
+      "string",
+      { a: "number" },
+      "object|string",
+    ],
+  ])("%s", (_name, a, b, expected) => {
+    expect(mergeShapes(a, b)).toEqual(expected);
   });
 });
 
 describe("endpointKey", () => {
-  it("strips object names — normalization and name-scrubbing in one", () => {
-    expect(endpointKey("get", "/api/v1/Cubes('Sales_2026')/Views?$top=5")).toBe(
+  it.each([
+    [
+      "strips object names — normalization and name-scrubbing in one",
+      "get",
+      "/api/v1/Cubes('Sales_2026')/Views?$top=5",
       "GET /api/v1/Cubes('*')/Views",
-    );
-  });
-
-  it("strips the v12 instance segment, which is deployment-specific", () => {
+    ],
     // `/acme_prod/api/v1/...` would otherwise commit a customer's instance
     // name into an endpoint key.
-    expect(
-      endpointKey("GET", "/acme_prod/api/v1/Databases('Sales')/Cubes"),
-    ).toBe("GET /*/api/v1/Databases('*')/Cubes");
+    [
+      "strips the v12 instance segment, which is deployment-specific",
+      "GET",
+      "/acme_prod/api/v1/Databases('Sales')/Cubes",
+      "GET /*/api/v1/Databases('*')/Cubes",
+    ],
     // v11 has no such prefix and must stay untouched.
-    expect(endpointKey("GET", "/api/v1/Cubes")).toBe("GET /api/v1/Cubes");
-  });
-
-  it("strips numeric keys", () => {
-    expect(endpointKey("PATCH", "/api/v1/Cellsets('abc')/Cells(0)")).toBe(
+    [
+      "leaves a v11 path without an instance segment untouched",
+      "GET",
+      "/api/v1/Cubes",
+      "GET /api/v1/Cubes",
+    ],
+    [
+      "strips numeric keys",
+      "PATCH",
+      "/api/v1/Cellsets('abc')/Cells(0)",
       "PATCH /api/v1/Cellsets('*')/Cells(*)",
-    );
+    ],
+  ])("%s", (_name, method, path, expected) => {
+    expect(endpointKey(method, path)).toBe(expected);
   });
 });
 
@@ -119,18 +144,103 @@ describe("diffAgainstShape", () => {
     "@odata.count?": "number",
     "value[]": { Name: "string", "Dimensions[]": { Name: "string" } },
   };
+  // What a merge of two versions produces when one sends null, the other [].
+  const MERGED: Shape = { "Names?": "null", "Names[]?": "string" };
+  const EXACT: CheckOptions = { mode: "exact" };
 
-  it("accepts a payload that omits keys (that is what $select does)", () => {
-    expect(diffAgainstShape({ value: [{ Name: "a" }] }, CONTRACT)).toEqual([]);
+  it.each<[string, unknown, Shape, CheckOptions | undefined]>([
+    // $select drops keys, so a payload that omits them conforms.
+    [
+      "accepts a payload that omits keys (that is what $select does)",
+      { value: [{ Name: "a" }] },
+      CONTRACT,
+      undefined,
+    ],
+    // `@odata.count` appears only when the request asked for $count, and
+    // contracts are filed with the query stripped — so its absence from a
+    // recording says nothing about the payload being wrong.
+    [
+      "allows OData control annotations the contract never recorded",
+      { value: [{ Name: "a" }], "Elements@odata.count": 3 },
+      CONTRACT,
+      undefined,
+    ],
+    // JSON cannot express `undefined`; a fake that spreads optional fields
+    // produces it routinely and is making no claim by doing so.
+    [
+      "treats an explicit undefined as an absent key",
+      { value: [{ Name: "a", Nope: undefined }] },
+      CONTRACT,
+      undefined,
+    ],
+    [
+      "treats `unknown` as satisfied by anything",
+      { items: [1, 2] },
+      { "items[]": "unknown" },
+      undefined,
+    ],
+    // `Statements[]: "string"` means "array whose elements are strings", not
+    // "a string". Comparing the array itself against the primitive would call
+    // every string array a type error.
+    [
+      "checks an array of primitives element-wise",
+      { Statements: ["a", "b"] },
+      { "Statements[]": "string" },
+      undefined,
+    ],
+    [
+      "accepts null where the contract recorded a nullable",
+      { V: null },
+      { V: "null|number" },
+      undefined,
+    ],
+    [
+      "accepts a scalar null for a key recorded as both scalar and array",
+      { Names: null },
+      MERGED,
+      EXACT,
+    ],
+    [
+      "accepts an array for a key recorded as both scalar and array",
+      { Names: ["a"] },
+      MERGED,
+      EXACT,
+    ],
+  ])("%s", (_name, payload, contract, opts) => {
+    expect(diffAgainstShape(payload, contract, opts)).toEqual([]);
   });
 
-  it("accepts either variant of a key recorded as both scalar and array", () => {
-    // What a merge of two versions produces when one sends null, the other [].
-    const merged: Shape = { "Names?": "null", "Names[]?": "string" };
-    const exact = { mode: "exact" } as const;
-    expect(diffAgainstShape({ Names: null }, merged, exact)).toEqual([]);
-    expect(diffAgainstShape({ Names: ["a"] }, merged, exact)).toEqual([]);
-    expect(diffAgainstShape({ Names: [1] }, merged, exact)).toHaveLength(1);
+  it.each<[string, unknown, Shape, CheckOptions | undefined, number]>([
+    [
+      "rejects an array of the wrong primitive element type",
+      { Statements: [1] },
+      { "Statements[]": "string" },
+      undefined,
+      1,
+    ],
+    [
+      "rejects null where the contract recorded only a number",
+      { V: null },
+      { V: "number" },
+      undefined,
+      1,
+    ],
+    [
+      "rejects an array where the merged shape records only a scalar in exact mode",
+      { Names: [1] },
+      MERGED,
+      EXACT,
+      1,
+    ],
+    [
+      "lists every divergence at once",
+      { value: [{ Name: 1, Bogus: 2 }] },
+      CONTRACT,
+      undefined,
+      2,
+    ],
+  ])("%s", (_name, payload, contract, opts, count) => {
+    expect(diffAgainstShape(payload, contract, opts)).toHaveLength(count);
   });
 
   it("rejects a key the server never sends", () => {
@@ -164,67 +274,11 @@ describe("diffAgainstShape", () => {
     expect(problems[0]).toContain("$.value[0].Dimensions[0].Name");
   });
 
-  it("lists every divergence at once", () => {
-    const problems = diffAgainstShape(
-      { value: [{ Name: 1, Bogus: 2 }] },
-      CONTRACT,
-    );
-    expect(problems).toHaveLength(2);
-  });
-
   it("exact mode additionally demands the required keys", () => {
-    expect(diffAgainstShape({}, CONTRACT, { mode: "exact" })).toEqual([
+    expect(diffAgainstShape({}, CONTRACT, EXACT)).toEqual([
       "$.value: required by the contract, missing from the payload",
     ]);
     // The optional one is not demanded.
-    expect(
-      diffAgainstShape({ value: [] }, CONTRACT, { mode: "exact" }),
-    ).toEqual([]);
-  });
-
-  it("allows OData control annotations the contract never recorded", () => {
-    // `@odata.count` appears only when the request asked for $count, and
-    // contracts are filed with the query stripped — so its absence from a
-    // recording says nothing about the payload being wrong.
-    expect(
-      diffAgainstShape(
-        { value: [{ Name: "a" }], "Elements@odata.count": 3 },
-        CONTRACT,
-      ),
-    ).toEqual([]);
-  });
-
-  it("checks an array of primitives element-wise", () => {
-    // `Statements[]: "string"` means "array whose elements are strings", not
-    // "a string". Comparing the array itself against the primitive would call
-    // every string array a type error.
-    expect(
-      diffAgainstShape(
-        { Statements: ["a", "b"] },
-        { "Statements[]": "string" },
-      ),
-    ).toEqual([]);
-    expect(
-      diffAgainstShape({ Statements: [1] }, { "Statements[]": "string" }),
-    ).toHaveLength(1);
-  });
-
-  it("treats an explicit undefined as an absent key", () => {
-    // JSON cannot express `undefined`; a fake that spreads optional fields
-    // produces it routinely and is making no claim by doing so.
-    expect(
-      diffAgainstShape({ value: [{ Name: "a", Nope: undefined }] }, CONTRACT),
-    ).toEqual([]);
-  });
-
-  it("treats `unknown` as satisfied by anything", () => {
-    expect(
-      diffAgainstShape({ items: [1, 2] }, { "items[]": "unknown" }),
-    ).toEqual([]);
-  });
-
-  it("accepts null where the contract recorded a nullable", () => {
-    expect(diffAgainstShape({ V: null }, { V: "null|number" })).toEqual([]);
-    expect(diffAgainstShape({ V: null }, { V: "number" })).toHaveLength(1);
+    expect(diffAgainstShape({ value: [] }, CONTRACT, EXACT)).toEqual([]);
   });
 });

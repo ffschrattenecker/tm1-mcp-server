@@ -94,9 +94,7 @@ console.log(
         : " — merging into the contracts on disk"),
 );
 
-const target = readOnly
-  ? ["tests/live/read-broad.live.test.ts"]
-  : [];
+const target = readOnly ? ["tests/live/read-broad.live.test.ts"] : [];
 
 const modeEnv = {
   ...(flags.has("--verify") ? {} : { RECORD_CONTRACTS: "1" }),

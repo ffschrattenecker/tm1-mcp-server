@@ -258,3 +258,15 @@ describe("computeProcessMetrics v2 score", () => {
     expect(on.totals.scoreV2).toBeLessThan(off.totals.scoreV2);
   });
 });
+
+describe("TI parser: `;;` inside a string literal", () => {
+  it("is not a syntax error; TM1 compiles it", () => {
+    const m = computeTabMetrics("sQ = 'SELECT a FROM t WHERE b=1;;';\nnI = 1;");
+    expect(m.parseError).toBe(false);
+    expect(m.loc).toBeGreaterThan(0);
+  });
+
+  it("outside a literal still is", () => {
+    expect(computeTabMetrics("nI = 1;;").parseError).toBe(true);
+  });
+});
