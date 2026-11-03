@@ -74,6 +74,12 @@ export interface BuildCallGraphOptions {
    * Default: true.
    */
   includeSystem?: boolean;
+  /**
+   * Literal values laid over the root's declared-param env before the tree is
+   * built (downstream only), e.g. a chore task's fixed params. Later entries
+   * win over earlier ones; defaults are overridden.
+   */
+  rootParams?: ReadonlyArray<{ name: string; value: string }> | undefined;
 }
 
 function lc(s: string): string {
@@ -239,6 +245,9 @@ export function buildCallGraph(
   const includeSystem = opts.includeSystem ?? true;
   const rootEnv =
     opts.direction === "downstream" ? buildInitialEnv(start, index) : undefined;
+  for (const p of opts.rootParams ?? []) {
+    rootEnv?.set(lc(p.name), { kind: "literal", value: p.value });
+  }
   const root: CallGraphNode = {
     process: start,
     incomingEdge: null,
