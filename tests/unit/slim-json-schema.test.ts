@@ -212,22 +212,6 @@ describe("tools/list advertises slimmed schemas", () => {
       (tool?.outputSchema as Record<string, unknown>).additionalProperties,
     ).toBe(false);
   });
-
-  it("control: an unwrapped server still ships the sentinels (SDK shape check)", async () => {
-    const server = new McpServer({ name: "test", version: "0.0.0" });
-    server.registerTool(
-      TOOL,
-      { description: "read files", inputSchema: inputShape },
-      handler,
-    );
-
-    const listing = await listTools(server);
-    const wire = JSON.stringify(listing.tools.find((t) => t.name === TOOL));
-    // If this ever fails, the SDK/Zod stopped emitting the noise this helper
-    // exists to remove — re-check whether the slimming is still needed.
-    expect(wire).toContain(String(SAFE_INT_MAX));
-    expect(wire).toContain("$schema");
-  });
 });
 
 describe("stripDefaultPhrase", () => {

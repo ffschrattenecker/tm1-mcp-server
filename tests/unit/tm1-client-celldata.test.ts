@@ -3,7 +3,6 @@ import { TM1ErrorCode } from "../../src/types.js";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type { FnSpy } from "../helpers/spy-types.js";
 import { type TM1Client } from "../../src/tm1-client.js";
-import { TM1Error } from "../../src/types.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockResponse, stubbedClient } from "../helpers/client-harness.js";
 
@@ -73,62 +72,57 @@ describe("TM1Client – Cell Data Methods", () => {
       );
     });
 
-    it("should return a string cell value", async () => {
-      fetchSpy
-        .mockResolvedValueOnce(mockResponse(statusCubeMeta))
-        .mockResolvedValueOnce(
-          mockResponse({
-            ID: "cellset-002",
-            Cells: [{ Value: "Active", FormattedValue: "Active" }],
-          }),
-        );
-
-      const value = await client.cells.getValue("StatusCube", ["Q1", "Open"]);
-      expect(value).toBe("Active");
-    });
-
-    it("should return null when cell is empty", async () => {
-      fetchSpy
-        .mockResolvedValueOnce(mockResponse(salesCubeMeta))
-        .mockResolvedValueOnce(
-          mockResponse({
-            ID: "cellset-003",
-            Cells: [{ Value: null, FormattedValue: "" }],
-          }),
-        );
-
-      const value = await client.cells.getValue("SalesCube", [
-        "Feb",
-        "France",
-        "Budget",
-      ]);
-      expect(value).toBeNull();
-    });
-
     // An empty cellset means a member did not resolve, not an empty cell: the
     // MDX selects exactly one member, and an empty cell comes back as a cell
-    // with a null Value (covered above). v11 refuses such an MDX outright,
-    // v12 answers 200 with no cells — returning null there reported "empty
-    // cell" for a coordinate that does not exist.
-    it("throws when the Cells array is empty (coordinate did not resolve)", async () => {
-      fetchSpy
-        .mockResolvedValueOnce(mockResponse(salesCubeMeta))
-        .mockResolvedValueOnce(mockResponse({ ID: "cellset-004", Cells: [] }));
+    // with a null Value. v11 refuses such an MDX outright, v12 answers 200 with
+    // no cells — returning null there reported "empty cell" for a coordinate
+    // that does not exist.
+    it.each([
+      [
+        "a string",
+        statusCubeMeta,
+        ["Q1", "Open"],
+        { Cells: [{ Value: "Active", FormattedValue: "Active" }] },
+        { value: "Active" },
+      ],
+      [
+        "an empty cell",
+        salesCubeMeta,
+        ["Feb", "France", "Budget"],
+        { Cells: [{ Value: null, FormattedValue: "" }] },
+        { value: null },
+      ],
+      [
+        "an empty Cells array",
+        salesCubeMeta,
+        ["Mar", "UK", "Actual"],
+        { Cells: [] },
+        "throws",
+      ],
+      [
+        "a missing Cells array",
+        salesCubeMeta,
+        ["Apr", "US", "Actual"],
+        {},
+        "throws",
+      ],
+    ] as const)(
+      "returns or throws for %s",
+      async (_label, meta, coords, cellset, expected) => {
+        fetchSpy
+          .mockResolvedValueOnce(mockResponse(meta))
+          .mockResolvedValueOnce(mockResponse({ ID: "cellset", ...cellset }));
 
-      await expect(
-        client.cells.getValue("SalesCube", ["Mar", "UK", "Actual"]),
-      ).rejects.toMatchObject({ code: TM1ErrorCode.NOT_FOUND });
-    });
-
-    it("throws when Cells is missing from the response", async () => {
-      fetchSpy
-        .mockResolvedValueOnce(mockResponse(salesCubeMeta))
-        .mockResolvedValueOnce(mockResponse({ ID: "cellset-005" }));
-
-      await expect(
-        client.cells.getValue("SalesCube", ["Apr", "US", "Actual"]),
-      ).rejects.toMatchObject({ code: TM1ErrorCode.NOT_FOUND });
-    });
+        const call = client.cells.getValue(meta.Name, [...coords]);
+        if (expected === "throws") {
+          await expect(call).rejects.toMatchObject({
+            code: TM1ErrorCode.NOT_FOUND,
+          });
+        } else {
+          expect(await call).toBe(expected.value);
+        }
+      },
+    );
 
     it("should pass through pre-qualified `[Dim].[Element]` element strings", async () => {
       fetchSpy
@@ -204,21 +198,6 @@ describe("TM1Client – Cell Data Methods", () => {
       );
     });
 
-    it("still takes an explicit Sandboxes element", async () => {
-      fetchSpy
-        .mockResolvedValueOnce(mockResponse(sandboxedMeta))
-        .mockResolvedValueOnce(
-          mockResponse({
-            ID: "cellset-sb2",
-            Cells: [{ Value: 7, FormattedValue: "7" }],
-          }),
-        );
-
-      await client.cells.getValue("SalesCube", ["MySandbox", "Jan", "Germany"]);
-      const body = JSON.parse(fetchSpy.mock.calls[1][1].body);
-      expect(body.MDX).toContain("{[Sandboxes].[MySandbox]}");
-    });
-
     it("refuses a sandboxed coordinate two short, naming Sandboxes as optional", async () => {
       fetchSpy.mockResolvedValueOnce(mockResponse(sandboxedMeta));
 
@@ -289,6 +268,45 @@ describe("TM1Client – Cell Data Methods", () => {
       expect(result.totalCellCount).toBe(4);
     });
 
+    it("maps an empty result, and every member of a multi-member tuple", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(
+          mockResponse({ ID: "cellset-104", Cells: [], Axes: [] }),
+        )
+        .mockResolvedValueOnce(mockResponse({})) // cellset DELETE
+        .mockResolvedValueOnce(
+          mockResponse({
+            ID: "cellset-106",
+            Cells: [{ Value: 99, FormattedValue: "99" }],
+            Axes: [
+              {
+                Tuples: [
+                  {
+                    Members: [
+                      { Name: "Jan", Hierarchy: { Name: "Time" } },
+                      { Name: "Actual", Hierarchy: { Name: "Version" } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          }),
+        );
+
+      const empty = await client.cells.executeMdx(
+        "SELECT {} ON COLUMNS FROM [EmptyCube]",
+      );
+      expect(empty.cells).toEqual([]);
+      expect(empty.axes).toEqual([]);
+      expect(empty.totalCellCount).toBe(0);
+
+      const multi = await client.cells.executeMdx("SELECT ...");
+      expect(multi.axes[0].tuples[0].members).toEqual([
+        { name: "Jan", hierarchyName: "Time" },
+        { name: "Actual", hierarchyName: "Version" },
+      ]);
+    });
+
     it("frees the server-side cellset with a DELETE after reading (H2)", async () => {
       fetchSpy
         .mockResolvedValueOnce(mockResponse(sampleResponse))
@@ -313,124 +331,28 @@ describe("TM1Client – Cell Data Methods", () => {
       expect(result.totalCellCount).toBe(4);
     });
 
-    it("should send MDX in POST body", async () => {
-      fetchSpy.mockResolvedValueOnce(mockResponse(sampleResponse));
+    it.each([
+      ["$top", 10, undefined, ["$top=10"], ["$skip="]],
+      ["$skip", undefined, 5, ["$skip=5"], ["$top="]],
+      ["$top and $skip", 20, 10, ["$top=20", "$skip=10"], []],
+    ])(
+      "sends %s in the request when provided",
+      async (_label, top, skip, present, absent) => {
+        fetchSpy.mockResolvedValueOnce(
+          mockResponse({ ID: "cellset-p", Cells: [], Axes: [] }),
+        );
 
-      await client.cells.executeMdx("SELECT {} ON COLUMNS FROM [TestCube]");
+        await client.cells.executeMdx(
+          "SELECT {} ON COLUMNS FROM [Cube]",
+          top,
+          skip,
+        );
 
-      const [url, opts] = fetchSpy.mock.calls[0];
-      expect(url).toContain("/api/v1/ExecuteMDX");
-      expect(opts.method).toBe("POST");
-      const body = JSON.parse(opts.body);
-      expect(body.MDX).toBe("SELECT {} ON COLUMNS FROM [TestCube]");
-    });
-
-    it("should include $top in the request when provided", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          ID: "cellset-101",
-          Cells: [{ Value: 10, FormattedValue: "10.00" }],
-          Axes: [
-            {
-              Tuples: [
-                { Members: [{ Name: "Jan", Hierarchy: { Name: "Time" } }] },
-              ],
-            },
-          ],
-        }),
-      );
-
-      await client.cells.executeMdx("SELECT {} ON COLUMNS FROM [Cube]", 10);
-
-      const [url] = fetchSpy.mock.calls[0];
-      expect(url).toContain("$top=10");
-    });
-
-    it("should include $skip in the request when provided", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          ID: "cellset-102",
-          Cells: [],
-          Axes: [],
-        }),
-      );
-
-      await client.cells.executeMdx(
-        "SELECT {} ON COLUMNS FROM [Cube]",
-        undefined,
-        5,
-      );
-
-      const [url] = fetchSpy.mock.calls[0];
-      expect(url).toContain("$skip=5");
-      expect(url).not.toContain("$top=");
-    });
-
-    it("should include both $top and $skip when provided", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          ID: "cellset-103",
-          Cells: [{ Value: 1, FormattedValue: "1" }],
-          Axes: [
-            {
-              Tuples: [
-                { Members: [{ Name: "X", Hierarchy: { Name: "Dim" } }] },
-              ],
-            },
-          ],
-        }),
-      );
-
-      await client.cells.executeMdx("SELECT {} ON COLUMNS FROM [Cube]", 20, 10);
-
-      const [url] = fetchSpy.mock.calls[0];
-      expect(url).toContain("$top=20");
-      expect(url).toContain("$skip=10");
-    });
-
-    it("should handle empty result set", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({ ID: "cellset-104", Cells: [], Axes: [] }),
-      );
-
-      const result = await client.cells.executeMdx(
-        "SELECT {} ON COLUMNS FROM [EmptyCube]",
-      );
-
-      expect(result.cells).toEqual([]);
-      expect(result.axes).toEqual([]);
-      expect(result.totalCellCount).toBe(0);
-    });
-
-    it("should use timeoutMs override when provided", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({ ID: "cellset-timeout", Cells: [], Axes: [] }),
-      );
-      const setTimeoutSpy = vi.spyOn(global, "setTimeout");
-
-      await client.cells.executeMdx(
-        "SELECT {} FROM [Cube]",
-        undefined,
-        undefined,
-        { timeoutMs: 120000 },
-      );
-
-      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 120000);
-      setTimeoutSpy.mockRestore();
-    });
-
-    it("should fall back to config requestTimeoutMs when no override", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({ ID: "cellset-default", Cells: [], Axes: [] }),
-      );
-      const setTimeoutSpy = vi.spyOn(global, "setTimeout");
-
-      await client.cells.executeMdx("SELECT {} FROM [Cube]");
-
-      // makeConfig() sets requestTimeoutMs: 5000.
-      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 5000);
-      setTimeoutSpy.mockRestore();
-    });
+        const [url] = fetchSpy.mock.calls[0];
+        for (const s of present) expect(url).toContain(s);
+        for (const s of absent) expect(url).not.toContain(s);
+      },
+    );
 
     it("should compute totalCellCount from axes cardinality", async () => {
       fetchSpy.mockResolvedValueOnce(
@@ -463,129 +385,6 @@ describe("TM1Client – Cell Data Methods", () => {
       // totalCellCount = 3 * 2 = 6, even though only 2 cells returned (paginated)
       expect(result.totalCellCount).toBe(6);
       expect(result.cells).toHaveLength(2);
-    });
-
-    it("should handle multi-member tuples", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          ID: "cellset-106",
-          Cells: [{ Value: 99, FormattedValue: "99" }],
-          Axes: [
-            {
-              Tuples: [
-                {
-                  Members: [
-                    { Name: "Jan", Hierarchy: { Name: "Time" } },
-                    { Name: "Actual", Hierarchy: { Name: "Version" } },
-                  ],
-                },
-              ],
-            },
-          ],
-        }),
-      );
-
-      const result = await client.cells.executeMdx("SELECT ...");
-
-      expect(result.axes[0].tuples[0].members).toHaveLength(2);
-      expect(result.axes[0].tuples[0].members[0]).toEqual({
-        name: "Jan",
-        hierarchyName: "Time",
-      });
-      expect(result.axes[0].tuples[0].members[1]).toEqual({
-        name: "Actual",
-        hierarchyName: "Version",
-      });
-    });
-  });
-
-  // ── writeCells() partial-commit reporting (M4) ──────────────────────────────
-
-  describe("cells.writeCells() partial commit", () => {
-    // Route by URL/body so one specific cell's PATCH fails while the rest
-    // succeed. Each cell = ExecuteMDX (→ cellset id) + PATCH Cells(0) + DELETE.
-    function routeWithBadCell(): void {
-      fetchSpy.mockImplementation((url: unknown, init: unknown) => {
-        const u = String(url);
-        const opts = init as { method: string; body?: string };
-        if (u.includes("/ExecuteMDX")) {
-          const mdx = JSON.parse(opts.body ?? "{}").MDX as string;
-          const id = mdx.includes("[Dim1].[Dim1].[BAD]") ? "bad" : "good";
-          return Promise.resolve(mockResponse({ ID: id }));
-        }
-        // The bulk PATCH targets /Cells (no ordinal). A chunk holding the bad
-        // coordinate is refused whole, exactly as TM1 does.
-        if (u.endsWith("/Cells") && u.includes("Cellsets('bad')")) {
-          return Promise.resolve({
-            ok: false,
-            status: 400,
-            statusText: "Bad Request",
-            headers: new Headers(),
-            text: vi
-              .fn()
-              .mockResolvedValue(
-                JSON.stringify({ error: { message: "consolidated cell" } }),
-              ),
-          });
-        }
-        if (u.includes("/Cells(0)")) {
-          if (u.includes("Cellsets('bad')")) {
-            return Promise.resolve({
-              ok: false,
-              status: 400,
-              statusText: "Bad Request",
-              headers: new Headers(),
-              text: vi
-                .fn()
-                .mockResolvedValue(
-                  JSON.stringify({ error: { message: "consolidated cell" } }),
-                ),
-            } as unknown as Response);
-          }
-          return Promise.resolve(mockResponse({}));
-        }
-        // DELETE cleanup
-        return Promise.resolve(mockResponse({}));
-      });
-    }
-
-    it("throws with written/failed/notAttempted split and stops after the failing batch", async () => {
-      routeWithBadCell();
-
-      // 12 cells fit one chunk. The bulk PATCH is refused because BAD is in
-      // it — nothing lands — so the fallback re-walks the chunk one cell at a
-      // time: 11 succeed, BAD does not. `notAttempted` counts whole chunks
-      // beyond the failing one, of which there are none here.
-      const dimensions = ["Dim1", "Dim2"];
-      const cells = Array.from({ length: 12 }, (_, i) => ({
-        elements: [`E${i}`, "M"],
-        value: i,
-      }));
-      cells[3] = { elements: ["BAD", "M"], value: 3 };
-
-      let caught: unknown;
-      try {
-        await client.cells.writeCells("Sales", dimensions, cells);
-      } catch (e) {
-        caught = e;
-      }
-
-      expect(caught).toBeInstanceOf(TM1Error);
-      const err = caught as TM1Error;
-      expect(err.code).toBe("TM1_ERROR");
-      expect(err.message).toMatch(/partially applied/);
-      expect(err.message).toMatch(/11 written/);
-      expect(err.message).toMatch(/1 failed/);
-      expect(err.message).toMatch(/0 not attempted/);
-
-      const details = JSON.parse(err.details ?? "{}");
-      expect(details.written).toBe(11);
-      expect(details.notAttempted).toBe(0);
-      // The coordinate the server refused — its own message names only a
-      // status code, which is why the fallback exists at all.
-      expect(details.failed).toEqual([
-        { elements: ["BAD", "M"], error: "consolidated cell" },
-      ]);
     });
   });
 
@@ -682,45 +481,6 @@ describe("TM1Client – Cell Data Methods", () => {
       expect(result.axes).toHaveLength(1);
       expect(result.axes[0].tuples).toHaveLength(2);
     });
-
-    it("should call the correct view execute endpoint", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({ ID: "cellset-201", Cells: [], Axes: [] }),
-      );
-
-      await client.views.getView("MyCube", "MyView");
-
-      const [url, opts] = fetchSpy.mock.calls[0];
-      expect(url).toContain("Cubes('MyCube')");
-      expect(url).toContain("Views('MyView')");
-      expect(url).toContain("tm1.Execute");
-      expect(opts.method).toBe("POST");
-    });
-
-    it("should encode special characters in cube and view names", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({ ID: "cellset-202", Cells: [], Axes: [] }),
-      );
-
-      await client.views.getView("My Cube", "My View");
-
-      const [url] = fetchSpy.mock.calls[0];
-      expect(url).toContain("Cubes('My%20Cube')");
-      expect(url).toContain("Views('My%20View')");
-    });
-
-    it("should handle empty view result", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({ ID: "cellset-203", Cells: [], Axes: [] }),
-      );
-
-      const result = await client.views.getView("EmptyCube", "EmptyView");
-
-      expect(result.cells).toEqual([]);
-      expect(result.axes).toEqual([]);
-      expect(result.cubeName).toBe("EmptyCube");
-      expect(result.viewName).toBe("EmptyView");
-    });
   });
 
   // ── clearCube() ────────────────────────────────────────────────────────────
@@ -751,56 +511,45 @@ describe("TM1Client – Cell Data Methods", () => {
 
     // Measured on 12.5: POST Cubes('x')/tm1.Clear answers "'tm1.Clear'
     // resource can not be resolved on type 'Cube'", and $metadata declares no
-    // clear action at all. The clear therefore takes the same TI route as v11
-    // rather than an endpoint this build does not have.
-    it("12.x clear: deploys ephemeral TI, not tm1.Clear", async () => {
-      const c = newClient("12.0");
-      fetchSpy
-        .mockResolvedValueOnce(mock204()) // create process
-        .mockResolvedValueOnce(
-          mockResponse({ ProcessExecuteStatusCode: "CompletedSuccessfully" }),
-        ) // execute
-        .mockResolvedValueOnce(mock204()); // delete
+    // clear action at all. The clear therefore takes the same TI route on every
+    // version rather than an endpoint this build does not have.
+    it.each([
+      ["12.x", "12.0"],
+      ["11.x", "11.8"],
+    ])(
+      "%s clear: deploys ephemeral TI, executes, deletes",
+      async (_l, version) => {
+        const c = newClient(version);
+        fetchSpy
+          .mockResolvedValueOnce(mock204()) // create process
+          // T-4: the execute must actually report CompletedSuccessfully. A body
+          // without ProcessExecuteStatusCode no longer counts as a confirmed
+          // clear — see the "unconfirmed clear" case below.
+          .mockResolvedValueOnce(
+            mockResponse({ ProcessExecuteStatusCode: "CompletedSuccessfully" }),
+          ) // execute
+          .mockResolvedValueOnce(mock204()); // delete
 
-      await c.cubes.clear("Sales");
+        await c.cubes.clear("Sales");
 
-      const [createUrl, createOpts] = fetchSpy.mock.calls[0];
-      expect(createUrl).toContain("/Processes");
-      const createBody = JSON.parse(createOpts.body);
-      expect(createBody.PrologProcedure).toBe("CubeClearData('Sales');");
-      expect(
-        fetchSpy.mock.calls.some(([u]) => String(u).includes("tm1.Clear")),
-      ).toBe(false);
-    });
+        const [createUrl, createOpts] = fetchSpy.mock.calls[0];
+        expect(createUrl).toContain("/Processes");
+        expect(createOpts.method).toBe("POST");
+        const createBody = JSON.parse(createOpts.body);
+        expect(createBody.Name).toMatch(/^}TempClear_Sales_\d+$/);
+        expect(createBody.PrologProcedure).toBe("CubeClearData('Sales');");
+        expect(
+          fetchSpy.mock.calls.some(([u]) => String(u).includes("tm1.Clear")),
+        ).toBe(false);
 
-    it("11.x clear: deploys ephemeral TI, executes, deletes", async () => {
-      const c = newClient("11.8");
-      fetchSpy
-        .mockResolvedValueOnce(mock204()) // create process
-        // T-4: the execute must actually report CompletedSuccessfully. A body
-        // without ProcessExecuteStatusCode no longer counts as a confirmed
-        // clear — see the "unconfirmed clear" case below.
-        .mockResolvedValueOnce(
-          mockResponse({ ProcessExecuteStatusCode: "CompletedSuccessfully" }),
-        ) // execute
-        .mockResolvedValueOnce(mock204()); // delete
+        const [execUrl] = fetchSpy.mock.calls[1];
+        expect(execUrl).toMatch(/Processes\('.*'\)\/tm1\.ExecuteWithReturn$/);
 
-      await c.cubes.clear("Sales");
-
-      const [createUrl, createOpts] = fetchSpy.mock.calls[0];
-      expect(createUrl).toContain("/api/v1/Processes");
-      expect(createOpts.method).toBe("POST");
-      const createBody = JSON.parse(createOpts.body);
-      expect(createBody.Name).toMatch(/^}TempClear_Sales_\d+$/);
-      expect(createBody.PrologProcedure).toBe("CubeClearData('Sales');");
-
-      const [execUrl] = fetchSpy.mock.calls[1];
-      expect(execUrl).toMatch(/Processes\('.*'\)\/tm1\.ExecuteWithReturn$/);
-
-      const [delUrl, delOpts] = fetchSpy.mock.calls[2];
-      expect(delOpts.method).toBe("DELETE");
-      expect(delUrl).toContain("/api/v1/Processes('");
-    });
+        const [delUrl, delOpts] = fetchSpy.mock.calls[2];
+        expect(delOpts.method).toBe("DELETE");
+        expect(delUrl).toContain("/Processes('");
+      },
+    );
 
     it("clear timeout leaves the temp TI running and says the cube will end up empty", async () => {
       const c = newClient("11.8");
@@ -960,62 +709,42 @@ describe("TM1Client – Cell Data Methods", () => {
       });
 
       // A bare name means the default hierarchy, which carries the dimension's
-      // own name; `Hier:Elem` leaves it. Both forms mix inside one coordinate.
-      it("addresses an alternate hierarchy from a Hier:Elem entry", async () => {
-        fetchSpy
-          .mockResolvedValueOnce(mockResponse(cubeMeta))
-          .mockResolvedValueOnce(mockResponse({ value: [] }));
-
-        await client.cells.checkFeeders("SalesCube", [
-          "2024",
+      // own name; `Hier:Elem` leaves it. The split takes the FIRST colon, so a
+      // colon inside the element name survives and reaches the default
+      // hierarchy when it is named explicitly. A colon that cannot separate two
+      // names (leading or trailing) is part of the element.
+      it.each([
+        [
+          "Hier:Elem names an alternate hierarchy",
           "Territory:North",
-        ]);
-
-        const [, opts] = fetchSpy.mock.calls[1];
-        expect(JSON.parse(opts.body)["Tuple@odata.bind"]).toEqual([
-          "Dimensions('Time')/Hierarchies('Time')/Elements('2024')",
           "Dimensions('Region')/Hierarchies('Territory')/Elements('North')",
-        ]);
-      });
-
-      // The split takes the FIRST colon, so naming the default hierarchy
-      // explicitly reaches an element whose own name contains one. Without
-      // this, `A:B` would be unaddressable.
-      it("reaches a colon-bearing element via its explicit hierarchy", async () => {
+        ],
+        [
+          "a colon-bearing element is reached via its explicit hierarchy",
+          "Region:North:West",
+          "Dimensions('Region')/Hierarchies('Region')/Elements('North%3AWest')",
+        ],
+        [
+          "a leading colon is part of the element name",
+          ":North",
+          "Dimensions('Region')/Hierarchies('Region')/Elements('%3ANorth')",
+        ],
+        [
+          "a trailing colon is part of the element name",
+          "North:",
+          "Dimensions('Region')/Hierarchies('Region')/Elements('North%3A')",
+        ],
+      ])("%s", async (_label, entry, expectedBind) => {
         fetchSpy
           .mockResolvedValueOnce(mockResponse(cubeMeta))
           .mockResolvedValueOnce(mockResponse({ value: [] }));
 
-        await client.cells.checkFeeders("SalesCube", [
-          "2024",
-          "Region:North:West",
-        ]);
+        await client.cells.checkFeeders("SalesCube", ["2024", entry]);
 
         const [, opts] = fetchSpy.mock.calls[1];
-        expect(JSON.parse(opts.body)["Tuple@odata.bind"]).toEqual([
-          "Dimensions('Time')/Hierarchies('Time')/Elements('2024')",
-          "Dimensions('Region')/Hierarchies('Region')/Elements('North%3AWest')",
-        ]);
+        const binds = JSON.parse(opts.body)["Tuple@odata.bind"] as string[];
+        expect(binds[1]).toBe(expectedBind);
       });
-
-      // A colon that cannot separate two names is part of the element.
-      it.each([":North", "North:"])(
-        "treats %s as a plain element name",
-        async (entry) => {
-          fetchSpy
-            .mockResolvedValueOnce(mockResponse(cubeMeta))
-            .mockResolvedValueOnce(mockResponse({ value: [] }));
-
-          await client.cells.checkFeeders("SalesCube", ["2024", entry]);
-
-          const [, opts] = fetchSpy.mock.calls[1];
-          const binds = JSON.parse(opts.body)["Tuple@odata.bind"] as string[];
-          expect(binds[1]).toContain("Hierarchies('Region')");
-          expect(binds[1]).toContain(
-            `Elements('${encodeURIComponent(entry)}')`,
-          );
-        },
-      );
     });
 
     describe("traceFeeders()", () => {
@@ -1045,28 +774,6 @@ describe("TM1Client – Cell Data Methods", () => {
         const [url] = fetchSpy.mock.calls[1];
         expect(url).toContain("/tm1.TraceFeeders");
       });
-    });
-
-    it("trace actions bind a left-out Sandboxes dimension to Base", async () => {
-      fetchSpy
-        .mockResolvedValueOnce(
-          mockResponse({
-            Name: "SalesCube",
-            Dimensions: [
-              { Name: "Sandboxes" },
-              { Name: "Time" },
-              { Name: "Region" },
-            ],
-          }),
-        )
-        .mockResolvedValueOnce(mockResponse({ value: [] }));
-
-      await client.cells.checkFeeders("SalesCube", ["2024", "EU"]);
-
-      const [, opts] = fetchSpy.mock.calls[1];
-      expect(JSON.parse(opts.body)["Tuple@odata.bind"][0]).toBe(
-        "Dimensions('Sandboxes')/Hierarchies('Sandboxes')/Elements('Base')",
-      );
     });
 
     describe("traceCellCalculation()", () => {

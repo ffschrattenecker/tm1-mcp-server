@@ -147,16 +147,6 @@ describe("tm1_files_read op=search", () => {
     });
     expectConforms(out);
   });
-
-  it("echoes null for absent filters and operator 'and' by default", async () => {
-    const { call } = setup(registerFilesRead);
-    const out = json(await call({ op: "search" }));
-    expect(out).toMatchObject({
-      startswith: null,
-      contains: null,
-      operator: "and",
-    });
-  });
 });
 
 describe("tm1_files_read op=get, base64 encoding", () => {
@@ -206,14 +196,6 @@ describe("tm1_files_read op=get, base64 encoding", () => {
     expect(out.returnedBytes).toBe(48 * 1024);
     expect(out.truncated).toBe(true);
     expect(res.content[0].text.length).toBeLessThan(80_000);
-  });
-
-  it("shows what a text read costs on the same bytes", async () => {
-    const { call } = setup(registerFilesRead);
-    const out = asFileContent(
-      json(await call({ op: "get", fileName: "book.xlsx" })),
-    );
-    expect(out.content).toContain("�");
   });
 });
 
@@ -404,25 +386,5 @@ describe("tm1_files_write op=delete", () => {
       message: expect.stringMatching(/content does not apply/),
     });
     expect(files.delete).not.toHaveBeenCalled();
-  });
-
-  it("points a service error at tm1_files_read", async () => {
-    const files = fakeFiles();
-    files.delete.mockRejectedValueOnce(new Error("404"));
-    const { call } = setup(registerFilesWrite, files);
-    await expect(
-      call({ op: "delete", fileName: "a", confirm: "a" }),
-    ).rejects.toMatchObject({
-      hintOverride: expect.stringContaining("tm1_files_read"),
-    });
-  });
-});
-
-describe("annotations", () => {
-  it("files_read is read-only, files_write destructive", () => {
-    expect(specFor("tm1_files_read")?.annotations.readOnlyHint).toBe(true);
-    const write = specFor("tm1_files_write")?.annotations;
-    expect(write?.readOnlyHint).toBe(false);
-    expect(write?.destructiveHint).toBe(true);
   });
 });

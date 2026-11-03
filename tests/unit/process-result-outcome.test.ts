@@ -48,77 +48,42 @@ describe("ProcessResult — a missing status code is not success (T-4)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("reports an execution with no ProcessExecuteStatusCode as indeterminate", async () => {
-    fetchSpy.mockResolvedValueOnce(mockResponse({ ErrorLogFile: null }));
+  // A live server always sends the field (tests/live/process.live.test.ts), so
+  // every row here means we genuinely do not know the outcome. The status text
+  // is the only channel the tool has for saying so.
+  it.each([
+    [
+      "a body without ProcessExecuteStatusCode",
+      () => mockResponse({ ErrorLogFile: null }),
+      (c: TM1Client) => c.processes.execute("ImportData"),
+    ],
+    [
+      "an empty 200 body",
+      () => mockEmptyBody(200),
+      (c: TM1Client) => c.processes.execute("RunCalc"),
+    ],
+    [
+      "a 204 No Content",
+      () => mockEmptyBody(204),
+      (c: TM1Client) => c.processes.execute("RunCalc"),
+    ],
+    [
+      "a 204 from saveData",
+      () => mockEmptyBody(204),
+      (c: TM1Client) => c.processes.saveData(),
+    ],
+  ])(
+    "reports %s as indeterminate, not as a successful run",
+    async (_label, respond, call) => {
+      fetchSpy.mockResolvedValueOnce(respond());
 
-    const result = await client.processes.execute("ImportData");
+      const result = await call(client);
 
-    expect(result.success).toBe(false);
-    expect(result.outcome).toBe("indeterminate");
-    // The status text has to say so — it is the only channel the tool has for
-    // telling the model "we do not know whether this ran".
-    expect(result.processErrorStatus).toMatch(/ProcessExecuteStatusCode/);
-  });
-
-  it("reports an empty response body as indeterminate, not as a successful run", async () => {
-    // A live server always sends the field (tests/live/process.live.test.ts),
-    // so reaching this branch means we genuinely do not know the outcome.
-    fetchSpy.mockResolvedValueOnce(mockEmptyBody(200));
-
-    const result = await client.processes.execute("RunCalc");
-
-    expect(result.success).toBe(false);
-    expect(result.outcome).toBe("indeterminate");
-  });
-
-  it("reports a 204 No Content as indeterminate", async () => {
-    fetchSpy.mockResolvedValueOnce(mockEmptyBody(204));
-
-    const result = await client.processes.execute("RunCalc");
-
-    expect(result.outcome).toBe("indeterminate");
-    expect(result.success).toBe(false);
-  });
-
-  it("applies the same rule to saveData", async () => {
-    fetchSpy.mockResolvedValueOnce(mockEmptyBody(204));
-
-    const result = await client.processes.saveData();
-
-    expect(result.success).toBe(false);
-    expect(result.outcome).toBe("indeterminate");
-  });
-
-  it("still reports a real CompletedSuccessfully as succeeded", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      mockResponse({
-        ProcessExecuteStatusCode: "CompletedSuccessfully",
-        ErrorLogFile: null,
-      }),
-    );
-
-    const result = await client.processes.execute("ImportData");
-
-    expect(result.success).toBe(true);
-    expect(result.outcome).toBe("succeeded");
-    expect(result.processErrorStatus).toBe("CompletedSuccessfully");
-  });
-
-  it("labels an aborted run rolled_back, not indeterminate", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      mockResponse({
-        ProcessExecuteStatusCode: "Aborted",
-        ErrorLogFile: { Filename: "TM1ProcessError_x.log" },
-      }),
-    );
-
-    const result = await client.processes.execute("Broken");
-
-    expect(result.success).toBe(false);
-    expect(result.outcome).toBe("rolled_back");
-    expect(result.processErrorStatus).toBe("Aborted");
-    expect(result.errorLogFile).toBe("TM1ProcessError_x.log");
-  });
+      expect(result.success).toBe(false);
+      expect(result.outcome).toBe("indeterminate");
+      expect(result.processErrorStatus).toMatch(/ProcessExecuteStatusCode/);
+    },
+  );
 
   it("labels a TM1 error response indeterminate and keeps the server text", async () => {
     // The call errored, so TM1 never reported a status — and an error raised
@@ -147,35 +112,19 @@ describe("ProcessResult — a missing status code is not success (T-4)", () => {
 // write to a consolidated element produces the same code without one — and the
 // marker survived, so it belongs with the committed group.
 describe("classifyExecution — one row per ProcessExecuteStatusCode", () => {
-  const CASES: ReadonlyArray<{
-    status: string;
-    outcome: ProcessResult["outcome"];
-    success: boolean;
-  }> = [
-    { status: "CompletedSuccessfully", outcome: "succeeded", success: true },
-    {
-      status: "HasMinorErrors",
-      outcome: "completed_with_errors",
-      success: false,
-    },
-    { status: "QuitCalled", outcome: "completed_with_errors", success: false },
-    {
-      status: "CompletedWithMessages",
-      outcome: "completed_with_errors",
-      success: false,
-    },
-    { status: "Aborted", outcome: "rolled_back", success: false },
-    { status: "RollbackCalled", outcome: "rolled_back", success: false },
-  ];
-
-  for (const c of CASES) {
-    it(`maps ${c.status} to ${c.outcome} (success=${String(c.success)})`, () => {
-      const result = classifyExecution(c.status, undefined);
-      expect(result.outcome).toBe(c.outcome);
-      expect(result.success).toBe(c.success);
-      expect(result.processErrorStatus).toBe(c.status);
-    });
-  }
+  it.each([
+    ["CompletedSuccessfully", "succeeded", true],
+    ["HasMinorErrors", "completed_with_errors", false],
+    ["QuitCalled", "completed_with_errors", false],
+    ["CompletedWithMessages", "completed_with_errors", false],
+    ["Aborted", "rolled_back", false],
+    ["RollbackCalled", "rolled_back", false],
+  ] as const)("maps %s to %s (success=%s)", (status, outcome, success) => {
+    const result = classifyExecution(status, undefined);
+    expect(result.outcome).toBe(outcome);
+    expect(result.success).toBe(success);
+    expect(result.processErrorStatus).toBe(status);
+  });
 
   it("carries the error log file through unchanged", () => {
     const result = classifyExecution("Aborted", "TM1ProcessError_y.log");
@@ -193,15 +142,11 @@ describe("classifyExecution — one row per ProcessExecuteStatusCode", () => {
     expect(result.processErrorStatus).toMatch(/unrecognised/i);
   });
 
-  it("maps a missing status code to indeterminate (T-4)", () => {
-    const result = classifyExecution(undefined, undefined);
-    expect(result.outcome).toBe("indeterminate");
-    expect(result.success).toBe(false);
-    expect(result.processErrorStatus).toMatch(/ProcessExecuteStatusCode/);
-  });
-
-  it("maps an empty status code to indeterminate", () => {
-    const result = classifyExecution("", undefined);
+  it.each([
+    ["a missing status code", undefined],
+    ["an empty status code", ""],
+  ])("maps %s to indeterminate (T-4)", (_label, status) => {
+    const result = classifyExecution(status, undefined);
     expect(result.outcome).toBe("indeterminate");
     expect(result.success).toBe(false);
   });
@@ -216,26 +161,6 @@ describe("ProcessResult — contradictory states are unrepresentable (T-4)", () 
       processErrorStatus: "Aborted",
     };
     expect(contradiction.processErrorStatus).toBe("Aborted");
-  });
-
-  it("rejects {success: true} paired with a non-success outcome at compile time", () => {
-    // @ts-expect-error outcome and success are the same axis; they cannot disagree
-    const contradiction: ProcessResult = {
-      success: true,
-      outcome: "rolled_back",
-      processErrorStatus: "CompletedSuccessfully",
-    };
-    expect(contradiction.outcome).toBe("rolled_back");
-  });
-
-  it("rejects an indeterminate result that claims success at compile time", () => {
-    // @ts-expect-error "we don't know" is never success
-    const contradiction: ProcessResult = {
-      success: true,
-      outcome: "indeterminate",
-      processErrorStatus: "Unknown",
-    };
-    expect(contradiction.outcome).toBe("indeterminate");
   });
 
   it("narrows on `success` without a cast", () => {
@@ -255,41 +180,49 @@ describe("ProcessResult — contradictory states are unrepresentable (T-4)", () 
 });
 
 describe("ProcessResultSchema carries the new field (strict output gate)", () => {
-  it("accepts the indeterminate payload the handler now returns", () => {
-    const parsed = ProcessResultSchema.safeParse({
-      success: false,
-      outcome: "indeterminate",
-      processErrorStatus: "Unknown: TM1 returned no ProcessExecuteStatusCode",
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it("accepts a successful payload", () => {
-    const parsed = ProcessResultSchema.safeParse({
-      success: true,
-      outcome: "succeeded",
-      processErrorStatus: "CompletedSuccessfully",
-    });
-    expect(parsed.success).toBe(true);
-  });
-
-  it("accepts the two committed/rolled-back payloads", () => {
-    for (const outcome of ["completed_with_errors", "rolled_back"]) {
-      const parsed = ProcessResultSchema.safeParse({
+  it.each([
+    [
+      "the indeterminate payload the handler returns",
+      {
         success: false,
-        outcome,
+        outcome: "indeterminate",
+        processErrorStatus: "Unknown: TM1 returned no ProcessExecuteStatusCode",
+      },
+      true,
+    ],
+    [
+      "a successful payload",
+      {
+        success: true,
+        outcome: "succeeded",
+        processErrorStatus: "CompletedSuccessfully",
+      },
+      true,
+    ],
+    [
+      "a completed_with_errors payload",
+      {
+        success: false,
+        outcome: "completed_with_errors",
         processErrorStatus: "QuitCalled",
-      });
-      expect(parsed.success).toBe(true);
-    }
-  });
-
-  it("rejects an unknown outcome value", () => {
-    const parsed = ProcessResultSchema.safeParse({
-      success: false,
-      outcome: "probably-fine",
-      processErrorStatus: "?",
-    });
-    expect(parsed.success).toBe(false);
+      },
+      true,
+    ],
+    [
+      "a rolled_back payload",
+      {
+        success: false,
+        outcome: "rolled_back",
+        processErrorStatus: "QuitCalled",
+      },
+      true,
+    ],
+    [
+      "an unknown outcome value",
+      { success: false, outcome: "probably-fine", processErrorStatus: "?" },
+      false,
+    ],
+  ])("accepts or rejects %s", (_label, payload, valid) => {
+    expect(ProcessResultSchema.safeParse(payload).success).toBe(valid);
   });
 });

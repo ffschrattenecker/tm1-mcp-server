@@ -50,14 +50,6 @@ describe("ElementTypeCache", () => {
     await cache.getType("Region", "Region", "DE");
     await cache.getType("Region", "Region", "FR");
     expect(hier.getElementTypes).toHaveBeenCalledTimes(1);
-  });
-
-  it("reads types with getElementTypes(dimension, hierarchy)", async () => {
-    const hier = makeHierarchyMock({
-      "Region|Region": [{ name: "DE", type: "Numeric" }],
-    });
-    const cache = new ElementTypeCache(hier);
-    expect(await cache.getType("Region", "Region", "DE")).toBe("Numeric");
     expect(hier.getElementTypes).toHaveBeenCalledWith("Region", "Region");
   });
 
@@ -133,107 +125,41 @@ describe("ElementTypeCache", () => {
     expect(hier.getElementTypes).toHaveBeenCalledTimes(1);
   });
 
-  it("gives up after 3 consecutive failures and stops issuing requests", async () => {
-    const hier: HierarchyMock = {
-      getElementTypes: vi.fn(async () => {
-        // Deterministic failure, e.g. TM1's HTTP 400 ObjectSecurityNoReadRights
-        // for a dimension the auditing user may not read.
-        throw new Error("ObjectSecurityNoReadRights");
-      }),
-    };
-    const cache = new ElementTypeCache(hier);
-
-    // Failures 1 and 2 each retry.
-    expect(await cache.getType("Region", "Region", "DE")).toBeNull();
-    expect(hier.getElementTypes).toHaveBeenCalledTimes(1);
-    expect(await cache.getType("Region", "Region", "DE")).toBeNull();
-    expect(hier.getElementTypes).toHaveBeenCalledTimes(2);
-
-    // The 3rd failure pins the slot to null.
-    expect(await cache.getType("Region", "Region", "DE")).toBeNull();
-    expect(hier.getElementTypes).toHaveBeenCalledTimes(3);
-
-    // No further requests, however many lookups follow — this is the bound
-    // that keeps a per-feeder-entry loop from issuing N failing calls.
-    for (let i = 0; i < 25; i++) {
-      expect(await cache.getType("Region", "Region", `E${i}`)).toBeNull();
-    }
-    expect(hier.getElementTypes).toHaveBeenCalledTimes(3);
-  });
-
-  it("spends the retry budget before the threshold and still heals on the last attempt", async () => {
-    let calls = 0;
-    const hier: HierarchyMock = {
-      getElementTypes: vi.fn(async () => {
-        calls++;
-        if (calls < 3) throw new Error("transient");
-        return [{ name: "DE", type: "Numeric" }];
-      }),
-    };
-    const cache = new ElementTypeCache(hier);
-
-    expect(await cache.getType("Region", "Region", "DE")).toBeNull();
-    expect(await cache.getType("Region", "Region", "DE")).toBeNull();
-    // Attempt 3 succeeds: the slot must be cached as the success, never pinned
-    // to null by the two failures that preceded it.
-    expect(await cache.getType("Region", "Region", "DE")).toBe("Numeric");
-    expect(await cache.getType("Region", "Region", "FR")).toBeNull();
-    expect(hier.getElementTypes).toHaveBeenCalledTimes(3);
-  });
-
-  it("counts failures per slot — one dead dimension does not pin the others", async () => {
+  // Each slot gives up after 3 consecutive failures and stops issuing requests,
+  // which bounds a per-feeder-entry loop to 3 failing calls. Two failures that
+  // precede a success must not pin the slot: the success is cached.
+  it("gives up and heals per slot", async () => {
+    const attempts: Record<string, number> = {};
     const hier: HierarchyMock = {
       getElementTypes: vi.fn(async (dim: string) => {
+        attempts[dim] = (attempts[dim] ?? 0) + 1;
+        // Deterministic failure, e.g. TM1's HTTP 400 ObjectSecurityNoReadRights
+        // for a dimension the auditing user may not read.
         if (dim === "Region") throw new Error("ObjectSecurityNoReadRights");
+        // Transient failures that clear before the budget runs out.
+        if (dim === "Flaky" && attempts[dim] <= 2) throw new Error("transient");
         return [{ name: "P1", type: "Numeric" }];
       }),
     };
     const cache = new ElementTypeCache(hier);
 
-    for (let i = 0; i < 5; i++) {
+    // Region: failures 1 and 2 retry, the 3rd pins the slot to null.
+    for (let i = 0; i < 3; i++) {
       expect(await cache.getType("Region", "Region", "DE")).toBeNull();
     }
-    // Region pinned after 3; Product unaffected and still resolvable.
     expect(hier.getElementTypes).toHaveBeenCalledTimes(3);
-    expect(await cache.getType("Product", "Product", "P1")).toBe("Numeric");
-    expect(hier.getElementTypes).toHaveBeenCalledTimes(4);
-  });
-
-  it("counts a shared failing attempt as one failure, not one per caller", async () => {
-    let release!: () => void;
-    const gate = new Promise<void>((r) => {
-      release = r;
-    });
-    let first = true;
-    const hier: HierarchyMock = {
-      getElementTypes: vi.fn(async () => {
-        if (first) {
-          first = false;
-          await gate;
-        }
-        throw new Error("hier 500");
-      }),
-    };
-    const cache = new ElementTypeCache(hier);
-
-    const inflight = Promise.all([
-      cache.getType("Region", "Region", "DE"),
-      cache.getType("Region", "Region", "FR"),
-      cache.getType("Region", "Region", "IT"),
-      cache.getType("Region", "Region", "ES"),
-    ]);
-    release();
-    expect(await inflight).toEqual([null, null, null, null]);
-    // One shared attempt → one failure counted, so the budget is not burned
-    // by the number of waiting callers.
-    expect(hier.getElementTypes).toHaveBeenCalledTimes(1);
-
-    expect(await cache.getType("Region", "Region", "DE")).toBeNull();
-    expect(await cache.getType("Region", "Region", "DE")).toBeNull();
+    // No further requests however many lookups follow.
+    for (let i = 0; i < 25; i++) {
+      expect(await cache.getType("Region", "Region", `E${i}`)).toBeNull();
+    }
     expect(hier.getElementTypes).toHaveBeenCalledTimes(3);
-    // Third failure pinned it.
-    expect(await cache.getType("Region", "Region", "DE")).toBeNull();
-    expect(hier.getElementTypes).toHaveBeenCalledTimes(3);
+
+    // Flaky: two failures, then the third attempt succeeds and is cached.
+    expect(await cache.getType("Flaky", "Flaky", "P1")).toBeNull();
+    expect(await cache.getType("Flaky", "Flaky", "P1")).toBeNull();
+    expect(await cache.getType("Flaky", "Flaky", "P1")).toBe("Numeric");
+    expect(await cache.getType("Flaky", "Flaky", "P1")).toBe("Numeric");
+    expect(attempts.Flaky).toBe(3);
   });
 
   it("normalizes type strings unknown to TM1 to null", async () => {

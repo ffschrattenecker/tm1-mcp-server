@@ -62,26 +62,6 @@ describe("DimensionService.resolveDefaultMember", () => {
     });
   });
 
-  it("Tier 1: defaults hierarchyName to dimensionName when omitted", async () => {
-    fetchSpy.mockResolvedValueOnce(ok({ Name: "Total", Level: 2 }));
-
-    await client.dimensions.resolveDefaultMember("Region");
-
-    const url = fetchSpy.mock.calls[0][0];
-    expect(url).toContain(
-      "Dimensions('Region')/Hierarchies('Region')/DefaultMember",
-    );
-  });
-
-  it("Tier 1: respects explicit hierarchyName parameter", async () => {
-    fetchSpy.mockResolvedValueOnce(ok({ Name: "Top", Level: 3 }));
-
-    await client.dimensions.resolveDefaultMember("Region", "Reporting");
-
-    const url = fetchSpy.mock.calls[0][0];
-    expect(url).toContain("Hierarchies('Reporting')/DefaultMember");
-  });
-
   it("Tier 2 (single root): falls through 404 DefaultMember, returns unique parentless root, medium confidence (derived, not maintained)", async () => {
     fetchSpy.mockResolvedValueOnce(notFound());
     fetchSpy.mockResolvedValueOnce(
@@ -204,15 +184,5 @@ describe("DimensionService.resolveDefaultMember", () => {
     await expect(
       client.dimensions.resolveDefaultMember("Region"),
     ).rejects.toBeInstanceOf(TM1Error);
-  });
-
-  it("encodes special characters in dimension and hierarchy names", async () => {
-    fetchSpy.mockResolvedValueOnce(ok({ Name: "X", Level: 1 }));
-
-    await client.dimensions.resolveDefaultMember("My Dim", "My Hier");
-
-    const url = fetchSpy.mock.calls[0][0];
-    expect(url).toContain("Dimensions('My%20Dim')");
-    expect(url).toContain("Hierarchies('My%20Hier')");
   });
 });

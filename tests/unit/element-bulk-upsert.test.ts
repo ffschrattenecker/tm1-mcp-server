@@ -527,14 +527,21 @@ describe("ElementService.bulkUpsert — $batch path", () => {
 });
 
 describe("ElementService.bulkUpsert — fallback to the per-request path", () => {
-  it("falls back when the server has no $batch endpoint", async () => {
-    const { svc, perRequest } = makeBatchService({
-      throwOnBatch: new TM1Error({
+  // A missing $batch surfaces either as the mapped BatchUnsupportedError or as
+  // the raw 404 that BatchService has not yet classified; both must complete
+  // through the per-request path rather than escape.
+  it.each([
+    [
+      "a 404 on the $batch endpoint",
+      new TM1Error({
         code: TM1ErrorCode.NOT_FOUND,
         message: "no $batch here",
         httpStatus: 404,
       }),
-    });
+    ],
+    ["a BatchUnsupportedError", new BatchUnsupportedError("synthetic")],
+  ])("falls back when the batch layer reports %s", async (_label, thrown) => {
+    const { svc, perRequest } = makeBatchService({ throwOnBatch: thrown });
 
     const { typeChanges } = await svc.bulkUpsert("Dim", "Dim", [
       { name: "L1", type: "Numeric" },
@@ -549,28 +556,6 @@ describe("ElementService.bulkUpsert — fallback to the per-request path", () =>
     // The old path ran: one POST per element plus the Components PATCH.
     expect(perRequest.filter((c) => c.method === "POST")).toHaveLength(2);
     expect(perRequest.filter((c) => c.method === "PATCH")).toHaveLength(1);
-  });
-
-  it("does not re-probe $batch on a later bulkUpsert once it is known unsupported", async () => {
-    let batchAttempts = 0;
-    const http = contractCheckedHttp({
-      async request<T>(_method: string, path: string): Promise<T> {
-        if (path === "/api/v1/$batch") {
-          batchAttempts++;
-          throw new TM1Error({
-            code: TM1ErrorCode.NOT_FOUND,
-            message: "nope",
-            httpStatus: 404,
-          });
-        }
-        return undefined as T;
-      },
-    } as unknown as TM1HttpClient);
-    const svc = new ElementService(http, cells, new BatchService(http));
-
-    await svc.bulkUpsert("Dim", "Dim", [{ name: "L1", type: "Numeric" }]);
-    await svc.bulkUpsert("Dim", "Dim", [{ name: "L2", type: "Numeric" }]);
-    expect(batchAttempts).toBe(1);
   });
 
   it("does NOT fall back on a systemic transport failure (no silent re-drive of writes)", async () => {
@@ -597,33 +582,5 @@ describe("ElementService.bulkUpsert — fallback to the per-request path", () =>
       svc.bulkUpsert("Dim", "Dim", [{ name: "L1", type: "Numeric" }]),
     ).rejects.toMatchObject({ message: "Invalid element type" });
     expect(perRequest).toHaveLength(0);
-  });
-
-  it("uses the per-request path when no BatchService is wired", async () => {
-    const calls: string[] = [];
-    const http = contractCheckedHttp({
-      async request<T>(method: string, path: string): Promise<T> {
-        calls.push(`${method} ${path}`);
-        return undefined as T;
-      },
-    } as unknown as TM1HttpClient);
-    const svc = new ElementService(http, cells);
-    await svc.bulkUpsert("Dim", "Dim", [{ name: "L1", type: "Numeric" }]);
-    expect(calls.some((c) => c.includes("$batch"))).toBe(false);
-    expect(calls).toHaveLength(1);
-  });
-
-  it("BatchUnsupportedError never escapes bulkUpsert", async () => {
-    const { svc } = makeBatchService({
-      throwOnBatch: new BatchUnsupportedError("synthetic"),
-    });
-    // A BatchUnsupportedError thrown by the transport stub is not a TM1Error, so
-    // it propagates out of BatchService untouched — bulkUpsert must still treat
-    // it as "no batch" and complete via the fallback.
-    await expect(
-      svc.bulkUpsert("Dim", "Dim", [{ name: "L1", type: "Numeric" }]),
-    ).resolves.toEqual({
-      typeChanges: [],
-    });
   });
 });

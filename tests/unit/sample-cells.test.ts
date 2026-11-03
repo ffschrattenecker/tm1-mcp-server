@@ -200,31 +200,22 @@ describe("buildSampleCellsMdx", () => {
 
 describe("transformSampleCells", () => {
   it("maps row+column tuple members + WHERE coords into per-cell coordinates", () => {
+    const m = (name: string, hierarchyName: string) => ({
+      name,
+      hierarchyName,
+    });
+    const tuple = (...members: Array<ReturnType<typeof m>>) => ({ members });
     const result: MdxResult = {
       cells: [
         { value: 1, formattedValue: "1" },
         { value: 2, formattedValue: "2" },
       ],
       axes: [
+        { tuples: [tuple(m("Measure_A", "Measure"))] },
         {
           tuples: [
-            { members: [{ name: "Measure_A", hierarchyName: "Measure" }] },
-          ],
-        },
-        {
-          tuples: [
-            {
-              members: [
-                { name: "2025", hierarchyName: "Year" },
-                { name: "Sales", hierarchyName: "Account" },
-              ],
-            },
-            {
-              members: [
-                { name: "2026", hierarchyName: "Year" },
-                { name: "Sales", hierarchyName: "Account" },
-              ],
-            },
+            tuple(m("2025", "Year"), m("Sales", "Account")),
+            tuple(m("2026", "Year"), m("Sales", "Account")),
           ],
         },
       ],

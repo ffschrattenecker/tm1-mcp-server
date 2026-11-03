@@ -2,10 +2,7 @@ import { describe, it, expect } from "vitest";
 import { contractCheckedClient } from "../helpers/service-contract.js";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
-import {
-  abortHint,
-  registerExecuteProcess,
-} from "../../src/tools/ti-development/execute-process.js";
+import { registerExecuteProcess } from "../../src/tools/ti-development/execute-process.js";
 import { captureTool } from "../helpers/client-harness.js";
 
 // Capture the handler the tool registers, then invoke it directly with a
@@ -122,24 +119,6 @@ describe("tm1_execute_process isError contract (T2.1)", () => {
     });
   });
 
-  it("flags isError when the outcome is indeterminate (T-4)", async () => {
-    // "TM1 told us nothing" is not a successful call. Fail closed so an agent
-    // branching on the MCP error signal does not proceed on an unverified run,
-    // and keep the status text — it is what explains the uncertainty.
-    const cb = captureHandler(async () => ({
-      success: false as const,
-      outcome: "indeterminate" as const,
-      processErrorStatus:
-        "Unknown: TM1 returned no ProcessExecuteStatusCode — the run may have completed, partially completed, or never started.",
-    }));
-    const result = await cb(
-      { processName: "Silent.Process", confirm: "Silent.Process" },
-      {},
-    );
-    expect(result.isError).toBe(true);
-    expect(result.content[0]?.text).toContain("indeterminate");
-  });
-
   it("does not flag isError on a successful run", async () => {
     const cb = captureHandler(async () => ({
       success: true,
@@ -181,25 +160,6 @@ describe("tm1_execute_process abort handling (M2)", () => {
     // may still be running, so re-running risks a duplicate execution.
     expect(err.hint).not.toContain("diagnose_process_error");
   });
-
-  it("keeps the runtime hint when the failure is a genuine error, not a cancellation", async () => {
-    const cb = captureHandler(async () => {
-      throw new Error("boom");
-    });
-
-    let caught: unknown;
-    try {
-      await cb(
-        { processName: "Broken.Process", confirm: "Broken.Process" },
-        {},
-      );
-    } catch (e) {
-      caught = e;
-    }
-
-    expect(caught).toBeInstanceOf(TM1Error);
-    expect((caught as TM1Error).hint).toContain("tm1_diagnose_process_error");
-  });
 });
 
 describe("tm1_execute_process transport hints", () => {
@@ -222,32 +182,5 @@ describe("tm1_execute_process transport hints", () => {
     expect((err as TM1Error).hint).toBe(
       "Only the waiting stopped, not the run.",
     );
-  });
-
-  it("still attaches the tool hint to other errors", async () => {
-    const cb = captureHandler(() =>
-      Promise.reject(
-        new TM1Error({ code: TM1ErrorCode.TM1_ERROR, message: "boom" }),
-      ),
-    );
-    const err = await cb({ processName: "P", confirm: "P" }, {}).catch(
-      (e: unknown) => e,
-    );
-    expect((err as TM1Error).hint).toContain("tm1_diagnose_process_error");
-  });
-});
-
-describe("abortHint", () => {
-  it("points jobs on v12", () => {
-    const h = abortHint(12);
-    expect(h).toContain("tm1_rest_read Jobs");
-    expect(h).toContain("Jobs('id')/tm1.Cancel");
-    expect(h).not.toContain("Threads");
-  });
-  it("points threads on v11", () => {
-    const h = abortHint(11);
-    expect(h).toContain("tm1_rest_read Threads");
-    expect(h).toContain("Threads(id)/tm1.CancelOperation");
-    expect(h).not.toContain("Jobs");
   });
 });

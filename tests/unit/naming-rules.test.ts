@@ -33,22 +33,19 @@ describe("checkName — cube/dim/process (server-reserved kinds)", () => {
     expect(v.some((x) => x.rule === "leading_control_prefix")).toBe(true);
   });
 
-  it("flags leading/trailing whitespace", () => {
-    expect(
-      checkName(" Sales", "cube").some(
-        (x) => x.rule === "leading_trailing_whitespace",
-      ),
-    ).toBe(true);
-    expect(
-      checkName("Sales ", "cube").some(
-        (x) => x.rule === "leading_trailing_whitespace",
-      ),
-    ).toBe(true);
-  });
+  it.each([" Sales", "Sales "])(
+    "flags leading/trailing whitespace in '%s'",
+    (name) => {
+      expect(
+        checkName(name, "cube").some(
+          (x) => x.rule === "leading_trailing_whitespace",
+        ),
+      ).toBe(true);
+    },
+  );
 
-  it("flags empty / whitespace-only names", () => {
-    expect(checkName("", "cube")[0]?.rule).toBe("empty");
-    expect(checkName("   ", "cube")[0]?.rule).toBe("empty");
+  it.each(["", "   "])("flags empty / whitespace-only name '%s'", (name) => {
+    expect(checkName(name, "cube")[0]?.rule).toBe("empty");
   });
 
   it("flags length > 256", () => {
@@ -64,14 +61,14 @@ describe("checkName — element (PA 2.0 v11)", () => {
     expect(checkName("Jan", "element")).toEqual([]);
   });
 
-  it("flags leading '+' or '-'", () => {
-    expect(checkName("+Special", "element")[0]?.rule).toBe(
-      "element_leading_arithmetic",
-    );
-    expect(checkName("-Special", "element")[0]?.rule).toBe(
-      "element_leading_arithmetic",
-    );
-  });
+  it.each(["+Special", "-Special"])(
+    "flags leading '+' or '-' in '%s'",
+    (name) => {
+      expect(checkName(name, "element")[0]?.rule).toBe(
+        "element_leading_arithmetic",
+      );
+    },
+  );
 
   it("flags TAB in element names", () => {
     // 11.8 and 12.5 both accept a TAB and keep the name verbatim, so the rule
@@ -105,50 +102,28 @@ describe("checkName — processVariable", () => {
     expect(checkName("v_Account.1", "processVariable")).toEqual([]);
   });
 
-  it("rejects leading digit", () => {
-    expect(checkName("1var", "processVariable")[0]?.rule).toBe(
-      "process_var_leading_non_letter",
-    );
-  });
-
-  it("rejects leading underscore", () => {
-    expect(checkName("_v", "processVariable")[0]?.rule).toBe(
-      "process_var_leading_non_letter",
-    );
-  });
-
-  it("rejects disallowed special characters", () => {
-    expect(checkName("v-name", "processVariable")[0]?.rule).toBe(
-      "process_var_invalid_char",
-    );
-    expect(checkName("v name", "processVariable")[0]?.rule).toBe(
-      "process_var_invalid_char",
-    );
-    expect(checkName("v@name", "processVariable")[0]?.rule).toBe(
-      "process_var_invalid_char",
-    );
-  });
-
-  it("rejects empty variable", () => {
-    expect(checkName("", "processVariable")[0]?.rule).toBe("empty");
+  it.each([
+    ["1var", "process_var_leading_non_letter"],
+    ["_v", "process_var_leading_non_letter"],
+    ["v-name", "process_var_invalid_char"],
+    ["v name", "process_var_invalid_char"],
+    ["v@name", "process_var_invalid_char"],
+    ["", "empty"],
+  ])("rejects '%s' with %s", (name, rule) => {
+    expect(checkName(name, "processVariable")[0]?.rule).toBe(rule);
   });
 });
 
 describe("parseMajorVersion", () => {
-  it("classifies 11.x as v11", () => {
-    expect(parseMajorVersion("11.8.01100")).toBe(11);
-  });
-
-  it("classifies 12.x as v12", () => {
-    expect(parseMajorVersion("12.0.0")).toBe(12);
-  });
-
-  it("classifies >= 12 as v12", () => {
-    expect(parseMajorVersion("13.5.0")).toBe(12);
-  });
-
-  it("falls back to v11 on empty / unparseable", () => {
-    expect(parseMajorVersion("")).toBe(11);
-    expect(parseMajorVersion("foo")).toBe(11);
+  it.each([
+    ["11.8.01100", 11],
+    ["12.0.0", 12],
+    // Anything at or above 12 is treated as v12.
+    ["13.5.0", 12],
+    // Empty or unparseable falls back to v11.
+    ["", 11],
+    ["foo", 11],
+  ])("parses %j as v%i", (input, major) => {
+    expect(parseMajorVersion(input)).toBe(major);
   });
 });

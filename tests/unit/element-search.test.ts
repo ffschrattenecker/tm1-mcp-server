@@ -1,33 +1,42 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
-import type pino from "pino";
 import type { FnSpy } from "../helpers/spy-types.js";
-import { TM1Client } from "../../src/tm1-client.js";
-import { SessionManager } from "../../src/session-manager.js";
-import type { TM1Config } from "../../src/config.js";
+import type { TM1Client } from "../../src/tm1-client.js";
+import { makeTestConfig } from "../helpers/tm1-config.js";
+import { mockResponse, stubbedClient } from "../helpers/client-harness.js";
 
-const mockLogger = {
-  info: vi.fn(),
-  error: vi.fn(),
-  warn: vi.fn(),
-  debug: vi.fn(),
-  fatal: vi.fn(),
-  trace: vi.fn(),
-  child: vi.fn().mockReturnThis(),
-  level: "silent",
-  flush: vi.fn(),
-} as unknown as pino.Logger;
+/** The JSON body of the MDX request (the second call: the first reads attributes). */
+const mdxOf = (fetchSpy: FnSpy): string =>
+  (
+    JSON.parse(
+      String((fetchSpy.mock.calls[1][1] as { body: string }).body),
+    ) as { MDX: string }
+  ).MDX;
 
-function mockResponse(body: unknown): Response {
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    headers: new Headers(),
-    text: vi.fn().mockResolvedValue(JSON.stringify(body)),
-    json: vi.fn().mockResolvedValue(body),
-  } as unknown as Response;
-}
+const twoMatches = (cardinality: number) =>
+  mockResponse({
+    Cardinality: cardinality,
+    Tuples: [
+      {
+        Members: [
+          {
+            Name: "North_Ab",
+            Attributes: {},
+            Element: { Type: "Numeric", Level: 0 },
+          },
+        ],
+      },
+      {
+        Members: [
+          {
+            Name: "K17",
+            Attributes: { Site: "Ab Ville" },
+            Element: { Type: "Consolidated", Level: 1 },
+          },
+        ],
+      },
+    ],
+  });
 
 // OData cannot filter on attribute values (v11 error 278), so the search is
 // an MDX FILTER over the name and every String/Alias attribute.
@@ -38,21 +47,7 @@ describe("ElementService.searchElements", () => {
   beforeEach(() => {
     fetchSpy = vi.fn();
     stubContractCheckedFetch(fetchSpy);
-    const config = {
-      baseUrl: "https://tm1server:8010",
-      user: "admin",
-      password: "secret",
-      ssl: { rejectUnauthorized: true },
-      keepAliveIntervalMs: 60_000,
-      requestTimeoutMs: 5_000,
-      logLevel: "info",
-    } as unknown as TM1Config;
-    const sessionManager = new SessionManager(config, mockLogger);
-    vi.spyOn(sessionManager, "ensureSession").mockResolvedValue("session123");
-    vi.spyOn(sessionManager, "authenticate").mockResolvedValue("session123");
-    vi.spyOn(sessionManager, "startKeepAlive").mockImplementation(() => {});
-    vi.spyOn(sessionManager, "stopKeepAlive").mockImplementation(() => {});
-    client = new TM1Client(config, sessionManager, mockLogger);
+    client = stubbedClient(makeTestConfig());
   });
 
   afterEach(() => {
@@ -70,31 +65,7 @@ describe("ElementService.searchElements", () => {
         ],
       }),
     );
-    fetchSpy.mockResolvedValueOnce(
-      mockResponse({
-        Cardinality: 7,
-        Tuples: [
-          {
-            Members: [
-              {
-                Name: "North_Ab",
-                Attributes: {},
-                Element: { Type: "Numeric", Level: 0 },
-              },
-            ],
-          },
-          {
-            Members: [
-              {
-                Name: "K17",
-                Attributes: { Site: "Ab Ville" },
-                Element: { Type: "Consolidated", Level: 1 },
-              },
-            ],
-          },
-        ],
-      }),
-    );
+    fetchSpy.mockResolvedValueOnce(twoMatches(7));
 
     const r = await client.elements.searchElements(
       "Reg]ion",
@@ -104,13 +75,7 @@ describe("ElementService.searchElements", () => {
       ["Site", "Weight", "Missing"],
     );
 
-    const mdx = (
-      JSON.parse(
-        String((fetchSpy.mock.calls[1][1] as { body: string }).body),
-      ) as {
-        MDX: string;
-      }
-    ).MDX;
+    const mdx = mdxOf(fetchSpy);
     expect(mdx).toContain("TM1SUBSETALL([Reg]]ion].[Reg]]ion])");
     expect(mdx).toContain('Properties("Site")');
     expect(mdx).toContain('Properties("Short")');
@@ -135,13 +100,8 @@ describe("ElementService.searchElements", () => {
       mockResponse({ Cardinality: 0, Tuples: [] }),
     );
     await client.elements.searchElements("Region", "Region", "x", 10);
-    const mdx = (
-      JSON.parse(
-        String((fetchSpy.mock.calls[1][1] as { body: string }).body),
-      ) as {
-        MDX: string;
-      }
-    ).MDX;
+
+    const mdx = mdxOf(fetchSpy);
     expect(mdx).toContain('Properties("Short")');
     expect(mdx).not.toContain("Site");
   });
@@ -150,31 +110,7 @@ describe("ElementService.searchElements", () => {
     fetchSpy.mockResolvedValueOnce(
       mockResponse({ value: [{ Name: "Site", Type: "String" }] }),
     );
-    fetchSpy.mockResolvedValueOnce(
-      mockResponse({
-        Cardinality: 2,
-        Tuples: [
-          {
-            Members: [
-              {
-                Name: "North_Ab",
-                Attributes: {},
-                Element: { Type: "Numeric", Level: 0 },
-              },
-            ],
-          },
-          {
-            Members: [
-              {
-                Name: "K17",
-                Attributes: { Site: "Ab Ville" },
-                Element: { Type: "Consolidated", Level: 1 },
-              },
-            ],
-          },
-        ],
-      }),
-    );
+    fetchSpy.mockResolvedValueOnce(twoMatches(2));
     const r = await client.elements.searchElements(
       "Region",
       "Region",

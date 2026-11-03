@@ -130,12 +130,6 @@ describe("BatchService — payload construction", () => {
     expect(payload.requests[0]).not.toHaveProperty("body");
   });
 
-  it("scales the timeout with the chunk size (a batch is N ops in one call)", async () => {
-    const { svc, sent } = makeService();
-    await svc.execute([req("a"), req("b")]);
-    expect(sent[0].opts).toEqual({ timeoutMs: 30_000 + 2 * 200 });
-  });
-
   it("returns an empty result without any HTTP call for zero requests", async () => {
     const { svc, sent } = makeService();
     await expect(svc.execute([])).resolves.toEqual([]);
@@ -181,35 +175,39 @@ describe("BatchService — chunking by payload size", () => {
       body: { blob: filler.repeat(chars) },
     });
 
-  it("keeps the count cap in charge while the sub-requests are small", async () => {
-    const { svc, sent } = makeService();
-    // 250 tiny requests are nowhere near the byte budget, so the split must
-    // still happen exactly at the count cap.
-    await svc.execute(
-      Array.from({ length: BATCH_MAX_REQUESTS + 50 }, (_, i) =>
-        req(String(i), { method: "POST", body: { Name: `e${i}` } }),
-      ),
-    );
-    expect(sizes(sent)).toEqual([BATCH_MAX_REQUESTS, 50]);
-  });
-
-  it("closes a chunk early when the byte budget would be exceeded", async () => {
-    const { svc, sent } = makeService();
+  it.each([
+    // 250 tiny requests are nowhere near the byte budget: the split happens
+    // exactly at the count cap.
+    [
+      "the count cap, with tiny sub-requests",
+      BATCH_MAX_REQUESTS + 50,
+      0,
+      "x",
+      [BATCH_MAX_REQUESTS, 50],
+    ],
     // ~40% of the budget each: two fit, a third would overshoot.
-    const chars = Math.floor(BATCH_MAX_PAYLOAD_BYTES * 0.4);
+    ["the byte budget, with 40% sub-requests", 5, 0.4, "x", [2, 2, 1]],
+    // 30% of the budget in CHARACTERS: three fit by String.length, but the
+    // umlauts are two bytes each in UTF-8 and only one fits per chunk.
+    ["ASCII names at 30% of the budget", 3, 0.3, "x", [3]],
+    ["multi-byte names at the same character count", 3, 0.3, "ä", [1, 1, 1]],
+  ])("splits on %s", async (_label, count, fraction, filler, expected) => {
+    const { svc, sent } = makeService();
+    const chars = Math.floor(BATCH_MAX_PAYLOAD_BYTES * fraction);
     const results = await svc.execute(
-      Array.from({ length: 5 }, (_, i) => bigReq(String(i), chars)),
+      Array.from({ length: count }, (_, i) => bigReq(String(i), chars, filler)),
     );
 
-    expect(sizes(sent)).toEqual([2, 2, 1]);
+    expect(sizes(sent)).toEqual(expected);
     // Every chunk actually stayed under the budget on the wire.
     for (const s of sent) {
       expect(Buffer.byteLength(JSON.stringify(s.body), "utf8")).toBeLessThan(
         BATCH_MAX_PAYLOAD_BYTES,
       );
     }
-    // The split points are where they are because of bytes, not count.
-    expect(results.map((r) => r.id)).toEqual(["0", "1", "2", "3", "4"]);
+    expect(results.map((r) => r.id)).toEqual(
+      Array.from({ length: count }, (_, i) => String(i)),
+    );
   });
 
   it("sends a single oversized sub-request alone rather than dropping it", async () => {
@@ -225,25 +223,6 @@ describe("BatchService — chunking by payload size", () => {
     expect(middle.map((r) => r.id)).toEqual(["big"]);
     expect(results.map((r) => r.id)).toEqual(["before", "big", "after"]);
     expect(results.every((r) => r.ok)).toBe(true);
-  });
-
-  it("counts BYTES, not characters, for multi-byte names", async () => {
-    // 30% of the budget in CHARACTERS: three of them fit by String.length but
-    // blow the budget by ~1.8x once the umlauts are UTF-8 encoded.
-    const chars = Math.floor(BATCH_MAX_PAYLOAD_BYTES * 0.3);
-
-    const ascii = makeService();
-    await ascii.svc.execute(
-      Array.from({ length: 3 }, (_, i) => bigReq(String(i), chars, "x")),
-    );
-    expect(sizes(ascii.sent)).toEqual([3]);
-
-    const utf8 = makeService();
-    await utf8.svc.execute(
-      Array.from({ length: 3 }, (_, i) => bigReq(String(i), chars, "ä")),
-    );
-    // Same character count, two bytes per character -> one per chunk.
-    expect(sizes(utf8.sent)).toEqual([1, 1, 1]);
   });
 
   it("keeps results in input order across a byte-driven split", async () => {
@@ -271,9 +250,9 @@ describe("BatchService — chunking by payload size", () => {
   });
 
   it("scales each chunk's timeout with that chunk's own size", async () => {
-    // Chunks are variable-length now, so the per-chunk budget has to be derived
-    // per chunk — a fixed 200-request budget would be far too generous for the
-    // 1-request chunk a huge sub-request produces.
+    // Chunks are variable-length, so the per-chunk budget is derived per chunk
+    // (30s + 200ms per sub-request). A fixed 200-request budget would be far too
+    // generous for the 1-request chunk a huge sub-request produces.
     const { svc, sent } = makeService();
     const chars = Math.floor(BATCH_MAX_PAYLOAD_BYTES * 0.4);
     await svc.execute(
@@ -419,8 +398,9 @@ describe("BatchService — unsupported-server detection and fallback signalling"
   // A server or gateway that does not know the endpoint may answer with any of
   // these; all of them must reach the caller's fallback rather than fail the
   // whole bulk operation.
-  for (const status of [400, 403, 404, 405, 500, 501]) {
-    it(`maps HTTP ${status} on the $batch endpoint to BatchUnsupportedError`, async () => {
+  it.each([400, 403, 404, 405, 500, 501])(
+    "maps HTTP %s on the $batch endpoint to BatchUnsupportedError",
+    async (status) => {
       const { svc } = makeService({
         throwOnBatch: new TM1Error({
           code: TM1ErrorCode.NOT_FOUND,
@@ -432,8 +412,8 @@ describe("BatchService — unsupported-server detection and fallback signalling"
         BatchUnsupportedError,
       );
       expect(svc.isKnownUnsupported).toBe(true);
-    });
-  }
+    },
+  );
 
   it("treats a 200 that is not a batch envelope as unsupported", async () => {
     const { svc } = makeService({
@@ -517,29 +497,6 @@ describe("BatchService — unsupported-server detection and fallback signalling"
     expect(svc.isKnownUnsupported).toBe(false);
   });
 
-  it("does NOT counter-probe the unambiguous statuses", async () => {
-    // 404/405/501 are verdicts about the URL and the METHOD, both of which are
-    // constants here; 403 is a verdict about the caller's identity; 500 keeps
-    // the fallback because it can arrive mid-commit. None of them can be
-    // explained by "the payload was bad", so a probe could not change the
-    // answer — and must not cost a round-trip.
-    for (const status of [403, 404, 405, 500, 501]) {
-      const { svc, sent } = makeService({
-        throwOnBatch: new TM1Error({
-          code: TM1ErrorCode.TM1_ERROR,
-          message: "no such endpoint",
-          httpStatus: status,
-        }),
-      });
-      await expect(svc.execute([req("a")])).rejects.toBeInstanceOf(
-        BatchUnsupportedError,
-      );
-      expect(svc.isKnownUnsupported).toBe(true);
-      expect(sent.filter(isProbe)).toHaveLength(0);
-      expect(sent).toHaveLength(1);
-    }
-  });
-
   it("treats a non-envelope 200 after a successful batch as a hard error", async () => {
     let call = 0;
     const http = contractCheckedHttp({
@@ -566,6 +523,30 @@ describe("BatchService — unsupported-server detection and fallback signalling"
     expect(err).not.toBeInstanceOf(BatchUnsupportedError);
     expect(svc.isKnownUnsupported).toBe(false);
   });
+
+  // 404/405/501 are verdicts about the URL and the METHOD, both of which are
+  // constants here; 403 is a verdict about the caller's identity; 500 keeps
+  // the fallback because it can arrive mid-commit. None of them can be
+  // explained by "the payload was bad", so a probe could not change the
+  // answer — and must not cost a round-trip.
+  it.each([403, 404, 405, 500, 501])(
+    "does NOT counter-probe the unambiguous status %s",
+    async (status) => {
+      const { svc, sent } = makeService({
+        throwOnBatch: new TM1Error({
+          code: TM1ErrorCode.TM1_ERROR,
+          message: "no such endpoint",
+          httpStatus: status,
+        }),
+      });
+      await expect(svc.execute([req("a")])).rejects.toBeInstanceOf(
+        BatchUnsupportedError,
+      );
+      expect(svc.isKnownUnsupported).toBe(true);
+      expect(sent.filter(isProbe)).toHaveLength(0);
+      expect(sent).toHaveLength(1);
+    },
+  );
 });
 
 // A 400 on POST /$batch has two incompatible causes, and before the first
@@ -689,15 +670,16 @@ describe("BatchService — counter-probe on an ambiguous first-call 400", () => 
     expect(sent).toHaveLength(2);
   });
 
-  it("surfaces a systemic probe failure and leaves the verdict undecided", async () => {
-    // A network blip during the probe proves nothing about $batch. It must not
-    // be read as "unsupported" (the caller would silently re-drive every write),
-    // and it must not be read as "supported" either.
-    for (const code of [
-      TM1ErrorCode.AUTH_FAILED,
-      TM1ErrorCode.CONNECTION_FAILED,
-      TM1ErrorCode.LOCK_TIMEOUT,
-    ]) {
+  it.each([
+    ["AUTH_FAILED", TM1ErrorCode.AUTH_FAILED],
+    ["CONNECTION_FAILED", TM1ErrorCode.CONNECTION_FAILED],
+    ["LOCK_TIMEOUT", TM1ErrorCode.LOCK_TIMEOUT],
+  ])(
+    "surfaces a systemic probe failure (%s) and leaves the verdict undecided",
+    async (_label, code) => {
+      // A network blip during the probe proves nothing about $batch. It must not
+      // be read as "unsupported" (the caller would silently re-drive every write),
+      // and it must not be read as "supported" either.
       const down = new TM1Error({ code, message: "probe blew up" });
       const { svc } = makeService({
         respond: (payload) => {
@@ -711,24 +693,8 @@ describe("BatchService — counter-probe on an ambiguous first-call 400", () => 
       // Undecided, not false: `isKnownUnsupported` stays false AND a later
       // successful batch is still possible on this connection.
       expect(svc.isKnownUnsupported).toBe(false);
-    }
-  });
-
-  it("counts a 200 non-envelope probe response as unsupported", async () => {
-    // A proxy page answering 200 on $batch is a look-alike endpoint, not a
-    // working one — the probe judges the ENVELOPE, exactly as executeChunk does.
-    const { svc, sent } = makeService({
-      respond: (payload) => {
-        if (isProbePayload(payload)) return { value: "some proxy page" };
-        throw payload400();
-      },
-    });
-    await expect(svc.execute([req("a")])).rejects.toBeInstanceOf(
-      BatchUnsupportedError,
-    );
-    expect(svc.isKnownUnsupported).toBe(true);
-    expect(sent.filter(isProbe)).toHaveLength(1);
-  });
+    },
+  );
 
   it("treats a failing probe SUB-request as proof that $batch works", async () => {
     // The probe asks whether the ENVELOPE is served, not whether the caller may

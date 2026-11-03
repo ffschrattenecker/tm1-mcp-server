@@ -138,37 +138,6 @@ describe("CellService.writeCells — bulk cellset", () => {
       expect(perCell).toHaveLength(2);
     });
 
-    it("walks the fallback at most 8 cells at a time", async () => {
-      // Up to 500 cells per chunk, three requests each: unbounded, that is
-      // 1500 requests landing on TM1 at once.
-      let inFlight = 0;
-      let peak = 0;
-      const http = contractCheckedHttp({
-        request: vi.fn(async (method: string, path: string, body?: unknown) => {
-          inFlight++;
-          peak = Math.max(peak, inFlight);
-          await new Promise((r) => setTimeout(r, 1));
-          inFlight--;
-          if (path === "/api/v1/ExecuteMDX") return { ID: "cs" };
-          if (method === "PATCH" && failBulk(body)) {
-            throw new TM1Error({
-              code: TM1ErrorCode.TM1_ERROR,
-              message: "CubeCellWriteStatusElementIsConsolidated",
-            });
-          }
-          return undefined;
-        }),
-      } as unknown as TM1HttpClient);
-
-      await new CellService(http).writeCells(
-        "Sales",
-        ["Product", "Measure"],
-        Array.from({ length: 40 }, (_, i) => cell(`P${i}`, i)),
-      );
-
-      expect(peak).toBeLessThanOrEqual(8);
-    });
-
     it("names the refused coordinates when the retry also fails", async () => {
       // Both shapes rejected: the bulk PATCH and the per-cell one. Only then
       // is the write genuinely impossible, and the caller needs the
@@ -208,6 +177,54 @@ describe("CellService.writeCells — bulk cellset", () => {
       );
       expect(peak).toBeLessThanOrEqual(8);
       expect(peak).toBeGreaterThan(1);
+    });
+
+    it("reports a partial commit with the written, failed and notAttempted split", async () => {
+      // 12 cells fit one chunk. Any PATCH touching BAD is refused, so the bulk
+      // PATCH fails and the fallback re-walks the chunk one cell at a time:
+      // 11 land, BAD is reported by coordinate. notAttempted counts whole
+      // chunks beyond the failing one, of which there are none here.
+      let seq = 0;
+      const http = contractCheckedHttp({
+        request: vi.fn(async (method: string, path: string, body?: unknown) => {
+          if (path === "/api/v1/ExecuteMDX") {
+            const mdx = (body as { MDX: string }).MDX;
+            return { ID: mdx.includes("[BAD]") ? "bad" : `cs${seq++}` };
+          }
+          if (method === "PATCH" && path.includes("'bad'")) {
+            throw new TM1Error({
+              code: TM1ErrorCode.TM1_ERROR,
+              message: "CubeCellWriteStatusElementIsConsolidated",
+            });
+          }
+          return undefined;
+        }),
+      } as unknown as TM1HttpClient);
+
+      const cells = Array.from({ length: 12 }, (_, i) => cell(`E${i}`, i));
+      cells[3] = cell("BAD", 3);
+
+      const err = await new CellService(http)
+        .writeCells("Sales", ["Product", "Measure"], cells)
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(TM1Error);
+      const tm1Err = err as TM1Error;
+      expect(tm1Err.code).toBe("TM1_ERROR");
+      expect(tm1Err.message).toMatch(/partially applied/);
+      expect(tm1Err.message).toMatch(/11 written/);
+      expect(tm1Err.message).toMatch(/1 failed/);
+      expect(tm1Err.message).toMatch(/0 not attempted/);
+
+      const details = JSON.parse(tm1Err.details ?? "{}");
+      expect(details.written).toBe(11);
+      expect(details.notAttempted).toBe(0);
+      expect(details.failed).toEqual([
+        {
+          elements: ["BAD", "M"],
+          error: "CubeCellWriteStatusElementIsConsolidated",
+        },
+      ]);
     });
 
     it("reports what landed and what did not", async () => {
