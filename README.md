@@ -53,9 +53,6 @@ Everything below describes this fork's state. For the real project, read the
 - **TI lifecycle in version control.** Import, export, diff and bundle-install
   native `.pro` files, or the diff-friendly two-file git layout
   (`{name}.json` + `{name}.ti`).
-- **Resources and prompts, not just tools.** Four read-only resources with name
-  autocomplete, so `#tm1://process/MyProcess/code` attaches a process as context
-  in chat, plus five starting-point prompts.
 
 > **Token tip:** every registered tool's name + input schema costs context on
 > *each* turn, so exposing every tool is wasteful when a session needs a slice.

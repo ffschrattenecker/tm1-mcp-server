@@ -8,13 +8,13 @@ truth for any contributor adding TM1 calls or new tools.
 ```
 ┌──────────────────────────────────────────────┐
 │  src/index.ts            MCP server + wiring │  stdio + Streamable HTTP
-│  - registers tools, prompts, resources        │  TM1_MODE gate (see below)
+│  - registers tools                           │  TM1_MODE gate (see below)
 └──────────────────────┬───────────────────────┘
                        │ tools call
                        ▼
 ┌──────────────────────────────────────────────┐
 │  src/tools/**            MCP tool surface     │  one file per tool
-│  (Zod schemas, MCP envelopes, validation)     │  (+ prompts, resources)
+│  (Zod schemas, MCP envelopes, validation)     │
 └──────────────────────┬───────────────────────┘
                        │ uses
                        ▼
@@ -72,7 +72,7 @@ enforces that, and fails when a new interface starts duplicating a tool schema.
 
 `src/index.ts` is the entry point. It builds an `McpServer` (one for stdio, a
 fresh one per request for HTTP; see `src/http-transport.ts`), registers the
-tools/prompts/resources, and connects it to a transport:
+tools, and connects it to a transport:
 
 | Transport           | When                               | Notes                                                     |
 | ------------------- | ---------------------------------- | --------------------------------------------------------- |
@@ -105,8 +105,7 @@ resolved client — so a tool file is written exactly as for one server.
 receive the registry instead and take no `connection`.
 
 Process-global state is keyed by `connectionIdOf(config)` (host, port, v12
-instance/database): the callgraph cache, mutation events, and the
-resource-subscription routing.
+instance/database): the callgraph cache and mutation events.
 
 ## Tools
 
@@ -240,7 +239,7 @@ service (e.g. `ElementService.scanElementNames`) and call that.
 
 Four kinds of test prove different things; know which one you are writing.
 
-- **Behavioral/invariant** (`tests/unit/`, `tests/property/`): our logic against
+- **Behavioral/invariant** (`tests/unit/`): our logic against
   hand-written mocks. Proves intent, not TM1 behaviour.
 - **Recorded contract** (`tests/fixtures/`): every fake is checked against the
   _structure_ of real responses, so a mock cannot invent a field. Only

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ⚠️ Behavior change
+
+- MCP resources (`tm1://` URIs and subscriptions) and MCP prompts are removed. Use the tools, and the tm1-mcp plugin skills, instead.
+
 ## [10.3.0] - 2026-11-02
 
 ### ⚠️ Behavior change

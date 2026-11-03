@@ -138,8 +138,7 @@ names an unknown connection; no MCP restart or `/mcp` reconnect is needed. An
 edited `.env` replaces its connection only if that has no open session. With no
 connection folder at all the server still starts: `tm1_list_connections` returns
 `[]` with a setup hint and every other tool fails with
-`No TM1 connection configured under <dir>`. Resources are registered at startup,
-so they appear for connections that exist then. After a rejected login (401/403)
+`No TM1 connection configured under <dir>`. After a rejected login (401/403)
 the server stops logging in, so the account is not locked out, until the `.env`
 or the keychain secret changes (`secrets set`); the next call then tries once.
 Legacy single-connection mode (`TM1_BASE_URL`) still needs a restart.
@@ -147,10 +146,6 @@ Legacy single-connection mode (`TM1_BASE_URL`) still needs a restart.
 **Nothing logs in at startup.** Each connection authenticates on its first
 tool call. A folder whose `.env` is invalid is listed with its error and
 skipped; the other connections keep working.
-
-Resources are namespaced per connection: `tm1://<connection>/process/{name}/code`.
-A resources/list only enumerates objects of connections that are already
-connected, so browsing resources never logs in to every server.
 
 ## Response size — `TM1_MAX_RESPONSE_CHARS`
 

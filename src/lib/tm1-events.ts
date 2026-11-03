@@ -1,11 +1,10 @@
 // In-process event bus for cross-cutting TM1 events.
 //
 // Currently emits only `mutation` after any successful non-safe HTTP request
-// (POST/PUT/PATCH/DELETE), used by resource-subscription notifications
-// and as a future hook for cache layers.
+// (POST/PUT/PATCH/DELETE), used by the callgraph cache invalidation.
 //
-// Decoupled from the HTTP layer so the MCP-side subscription registry can
-// listen without HTTP needing a reference to the MCP server.
+// Decoupled from the HTTP layer so listeners can subscribe without HTTP
+// needing a reference to them.
 
 import { EventEmitter } from "node:events";
 
@@ -46,7 +45,6 @@ class TypedEmitter extends EventEmitter {
 
 export const tm1Events = new TypedEmitter();
 
-// Set a generous listener cap. Subscriptions are server-scoped (one listener
-// per running server process), so the default 10 is fine for now; raise only
-// if a workload registers many per-resource listeners.
+// Set a generous listener cap. Listeners are few (today one callgraph cache
+// hook); raise only if that changes.
 tm1Events.setMaxListeners(20);

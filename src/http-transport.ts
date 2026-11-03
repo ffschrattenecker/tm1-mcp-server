@@ -18,7 +18,7 @@ import type { ServerSettings } from "./config.js";
 // This is cheap: registration is pure in-memory wiring with no I/O, and the shared
 // TM1 client (captured by the buildServer closure) is not rebuilt.
 //
-// Consequence: there is no standing server->client stream, so subscribe/logging
+// Consequence: there is no standing server->client stream, so logging
 // notifications are not delivered over HTTP. That is acceptable for the intended
 // deployment (one process per TM1 identity; stdio remains the push-capable default).
 //
@@ -33,7 +33,7 @@ import type { ServerSettings } from "./config.js";
 // ponytail: fixed constant, make it configurable if a deployment needs more.
 const MAX_BODY_BYTES = 64 * 1024 * 1024;
 export async function startHttpTransport(
-  buildServer: () => { server: McpServer; dispose: () => void },
+  buildServer: () => McpServer,
   config: ServerSettings,
   logger: pino.Logger,
 ): Promise<() => Promise<void>> {
@@ -162,7 +162,7 @@ export async function startHttpTransport(
         // both down once the response is fully written so nothing leaks
         // between requests. Inside the try: a throw here would otherwise
         // escape the async handler and leave the request without an answer.
-        const { server, dispose } = buildServer();
+        const server = buildServer();
         const transport = new StreamableHTTPServerTransport({
           // sessionIdGenerator omitted → stateless mode (single-use per request)
           enableJsonResponse: true,
@@ -171,12 +171,6 @@ export async function startHttpTransport(
           allowedOrigins: config.httpAllowedOrigins,
         });
         res.on("close", () => {
-          // dispose() FIRST and synchronously: it detaches the per-build listener
-          // from the process-global tm1Events emitter, which server.close() has no
-          // knowledge of. Skipping it leaks one listener plus the server graph it
-          // retains on every request — the transport builds a fresh server each
-          // time, so the leak is unbounded, not one-off.
-          dispose();
           void transport.close();
           void server.close();
         });

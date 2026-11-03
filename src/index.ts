@@ -7,10 +7,6 @@ import { loadServerSettings, type ServerSettings } from "./config.js";
 import { ConnectionRegistry } from "./connections.js";
 import { serverInstructions } from "./server-instructions.js";
 import { createLogger } from "./logger.js";
-import { registerAllPrompts } from "./prompts/index.js";
-import { registerAllResources, stateResourceUris } from "./resources/index.js";
-import { SubscriptionRegistry } from "./resources/subscriptions.js";
-import { installPaginatedListHandler } from "./resources/list-handler.js";
 import { registerAllTools } from "./tools/index.js";
 import { withAnnotations } from "./tools/with-annotations.js";
 import { startHttpTransport } from "./http-transport.js";
@@ -29,38 +25,22 @@ async function startStdioTransport(
   };
 }
 
-// Build a fully-registered MCP server (tools + resources + prompts). Called once
-// for stdio, and once per request for the stateless HTTP transport — so the
-// per-build logging is at debug to avoid per-request spam. Registration is pure
-// in-memory wiring (no I/O); the connection registry is shared, not rebuilt.
+// Build a fully-registered MCP server (tools). Called once for stdio, and once
+// per request for the stateless HTTP transport — so the per-build logging is at
+// debug to avoid per-request spam. Registration is pure in-memory wiring (no
+// I/O); the connection registry is shared, not rebuilt.
 //
 // Capabilities are declared explicitly per MCP spec recommendation:
-//   tools / resources / prompts — auto-registered by the SDK when the respective
-//     register* helper is first called; declared here for self-documentation and
-//     to allow listChanged toggling later.
+//   tools — auto-registered by the SDK when the first tool is registered;
+//     declared here for self-documentation and to allow listChanged toggling later.
 //   logging — NOT auto-registered by the SDK; declaring it unlocks
 //     server.sendLoggingMessage() (delivered on stdio; HTTP stateless has no
 //     standing stream, so notifications are not pushed there).
-export interface BuiltMcpServer {
-  server: McpServer;
-  /**
-   * Detach everything this build attached to PROCESS-GLOBAL state — today the
-   * SubscriptionRegistry's `tm1Events` listener. `server.close()` does NOT do
-   * this: the registry holds its listener on an emitter the server knows
-   * nothing about, so closing the server leaves it subscribed forever.
-   *
-   * The stateless HTTP transport builds one server per request, so skipping
-   * this leaks a listener (and the whole server object graph it closes over)
-   * on every single call. Must be invoked by every transport teardown path.
-   */
-  dispose: () => void;
-}
-
 function buildMcpServer(
   registry: ConnectionRegistry,
   settings: ServerSettings,
   logger: pino.Logger,
-): BuiltMcpServer {
+): McpServer {
   const server = new McpServer(
     {
       name: NAME,
@@ -69,8 +49,6 @@ function buildMcpServer(
     {
       capabilities: {
         tools: { listChanged: true },
-        resources: { listChanged: true, subscribe: true },
-        prompts: { listChanged: true },
         logging: {},
       },
       instructions: serverInstructions(registry),
@@ -100,32 +78,7 @@ function buildMcpServer(
   );
   logger.debug(`All MCP tools registered (mode: ${mode})`);
 
-  // Register MCP Resources (URI-addressable read-only views over TM1 objects).
-  const resourceCatalog = registerAllResources(server, registry);
-
-  // Replace the SDK's default ListResourcesRequestSchema handler with a
-  // cursor-aware override that paginates the combined static + template list.
-  installPaginatedListHandler(server, resourceCatalog, logger);
-
-  // Install subscribe/unsubscribe handlers and bridge HTTP-layer mutation
-  // events to notifications/resources/updated for subscribers of tm1://server/state.
-  const subscriptions = new SubscriptionRegistry(
-    server,
-    logger,
-    stateResourceUris(registry),
-  );
-  subscriptions.install();
-
-  // Register MCP Prompts (parameterised workflow templates surfaced as slash-commands).
-  registerAllPrompts(server);
-  logger.debug("All MCP resources and prompts registered");
-
-  return {
-    server,
-    dispose: () => {
-      subscriptions.dispose();
-    },
-  };
+  return server;
 }
 
 async function main(): Promise<void> {
@@ -181,10 +134,6 @@ async function main(): Promise<void> {
   // (Streamable HTTP, stateless) is for remote/multi-client deploys and builds a
   // fresh server per request (single-use transport); binds to 127.0.0.1 by
   // default with DNS-rebinding protection per MCP spec recommendation.
-  // stdio builds exactly one server for the process lifetime, so its disposer
-  // runs in shutdown(). http builds one per request and disposes each in the
-  // transport's own teardown — nothing process-scoped is left for us here.
-  let stdioDispose: (() => void) | undefined;
   const httpCloser =
     settings.transport === "http"
       ? await startHttpTransport(
@@ -192,11 +141,10 @@ async function main(): Promise<void> {
           settings,
           logger,
         )
-      : await (async () => {
-          const built = buildMcpServer(registry, settings, logger);
-          stdioDispose = built.dispose;
-          return startStdioTransport(built.server, logger);
-        })();
+      : await startStdioTransport(
+          buildMcpServer(registry, settings, logger),
+          logger,
+        );
   logger.info(
     `MCP server configured (connections: ${registry.names.join(", ")}, transport: ${settings.transport})`,
   );
@@ -207,11 +155,6 @@ async function main(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info({ signal }, "Shutting down TM1 MCP Server");
-    try {
-      stdioDispose?.();
-    } catch (err) {
-      logger.error({ err }, "Error disposing server subscriptions");
-    }
     try {
       await httpCloser?.();
     } catch (err) {
