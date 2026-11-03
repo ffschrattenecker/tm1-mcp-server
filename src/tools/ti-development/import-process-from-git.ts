@@ -3,7 +3,6 @@ import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { resolveLocalPath } from "../local-file.js";
 import { parseProcessFromGit, toCodeBlob } from "../../lib/git-process.js";
-import { withToolHint } from "../error-format.js";
 import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { ImportProcessFromGitResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
@@ -11,7 +10,12 @@ import {
   OVERWRITE_CONFIRM_SCHEMA,
   requireOverwriteConfirm,
 } from "../confirm.js";
-import { applyDeployParts, runPreflight } from "./preflight.js";
+import {
+  deployModeError,
+  installHints,
+  runPreflight,
+  writeInstall,
+} from "./preflight.js";
 import { backupProcess } from "./process-backup.js";
 import { jsonError, jsonResult } from "../format.js";
 
@@ -117,78 +121,41 @@ export const registerImportProcessFromGit = defineTool({
     if (dataSource.type === "ODBC" && dataSourcePassword !== undefined) {
       dataSource.password = dataSourcePassword;
     }
+    const definition = { ...parsed, dataSource };
 
     if (preflight) {
       // The parser refuses code outside a tab region and a repeated tab, so
       // the parsed tabs are exactly what the blob deploys (a file in the
       // extension's former layout is rebuilt from them by toCodeBlob).
       const failure = await runPreflight(tm1Client, {
+        ...definition,
         name: processName,
-        prolog: parsed.prolog,
-        metadata: parsed.metadata,
-        data: parsed.data,
-        epilog: parsed.epilog,
-        parameters: parsed.parameters,
-        variables: parsed.variables,
-        dataSource,
       });
       if (failure) return jsonError(failure);
     }
 
     const exists = await tm1Client.processes.exists(processName);
-
-    if (mode === "create" && exists) {
-      throw new TM1Error({
-        code: TM1ErrorCode.CONFLICT,
-        message: `Process '${processName}' already exists; mode=create`,
-      });
-    }
-    if (mode === "update" && !exists) {
-      throw new TM1Error({
-        code: TM1ErrorCode.NOT_FOUND,
-        message: `Process '${processName}' does not exist; mode=update`,
-      });
-    }
+    const modeError = deployModeError(mode, exists, processName);
+    if (modeError) throw modeError;
 
     // Replacing an installed process is not undoable through the API.
     if (exists) requireOverwriteConfirm(confirm, processName, "process");
     // Last step before the first write: a failed backup throws, nothing is written.
     const backup = exists ? await backupProcess(tm1Client, processName) : null;
 
-    const action = exists ? "updated" : "created";
-    if (!exists) {
-      await withToolHint(
-        tm1Client.processes.create(processName),
-        `Process create failed mid-import. Name '${processName}' may already exist (race) or contain invalid characters. Verify state with tm1_rest_read Processes('${processName}')?$select=Name before retry.`,
-      );
-    }
-
     // Write code via TM1's native Code property and let the server split it
     // into the four tabs. This is a full replace — tabs whose region is absent
     // are cleared. toCodeBlob sends the .ti as is (CRLF, as TM1 expects) and
     // rebuilds only a file in the extension's former layout.
-    await withToolHint(
-      tm1Client.processes.updateCodeBlob(processName, toCodeBlob(ti, parsed)),
-      `Code update failed after process '${processName}' was ${exists ? "located" : "created"}. PARTIAL APPLY: shell exists but tabs are stale/empty. Re-run with mode=update once root cause fixed, or tm1_rest_write DELETE Processes('${processName}') to roll back.`,
-    );
-
-    await applyDeployParts(
-      tm1Client.processes,
-      processName,
-      { ...parsed, dataSource },
-      {
-        exists,
-        hints: {
-          parameters: `Parameter update failed for '${processName}'. Code applied but parameters missing. tm1_upsert_process with mode=update + parameters=[...] to recover.`,
-          variables: `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
-          dataSource: `Datasource update failed for '${processName}' (type=${dataSource.type}). Code+params+vars applied. For ODBC verify dataSourcePassword/DSN and re-run with mode=update.`,
-          deployMeta: `HasSecurityAccess/UIData update failed for '${processName}'. Code+params+vars+datasource applied. Re-run with mode=update once root cause fixed.`,
-        },
-      },
-    );
+    await writeInstall(tm1Client.processes, processName, definition, {
+      exists,
+      hints: installHints(processName, exists, dataSource.type),
+      writeCode: () =>
+        tm1Client.processes.updateCodeBlob(processName, toCodeBlob(ti, parsed)),
+    });
 
     return jsonResult({
-      action,
+      action: exists ? "updated" : "created",
       processName,
       ...(backup ? { backup } : {}),
       ...(parsed.hasSecurityAccess !== undefined

@@ -9,8 +9,9 @@ import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { InstallProBundleResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import {
-  applyDeployParts,
+  deployModeError,
   runPreflight,
+  writeInstall,
   type PreflightFailure,
 } from "./preflight.js";
 import { backupProcess, type ProcessBackup } from "./process-backup.js";
@@ -202,14 +203,8 @@ export const registerInstallProBundle = defineTool({
 
         if (preflight) {
           const failure = await runPreflight(tm1Client, {
+            ...parsed,
             name: processName,
-            prolog: parsed.prolog,
-            metadata: parsed.metadata,
-            data: parsed.data,
-            epilog: parsed.epilog,
-            parameters: parsed.parameters,
-            variables: parsed.variables,
-            dataSource: parsed.dataSource,
           });
           if (failure) {
             results.push({
@@ -226,22 +221,13 @@ export const registerInstallProBundle = defineTool({
         }
 
         const exists = installedNames.has(processName);
-        if (mode === "create" && exists) {
+        const modeError = deployModeError(mode, exists, processName);
+        if (modeError) {
           results.push({
             file,
             processName,
             status: "error",
-            error: `Already exists; mode=create`,
-          });
-          if (!continueOnError) stopped = true;
-          continue;
-        }
-        if (mode === "update" && !exists) {
-          results.push({
-            file,
-            processName,
-            status: "error",
-            error: `Does not exist; mode=update`,
+            error: modeError.message,
           });
           if (!continueOnError) stopped = true;
           continue;
@@ -261,14 +247,7 @@ export const registerInstallProBundle = defineTool({
         const backup = exists
           ? await backupProcess(tm1Client, processName)
           : null;
-        if (!exists) await tm1Client.processes.create(processName);
-        await tm1Client.processes.updateCode(processName, {
-          prolog: parsed.prolog,
-          metadata: parsed.metadata,
-          data: parsed.data,
-          epilog: parsed.epilog,
-        });
-        await applyDeployParts(tm1Client.processes, processName, parsed, {
+        await writeInstall(tm1Client.processes, processName, parsed, {
           exists,
           skipEmptyIfNew: true,
         });

@@ -15,7 +15,7 @@ import type {
   ProcessParameter,
   ProcessVariable,
 } from "../../types.js";
-import { TM1ErrorCode } from "../../types.js";
+import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { checkProcessRefs, type RefIssue } from "../../lib/process-refs.js";
 import { withToolHint } from "../error-format.js";
 
@@ -53,16 +53,7 @@ export async function runPreflight(
   tm1Client: TM1Client,
   p: PreflightPayload,
 ): Promise<PreflightFailure | undefined> {
-  const check = await tm1Client.processes.check({
-    name: p.name,
-    prolog: p.prolog,
-    metadata: p.metadata,
-    data: p.data,
-    epilog: p.epilog,
-    ...(p.parameters !== undefined ? { parameters: p.parameters } : {}),
-    ...(p.variables !== undefined ? { variables: p.variables } : {}),
-    ...(p.dataSource !== undefined ? { dataSource: p.dataSource } : {}),
-  });
+  const check = await tm1Client.processes.check(p);
   if (!check.success) {
     return {
       stage: "preflight",
@@ -157,16 +148,7 @@ export async function runChecks(
   p: PreflightPayload,
 ): Promise<PreflightChecks> {
   const [check, refs] = await Promise.all([
-    tm1Client.processes.check({
-      name: p.name,
-      prolog: p.prolog,
-      metadata: p.metadata,
-      data: p.data,
-      epilog: p.epilog,
-      ...(p.parameters !== undefined ? { parameters: p.parameters } : {}),
-      ...(p.variables !== undefined ? { variables: p.variables } : {}),
-      ...(p.dataSource !== undefined ? { dataSource: p.dataSource } : {}),
-    }),
+    tm1Client.processes.check(p),
     checkProcessRefs(tm1Client, p),
   ]);
   const references = {
@@ -181,14 +163,6 @@ export async function runChecks(
     syntax: { ok: check.success, errors: check.errors },
     references,
   };
-}
-
-/** Error hint per deploy step. A step without a hint passes its error through. */
-export interface DeployHints {
-  parameters: string;
-  variables: string;
-  dataSource: string;
-  deployMeta: string;
 }
 
 export interface DeployParts {
@@ -213,11 +187,15 @@ function withHint(p: Promise<void>, hint: string | undefined): Promise<void> {
  * replace it. A POST does not create UIData and a PATCH without it leaves it
  * alone, so deploy meta is sent only when one of its fields is set.
  */
-export async function applyDeployParts(
+async function applyDeployParts(
   processes: TM1Client["processes"],
   processName: string,
   parts: DeployParts,
-  opts: { exists: boolean; skipEmptyIfNew?: boolean; hints?: DeployHints },
+  opts: {
+    exists: boolean;
+    skipEmptyIfNew?: boolean;
+    hints?: ReturnType<typeof installHints> | undefined;
+  },
 ): Promise<void> {
   const all = opts.exists || !opts.skipEmptyIfNew;
   const hints = opts.hints;
@@ -256,4 +234,61 @@ export async function applyDeployParts(
       hints?.deployMeta,
     );
   }
+}
+
+// Hint per install step; each names the state a failure leaves behind.
+export function installHints(n: string, exists: boolean, dsType: string) {
+  return {
+    create: `Process create failed mid-import. Name '${n}' may already exist (mode=create would have caught — likely race) or contain invalid characters. Verify state with tm1_rest_read Processes('${n}')?$select=Name before retry.`,
+    code: `Code update failed after process '${n}' was ${exists ? "located" : "created"}. PARTIAL APPLY: the process shell exists but tabs are stale/empty. Re-run with mode=update once root cause fixed, or tm1_rest_write DELETE Processes('${n}') to roll back.`,
+    parameters: `Parameter update failed for '${n}'. Code applied but parameters missing. tm1_upsert_process with mode=update + parameters=[...] to recover.`,
+    variables: `Variable update failed for '${n}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
+    dataSource: `Datasource update failed for '${n}' (type=${dsType}). Code+params+vars applied. Verify datasource credentials/path (ASCII file existence, ODBC DSN or dataSourcePassword, view name) and re-run with mode=update, or tm1_upsert_process with mode=update + dataSource={...}.`,
+    deployMeta: `HasSecurityAccess/UIData update failed for '${n}'. Code+params+vars+datasource applied. Re-run with mode=update once root cause fixed.`,
+  };
+}
+
+// Create (when new), write the code, then the deploy parts. The caller runs
+// the mode, confirm and backup gates first. No hints: errors pass through.
+export async function writeInstall(
+  processes: TM1Client["processes"],
+  processName: string,
+  def: DeployParts & Record<"prolog" | "metadata" | "data" | "epilog", string>,
+  opts: {
+    exists: boolean;
+    skipEmptyIfNew?: boolean;
+    hints?: ReturnType<typeof installHints>;
+    writeCode?: () => Promise<void>;
+  },
+): Promise<void> {
+  if (!opts.exists)
+    await withHint(processes.create(processName), opts.hints?.create);
+  await withHint(
+    opts.writeCode?.() ?? processes.updateCode(processName, def),
+    opts.hints?.code,
+  );
+  await applyDeployParts(processes, processName, def, {
+    exists: opts.exists,
+    skipEmptyIfNew: opts.skipEmptyIfNew ?? false,
+    hints: opts.hints,
+  });
+}
+
+// The error a create/update mode refuses, or undefined when the install may run.
+export function deployModeError(
+  mode: "create" | "update" | "upsert",
+  exists: boolean,
+  processName: string,
+): TM1Error | undefined {
+  if (mode === "create" && exists)
+    return new TM1Error({
+      code: TM1ErrorCode.CONFLICT,
+      message: `Process '${processName}' already exists; mode=create`,
+    });
+  if (mode === "update" && !exists)
+    return new TM1Error({
+      code: TM1ErrorCode.NOT_FOUND,
+      message: `Process '${processName}' does not exist; mode=update`,
+    });
+  return undefined;
 }

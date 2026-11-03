@@ -3,7 +3,6 @@ import { resolveLocalPath } from "../local-file.js";
 import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { parseProFile } from "../../lib/pro-parser.js";
-import { withToolHint } from "../error-format.js";
 import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { ImportProFileResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
@@ -11,7 +10,12 @@ import {
   OVERWRITE_CONFIRM_SCHEMA,
   requireOverwriteConfirm,
 } from "../confirm.js";
-import { applyDeployParts, runPreflight } from "./preflight.js";
+import {
+  deployModeError,
+  installHints,
+  runPreflight,
+  writeInstall,
+} from "./preflight.js";
 import { backupProcess } from "./process-backup.js";
 import { jsonError, jsonResult } from "../format.js";
 
@@ -96,14 +100,8 @@ export const registerImportProFile = defineTool({
 
     if (preflight) {
       const failure = await runPreflight(tm1Client, {
+        ...parsed,
         name: processName,
-        prolog: parsed.prolog,
-        metadata: parsed.metadata,
-        data: parsed.data,
-        epilog: parsed.epilog,
-        parameters: parsed.parameters,
-        variables: parsed.variables,
-        dataSource: parsed.dataSource,
       });
       if (failure) return jsonError(failure);
     }
@@ -112,55 +110,21 @@ export const registerImportProFile = defineTool({
     const exists = allProcs.some(
       (p: { name: string }) => p.name === processName,
     );
-
-    if (mode === "create" && exists) {
-      throw new TM1Error({
-        code: TM1ErrorCode.CONFLICT,
-        message: `Process '${processName}' already exists; mode=create`,
-      });
-    }
-    if (mode === "update" && !exists) {
-      throw new TM1Error({
-        code: TM1ErrorCode.NOT_FOUND,
-        message: `Process '${processName}' does not exist; mode=update`,
-      });
-    }
+    const modeError = deployModeError(mode, exists, processName);
+    if (modeError) throw modeError;
 
     // Replacing an installed process is not undoable through the API.
     if (exists) requireOverwriteConfirm(confirm, processName, "process");
     // Last step before the first write: a failed backup throws, nothing is written.
     const backup = exists ? await backupProcess(tm1Client, processName) : null;
 
-    const action = exists ? "updated" : "created";
-    if (!exists) {
-      await withToolHint(
-        tm1Client.processes.create(processName),
-        `Process create failed mid-import. Name '${processName}' may already exist (mode=create would have caught — likely race) or contain invalid characters. Verify state with tm1_rest_read Processes('${processName}')?$select=Name before retry.`,
-      );
-    }
-
-    await withToolHint(
-      tm1Client.processes.updateCode(processName, {
-        prolog: parsed.prolog,
-        metadata: parsed.metadata,
-        data: parsed.data,
-        epilog: parsed.epilog,
-      }),
-      `Code update failed after process '${processName}' was ${exists ? "located" : "created"}. PARTIAL APPLY: the process shell exists but tabs are stale/empty. Re-run tm1_import_pro_file with mode=update once root cause fixed, or tm1_rest_write DELETE Processes('${processName}') to roll back.`,
-    );
-
-    await applyDeployParts(tm1Client.processes, processName, parsed, {
+    await writeInstall(tm1Client.processes, processName, parsed, {
       exists,
-      hints: {
-        parameters: `Parameter update failed for '${processName}'. Code applied but parameters missing. Inspect parsed parameters and re-run tm1_upsert_process with mode=update + parameters=[...] to recover.`,
-        variables: `Variable update failed for '${processName}'. Code+parameters applied but variables missing. tm1_upsert_process with mode=update + variables=[...] to recover.`,
-        dataSource: `Datasource update failed for '${processName}' (type=${parsed.dataSource.type}). Code+params+vars applied. Verify datasource credentials/path (ASCII file existence, ODBC DSN, view name) and re-run tm1_upsert_process with mode=update + dataSource={...} to recover.`,
-        deployMeta: `HasSecurityAccess/UIData update failed for '${processName}'. Code+params+vars+datasource applied. Re-run with mode=update once root cause fixed.`,
-      },
+      hints: installHints(processName, exists, parsed.dataSource.type),
     });
 
     return jsonResult({
-      action,
+      action: exists ? "updated" : "created",
       processName,
       ...(backup ? { backup } : {}),
       parsed: {

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { invalidateCallgraphCache } from "../../lib/callgraph/tm1-adapter.js";
 import { dataSourceSchema as sharedDataSourceSchema } from "../../lib/process-parts-schema.js";
 import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
@@ -9,7 +8,12 @@ import {
   OVERWRITE_CONFIRM_SCHEMA,
   requireOverwriteConfirm,
 } from "../confirm.js";
-import { runChecks, runPreflight, type PreflightPayload } from "./preflight.js";
+import {
+  deployModeError,
+  runChecks,
+  runPreflight,
+  type PreflightPayload,
+} from "./preflight.js";
 import { diffDs, diffParams, diffVars } from "./diff-processes.js";
 import { normalizeText, tabCodeDiff } from "../../lib/line-diff.js";
 import type { DataSource } from "../../types.js";
@@ -117,18 +121,8 @@ export const registerUpsertProcess = defineTool({
   ) => {
     const trail: string[] = [];
     const exists = await tm1Client.processes.exists(processName);
-    if (mode === "create" && exists) {
-      throw new TM1Error({
-        code: TM1ErrorCode.CONFLICT,
-        message: `Process '${processName}' already exists; mode=create`,
-      });
-    }
-    if (mode === "update" && !exists) {
-      throw new TM1Error({
-        code: TM1ErrorCode.NOT_FOUND,
-        message: `Process '${processName}' does not exist; mode=update`,
-      });
-    }
+    const modeError = deployModeError(mode, exists, processName);
+    if (modeError) throw modeError;
 
     // The process as it will stand after this call, not the fields the
     // caller happened to send: an omitted tab keeps its installed code.
