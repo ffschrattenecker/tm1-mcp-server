@@ -9,6 +9,11 @@
 // ElementName / SubsetName was recorded under the lowercased function name.
 // Key order follows the original signature order — FUNC_RE's alternation is
 // built from it. tests/unit/callgraph-arg-index.test.ts pins the result.
+// Entries corrected by hand against the TM1 TI reference, where the derived
+// value was wrong: the Subset* functions take the dimension at 0 and the subset
+// at 1 (SubsetCreate, SubsetElementAdd, SubsetExists, ...); ElementAttrPut*
+// takes the element at 3 in its five-argument form (dimension, hierarchy,
+// element, attribute).
 //
 // To add a function: append `functionnamelowercase: argIndex` to each table
 // whose parameter it takes.
@@ -114,6 +119,9 @@ export const TI_ARG_IDX = {
     viewzerosuppressionget: 0,
     viewzerosuppressionset: 0,
     viewzeroout: 0,
+    dbr: 0,
+    dbs: 1,
+    dbss: 1,
   },
   dimension: {
     dimsiz: 0,
@@ -159,8 +167,8 @@ export const TI_ARG_IDX = {
     elementattrputs: 1,
     dimensioncreate: 0,
     elementinsert: 0,
-    subsetcreate: 1,
-    subsetelementadd: 1,
+    subsetcreate: 0,
+    subsetelementadd: 0,
     dimensiondestroy: 0,
     dimensionexists: 0,
     dimensiondeleteallelements: 0,
@@ -249,12 +257,12 @@ export const TI_ARG_IDX = {
     attributecreate: 0,
     attributedelete: 0,
     attributeexists: 0,
-    subsetdelete: 1,
-    subsetelementdelete: 1,
-    subsetexists: 1,
-    subsetgetelementname: 1,
-    subsetgetsize: 1,
-    subsettoset: 1,
+    subsetdelete: 0,
+    subsetelementdelete: 0,
+    subsetexists: 0,
+    subsetgetelementname: 0,
+    subsetgetsize: 0,
+    subsettoset: 0,
     viewcolumndimensionset: 2,
     viewrowdimensionset: 2,
     viewtitledimensionset: 2,
@@ -314,8 +322,8 @@ export const TI_ARG_IDX = {
     attrsl: 1,
     elementattrnl: 1,
     elementattrsl: 1,
-    elementattrputn: 2,
-    elementattrputs: 2,
+    elementattrputn: 3,
+    elementattrputs: 3,
     elementinsert: 3,
     subsetelementadd: 2,
     dimensionelementinsert: 2,
@@ -369,8 +377,8 @@ export const TI_ARG_IDX = {
     subsetattrsl: 1,
     subsetattrputn: 2,
     subsetattrputs: 2,
-    subsetcreate: 0,
-    subsetelementadd: 0,
+    subsetcreate: 1,
+    subsetelementadd: 1,
     hierarchydeleteelements: 2,
     hierarchysubsetcreate: 2,
     hierarchysubsetdestroy: 2,
@@ -396,12 +404,12 @@ export const TI_ARG_IDX = {
     hierarchysubsetattrinsert: 2,
     hierarchysubsetattrdelete: 2,
     subsetcreatebymdx: 0,
-    subsetdelete: 0,
-    subsetelementdelete: 0,
-    subsetexists: 0,
-    subsetgetelementname: 0,
-    subsetgetsize: 0,
-    subsettoset: 0,
+    subsetdelete: 1,
+    subsetelementdelete: 1,
+    subsetexists: 1,
+    subsetgetelementname: 1,
+    subsetgetsize: 1,
+    subsettoset: 1,
     viewsubsetassign: 3,
     datasourcedimensionsubset: 0,
     subsetaliasget: 1,

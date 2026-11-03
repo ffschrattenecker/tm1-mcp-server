@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Rules cell references with mixed qualified and positional elements (`['Year':'2026','Sales']`) and names with `''` escapes are now found by the call graph and object-usage analysis.
+- The install preflight no longer reports a missing cube for `SubsetCreateByMDX('MySub', …)`. Subset functions read the dimension from the first argument (TM1 order), and preflight checks cube and dimension names for every TI function in the shared argument table except existence probes and destroys of the object itself. `DBR`/`DBS`/`DBSS` cube references now appear in the call graph.
 - TI parsing handles `''` inside strings and quoted parentheses in conditions consistently across the call graph, data flow and preflight.
 
 ## [10.3.0] - 2026-11-02

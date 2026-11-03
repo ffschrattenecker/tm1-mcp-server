@@ -88,9 +88,9 @@ describe("extractTiReferences — element refs from subset-membership calls", ()
     ]);
   });
 
-  it("handles SubsetElementAdd arg order (dim at index 1)", () => {
+  it("handles SubsetElementAdd arg order (dim at index 0)", () => {
     const refs = extractTiReferences(
-      "SubsetElementAdd('sTmp','Kunde','K100');",
+      "SubsetElementAdd('Kunde','sTmp','K100');",
     );
     const el = refs.filter((r) => r.targetKind === "element");
     expect(el.map((r) => ({ dim: r.dimension, name: r.targetName }))).toEqual([
@@ -166,7 +166,7 @@ describe("element ref carries subset handle", () => {
   });
   it("resolves subset handle from variable", () => {
     const refs = extractTiReferences(
-      "csSub='sTmp';\nSubsetElementAdd(csSub,'Currency','USD');",
+      "csSub='sTmp';\nSubsetElementAdd('Currency',csSub,'USD');",
     );
     const el = refs.filter((r) => r.targetKind === "element");
     expect(el[0].subset).toBe("sTmp");

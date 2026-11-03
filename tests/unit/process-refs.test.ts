@@ -362,3 +362,127 @@ describe("checkProcessRefs — TM1 name identity", () => {
     expect(r.issues).toEqual([]);
   });
 });
+
+// Argument positions come from the TI signatures (TI_ARG_IDX): the subset name
+// of a Subset* call is not a cube, the dimension of SubsetCreate is arg 0, and
+// ElementAttrPut* takes the hierarchy before the element only in the 5-argument
+// form.
+describe("checkProcessRefs — TI argument positions", () => {
+  const names = (r: { issues: Array<{ kind: string; name: string }> }) =>
+    r.issues.map((i) => [i.kind, i.name]);
+
+  it("does not read the subset name of SubsetCreatebyMDX as a cube", async () => {
+    const r = await checkProcessRefs(catalogue([], ["Region"]), {
+      prolog: "SubsetCreatebyMDX('MySub', '{[Region].Members}', 'Region');",
+    });
+    expect(names(r)).toEqual([]);
+  });
+
+  it("reads the dimension of SubsetCreate at arg 0, not the subset name", async () => {
+    const r = await checkProcessRefs(catalogue([], []), {
+      prolog: "SubsetCreate('Region', 'S1');",
+    });
+    expect(names(r)).toEqual([["dimension", "Region"]]);
+  });
+
+  it("reads the dimension of SubsetElementAdd at arg 0", async () => {
+    const r = await checkProcessRefs(catalogue([], []), {
+      prolog: "SubsetElementAdd('Region', 'S1', 'Asia');",
+    });
+    expect(names(r)).toEqual([["dimension", "Region"]]);
+  });
+
+  it("does not check existence probes on a dimension, subset or element", async () => {
+    const r = await checkProcessRefs(catalogue([], []), {
+      prolog: [
+        "SubsetExists('Region', 'S1');",
+        "ElementExists('Region', 'Region', 'Asia');",
+        "HierarchyExists('Region', 'Alt');",
+        "HierarchySubsetElementExists('Region', 'Alt', 'S1', 'Asia');",
+      ].join("\n"),
+    });
+    expect(names(r)).toEqual([]);
+  });
+
+  it("treats ElementAttrPutS with four arguments as dimension, element, attribute", async () => {
+    const r = await checkProcessRefs(noServer(), {
+      metadata: [
+        "DimensionElementInsert('Region', '', 'Asia', 'N');",
+        "ElementAttrPutS('Asien', 'Region', 'Asia', 'German');",
+      ].join("\n"),
+    });
+    expect(r.issues).toEqual([
+      {
+        kind: "uncommittedElement",
+        name: "Asia",
+        dimension: "Region",
+        tab: "metadata",
+        line: 2,
+        context: "ElementAttrPutS('Asien', 'Region', 'Asia', 'German');",
+      },
+    ]);
+  });
+
+  it("treats ElementAttrPutS with five arguments as dimension, hierarchy, element, attribute", async () => {
+    const r = await checkProcessRefs(noServer(), {
+      metadata: [
+        "HierarchyElementInsert('Region', 'Region', '', 'Asia', 'N');",
+        "ElementAttrPutS('Asien', 'Region', 'Region', 'Asia', 'German');",
+      ].join("\n"),
+    });
+    expect(r.issues.map((i) => [i.kind, i.name, i.dimension])).toEqual([
+      ["uncommittedElement", "Asia", "Region"],
+    ]);
+  });
+
+  function noServer() {
+    return catalogue([], ["Region"]);
+  }
+});
+
+// A guarded destroy of the object itself, and create-then-use in one process,
+// are normal TI; only a parent a destroy works on is still checked.
+describe("checkProcessRefs — destroys and creates", () => {
+  it("does not flag a guarded destroy of the object, or a create-then-use in the same process", async () => {
+    const r = await checkProcessRefs(catalogue([], []), {
+      prolog: [
+        "IF(DimensionExists('D')=1);",
+        "  DimensionDestroy('D');",
+        "ENDIF;",
+        "DimensionCreate('D');",
+        "DimensionElementInsert('D','','e','N');",
+      ].join("\n"),
+    });
+    expect(r.issues).toEqual([]);
+  });
+
+  it("does not flag a guarded CubeDestroy or CubeUnload of a cube that is absent", async () => {
+    const r = await checkProcessRefs(catalogue([], []), {
+      prolog: [
+        "IF(CubeExists('X')=1);",
+        "  CubeDestroy('X');",
+        "ENDIF;",
+        "CubeUnload('X');",
+      ].join("\n"),
+    });
+    expect(r.issues).toEqual([]);
+  });
+
+  it("does not flag a hierarchy created on a dimension the same process creates", async () => {
+    const r = await checkProcessRefs(catalogue([], []), {
+      prolog: [
+        "DimensionCreate('D');",
+        "HierarchyCreate('D','H');",
+        "DimensionElementInsert('D','H','e','N');",
+      ].join("\n"),
+    });
+    expect(r.issues).toEqual([]);
+  });
+
+  it("still checks the parent cube of a ViewDestroy", async () => {
+    const r = await checkProcessRefs(catalogue([], []), {
+      prolog: "ViewDestroy('Sales','v');",
+    });
+    expect(r.issues.map((i) => [i.kind, i.name])).toEqual([["cube", "Sales"]]);
+  });
+});

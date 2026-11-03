@@ -112,6 +112,9 @@ const EXPECTED_CUBE_ARG_IDX: [string, number][] = [
   ["viewzerosuppressionget", 0],
   ["viewzerosuppressionset", 0],
   ["viewzeroout", 0],
+  ["dbr", 0],
+  ["dbs", 1],
+  ["dbss", 1],
 ];
 
 const EXPECTED_DIM_ARG_IDX: [string, number][] = [
@@ -158,8 +161,8 @@ const EXPECTED_DIM_ARG_IDX: [string, number][] = [
   ["elementattrputs", 1],
   ["dimensioncreate", 0],
   ["elementinsert", 0],
-  ["subsetcreate", 1],
-  ["subsetelementadd", 1],
+  ["subsetcreate", 0],
+  ["subsetelementadd", 0],
   ["dimensiondestroy", 0],
   ["dimensionexists", 0],
   ["dimensiondeleteallelements", 0],
@@ -248,12 +251,12 @@ const EXPECTED_DIM_ARG_IDX: [string, number][] = [
   ["attributecreate", 0],
   ["attributedelete", 0],
   ["attributeexists", 0],
-  ["subsetdelete", 1],
-  ["subsetelementdelete", 1],
-  ["subsetexists", 1],
-  ["subsetgetelementname", 1],
-  ["subsetgetsize", 1],
-  ["subsettoset", 1],
+  ["subsetdelete", 0],
+  ["subsetelementdelete", 0],
+  ["subsetexists", 0],
+  ["subsetgetelementname", 0],
+  ["subsetgetsize", 0],
+  ["subsettoset", 0],
   ["viewcolumndimensionset", 2],
   ["viewrowdimensionset", 2],
   ["viewtitledimensionset", 2],
@@ -315,8 +318,8 @@ const EXPECTED_ELEM_ARG_IDX: [string, number][] = [
   ["attrsl", 1],
   ["elementattrnl", 1],
   ["elementattrsl", 1],
-  ["elementattrputn", 2],
-  ["elementattrputs", 2],
+  ["elementattrputn", 3],
+  ["elementattrputs", 3],
   ["elementinsert", 3],
   ["subsetelementadd", 2],
   ["dimensionelementinsert", 2],
@@ -371,8 +374,8 @@ const EXPECTED_SUBSET_ARG_IDX: [string, number][] = [
   ["subsetattrsl", 1],
   ["subsetattrputn", 2],
   ["subsetattrputs", 2],
-  ["subsetcreate", 0],
-  ["subsetelementadd", 0],
+  ["subsetcreate", 1],
+  ["subsetelementadd", 1],
   ["hierarchydeleteelements", 2],
   ["hierarchysubsetcreate", 2],
   ["hierarchysubsetdestroy", 2],
@@ -398,12 +401,12 @@ const EXPECTED_SUBSET_ARG_IDX: [string, number][] = [
   ["hierarchysubsetattrinsert", 2],
   ["hierarchysubsetattrdelete", 2],
   ["subsetcreatebymdx", 0],
-  ["subsetdelete", 0],
-  ["subsetelementdelete", 0],
-  ["subsetexists", 0],
-  ["subsetgetelementname", 0],
-  ["subsetgetsize", 0],
-  ["subsettoset", 0],
+  ["subsetdelete", 1],
+  ["subsetelementdelete", 1],
+  ["subsetexists", 1],
+  ["subsetgetelementname", 1],
+  ["subsetgetsize", 1],
+  ["subsettoset", 1],
   ["viewsubsetassign", 3],
   ["datasourcedimensionsubset", 0],
   ["subsetaliasget", 1],
@@ -419,7 +422,7 @@ const EXPECTED_SUBSET_ARG_IDX: [string, number][] = [
 ];
 
 const EXPECTED_FUNC_RE_SOURCE =
-  "\\b(cellgetn|cellgets|cellputn|cellputs|cellexists|cellisundefined|cellisrule|cellisupdateable|cubeattrn|cubeattrs|cubeattrnl|cubeattrsl|cubeattrputn|cubeattrputs|viewattrn|viewattrs|viewattrnl|viewattrsl|viewattrputn|viewattrputs|cubecreate|viewcreate|cubedelete|cubedestroy|cubeexists|tabdim|cubecleardata|cubesetlogchanges|cubegetlogchanges|cubegetn|cubegets|cubeputn|cubeputs|ruledestroy|ruleloadfromfile|viewcreatebymdx|viewdelete|viewexists|viewzero|viewconstruct|viewcolumndimensionset|viewrowdimensionset|viewtitledimensionset|viewtitleelementset|viewsubsetassign|viewextractskipcalcsset|viewextractskiprulevaluesset|viewextractskipzeroesset|viewextractskipconsolidatedvaluesset|viewgetn|viewgets|viewputn|viewputs|datasourceodbocubename|addinfocuberestriction|batchcellincrement|cubedatareservationacquire|cubedatareservationget|cubedatareservationgetconflicts|cubedatareservationrelease|cubedatareservationreleaseall|cubesavedata|cubesetconnparams|cubeunload|lockoff|lockon|cubedracquire|cubedrget|cubedrgetconflicts|cubedrrelease|cubedrreleaseall|addcubedependency|cubedimensioncountget|cubeprocessfeeders|cuberuleappend|cuberuledestroy|cubetimelastupdated|cellsecuritycubecreate|cellsecuritycubedestroy|cellincrementn|cellputproportionalspread|metadataallrollups|metadatarollups|metadatarollupsall|viewcolumndimensionget|viewcolumndimensionsetget|viewdestroy|viewmdxactivate|viewmdxdeactivate|viewmdxget|viewmdxset|viewrowdimensionget|viewrowdimensionsetget|viewstructcompact|viewstructupdate|viewsubsetget|viewzerosuppressionget|viewzerosuppressionset|viewzeroout|dimsiz|dimnm|dimix|dtype|dnlev|dnxt|elpar|elparn|ellev|elcomp|elcompn|elweight|elisanc|elisdesc|attrs|attrn|attributeput|attrputs|attrputn|elementsecurityput|attributeget|dimensionattrn|dimensionattrs|dimensionattrnl|dimensionattrsl|dimensionattrputn|dimensionattrputs|subsetattrn|subsetattrs|subsetattrnl|subsetattrsl|subsetattrputn|subsetattrputs|attrdelete|attrinsert|attrnl|attrsl|elementattrnl|elementattrsl|elementattrputn|elementattrputs|dimensioncreate|elementinsert|subsetcreate|subsetelementadd|dimensiondestroy|dimensionexists|dimensiondeleteallelements|dimensionelementinsert|dimensionelementdelete|dimensionelementmove|dimensionelementcount|dimensionelementexists|dimensionelementcomponentadd|dimensionelementcomponentdelete|dimensionsortorder|elementcount|elementdelete|elementexists|elementindex|elementname|elementlevel|elementtype|elementparent|elementparentcount|elementcomponent|elementcomponentcount|elementweight|elementattrn|elementattrs|elementattrinsert|elementattrdelete|hierarchyattrn|hierarchyattrs|hierarchyattrnl|hierarchyattrsl|hierarchyattrputn|hierarchyattrputs|elispar|elisstr|elisattr|hierarchycreate|hierarchyexists|hierarchyelementcount|hierarchyelementinsert|hierarchyelementdelete|hierarchyelementcomponentadd|hierarchyname|hierarchydestroy|hierarchydeleteallelements|hierarchydeleteelements|hierarchycontainsallleaves|hierarchyhasorphanedleaves|hierarchytimelastupdated|hierarchyupdatedirect|hierarchysortorder|hierarchytopelementinsert|hierarchytopelementinsertdirect|hierarchyelementexists|hierarchyelementdeletedirect|hierarchyelementinsertdirect|hierarchyelementprincipalname|hierarchyelementcomponentadddirect|hierarchyelementcomponentdelete|hierarchyelementcomponentdeletedirect|hierarchyelementsecurityget|hierarchyelementsecurityput|hierarchysubsetcreate|hierarchysubsetdestroy|hierarchysubsetexists|hierarchysubsetdeleteallelements|hierarchysubsetelementinsert|hierarchysubsetelementdelete|hierarchysubsetelementexists|hierarchysubsetelementgetindex|hierarchysubsetgetelementname|hierarchysubsetgetsize|hierarchysubsetisallset|hierarchysubsetmdxget|hierarchysubsetmdxset|hierarchysubsetaliasget|hierarchysubsetaliasset|hierarchysubsetattrn|hierarchysubsetattrs|hierarchysubsetattrnl|hierarchysubsetattrsl|hierarchysubsetattrputn|hierarchysubsetattrputs|hierarchysubsetattrinsert|hierarchysubsetattrdelete|attributecreate|attributedelete|attributeexists|subsetdelete|subsetelementdelete|subsetexists|subsetgetelementname|subsetgetsize|subsettoset|dimensiondeleteelements|dimensionelementcomponentadddirect|dimensionelementcomponentdeletedirect|dimensionelementdeletedirect|dimensionelementinsertdirect|dimensionelementprincipalname|dimensionhierarchycreate|dimensiontimelastupdated|dimensiontopelementinsert|dimensiontopelementinsertdirect|dimensionupdatedirect|olapdimensionproperty|olapelementname|olapelementnames|olapmemberproperty|subsetaliasget|subsetaliasset|subsetdeleteallelements|subsetdestroy|subsetelementexists|subsetelementgetindex|subsetelementinsert|subsetisallset|subsetmdxget|subsetmdxset|levelcount|executeprocess|runprocess)\\s*\\(";
+  "\\b(cellgetn|cellgets|cellputn|cellputs|cellexists|cellisundefined|cellisrule|cellisupdateable|cubeattrn|cubeattrs|cubeattrnl|cubeattrsl|cubeattrputn|cubeattrputs|viewattrn|viewattrs|viewattrnl|viewattrsl|viewattrputn|viewattrputs|cubecreate|viewcreate|cubedelete|cubedestroy|cubeexists|tabdim|cubecleardata|cubesetlogchanges|cubegetlogchanges|cubegetn|cubegets|cubeputn|cubeputs|ruledestroy|ruleloadfromfile|viewcreatebymdx|viewdelete|viewexists|viewzero|viewconstruct|viewcolumndimensionset|viewrowdimensionset|viewtitledimensionset|viewtitleelementset|viewsubsetassign|viewextractskipcalcsset|viewextractskiprulevaluesset|viewextractskipzeroesset|viewextractskipconsolidatedvaluesset|viewgetn|viewgets|viewputn|viewputs|datasourceodbocubename|addinfocuberestriction|batchcellincrement|cubedatareservationacquire|cubedatareservationget|cubedatareservationgetconflicts|cubedatareservationrelease|cubedatareservationreleaseall|cubesavedata|cubesetconnparams|cubeunload|lockoff|lockon|cubedracquire|cubedrget|cubedrgetconflicts|cubedrrelease|cubedrreleaseall|addcubedependency|cubedimensioncountget|cubeprocessfeeders|cuberuleappend|cuberuledestroy|cubetimelastupdated|cellsecuritycubecreate|cellsecuritycubedestroy|cellincrementn|cellputproportionalspread|metadataallrollups|metadatarollups|metadatarollupsall|viewcolumndimensionget|viewcolumndimensionsetget|viewdestroy|viewmdxactivate|viewmdxdeactivate|viewmdxget|viewmdxset|viewrowdimensionget|viewrowdimensionsetget|viewstructcompact|viewstructupdate|viewsubsetget|viewzerosuppressionget|viewzerosuppressionset|viewzeroout|dbr|dbs|dbss|dimsiz|dimnm|dimix|dtype|dnlev|dnxt|elpar|elparn|ellev|elcomp|elcompn|elweight|elisanc|elisdesc|attrs|attrn|attributeput|attrputs|attrputn|elementsecurityput|attributeget|dimensionattrn|dimensionattrs|dimensionattrnl|dimensionattrsl|dimensionattrputn|dimensionattrputs|subsetattrn|subsetattrs|subsetattrnl|subsetattrsl|subsetattrputn|subsetattrputs|attrdelete|attrinsert|attrnl|attrsl|elementattrnl|elementattrsl|elementattrputn|elementattrputs|dimensioncreate|elementinsert|subsetcreate|subsetelementadd|dimensiondestroy|dimensionexists|dimensiondeleteallelements|dimensionelementinsert|dimensionelementdelete|dimensionelementmove|dimensionelementcount|dimensionelementexists|dimensionelementcomponentadd|dimensionelementcomponentdelete|dimensionsortorder|elementcount|elementdelete|elementexists|elementindex|elementname|elementlevel|elementtype|elementparent|elementparentcount|elementcomponent|elementcomponentcount|elementweight|elementattrn|elementattrs|elementattrinsert|elementattrdelete|hierarchyattrn|hierarchyattrs|hierarchyattrnl|hierarchyattrsl|hierarchyattrputn|hierarchyattrputs|elispar|elisstr|elisattr|hierarchycreate|hierarchyexists|hierarchyelementcount|hierarchyelementinsert|hierarchyelementdelete|hierarchyelementcomponentadd|hierarchyname|hierarchydestroy|hierarchydeleteallelements|hierarchydeleteelements|hierarchycontainsallleaves|hierarchyhasorphanedleaves|hierarchytimelastupdated|hierarchyupdatedirect|hierarchysortorder|hierarchytopelementinsert|hierarchytopelementinsertdirect|hierarchyelementexists|hierarchyelementdeletedirect|hierarchyelementinsertdirect|hierarchyelementprincipalname|hierarchyelementcomponentadddirect|hierarchyelementcomponentdelete|hierarchyelementcomponentdeletedirect|hierarchyelementsecurityget|hierarchyelementsecurityput|hierarchysubsetcreate|hierarchysubsetdestroy|hierarchysubsetexists|hierarchysubsetdeleteallelements|hierarchysubsetelementinsert|hierarchysubsetelementdelete|hierarchysubsetelementexists|hierarchysubsetelementgetindex|hierarchysubsetgetelementname|hierarchysubsetgetsize|hierarchysubsetisallset|hierarchysubsetmdxget|hierarchysubsetmdxset|hierarchysubsetaliasget|hierarchysubsetaliasset|hierarchysubsetattrn|hierarchysubsetattrs|hierarchysubsetattrnl|hierarchysubsetattrsl|hierarchysubsetattrputn|hierarchysubsetattrputs|hierarchysubsetattrinsert|hierarchysubsetattrdelete|attributecreate|attributedelete|attributeexists|subsetdelete|subsetelementdelete|subsetexists|subsetgetelementname|subsetgetsize|subsettoset|dimensiondeleteelements|dimensionelementcomponentadddirect|dimensionelementcomponentdeletedirect|dimensionelementdeletedirect|dimensionelementinsertdirect|dimensionelementprincipalname|dimensionhierarchycreate|dimensiontimelastupdated|dimensiontopelementinsert|dimensiontopelementinsertdirect|dimensionupdatedirect|olapdimensionproperty|olapelementname|olapelementnames|olapmemberproperty|subsetaliasget|subsetaliasset|subsetdeleteallelements|subsetdestroy|subsetelementexists|subsetelementgetindex|subsetelementinsert|subsetisallset|subsetmdxget|subsetmdxset|levelcount|executeprocess|runprocess)\\s*\\(";
 
 describe("callgraph arg-index tables", () => {
   it("CUBE_ARG_IDX matches the pinned table", () => {

@@ -7,12 +7,15 @@
 // on the EXACT payload they are about to install, so a deploy cannot validate
 // cleanly and still install code that names a cube that does not exist.
 //
+// Argument positions come from TI_ARG_IDX (the callgraph's signature table).
 // TM1 lets syntactically valid code reference non-existent objects — the
 // compiler never resolves names — so this catches the gap between compile and
 // runtime. It does NOT flag:
 //   - existence probes (CubeExists, DimensionExists, HierarchyExists,
-//     SubsetExists, ViewExists): asking whether an object exists is legitimate
-//     precisely when it may not;
+//     SubsetExists, ViewExists, ElementExists, ...): asking whether an object
+//     exists is legitimate precisely when it may not;
+//   - the object a destroy or unload removes (CubeDestroy, DimensionDestroy,
+//     CubeUnload, ...): guarded cleanup is legitimate when it may be absent;
 //   - names the same code creates (CubeCreate / DimensionCreate with a literal
 //     or literal-bound name): the `IF(DimensionExists('X') = 0);
 //     DimensionCreate('X');` pattern must pass.
@@ -37,7 +40,7 @@
 //   - variables (datasource fields, parameters) are not checked — that is
 //     what the element is in most data-tab calls — and do not make the report
 //     partial.
-// Existence probes (DimIx, ElementIndex) are deliberately not element checks.
+// ElementIndex is an existence probe, so it is not an element check either.
 //
 // One more element trap needs no server: DimensionElementInsert and
 // HierarchyElementInsert commit only when the Prolog/Metadata tab ends, so an
@@ -46,6 +49,7 @@
 // "uncommittedElement"; *Direct inserts are not flagged.
 import { isControlName } from "./control-name.js";
 import { buildProcessEnv, type ProcessEnv } from "./callgraph/variableEnv.js";
+import { TI_ARG_IDX } from "./callgraph/tiArgIndex.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
 import { callArgs, quotedLiteral, truncateSnippet } from "./ti-lex.js";
 import { tm1NameKey, withoutSandboxes } from "./tm1-name.js";
@@ -107,145 +111,78 @@ export interface ObjectCatalogue {
 // hundreds of requests.
 const ELEMENT_LOOKUP_MAX = 200;
 
-const CUBE_ARG1_FNS =
-  "CellGetN|CellGetS|CellIsUpdateable|ViewCreate|ViewDestroy|ViewZeroOut|CubeClearData|SubsetCreatebyMDX|ViewSubsetAssign|DBR|DBS|DBSS|CubeProcessFeeders|CubeUnload|CubeLockOverride|CubeSetLogChanges";
+// Functions whose object-name argument may legitimately not exist: existence
+// probes, and destroys/unloads of the object named (the guarded cleanup
+// `IF(CubeExists('X') = 1); CubeDestroy('X'); ENDIF;` must pass). The
+// argument is not checked. HierarchyDestroy is excused too, though its checked
+// argument is the dimension. Destroys whose checked argument is the parent
+// (ViewDestroy, SubsetDestroy, RuleDestroy) are still checked.
+const UNCHECKED_FNS: ReadonlySet<string> = new Set([
+  "cubeexists",
+  "viewexists",
+  "dimensionexists",
+  "hierarchyexists",
+  "subsetexists",
+  "attributeexists",
+  "cellexists",
+  "elementexists",
+  "elementindex",
+  "dimensionelementexists",
+  "hierarchyelementexists",
+  "hierarchysubsetexists",
+  "hierarchysubsetelementexists",
+  "subsetelementexists",
+  "cubedestroy",
+  "cubedelete",
+  "cubeunload",
+  "dimensiondestroy",
+  "hierarchydestroy",
+]);
 
-const DIM_ARG1_FNS =
-  "SubsetCreate|SubsetDestroy|DimensionElementInsertDirect|DimensionElementComponentAdd|DimensionElementDelete|DimensionElementPrincipalName|DimSiz|DimNm|DimIx|DType|ElementType|ElementLevel|ElementWeight|HierarchyName|AttrS|AttrN";
+// Creates whose literal name excuses a later reference to it in the same code.
+const CREATE_FNS: ReadonlySet<string> = new Set([
+  "cubecreate",
+  "dimensioncreate",
+]);
 
-const CREATE_CUBE_FNS = "CubeCreate";
-const CREATE_DIM_FNS = "DimensionCreate";
+// Cell functions: the cube is at TI_ARG_IDX.cube, the elements follow it.
+const CELL_FNS: ReadonlySet<string> = new Set([
+  "cellgetn",
+  "cellgets",
+  "cellisupdateable",
+  "cellputn",
+  "cellputs",
+  "cellincrementn",
+  "cellputproportionalspread",
+]);
 
-const litRe = (fns: string) =>
-  new RegExp(`\\b(${fns})\\s*\\(\\s*'([^']+)'`, "gi");
-// Arg-1 passed as a bare identifier (sCube = 'x'; CellGetN(sCube, ...)) —
-// resolved through the per-process variable env; unresolvable identifiers
-// (params, datasource vars, reassigned or computed values) are counted as
-// unchecked.
-const identRe = (fns: string) =>
-  new RegExp(`\\b(${fns})\\s*\\(\\s*([A-Za-z_]\\w*)\\s*[,)]`, "gi");
+// Element inserts: the dimension is at TI_ARG_IDX.dimension, the element at
+// TI_ARG_IDX.element.
+const INSERT_FNS: ReadonlySet<string> = new Set([
+  "dimensionelementinsert",
+  "dimensionelementinsertdirect",
+  "hierarchyelementinsert",
+]);
 
-const CUBE_FN_RE = litRe(CUBE_ARG1_FNS);
-const DIM_FN_RE = litRe(DIM_ARG1_FNS);
-const CUBE_FN_IDENT_RE = identRe(CUBE_ARG1_FNS);
-const DIM_FN_IDENT_RE = identRe(DIM_ARG1_FNS);
-const CUBE_CREATE_RE = litRe(CREATE_CUBE_FNS);
-const DIM_CREATE_RE = litRe(CREATE_DIM_FNS);
-const CUBE_CREATE_IDENT_RE = identRe(CREATE_CUBE_FNS);
-const DIM_CREATE_IDENT_RE = identRe(CREATE_DIM_FNS);
-
-// CellPutN/CellPutS/CellIncrementN/CellPutProportionalSpread take the value as
-// arg 1 and the cube as arg 2; AttrPutS/AttrPutN/ElementSecurityPut take the
-// dimension as arg 2. The value arg is an arbitrary expression (nested calls,
-// '|'-concat, multi-line), so these are resolved with a paren/quote walker
-// (secondArgText) instead of a regex skip.
-const CUBE_ARG2_FN_RE =
-  /\b(?:CellPutN|CellPutS|CellIncrementN|CellPutProportionalSpread)\s*\(/gi;
-
-const DIM_ARG2_FN_RE = /\b(?:AttrPutS|AttrPutN|ElementSecurityPut)\s*\(/gi;
-
-function secondArgText(text: string, openParen: number): string | null {
-  return callArgs(text, openParen)?.[1] ?? null;
-}
-
-// Resolve a bare identifier through the process env: only a variable bound to
-// exactly one string literal counts; params, datasource vars, and dynamic
-// bindings return null (unresolvable at parse time).
-function identLiteral(argText: string, env: ProcessEnv): string | null {
-  const m = /^\s*([A-Za-z_]\w*)\s*$/.exec(argText);
-  if (!m) return null;
-  const binding = env.vars.get(m[1]!.toLowerCase());
-  return binding?.kind === "literal" ? binding.value : null;
-}
+// Inserts that commit only when the tab ends (not the *Direct variants), and
+// the attribute writes that fail on such an element in the same tab.
+const QUEUED_INSERT_FNS: ReadonlySet<string> = new Set([
+  "dimensionelementinsert",
+  "hierarchyelementinsert",
+]);
+const ATTR_PUT_FNS: ReadonlySet<string> = new Set([
+  "attrputs",
+  "attrputn",
+  "elementattrputs",
+  "elementattrputn",
+]);
+const ELEMENT_ATTR_PUT_FNS: ReadonlySet<string> = new Set([
+  "elementattrputs",
+  "elementattrputn",
+]);
+const QUEUED_INSERT_TABS: ReadonlySet<Tab> = new Set(["prolog", "metadata"]);
 
 type Found = Map<string, { tab: Tab; line: number; context: string }>;
-
-interface Scanner {
-  unresolvable: number;
-}
-
-function scanCode(
-  code: string,
-  tab: Tab,
-  regex: RegExp,
-  into: Found,
-  scanner: Scanner,
-  resolveName?: (raw: string) => string | null,
-): void {
-  const lines = code.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) {
-    const ln = lines[i]!;
-    if (/^\s*#/.test(ln)) continue;
-    regex.lastIndex = 0;
-    let m: RegExpExecArray | null;
-    while ((m = regex.exec(ln)) !== null) {
-      const name = resolveName ? resolveName(m[2]!) : m[2]!;
-      if (!name) {
-        scanner.unresolvable++;
-        continue;
-      }
-      if (!into.has(name))
-        into.set(name, { tab, line: i + 1, context: truncateSnippet(ln, 200) });
-    }
-  }
-}
-
-// Arg-2 variant of scanCode: matches the function name across the whole tab
-// (comment lines blanked, so multi-line calls survive) and resolves the second
-// argument with the paren/quote walker.
-function scanArg2(
-  code: string,
-  tab: Tab,
-  fnRe: RegExp,
-  env: ProcessEnv,
-  into: Found,
-  scanner: Scanner,
-): void {
-  const lines = code.split(/\r?\n/).map((ln) => (/^\s*#/.test(ln) ? "" : ln));
-  const text = lines.join("\n");
-  fnRe.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = fnRe.exec(text)) !== null) {
-    // The pattern ends with '(' — its index is the end of the match.
-    const argText = secondArgText(text, m.index + m[0].length - 1);
-    if (argText === null) continue;
-    const name = quotedLiteral(argText) ?? identLiteral(argText, env);
-    if (!name) {
-      scanner.unresolvable++;
-      continue;
-    }
-    if (into.has(name)) continue;
-    const line = text.slice(0, m.index).split("\n").length;
-    into.set(name, {
-      tab,
-      line,
-      context: truncateSnippet(lines[line - 1]!, 200),
-    });
-  }
-}
-
-// Cell functions and the position of their cube argument; the element
-// arguments follow it, one per (non-Sandboxes) cube dimension.
-const CELL_FN_RE =
-  /\b(CellGetN|CellGetS|CellIsUpdateable|CellPutN|CellPutS|CellIncrementN|CellPutProportionalSpread)\s*\(/gi;
-const CELL_CUBE_ARG: Record<string, number> = {
-  cellgetn: 0,
-  cellgets: 0,
-  cellisupdateable: 0,
-  cellputn: 1,
-  cellputs: 1,
-  cellincrementn: 1,
-  cellputproportionalspread: 1,
-};
-
-// Element inserts: [dimension arg, element arg].
-const INSERT_FN_RE =
-  /\b(DimensionElementInsert|DimensionElementInsertDirect|HierarchyElementInsert)\s*\(/gi;
-const INSERT_ARGS: Record<string, [number, number]> = {
-  dimensionelementinsert: [0, 2],
-  dimensionelementinsertdirect: [0, 2],
-  hierarchyelementinsert: [0, 3],
-};
 
 interface CellCall {
   cube: string;
@@ -264,6 +201,16 @@ interface Inserts {
   /** True if some insert targets a dimension whose name is computed. */
   dynamicAnyDim: boolean;
 }
+
+interface Call {
+  fn: string;
+  args: string[];
+  line: number;
+  context: string;
+  offset: number;
+}
+
+const CALL_RE = /\b([A-Za-z_]\w*)\s*\(/g;
 
 function forEachCall(
   code: string,
@@ -294,33 +241,130 @@ function forEachCall(
   }
 }
 
-// Inserts that commit only when the tab ends (not the *Direct variants), and
-// the attribute writes that fail on such an element in the same tab:
-// [dimension arg, element arg] for each.
-const QUEUED_INSERT_FN_RE =
-  /\b(DimensionElementInsert|HierarchyElementInsert)\s*\(/gi;
-const ATTR_PUT_FN_RE =
-  /\b(AttrPutS|AttrPutN|ElementAttrPutS|ElementAttrPutN)\s*\(/gi;
-const ATTR_PUT_ARGS: Record<string, [number, number]> = {
-  attrputs: [1, 2],
-  attrputn: [1, 2],
-  elementattrputs: [1, 3],
-  elementattrputn: [1, 3],
-};
-const QUEUED_INSERT_TABS: ReadonlySet<Tab> = new Set(["prolog", "metadata"]);
+/** The 0-based position of a parameter in a TI_ARG_IDX table, if the function has one. */
+function argIndex(
+  table: Readonly<Record<string, number>>,
+  fn: string,
+): number | undefined {
+  return Object.hasOwn(table, fn) ? table[fn] : undefined;
+}
+
+function argAt(args: string[], idx: number | undefined): string | undefined {
+  return idx === undefined ? undefined : args[idx];
+}
+
+// The element position of an AttrPut / ElementAttrPut call. ElementAttrPut*
+// takes the hierarchy before the element only in the five-argument form
+// (dimension, hierarchy, element, attribute); the four-argument form has no
+// hierarchy, so the element is one place earlier.
+function attrElementIndex(fn: string, args: string[]): number | undefined {
+  const idx = argIndex(TI_ARG_IDX.element, fn);
+  if (idx === undefined) return undefined;
+  return ELEMENT_ATTR_PUT_FNS.has(fn) && args.length === 4 ? idx - 1 : idx;
+}
+
+// Variable env: only a variable bound to exactly one string literal counts;
+// params, datasource vars, and dynamic bindings return null (unresolvable at
+// parse time).
+function identLiteral(argText: string, env: ProcessEnv): string | null {
+  const m = /^\s*([A-Za-z_]\w*)\s*$/.exec(argText);
+  if (!m) return null;
+  const binding = env.vars.get(m[1]!.toLowerCase());
+  return binding?.kind === "literal" ? binding.value : null;
+}
+
+/** An argument as a name: a quoted literal, or a variable bound to one. */
+function nameOf(argText: string, env: ProcessEnv): string | null {
+  return quotedLiteral(argText) ?? identLiteral(argText, env);
+}
+
+interface ScanState {
+  cubeRefs: Found;
+  dimRefs: Found;
+  /** tm1NameKey of each cube / dimension the code creates. */
+  createdCubes: Set<string>;
+  createdDims: Set<string>;
+  cellCalls: CellCall[];
+  inserts: Inserts;
+  /** Object-name arguments that no literal binding resolves. */
+  unresolvable: number;
+}
+
+/** One call's object-name references, cell calls and inserts. */
+function scanCall(call: Call, tab: Tab, env: ProcessEnv, s: ScanState): void {
+  const { fn, args, line, context } = call;
+  if (CREATE_FNS.has(fn)) {
+    const name = nameOf(args[0] ?? "", env);
+    if (name)
+      (fn === "cubecreate" ? s.createdCubes : s.createdDims).add(
+        tm1NameKey(name),
+      );
+    return;
+  }
+  if (UNCHECKED_FNS.has(fn)) return;
+
+  const addRef = (into: Found, argText: string | undefined) => {
+    if (argText === undefined) return;
+    const name = nameOf(argText, env);
+    if (name === null) {
+      s.unresolvable++;
+      return;
+    }
+    if (name === "" || into.has(name)) return;
+    into.set(name, { tab, line, context });
+  };
+  const cubeIdx = argIndex(TI_ARG_IDX.cube, fn);
+  const dimIdx = argIndex(TI_ARG_IDX.dimension, fn);
+  addRef(s.cubeRefs, argAt(args, cubeIdx));
+  addRef(s.dimRefs, argAt(args, dimIdx));
+
+  if (CELL_FNS.has(fn) && cubeIdx !== undefined) {
+    const cubeArg = argAt(args, cubeIdx);
+    // An unresolvable cube is already counted by the cube scan above.
+    const cube = cubeArg === undefined ? null : nameOf(cubeArg, env);
+    if (cube) {
+      s.cellCalls.push({
+        cube,
+        elements: args.slice(cubeIdx + 1).map((a) => nameOf(a, env)),
+        tab,
+        line,
+        context,
+      });
+    }
+  }
+
+  if (INSERT_FNS.has(fn)) {
+    const dimArg = argAt(args, dimIdx);
+    const elArg = argAt(args, argIndex(TI_ARG_IDX.element, fn));
+    if (dimArg === undefined || elArg === undefined) return;
+    const dim = nameOf(dimArg, env);
+    if (!dim) {
+      s.inserts.dynamicAnyDim = true;
+      return;
+    }
+    const el = nameOf(elArg, env);
+    const k = tm1NameKey(dim);
+    if (!el) {
+      s.inserts.dynamicDims.add(k);
+      return;
+    }
+    if (!s.inserts.literal.has(k)) s.inserts.literal.set(k, new Set());
+    s.inserts.literal.get(k)!.add(tm1NameKey(el));
+  }
+}
 
 // Same-tab identity of a name argument: its literal value when it has one,
 // otherwise the expression text itself (vEl in the insert and in the AttrPut
 // is the same element on that record).
 function argKey(argText: string, env: ProcessEnv): string {
-  const lit = quotedLiteral(argText) ?? identLiteral(argText, env);
+  const lit = nameOf(argText, env);
   return lit !== null
     ? `'${tm1NameKey(lit)}`
     : argText.toLowerCase().replace(/\s+/g, "");
 }
 
 function scanUncommitted(
-  code: string,
+  calls: Call[],
   tab: Tab,
   env: ProcessEnv,
   into: RefIssue[],
@@ -328,82 +372,34 @@ function scanUncommitted(
   if (!QUEUED_INSERT_TABS.has(tab)) return;
   // dimension key → element key → offset of the first insert
   const inserted = new Map<string, Map<string, number>>();
-  forEachCall(code, QUEUED_INSERT_FN_RE, (fn, args, _line, _ctx, offset) => {
-    const [dimIdx, elIdx] = INSERT_ARGS[fn]!;
-    const dimArg = args[dimIdx];
-    const elArg = args[elIdx];
-    if (dimArg === undefined || elArg === undefined) return;
+  for (const { fn, args, offset } of calls) {
+    if (!QUEUED_INSERT_FNS.has(fn)) continue;
+    const dimArg = argAt(args, argIndex(TI_ARG_IDX.dimension, fn));
+    const elArg = argAt(args, argIndex(TI_ARG_IDX.element, fn));
+    if (dimArg === undefined || elArg === undefined) continue;
     const dk = argKey(dimArg, env);
     if (!inserted.has(dk)) inserted.set(dk, new Map());
     const els = inserted.get(dk)!;
     const ek = argKey(elArg, env);
     if (!els.has(ek)) els.set(ek, offset);
-  });
+  }
   if (inserted.size === 0) return;
-  forEachCall(code, ATTR_PUT_FN_RE, (fn, args, line, context, offset) => {
-    const [dimIdx, elIdx] = ATTR_PUT_ARGS[fn]!;
-    const dimArg = args[dimIdx];
-    const elArg = args[elIdx];
-    if (dimArg === undefined || elArg === undefined) return;
+  for (const { fn, args, line, context, offset } of calls) {
+    if (!ATTR_PUT_FNS.has(fn)) continue;
+    const dimArg = argAt(args, argIndex(TI_ARG_IDX.dimension, fn));
+    const elArg = argAt(args, attrElementIndex(fn, args));
+    if (dimArg === undefined || elArg === undefined) continue;
     const at = inserted.get(argKey(dimArg, env))?.get(argKey(elArg, env));
-    if (at === undefined || at > offset) return;
+    if (at === undefined || at > offset) continue;
     into.push({
       kind: "uncommittedElement",
-      name: quotedLiteral(elArg) ?? identLiteral(elArg, env) ?? elArg.trim(),
-      dimension:
-        quotedLiteral(dimArg) ?? identLiteral(dimArg, env) ?? dimArg.trim(),
+      name: nameOf(elArg, env) ?? elArg.trim(),
+      dimension: nameOf(dimArg, env) ?? dimArg.trim(),
       tab,
       line,
       context,
     });
-  });
-}
-
-function scanCellCalls(
-  code: string,
-  tab: Tab,
-  env: ProcessEnv,
-  into: CellCall[],
-): void {
-  forEachCall(code, CELL_FN_RE, (fn, args, line, context) => {
-    const cubeIdx = CELL_CUBE_ARG[fn]!;
-    const cubeArg = args[cubeIdx];
-    if (cubeArg === undefined) return;
-    const cube = quotedLiteral(cubeArg) ?? identLiteral(cubeArg, env);
-    // An unresolvable cube is already counted by the cube scan.
-    if (!cube) return;
-    into.push({
-      cube,
-      elements: args
-        .slice(cubeIdx + 1)
-        .map((a) => quotedLiteral(a) ?? identLiteral(a, env)),
-      tab,
-      line,
-      context,
-    });
-  });
-}
-
-function scanInserts(code: string, env: ProcessEnv, into: Inserts): void {
-  forEachCall(code, INSERT_FN_RE, (fn, args) => {
-    const [dimIdx, elIdx] = INSERT_ARGS[fn]!;
-    const dimArg = args[dimIdx];
-    const elArg = args[elIdx];
-    if (dimArg === undefined || elArg === undefined) return;
-    const dim = quotedLiteral(dimArg) ?? identLiteral(dimArg, env);
-    if (!dim) {
-      into.dynamicAnyDim = true;
-      return;
-    }
-    const el = quotedLiteral(elArg) ?? identLiteral(elArg, env);
-    const k = tm1NameKey(dim);
-    if (!el) {
-      into.dynamicDims.add(k);
-      return;
-    }
-    if (!into.literal.has(k)) into.literal.set(k, new Set());
-    into.literal.get(k)!.add(tm1NameKey(el));
-  });
+  }
 }
 
 /** Parse-time half: collect the references, no server round-trip. */
@@ -423,51 +419,41 @@ function scanProcessRefs(code: ProcessCode): {
   // are unknown here (only code is scanned), so param-fed identifiers
   // stay unresolvable — conservative.
   const env = buildProcessEnv(TABS.map((t) => code[t] ?? "").join("\n"), []);
-  const resolveIdent = (raw: string) => identLiteral(raw, env);
-  const scanner: Scanner = { unresolvable: 0 };
-  const cubeRefs: Found = new Map();
-  const dimRefs: Found = new Map();
-  const createdCubes: Found = new Map();
-  const createdDims: Found = new Map();
-  // Created names are collected with their own counter: an unresolvable
-  // create name hides nothing, it just cannot excuse a reference.
-  const ignore: Scanner = { unresolvable: 0 };
-  const tabsChecked: Tab[] = [];
-  const cellCalls: CellCall[] = [];
-  const uncommitted: RefIssue[] = [];
-  const inserts: Inserts = {
-    literal: new Map(),
-    dynamicDims: new Set(),
-    dynamicAnyDim: false,
+  const s: ScanState = {
+    cubeRefs: new Map(),
+    dimRefs: new Map(),
+    createdCubes: new Set(),
+    createdDims: new Set(),
+    cellCalls: [],
+    inserts: {
+      literal: new Map(),
+      dynamicDims: new Set(),
+      dynamicAnyDim: false,
+    },
+    unresolvable: 0,
   };
+  const tabsChecked: Tab[] = [];
+  const uncommitted: RefIssue[] = [];
   for (const tab of TABS) {
     const c = code[tab];
     if (!c || c.trim() === "") continue;
     tabsChecked.push(tab);
-    scanCode(c, tab, CUBE_FN_RE, cubeRefs, scanner);
-    scanCode(c, tab, CUBE_FN_IDENT_RE, cubeRefs, scanner, resolveIdent);
-    scanArg2(c, tab, CUBE_ARG2_FN_RE, env, cubeRefs, scanner);
-    scanCode(c, tab, DIM_FN_RE, dimRefs, scanner);
-    scanCode(c, tab, DIM_FN_IDENT_RE, dimRefs, scanner, resolveIdent);
-    scanArg2(c, tab, DIM_ARG2_FN_RE, env, dimRefs, scanner);
-    scanCode(c, tab, CUBE_CREATE_RE, createdCubes, ignore);
-    scanCode(c, tab, CUBE_CREATE_IDENT_RE, createdCubes, ignore, resolveIdent);
-    scanCode(c, tab, DIM_CREATE_RE, createdDims, ignore);
-    scanCode(c, tab, DIM_CREATE_IDENT_RE, createdDims, ignore, resolveIdent);
-    scanCellCalls(c, tab, env, cellCalls);
-    scanInserts(c, env, inserts);
-    scanUncommitted(c, tab, env, uncommitted);
+    const calls: Call[] = [];
+    forEachCall(c, CALL_RE, (fn, args, line, context, offset) =>
+      calls.push({ fn, args, line, context, offset }),
+    );
+    for (const call of calls) scanCall(call, tab, env, s);
+    scanUncommitted(calls, tab, env, uncommitted);
   }
-  const nameKeys = (m: Found) => new Set([...m.keys()].map(tm1NameKey));
   return {
-    cubeRefs,
-    dimRefs,
-    createdCubes: nameKeys(createdCubes),
-    createdDims: nameKeys(createdDims),
+    cubeRefs: s.cubeRefs,
+    dimRefs: s.dimRefs,
+    createdCubes: s.createdCubes,
+    createdDims: s.createdDims,
     tabsChecked,
-    unresolvableArgs: scanner.unresolvable,
-    cellCalls,
-    inserts,
+    unresolvableArgs: s.unresolvable,
+    cellCalls: s.cellCalls,
+    inserts: s.inserts,
     uncommitted,
   };
 }
