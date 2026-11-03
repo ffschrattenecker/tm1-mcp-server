@@ -245,7 +245,7 @@ Run `npm run verify` before opening a PR; it is the gate CI and publish run.
 ## Documentation
 
 - [docs/TOOLS.md](docs/TOOLS.md) — every tool, grouped, with one-line descriptions
-- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — CAM login, TM1 v12 connection, host-disk file access, Streamable HTTP setup and `autoApprove`
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) — CAM login, TM1 v12 connection, host-disk file access, Streamable HTTP setup and tool permissions
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — layering, service-class pattern, transports, the readonly/readwrite gate
 - [CHANGELOG.md](CHANGELOG.md) · [SECURITY.md](SECURITY.md)
 

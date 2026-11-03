@@ -61,8 +61,8 @@ interface ExitCase {
   note?: string;
 }
 
-// Every failure here is a FINDING about the server, not a broken test — this
-// suite is manual/nightly and never a PR gate, so it is allowed to be strict.
+// Every failure here is a FINDING about the server, not a broken test. The suite
+// runs by hand against a live server and is never a PR gate, so it is allowed to be strict.
 // The right response to a red case is to record what TM1 actually returned and
 // work out what changed, never to relax the expectation until it passes.
 const finding = (c: ExitCase, what: string): string =>

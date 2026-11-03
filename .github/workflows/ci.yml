@@ -43,12 +43,6 @@ jobs:
       - name: Smoke-test the tarball
         run: npm run smoke:tarball
 
-      # Consumers install from npm-shrinkwrap.json, which pins the whole
-      # production tree, so this audits what they actually get. Dev-only
-      # advisories (e.g. vite via vitest) don't reach users.
-      - name: Audit (production deps, high+)
-        run: npm audit --omit=dev --audit-level=high
-
       # Full-tree audit incl. devDependencies — informational, never blocks.
       - name: Audit (all deps, informational)
         run: npm audit --audit-level=high

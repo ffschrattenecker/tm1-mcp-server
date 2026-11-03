@@ -57,12 +57,14 @@ truth for any contributor adding TM1 calls or new tools.
 
 ## One definition per wire shape
 
-A shape both layers need — `Thread`, `Cube`, `DataSource`, the log entries —
-lives exactly once, as a Zod object under `src/schemas/`, and its TypeScript
-type is `z.infer` of that object. `src/types.ts` re-exports the derived types;
-`src/tools/schemas/items-*.ts` re-export the schemas, deriving a projection
-where the published payload is a relaxed version of the canonical one
-(`CubeItemSchema = CubeSchema.partial({ dimensions: true })`).
+A shape both layers need — for example `ErrorLogFileSchema` in
+`src/schemas/monitoring.ts` — lives exactly once, as a Zod object under
+`src/schemas/`, and its TypeScript type is `z.infer` of that object.
+`src/types.ts` re-exports the derived types, and `src/tools/schemas/items-*.ts`
+re-export the schemas (`items-monitoring.ts` re-exports `ErrorLogFileSchema`).
+Where the published payload is a relaxed version of the canonical one, it is
+derived rather than copied: `markdownCapable()` in
+`src/tools/schemas/markdown-capable.ts` builds `strict.partial().extend({ markdown })`.
 
 `src/schemas/` must not import from `src/tools/`,
 `src/tm1-client/` or `src/types.ts` — `tests/unit/schema-single-source.test.ts`

@@ -16,7 +16,7 @@
 //
 //   npm run smoke:tarball
 //
-// Exit codes: 0 passed · 1 installed artefact broken · 2 usage error ·
+// Exit codes: 0 passed · 1 installed artefact broken · 2 unexpected error ·
 // 4 pack or install failed (nothing to test).
 import { spawn } from "node:child_process";
 import {
@@ -40,9 +40,13 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PKG = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 
 const EXIT_OK = 0;
-const EXIT_TIER1 = 1;
-const EXIT_USAGE = 2;
+const EXIT_BROKEN = 1;
+const EXIT_UNEXPECTED = 2;
 const EXIT_PACK = 4;
+
+const PACK_TIMEOUT_SEC = 300;
+const INSTALL_TIMEOUT_SEC = 300;
+const START_TIMEOUT_SEC = 30;
 
 // Tar entries that must never appear inside the published tarball (npm prefixes
 // every path with `package/`). `files` in package.json already restricts the
@@ -57,72 +61,6 @@ const FORBIDDEN_IN_TARBALL = [
   /\.map$/,
   /\.d\.ts$/,
 ];
-
-// ---------------------------------------------------------------- arguments
-
-function usage() {
-  process.stdout.write(
-    `Usage: node scripts/smoke-tarball.mjs [options]
-
-  --pack-timeout=SEC    npm pack budget (default: 300).
-  --install-timeout=SEC npm install budget (default: 300).
-  --start-timeout=SEC   No-config start budget (default: 30).
-  --keep-tmp            Leave the throwaway install dir behind (debugging only).
-  -h, --help            This text.
-`,
-  );
-}
-
-function parseArgs(argv) {
-  const opts = {
-    packTimeoutSec: 300,
-    installTimeoutSec: 300,
-    startTimeoutSec: 30,
-    keepTmp: false,
-  };
-  for (const arg of argv) {
-    const [key, ...rest] = arg.split("=");
-    const value = rest.join("=");
-    switch (key) {
-      case "-h":
-      case "--help":
-        usage();
-        process.exit(EXIT_OK);
-        break;
-      case "--pack-timeout":
-        opts.packTimeoutSec = Number(value);
-        break;
-      case "--install-timeout":
-        opts.installTimeoutSec = Number(value);
-        break;
-      case "--start-timeout":
-        opts.startTimeoutSec = Number(value);
-        break;
-      case "--keep-tmp":
-        opts.keepTmp = true;
-        break;
-      default:
-        fail(`Unknown argument: ${arg}
-Run with --help.`);
-    }
-  }
-  const budgets = {
-    "--pack-timeout": opts.packTimeoutSec,
-    "--install-timeout": opts.installTimeoutSec,
-    "--start-timeout": opts.startTimeoutSec,
-  };
-  for (const [flag, value] of Object.entries(budgets)) {
-    if (!Number.isFinite(value) || value <= 0) {
-      fail(`${flag} must be a positive number`);
-    }
-  }
-  return opts;
-}
-
-function fail(message) {
-  process.stderr.write(`\n[smoke-tarball] ${message}\n`);
-  process.exit(EXIT_USAGE);
-}
 
 // ------------------------------------------------------------- process glue
 
@@ -248,9 +186,9 @@ function bareProcessEnv() {
 
 /** npm pack + npm install into a throwaway project. Throws PackError. */
 class PackError extends Error {}
-class Tier1Error extends Error {}
+class ArtefactError extends Error {}
 
-async function packAndInstall(work, opts) {
+async function packAndInstall(work) {
   say(`## pack`);
   // `npm pack` triggers prepack (`rm -rf dist && npm run build`), so this is
   // the real compile of the real source — and it does wipe the developer's
@@ -258,10 +196,10 @@ async function packAndInstall(work, opts) {
   const packed = await run(
     "npm",
     ["pack", "--pack-destination", work, "--loglevel=error"],
-    { cwd: ROOT, timeoutMs: opts.packTimeoutSec * 1000 },
+    { cwd: ROOT, timeoutMs: PACK_TIMEOUT_SEC * 1000 },
   );
   if (packed.timedOut) {
-    throw new PackError(`npm pack timed out after ${opts.packTimeoutSec}s`);
+    throw new PackError(`npm pack timed out after ${PACK_TIMEOUT_SEC}s`);
   }
   if (packed.code !== 0) {
     for (const l of tail(packed.stderr)) say(`   | ${l}`);
@@ -338,12 +276,10 @@ async function packAndInstall(work, opts) {
       "--no-package-lock",
       "--loglevel=error",
     ],
-    { cwd: proj, timeoutMs: opts.installTimeoutSec * 1000 },
+    { cwd: proj, timeoutMs: INSTALL_TIMEOUT_SEC * 1000 },
   );
   if (install.timedOut) {
-    throw new PackError(
-      `npm install timed out after ${opts.installTimeoutSec}s`,
-    );
+    throw new PackError(`npm install timed out after ${INSTALL_TIMEOUT_SEC}s`);
   }
   if (install.code !== 0) {
     for (const l of tail(install.stderr)) say(`   | ${l}`);
@@ -361,12 +297,12 @@ function resolveBinShim(binLink) {
   if (process.platform !== "win32") return realpathSync(binLink);
   const shim = readFileSync(binLink, "utf8");
   const m = /"\$basedir\/([^"]+\.js)"/.exec(shim);
-  if (!m) throw new Tier1Error(`unrecognised npm bin shim at ${binLink}`);
+  if (!m) throw new ArtefactError(`unrecognised npm bin shim at ${binLink}`);
   return realpathSync(resolve(dirname(binLink), m[1]));
 }
 
-/** Everything that must hold for the INSTALLED package. Throws Tier1Error. */
-async function tier1(proj, opts) {
+/** Everything that must hold for the INSTALLED package. Throws ArtefactError. */
+async function checkInstalledArtefact(proj) {
   say(`## installed artefact`);
 
   // 1. The bin entry. npm creates node_modules/.bin/<name> from the "bin"
@@ -374,18 +310,18 @@ async function tier1(proj, opts) {
   //    and no source test can see it.
   const binLink = join(proj, "node_modules", ".bin", "tm1-mcp-server");
   if (!existsSync(binLink)) {
-    throw new Tier1Error(`no bin shim at node_modules/.bin/tm1-mcp-server`);
+    throw new ArtefactError(`no bin shim at node_modules/.bin/tm1-mcp-server`);
   }
   const binTarget = resolveBinShim(binLink);
   const expectedDir =
     join(proj, "node_modules", ...PKG.name.split("/"), "dist") + sep;
   if (!realpathSync(binTarget).startsWith(realpathSync(expectedDir))) {
-    throw new Tier1Error(
+    throw new ArtefactError(
       `bin shim resolves outside the installed package: ${binTarget}`,
     );
   }
   if (!binTarget.endsWith(`${sep}dist${sep}index.js`)) {
-    throw new Tier1Error(
+    throw new ArtefactError(
       `bin shim does not point at dist/index.js: ${binTarget}`,
     );
   }
@@ -399,7 +335,7 @@ async function tier1(proj, opts) {
   closeSync(fd);
   const firstLine = head.subarray(0, n).toString("utf8").split("\n")[0];
   if (firstLine !== "#!/usr/bin/env node") {
-    throw new Tier1Error(
+    throw new ArtefactError(
       `dist/index.js first line is ${JSON.stringify(firstLine)}, expected "#!/usr/bin/env node"`,
     );
   }
@@ -416,7 +352,7 @@ async function tier1(proj, opts) {
   );
   const installedPkg = JSON.parse(readFileSync(installedPkgPath, "utf8"));
   if (installedPkg.version !== PKG.version) {
-    throw new Tier1Error(
+    throw new ArtefactError(
       `installed version ${installedPkg.version} != repo version ${PKG.version}`,
     );
   }
@@ -437,7 +373,7 @@ async function tier1(proj, opts) {
   const noConfig = await runMcp(process.execPath, [binTarget], {
     cwd: proj,
     env: bareEnv,
-    timeoutMs: opts.startTimeoutSec * 1000,
+    timeoutMs: START_TIMEOUT_SEC * 1000,
     requests: [
       {
         jsonrpc: "2.0",
@@ -462,9 +398,9 @@ async function tier1(proj, opts) {
   const secs = ((Date.now() - started) / 1000).toFixed(1);
   if (noConfig.timedOut) {
     for (const l of tail(noConfig.stderr)) say(`   | ${l}`);
-    throw new Tier1Error(
+    throw new ArtefactError(
       `unconfigured start HUNG — no answer to tm1_list_connections within ` +
-        `${opts.startTimeoutSec}s (an MCP client would wait forever)`,
+        `${START_TIMEOUT_SEC}s (an MCP client would wait forever)`,
     );
   }
   const answer = noConfig.responses.find((r) => r.id === 2);
@@ -476,7 +412,7 @@ async function tier1(proj, opts) {
     !text.includes("TM1_BASE_URL")
   ) {
     for (const l of tail(noConfig.stderr)) say(`   | ${l}`);
-    throw new Tier1Error(
+    throw new ArtefactError(
       `unconfigured start must serve an empty tm1_list_connections with a ` +
         `hint naming the .env keys; got ${text.slice(0, 200)}`,
     );
@@ -488,8 +424,6 @@ async function tier1(proj, opts) {
 // --------------------------------------------------------------------- main
 
 async function main() {
-  const opts = parseArgs(process.argv.slice(2));
-
   say(`# tm1-mcp-server tarball smoke — ${new Date().toISOString()}`);
   say(`# package ${PKG.name}@${PKG.version}`);
   say("");
@@ -501,7 +435,7 @@ async function main() {
   try {
     let proj;
     try {
-      ({ proj } = await packAndInstall(work, opts));
+      ({ proj } = await packAndInstall(work));
     } catch (err) {
       if (!(err instanceof PackError)) throw err;
       say(`   => PACK/INSTALL FAILED — ${err.message}`);
@@ -513,14 +447,14 @@ async function main() {
     say("");
 
     try {
-      await tier1(proj, opts);
+      await checkInstalledArtefact(proj);
     } catch (err) {
-      if (!(err instanceof Tier1Error)) throw err;
+      if (!(err instanceof ArtefactError)) throw err;
       say(`   => FAIL — ${err.message}`);
       say("");
       say("## summary");
       say(`   FAILED — the installed artefact is broken`);
-      return EXIT_TIER1;
+      return EXIT_BROKEN;
     }
 
     say("");
@@ -530,12 +464,7 @@ async function main() {
   } finally {
     // Cleanup on success AND on failure. The whole install lives in one
     // mkdtemp root, so a single rm is the entire teardown.
-    if (opts.keepTmp) {
-      say(`
-(kept ${work} — --keep-tmp)`);
-    } else {
-      rmSync(work, { recursive: true, force: true });
-    }
+    rmSync(work, { recursive: true, force: true });
   }
 }
 
@@ -547,5 +476,5 @@ main()
 [smoke-tarball] unexpected error: ${String(err.stack ?? err)}
 `,
     );
-    process.exit(EXIT_USAGE);
+    process.exit(EXIT_UNEXPECTED);
   });

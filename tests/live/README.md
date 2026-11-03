@@ -2,26 +2,23 @@
 
 These suites exercise the **real MCP tool layer against a running TM1 server**.
 Every call goes through the same path an MCP client uses: the tool's zod input
-schema (defaults + validation), the `withAnnotations` wrapper (annotation
-injection, error normalization, output-schema attach), the real handler, the
-real `TM1Client`, and real OData. They are the complement to the mocked unit
-tests under `tests/unit/` — those prove the logic in isolation; these prove the
-calls actually work end-to-end against TM1 11.x.
+schema, the `withAnnotations` wrapper, the real handler, the real `TM1Client`
+and real OData. The unit tests under `tests/unit/` prove the logic in isolation
+against mocks; these prove the calls work end-to-end against TM1 11.x and 12.
 
 ## Opt-in — never runs by default
 
-The default `vitest.config.ts` does **not** include `tests/live`, so
-`npm test` / `npm run verify` never touch the network. Live tests run only via
-their own config and only when a server is configured:
+`vitest.config.ts` does **not** include `tests/live`, so `npm test` and
+`npm run verify` never touch the network. Live tests run through their own
+config and only when a server is configured:
 
 ```bash
 TM1_BASE_URL=https://host:port TM1_USER=admin TM1_PASSWORD=... npm run test:live
 ```
 
-Without `TM1_BASE_URL` + `TM1_USER` in the environment, every suite skips itself
-(`describe.skipIf(!LIVE_ENABLED)`), so the command is also safe to run blind in
-CI — it just reports skipped. Credentials come from the environment / `.env`
-(git-ignored) and are never committed.
+Without `TM1_BASE_URL` and `TM1_USER`, every suite skips itself
+(`describe.skipIf(!LIVE_ENABLED)`). Credentials come from the environment or
+`.env` (git-ignored) and are never committed.
 
 ## Against one connection folder — `npm run test:live:for`
 
@@ -34,69 +31,69 @@ npm run test:live:for -- my-dev --retry-login   # after fixing a refused login
 ```
 
 - The `.env` goes through `connectionEnv()` in `src/connections.ts`, the same
-  dotenv parse and `TM1_*` isolation the MCP server uses. A hand-rolled parser
-  once kept the quotes around a password, and every login failed.
-- One login probe runs before vitest. Every live file logs in by itself, so
-  without the probe a bad password costs one failed login **per file**, and
-  that locks the account fast (see Troubleshooting below).
+  parse and `TM1_*` isolation the MCP server uses.
+- One login probe runs before vitest, so a bad password costs one failed login
+  rather than one per file.
 - A refused probe (401/403) writes `.live-reports/<name>.auth-failed.log` and
   blocks further runs for that connection until `--retry-login` is passed. An
   unreachable server leaves no marker, since it never saw the credentials.
 
-## There is no CI live coverage — and none is planned
+## Coverage is manual, not scheduled
 
-**Read this before you assume the tool surface is continuously verified against
-a real TM1: it is not.** Live coverage exists only for the minutes in which
-somebody runs these suites against a reachable server. Nothing on GitHub does.
+Nothing runs these suites on a timer. Live coverage exists only while someone
+runs them against a reachable server: the TM1 servers sit on a private network
+that GitHub-hosted runners cannot reach. CI therefore proves the code is
+self-consistent, not that TM1 still answers the way it did.
 
-The reason is routing, not effort. The TM1 servers this project is developed
-against sit on a private network (the Windows host of a WSL box). A
-GitHub-hosted runner cannot reach them. A scheduled workflow *could* be added
-and would go green every night — because without `TM1_BASE_URL` + `TM1_USER`
-every suite self-skips — but that green would mean "nothing was tested", and a
-badge that says "passing" for a run that verified nothing is worse than no
-badge at all. So that job deliberately does not exist.
+The recorded-fixture contract suite closes part of that gap without a server.
+A live run can record the structure of real responses, which is then committed
+and checked by the normal unit suite. See
+[tests/fixtures/README.md](../fixtures/README.md) for the flow
+(`npm run contracts:record`, `npm run contracts:verify`).
 
-Two honest ways to close the gap:
+## Safety
 
-- **Run the scheduled script below** on a machine that can reach a TM1 server
-  (the developer's WSL box, or any host with a route to the server).
-- **Recorded-fixture contract suite** (Tier 6 item 1 of the 2026-08-05 review):
-  check in sanitized real responses and assert the parsers against them in the
-  normal CI, with no server involved. That is the only variant that can ever be
-  server-free. **It is not built yet.** Until it is, CI proves the code is
-  self-consistent, not that TM1 still answers the way it did.
+Everything created is prefixed `ZZ_MCP_LIVE_<DOMAIN>` (`SANDBOX` in
+`harness.ts`), and each file deletes its own objects in `afterAll`. The
+`teardown` in `global-setup.ts` sweeps any leftovers after the run.
 
-## Safety model
+## Files
 
-- **Sandbox namespace.** Everything created is prefixed `ZZ_MCP_LIVE_<DOMAIN>`
-  (see `SANDBOX` in `harness.ts`). No real model object is ever touched.
-- **Lifecycle, not blind matrix.** Each domain runs a real
-  create → read → update → delete chain, so destructive tools are covered in a
-  controlled context rather than fired at production objects.
-- **Idempotent cleanup.** Each file tears down its own objects in `afterAll`;
-  `global-setup.ts`'s `teardown` is a safety net that sweeps any
-  `ZZ_MCP_LIVE`-prefixed leftovers (including `}Subsets_…` control objects)
-  after the whole run, in dependency order (chores → processes → cubes → dims).
-- **Avoided:** unbounded `TransactionLogEntries` reads (slow full-scan /
-  timeout trap; `rest.live` always filters by TimeStamp) and `tm1_save_data`
-  (global flush).
+Helpers and infrastructure:
 
-## Layout
+- `harness.ts` — connect, capture tool handlers, `call`/`ok`, REST fixtures, `sweepSandbox`
+- `global-setup.ts` — vitest globalSetup; teardown sweeps leftovers and merges recorded contracts
+- `contract-mode.ts` — `RECORD_CONTRACTS` flag and spool paths, shared by setup and recorder
+- `contract-recorder.ts` — records wire responses while the suite runs
+- `service-recorder.ts` — records service-method return shapes
+- `merge-contracts.ts` — folds the recorder spools into `tests/fixtures/*.json`
 
-| File | Domain |
-|------|--------|
-| `harness.ts` | shared infra: connect, capture handlers, `call`/`ok`, REST fixtures (`restGet`/`restWrite`/`names`/`createDimension`/`createCube`/`dropIfExists`/`cellValue`), `sweepSandbox` |
-| `global-setup.ts` | vitest globalSetup; `teardown` = safety-net sweep |
-| `read-smoke.live.test.ts` | non-mutating read battery + error-envelope checks |
-| `dimension.live.test.ts` | dimensions / hierarchies / elements / attributes / subsets-of-dim |
-| `cube.live.test.ts` | cubes / cells / rules / MDX |
-| `view.live.test.ts` | native + MDX views / subsets |
-| `process.live.test.ts` | TI processes (upsert / compile / execute / diff / diagnose) |
-| `chore.live.test.ts` | chores (deactivated; create / toggle / execute / delete) |
-| `ops.live.test.ts` | server / security / files |
-| `analysis.live.test.ts` | read-only audits over the existing model |
-| `rest.live.test.ts` | `tm1_rest_read` / `tm1_rest_write`: cheat-sheet and monitoring paths, guard refusals |
+Suites:
+
+- `read-smoke.live.test.ts` — non-mutating read battery and error envelopes
+- `read-broad.live.test.ts` — broad read-only sweep over a real model
+- `analysis.live.test.ts` — read-only audit and analysis tools
+- `compare.live.test.ts` — cross-connection comparison, run against itself
+- `dimension.live.test.ts` — dimensions, hierarchies, elements, attributes
+- `element-refs.live.test.ts` — element-literal reference check for process validation
+- `cube.live.test.ts` — cubes, cells, rules, MDX
+- `rules-preflight.live.test.ts` — `tm1_set_cube_rules` preflight
+- `view.live.test.ts` — native and MDX views, subsets
+- `write-cells-address.live.test.ts` — `tm1_write_cells` address resolution
+- `process.live.test.ts` — TurboIntegrator tools: upsert, compile, execute, diff
+- `ti-extra.live.test.ts` — remaining TI tools: `.pro` round trip, bulk dump, readiness scan
+- `async-exec.live.test.ts` — TI runs as async operations: timeout, cancel, rollback
+- `process-exit-status.live.test.ts` — process exit status mapping (`ProcessOutcome`)
+- `process-backup.live.test.ts` — the automatic pre-overwrite backup restores cleanly
+- `ignored-columns.live.test.ts` — datasource columns set to "Ignore"
+- `chore.live.test.ts` — chore lifecycle
+- `chore-exit-status.live.test.ts` — chore step exit status mapping
+- `ops.live.test.ts` — server, security and file tools
+- `rest.live.test.ts` — `tm1_rest_read` / `tm1_rest_write` paths and guard refusals
+- `perf-fixes.live.test.ts` — performance fixes and the `$batch` fallback probe
+- `audit-fixes.live.test.ts` — validation of the 2026-08-05 audit fixes
+- `v12-connection.live.test.ts` — v12 (Planning Analytics Engine) login and services
+- `release-4-1.live.test.ts`, `release-5-0.live.test.ts`, `release-6-1.live.test.ts` — checks for specific releases
 
 ## Writing a new live test
 
@@ -116,10 +113,10 @@ describe.skipIf(!LIVE_ENABLED)("live: my domain", () => {
 ```
 
 - `h.call(name, args)` returns `{ result, json, text, isError }` and never throws
-  on a TM1 error — assert on `isError` / `json.code` for negative paths.
-- `h.ok(name, args)` throws if the tool returned an error envelope — use for
+  on a TM1 error. Assert on `isError` or `json.code` for negative paths.
+- `h.ok(name, args)` throws if the tool returned an error envelope. Use it for
   steps that must succeed.
 - Prefix **every** created object with `${SANDBOX}_<DOMAIN>` and delete it in
-  `afterAll` (the global sweep is a backstop, not a substitute).
+  `afterAll`. The global sweep is a backstop, not a substitute.
 - Build fixtures with the REST helpers: `createDimension(h, D, ["A", { name: "T", children: ["A"] }])`,
   `createCube(h, C, [D1, D2])` (TM1 needs at least two dimensions), `dropIfExists(h, seg("Cubes", C))`.
