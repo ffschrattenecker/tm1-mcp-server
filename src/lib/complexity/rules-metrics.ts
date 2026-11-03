@@ -41,12 +41,6 @@ export interface RulesMetrics {
 
 const RULE_LINE_RE = /^\[/;
 
-function stripQuotes(s: string): string {
-  // Strip matching pair only — leave mismatched quotes alone so we don't
-  // mangle an already-broken extracted argument (`'Foo"` stays `'Foo"`).
-  return s.replace(/^(['"])(.*)\1$/, "$2");
-}
-
 export function computeRulesMetrics(
   cube: string,
   rulesText: string,
@@ -98,10 +92,7 @@ export function computeRulesMetrics(
     }
     for (const call of extractDbCalls(line.trimmed)) {
       dbCallCount++;
-      if (call.cubeName) {
-        const c = stripQuotes(call.cubeName);
-        if (c !== "") coupled.add(c);
-      }
+      if (call.cubeName) coupled.add(call.cubeName);
     }
   }
 

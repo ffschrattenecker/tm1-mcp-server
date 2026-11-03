@@ -60,7 +60,7 @@ const OWNED_BY: Record<string, readonly Op[]> = {
   headLines: ["get"],
 };
 
-function validationError(message: string, hint: string): TM1Error {
+export function validationError(message: string, hint: string): TM1Error {
   return new TM1Error({ code: TM1ErrorCode.VALIDATION_ERROR, message, hint });
 }
 

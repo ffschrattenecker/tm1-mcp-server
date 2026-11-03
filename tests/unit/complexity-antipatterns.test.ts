@@ -239,13 +239,6 @@ describe("dead-assignment", () => {
     expect(rules(findings)).not.toContain("dead-assignment");
   });
 
-  it("respects excludeVarsFromDeadCheck option", () => {
-    const findings = lintProcess("p", code({ data: `pExcluded = 7;` }), {
-      excludeVarsFromDeadCheck: ["pExcluded"],
-    });
-    expect(rules(findings)).not.toContain("dead-assignment");
-  });
-
   it("reports dead variable only once even if assigned multiple times", () => {
     const findings = lintProcess("p", code({ data: `vX = 1;\nvX = 2;` }));
     const hits = findings.filter((f) => f.rule === "dead-assignment");

@@ -125,14 +125,13 @@ export class ViewService {
 
   /**
    * Return the structural definition of a view (MDX expression OR native
-   * axes) WITHOUT executing it. Auto-falls back from public to private when
-   * isPrivate is undefined.
+   * axes) WITHOUT executing it. Tries the public view first and falls back to
+   * the private one.
    * GET /api/v1/Cubes('X')/Views('Y') with tm1.NativeView/* expands.
    */
   async getDefinition(
     cubeName: string,
     viewName: string,
-    isPrivate?: boolean,
   ): Promise<ViewDefinition> {
     type RawSubset = {
       Name?: string;
@@ -155,15 +154,10 @@ export class ViewService {
       return this.http.request<RawBase>("GET", path);
     };
 
-    const order: Array<{ seg: "Views" | "PrivateViews"; priv: boolean }> =
-      isPrivate === true
-        ? [{ seg: "PrivateViews", priv: true }]
-        : isPrivate === false
-          ? [{ seg: "Views", priv: false }]
-          : [
-              { seg: "Views", priv: false },
-              { seg: "PrivateViews", priv: true },
-            ];
+    const order: Array<{ seg: "Views" | "PrivateViews"; priv: boolean }> = [
+      { seg: "Views", priv: false },
+      { seg: "PrivateViews", priv: true },
+    ];
 
     let base: RawBase | null = null;
     let resolvedSeg: "Views" | "PrivateViews" = "Views";

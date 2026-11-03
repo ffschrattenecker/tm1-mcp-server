@@ -5,14 +5,10 @@ import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
-import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { CONTAINER_SCHEMA } from "./container.js";
+import { validationError } from "./files-read.js";
 
 const HARD_MAX_BYTES = 32 * 1024 * 1024;
-
-function validationError(message: string, hint: string): TM1Error {
-  return new TM1Error({ code: TM1ErrorCode.VALIDATION_ERROR, message, hint });
-}
 
 // Upload and delete share one tool so the readonly gate in defineTool covers
 // both with a single non-READ_ONLY annotation; DESTRUCTIVE because either op

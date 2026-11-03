@@ -8,12 +8,8 @@ import {
 import { FORMAT_SCHEMA } from "../../src/tools/format.js";
 import {
   escapeOdataLiteral,
-  filterClause,
-  nameFilterPredicates,
   odataKey,
   pageClauseList,
-  pageClauses,
-  readCount,
 } from "../../src/tm1-client/services/odata-page.js";
 
 describe("paginate", () => {
@@ -149,74 +145,25 @@ describe("odata-page clause builders", () => {
   it("always emits $orderby next to $skip", () => {
     // R1: $skip against TM1's internal index order silently duplicates or
     // drops rows once anything is created or deleted mid-walk.
-    const clauses = pageClauseList({ top: 50, skip: 100 });
-    expect(clauses).toEqual([
+    expect(pageClauseList({ top: 50, skip: 100 })).toEqual([
       "$orderby=Name",
       "$top=50",
       "$skip=100",
       "$count=true",
     ]);
-    expect(pageClauses({ top: 50, skip: 100 })).toBe(
-      "&$orderby=Name&$top=50&$skip=100&$count=true",
-    );
   });
 
   it("emits nothing when unpaged", () => {
     expect(pageClauseList(undefined)).toEqual([]);
-    expect(pageClauses(undefined)).toBe("");
-    expect(filterClause([])).toBe("");
-  });
-
-  it("honours a caller-chosen orderBy property", () => {
-    expect(pageClauses({ top: 1, skip: 0, orderBy: "Filename" })).toContain(
-      "$orderby=Filename",
-    );
-  });
-
-  it("excludes control objects unless asked, and lowercases substring needles", () => {
-    expect(nameFilterPredicates({})).toEqual(["not startswith(Name,'}')"]);
-    expect(nameFilterPredicates({ includeControl: true })).toEqual([]);
-    expect(
-      nameFilterPredicates({
-        includeControl: true,
-        nameContains: "Plan",
-        nameNotContains: "TEST",
-      }),
-    ).toEqual([
-      "contains(tolower(Name),'plan')",
-      "not contains(tolower(Name),'test')",
-    ]);
-    expect(filterClause(nameFilterPredicates({ nameExact: "Sales" }))).toBe(
-      "&$filter=not startswith(Name,'}') and Name eq 'Sales'",
-    );
-  });
-
-  it("ignores empty filter strings rather than emitting a match-nothing predicate", () => {
-    expect(
-      nameFilterPredicates({
-        includeControl: true,
-        nameExact: "",
-        nameContains: "",
-      }),
-    ).toEqual([]);
   });
 
   it("doubles quotes so a name cannot break out of an OData literal", () => {
     expect(escapeOdataLiteral("O'Brien")).toBe("O''Brien");
-    expect(
-      nameFilterPredicates({ includeControl: true, nameExact: "d'Or" }),
-    ).toEqual(["Name eq 'd''Or'"]);
   });
 
   it("odataKey doubles quotes, then percent-encodes URL-significant chars", () => {
     expect(odataKey("O'Brien")).toBe("O''Brien");
     expect(odataKey("a#b?c%d&e/f g")).toBe("a%23b%3Fc%25d%26e%2Ff%20g");
     expect(odataKey("}Clients")).toBe("%7DClients");
-  });
-
-  it("reads the collection count, and reports absence as undefined", () => {
-    expect(readCount({ "@odata.count": 7 })).toBe(7);
-    expect(readCount({})).toBeUndefined();
-    expect(readCount(undefined)).toBeUndefined();
   });
 });

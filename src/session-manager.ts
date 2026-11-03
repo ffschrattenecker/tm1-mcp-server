@@ -5,11 +5,9 @@ import {
   type ConnectionProfile,
 } from "./tm1-client/connection/profile.js";
 import { getTm1Dispatcher, tm1Fetch } from "./tm1-client/dispatcher.js";
-import { PRODUCT, VERSION } from "./version.js";
+import { USER_AGENT } from "./tm1-client/http.js";
 import { TM1Error, TM1ErrorCode } from "./types.js";
 import type pino from "pino";
-
-const USER_AGENT = `${PRODUCT}/${VERSION}`;
 
 class TimeoutError extends Error {
   readonly timeoutMs: number;

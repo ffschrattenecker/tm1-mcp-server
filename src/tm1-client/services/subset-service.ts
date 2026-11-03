@@ -56,10 +56,8 @@ export class SubsetService {
     dimensionName: string,
     hierarchyName: string,
     subsetName: string,
-    isPrivate = false,
   ): Promise<Subset> {
-    const segment = isPrivate ? "PrivateSubsets" : "Subsets";
-    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/${segment}('${odataKey(subsetName)}')?$expand=Elements($select=Name)&$select=Name,Expression,Alias`;
+    const path = `/api/v1/Dimensions('${odataKey(dimensionName)}')/Hierarchies('${odataKey(hierarchyName)}')/Subsets('${odataKey(subsetName)}')?$expand=Elements($select=Name)&$select=Name,Expression,Alias`;
     const response = await this.http.request<{
       Name: string;
       Expression?: string;
@@ -70,7 +68,7 @@ export class SubsetService {
       name: response.Name,
       dimensionName,
       hierarchyName,
-      private: isPrivate,
+      private: false,
       expression: response.Expression || undefined,
       elements: (response.Elements ?? []).map((e) => e.Name),
       alias: response.Alias || undefined,

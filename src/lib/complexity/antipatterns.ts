@@ -26,11 +26,6 @@ export interface Finding {
 export interface LintOptions {
   /** Element-arg count at/above which CellGetN/S is flagged as perf-risky. */
   cellGetDimThreshold?: number | undefined;
-  /**
-   * Additional variable names (case-insensitive) to exclude from dead-assignment
-   * detection — pass process parameters and datasource column variable names here.
-   */
-  excludeVarsFromDeadCheck?: string[] | undefined;
 }
 
 const TABS: ReadonlyArray<TiTab> = ["prolog", "metadata", "data", "epilog"];
@@ -338,10 +333,6 @@ export function lintProcess(
     collectReadsFromStmts(ast, readSet);
   }
 
-  const excludeSet = new Set<string>(
-    (opts?.excludeVarsFromDeadCheck ?? []).map((v) => v.toLowerCase()),
-  );
-
   const deadCandidates: DeadCandidate[] = [];
   for (const tab of ["metadata", "data"] as const) {
     const ast = parsedTabs.get(tab);
@@ -351,7 +342,6 @@ export function lintProcess(
   const reported = new Set<string>();
   for (const c of deadCandidates) {
     if (reported.has(c.variable)) continue;
-    if (excludeSet.has(c.variable)) continue;
     if (!readSet.has(c.variable)) {
       reported.add(c.variable);
       findings.push({

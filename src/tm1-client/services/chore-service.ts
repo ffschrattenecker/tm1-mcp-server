@@ -7,13 +7,18 @@ import {
   TM1Error,
   TM1ErrorCode,
 } from "../../types.js";
-import type { Chore, ChoreCreate, ChoreResult } from "../../types.js";
+import type {
+  Chore,
+  ChoreFrequency,
+  ChoreResult,
+  ChoreStep,
+} from "../../types.js";
 import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { classifyChoreExecution } from "./chore-status.js";
 import { rethrowIfSystemic } from "./fallback.js";
 import { odataKey } from "./odata-page.js";
 
-function frequencyDuration(f: ChoreCreate["frequency"]): string {
+function frequencyDuration(f: ChoreFrequency): string {
   return `P${f.days}DT${String(f.hours).padStart(2, "0")}H${String(f.minutes).padStart(2, "0")}M${String(f.seconds).padStart(2, "0")}S`;
 }
 
@@ -162,8 +167,8 @@ export class ChoreService {
       active?: boolean | undefined;
       dstSensitive?: boolean | undefined;
       executionMode?: "SingleCommit" | "MultipleCommit" | undefined;
-      frequency?: ChoreCreate["frequency"] | undefined;
-      steps?: ChoreCreate["steps"] | undefined;
+      frequency?: ChoreFrequency | undefined;
+      steps?: ChoreStep[] | undefined;
     },
   ): Promise<void> {
     const path = `/api/v1/Chores('${odataKey(choreName)}')`;

@@ -116,12 +116,7 @@
         "dimensions[]": "string",
         "hasRules?": "boolean",
         "name": "string"
-      },
-      "items[]?": {
-        "dimensions[]": "string",
-        "name": "string"
-      },
-      "total?": "number"
+      }
     },
     "dimensions.list": {
       "[]?": {
@@ -130,12 +125,7 @@
         },
         "hierarchies[]": "string",
         "name": "string"
-      },
-      "items[]?": {
-        "hierarchies[]": "string",
-        "name": "string"
-      },
-      "total?": "number"
+      }
     },
     "dimensions.resolveDefaultMember": {
       "confidence": "string",
@@ -393,17 +383,7 @@
           "prompt?": "string",
           "type": "string"
         }
-      },
-      "items[]?": {
-        "name": "string",
-        "parameters[]": {
-          "defaultValue": "number|string",
-          "name": "string",
-          "prompt?": "string",
-          "type": "string"
-        }
-      },
-      "total?": "number"
+      }
     },
     "processes.listDataSources": {
       "[]": {

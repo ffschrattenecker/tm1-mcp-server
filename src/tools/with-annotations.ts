@@ -6,7 +6,7 @@ import { slimJsonSchema } from "../lib/slim-json-schema.js";
 import { specFor, type ResolvedSpec } from "./define-tool.js";
 import { DEFAULT_MAX_RESPONSE_CHARS } from "../config.js";
 import { TM1Error, TM1ErrorCode } from "../types.js";
-import { strictVariants } from "./schemas/markdown-capable.js";
+import { isZodSchema, strictVariants } from "./schemas/markdown-capable.js";
 import {
   formatTm1ErrorResult,
   normalizeErrorResult,
@@ -34,10 +34,6 @@ export function deriveTitle(toolName: string): string {
 
 // An output schema is either a raw shape or a full Zod schema
 // (passthrough/catchall). Normalize to a parseable schema.
-function isZodSchema(entry: ZodRawShape | ZodTypeAny): entry is ZodTypeAny {
-  return "_def" in entry;
-}
-
 function asZodSchema(entry: ZodRawShape | ZodTypeAny): ZodTypeAny {
   return isZodSchema(entry) ? entry : z.object(entry);
 }

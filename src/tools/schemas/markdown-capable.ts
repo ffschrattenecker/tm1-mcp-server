@@ -43,7 +43,9 @@ const MARKDOWN_ONLY_SCHEMA = z.strictObject({
   markdown: z.string(),
 });
 
-function isZodSchema(entry: ZodRawShape | ZodTypeAny): entry is ZodTypeAny {
+export function isZodSchema(
+  entry: ZodRawShape | ZodTypeAny,
+): entry is ZodTypeAny {
   return "_def" in entry;
 }
 

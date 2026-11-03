@@ -15,7 +15,7 @@ import { maskSecretValues } from "../lib/mask-secrets.js";
 
 const MAX_NETWORK_RETRIES = 3;
 const BACKOFF_BASE_MS = 1000;
-const USER_AGENT = `${PRODUCT}/${VERSION}`;
+export const USER_AGENT = `${PRODUCT}/${VERSION}`;
 
 // Async operations (RequestOptions.async). Polling backs off from 0.1s to 1s.
 // Without a caller timeoutMs the wait is capped at an hour — the tools'
@@ -45,11 +45,6 @@ function isSafeHttpMethod(method: string): boolean {
 export interface RequestOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
-  // Disable the safe-method network-retry loop for this call. Use for
-  // deterministically-slow endpoints (e.g. the transaction log) where a
-  // timeout means "too much data", not a transient blip — retrying just
-  // multiplies the wait. Default: retries enabled for safe methods.
-  retry?: boolean;
   // Run as a TM1 async operation (`Prefer: respond-async`). TM1 answers 202
   // and the result is polled from /_async('id'), so a long TI run never holds
   // one HTTP request open. timeoutMs then caps the whole wait (default: an
@@ -140,8 +135,7 @@ export class TM1HttpClient {
   ): Promise<T> {
     const url = `${this.config.baseUrl}${this.profile.resolveApiPath(path)}`;
     const isSafeMethod = isSafeHttpMethod(method);
-    const allowRetry = opts?.retry !== false;
-    const maxAttempts = isSafeMethod && allowRetry ? MAX_NETWORK_RETRIES : 0;
+    const maxAttempts = isSafeMethod ? MAX_NETWORK_RETRIES : 0;
     const isAsync = opts?.async === true;
     // Async: the POST itself returns at once, and a server that ignores the
     // preference answers synchronously — so the budget covers either.
@@ -294,12 +288,8 @@ export class TM1HttpClient {
    * to present it.
    */
   /** @internal — for Service-layer use; not part of the public consumer API. */
-  public async requestRawBytes(
-    method: string,
-    path: string,
-    opts?: RequestOptions,
-  ): Promise<Buffer> {
-    const res = await this.fetchRaw(method, path, opts);
+  public async requestRawBytes(method: string, path: string): Promise<Buffer> {
+    const res = await this.fetchRaw(method, path);
     return Buffer.from(await res.arrayBuffer());
   }
 
@@ -365,10 +355,9 @@ export class TM1HttpClient {
     path: string,
     body: Uint8Array,
     contentType: string = "application/octet-stream",
-    opts?: RequestOptions,
   ): Promise<void> {
     const url = `${this.config.baseUrl}${this.profile.resolveApiPath(path)}`;
-    const effectiveTimeout = opts?.timeoutMs ?? this.config.requestTimeoutMs;
+    const effectiveTimeout = this.config.requestTimeoutMs;
     const cookie = await this.sessionManager.ensureSession();
 
     const response = await this.withReauth(
@@ -386,7 +375,6 @@ export class TM1HttpClient {
           },
           body,
           effectiveTimeout,
-          opts?.signal,
         ),
       cookie,
       path,

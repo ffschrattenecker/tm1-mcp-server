@@ -370,24 +370,16 @@ export interface CubeRules {
   dimensions?: string[];
 }
 
-interface ChoreStep {
+export interface ChoreStep {
   process: string;
   parameters: Array<{ name: string; value: string | number }>;
 }
 
-export interface ChoreCreate {
-  name: string;
-  startTime: string; // ISO 8601, z.B. "2025-01-01T06:00:00"
-  dstSensitive: boolean;
-  active: boolean;
-  executionMode: "SingleCommit" | "MultipleCommit";
-  frequency: {
-    days: number;
-    hours: number;
-    minutes: number;
-    seconds: number;
-  };
-  steps: ChoreStep[];
+export interface ChoreFrequency {
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
 }
 
 export interface ServerInfo {

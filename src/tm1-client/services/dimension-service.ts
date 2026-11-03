@@ -4,16 +4,7 @@
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type { Dimension } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
-import {
-  filterClause,
-  nameFilterPredicates,
-  pageClauses,
-  readCount,
-  type NameFilterOpts,
-  type Paged,
-  type PageOpts,
-  odataKey,
-} from "./odata-page.js";
+import { odataKey } from "./odata-page.js";
 
 type DefaultMemberSource = "defined" | "single_root" | "first_root" | "index_1";
 
@@ -30,11 +21,8 @@ export interface DefaultMemberResolution {
   warning?: string;
 }
 
-export interface DimensionListOpts extends NameFilterOpts {
+export interface DimensionListOpts {
   includeElementCount?: boolean;
-  includeElementStats?: boolean;
-  /** Set to slice server-side. Only legal when every active filter is in NameFilterOpts. */
-  page?: PageOpts;
 }
 
 export class DimensionService {
@@ -48,100 +36,33 @@ export class DimensionService {
    * `Elements($count=true;$top=0)` so each Hierarchy returns
    * `Elements@odata.count` without paying for the full element list.
    * Single round-trip, so sizing many dimensions costs one request.
-   *
-   * When opts.includeElementStats is true, the expand fetches every
-   * Element's Type+Level so we can aggregate per-Type counts and maxLevel
-   * client-side. TM1 OData rejects `Type eq 'Numeric'` ($filter on enum
-   * properties) and exposes no nested `$apply=groupby`, so a single
-   * full-element scan is the cheapest path — still one round-trip, payload
-   * scales with total element count across all dimensions.
-   * Takes precedence over includeElementCount when both are set.
    */
-  async list(opts?: {
-    includeElementCount?: boolean;
-    includeElementStats?: boolean;
-  }): Promise<Dimension[]>;
-  /**
-   * Paged variant: with `page` set the *outer* /Dimensions collection is
-   * sliced server-side, which is the only lever that bounds the
-   * includeElementStats payload — a 340-dimension model measured 218 MB on the
-   * full scan versus 101 MB for the first 50-dimension page. The nested
-   * Elements expand is still unbounded per dimension (TM1 has no nested
-   * aggregate that would give Type/Level counts without listing elements), so
-   * the win is proportional to how many dimensions the page holds, not
-   * constant.
-   */
-  async list(
-    opts: DimensionListOpts & { page: PageOpts },
-  ): Promise<Paged<Dimension>>;
-  async list(
-    opts: DimensionListOpts = {},
-  ): Promise<Dimension[] | Paged<Dimension>> {
-    let expand: string;
-    if (opts?.includeElementStats) {
-      expand = "Hierarchies($select=Name;$expand=Elements($select=Type,Level))";
-    } else if (opts?.includeElementCount) {
-      expand = "Hierarchies($select=Name;$expand=Elements($count=true;$top=0))";
-    } else {
-      expand = "Hierarchies($select=Name)";
-    }
-    // Filters are only emitted on the paged path; unpaged callers keep getting
-    // the whole collection and filter in-process, so nothing changes for them.
-    const filter =
-      opts.page === undefined ? "" : filterClause(nameFilterPredicates(opts));
-    const path = `/api/v1/Dimensions?$expand=${expand}${filter}${pageClauses(opts.page)}`;
+  async list(opts: DimensionListOpts = {}): Promise<Dimension[]> {
+    const expand = opts.includeElementCount
+      ? "Hierarchies($select=Name;$expand=Elements($count=true;$top=0))"
+      : "Hierarchies($select=Name)";
+    const path = `/api/v1/Dimensions?$expand=${expand}`;
     const response = await this.http.request<{
-      "@odata.count"?: number;
       value: Array<{
         Name: string;
         Hierarchies: Array<{
           Name: string;
           "Elements@odata.count"?: number;
-          Elements?: Array<{ Type: string; Level: number }>;
         }>;
       }>;
     }>("GET", path);
-    const items = response.value.map((d) => {
+    return response.value.map((d) => {
       const dim: Dimension = {
         name: d.Name,
         hierarchies: d.Hierarchies.map((h) => h.Name),
       };
-      if (opts?.includeElementStats) {
-        dim.elementStats = Object.fromEntries(
-          d.Hierarchies.map((h) => {
-            const elements = h.Elements ?? [];
-            let numeric = 0;
-            let consolidated = 0;
-            let stringCount = 0;
-            let maxLevel = 0;
-            for (const e of elements) {
-              if (e.Type === "Numeric") numeric++;
-              else if (e.Type === "Consolidated") consolidated++;
-              else if (e.Type === "String") stringCount++;
-              if (e.Level > maxLevel) maxLevel = e.Level;
-            }
-            return [
-              h.Name,
-              {
-                total: elements.length,
-                numeric,
-                consolidated,
-                string: stringCount,
-                maxLevel,
-              },
-            ];
-          }),
-        );
-      } else if (opts?.includeElementCount) {
+      if (opts.includeElementCount) {
         dim.elementCounts = Object.fromEntries(
           d.Hierarchies.map((h) => [h.Name, h["Elements@odata.count"] ?? 0]),
         );
       }
       return dim;
     });
-    return opts.page === undefined
-      ? items
-      : { items, total: readCount(response) };
   }
 
   /**

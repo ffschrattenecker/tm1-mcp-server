@@ -73,7 +73,7 @@ describe("TM1Client – views.getDefinition() on a native view", () => {
         }),
       );
 
-    const def = await client.views.getDefinition("Sales", "NV", false);
+    const def = await client.views.getDefinition("Sales", "NV");
 
     const nativeUrl = decodeURIComponent(String(fetchSpy.mock.calls[1][0]));
     // Path through the complex collection, parenthesized options only from the
