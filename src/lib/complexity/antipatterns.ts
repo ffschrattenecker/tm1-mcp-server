@@ -10,6 +10,7 @@ import { parseTiCode } from "../callgraph/tiParser.js";
 import type { TiStatement } from "../callgraph/types.js";
 import type { ProcessCodeInput, TiTab } from "./process-metrics.js";
 import { TI_VAR } from "../ti-identifier.js";
+import { quotedLiteral } from "../ti-lex.js";
 
 type Severity = "error" | "warn" | "info";
 
@@ -191,16 +192,6 @@ function collectDeadCandidates(
   }
 }
 
-/**
- * Strip a TI single-quoted string literal to its inner value, or return null if
- * the arg is not a string literal (e.g. a variable or number).
- */
-function stringLiteralValue(arg: string): string | null {
-  const t = arg.trim();
-  if (t.length < 2 || t[0] !== "'" || t[t.length - 1] !== "'") return null;
-  return t.slice(1, -1).replace(/''/g, "'");
-}
-
 /** UNC (`\\srv\…`) or drive-letter (`C:\…`) absolute path. */
 const PATH_LITERAL = /^(?:\\\\|[A-Za-z]:[\\/])/;
 
@@ -282,7 +273,7 @@ function walk(
         });
       }
       for (const arg of s.args) {
-        const val = stringLiteralValue(arg);
+        const val = quotedLiteral(arg);
         if (val && PATH_LITERAL.test(val)) {
           ctx.findings.push({
             process: ctx.process,

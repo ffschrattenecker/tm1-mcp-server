@@ -15,7 +15,14 @@ import {
 } from "./variableEnv.js";
 import { rethrowIfSystemic } from "../../tm1-client/services/fallback.js";
 import { extractSubsetUsage, type SubsetUsage } from "./subsetUsage.js";
-import { TI_VAR } from "../ti-identifier.js";
+import {
+  ASSIGNMENT_RE,
+  SECTION_MARKER_RE,
+  matchParen,
+  quotedLiteral,
+  splitTopLevel,
+  truncateSnippet,
+} from "../ti-lex.js";
 
 // ─── Argument-Index Tables ───────────────────────────────────────────────────
 
@@ -163,59 +170,9 @@ export interface ReferenceIndex {
 
 // ─── Helpers (subset of rulesLinter/tiServerLinter internals) ────────────────
 
-export function splitArgs(argsStr: string): string[] {
-  if (!argsStr.trim()) {
-    return [];
-  }
-  const args: string[] = [];
-  let depth = 0;
-  let inStr = false;
-  let cur = "";
-  for (const ch of argsStr) {
-    if (ch === "'" && !inStr) {
-      inStr = true;
-      cur += ch;
-    } else if (ch === "'" && inStr) {
-      inStr = false;
-      cur += ch;
-    } else if (!inStr && ch === "(") {
-      depth++;
-      cur += ch;
-    } else if (!inStr && ch === ")") {
-      depth--;
-      cur += ch;
-    } else if (!inStr && depth === 0 && ch === ",") {
-      args.push(cur.trim());
-      cur = "";
-    } else {
-      cur += ch;
-    }
-  }
-  args.push(cur.trim());
-  return args.filter((a) => a !== "");
-}
-
 /** Composite key for the byElement index: dimension + element, both lowercased. */
 export function elementKey(dimension: string, element: string): string {
   return `${dimension.toLowerCase()} ${element.toLowerCase()}`;
-}
-
-export function extractStringLiteral(arg: string): string | null {
-  const t = arg.trim();
-  if (t.startsWith("'") && t.endsWith("'") && t.length >= 3) {
-    const inner = t.slice(1, -1);
-    if (!inner.includes("'")) {
-      return inner;
-    }
-  }
-  return null;
-}
-
-const SECTION_MARKER_RE = /^57[2345],\d*$/;
-
-function truncateSnippet(line: string): string {
-  const t = line.trim();
-  return t.length > 200 ? t.slice(0, 197) + "…" : t;
 }
 
 // ─── TI reference extraction (one section at a time) ─────────────────────────
@@ -280,8 +237,8 @@ function resolveValueArg(
 function extractCallParams(args: string[], env: ProcessEnv): CallParam[] {
   const params: CallParam[] = [];
   for (let i = 1; i + 1 < args.length; i += 2) {
-    const nameLit = extractStringLiteral(args[i]!);
-    if (nameLit === null) {
+    const nameLit = quotedLiteral(args[i]!);
+    if (!nameLit) {
       continue;
     }
     const { resolution, valueRaw } = resolveValueArg(args[i + 1]!, env);
@@ -325,10 +282,6 @@ export function extractTiReferences(
     text.split("\n").map((l) => l.replace(/\r$/, "")),
   );
 
-  const assignRe = new RegExp(
-    `^\\s*(${TI_VAR})\\s*=\\s*(.+?)\\s*;?\\s*(?:#.*)?$`,
-  );
-
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const line = lines[lineIdx]!;
     if (SECTION_MARKER_RE.test(line.trim()) || line.trim() === "") {
@@ -341,7 +294,7 @@ export function extractTiReferences(
     }
 
     // Vor der Call-Erkennung: Zuweisungen in liveVars eintragen (last-assignment-wins).
-    const aM = assignRe.exec(line);
+    const aM = ASSIGNMENT_RE.exec(line);
     if (aM && !aM[2]!.startsWith("=")) {
       const varLc = aM[1]!.toLowerCase();
       if (!baseEnv.paramsLc.has(varLc)) {
@@ -354,35 +307,27 @@ export function extractTiReferences(
     while ((m = FUNC_RE.exec(neutralized)) !== null) {
       const funcLower = m[1]!.toLowerCase();
       const openParen = m.index + m[0].length - 1;
-
-      let depth = 1;
-      let i = openParen + 1;
-      while (i < neutralized.length && depth > 0) {
-        if (neutralized[i] === "(") {
-          depth++;
-        } else if (neutralized[i] === ")") {
-          depth--;
-        }
-        i++;
-      }
-      if (depth !== 0) {
+      // Matched on the neutralized line (comments and strings blanked); the
+      // arguments are read from the original line so their text is kept.
+      const close = matchParen(neutralized, openParen);
+      if (close === -1) {
         continue;
       }
 
-      const argsStr = line.slice(openParen + 1, i - 1);
-      const args = splitArgs(argsStr);
+      const argsStr = line.slice(openParen + 1, close);
+      const args = splitTopLevel(argsStr, ",").filter((a) => a !== "");
 
       if (SKIP_VALIDATION_FUNCS.has(funcLower)) {
         continue;
       }
 
-      const snippet = truncateSnippet(line);
+      const snippet = truncateSnippet(line, 200);
       const pushRef = (kind: RefTargetKind, argIdx: number | undefined) => {
         if (argIdx === undefined || argIdx >= args.length) {
           return;
         }
         const argVal = args[argIdx]!;
-        let targetName = extractStringLiteral(argVal);
+        let targetName = quotedLiteral(argVal);
         if (targetName === null) {
           const binding = resolveExpression(argVal, callerEnv);
           if (binding.kind !== "literal") {
@@ -433,7 +378,7 @@ export function extractTiReferences(
           let dimName: string | undefined;
           if (dimIdx !== undefined && dimIdx < args.length) {
             const dimArg = args[dimIdx]!;
-            dimName = extractStringLiteral(dimArg) ?? undefined;
+            dimName = quotedLiteral(dimArg) ?? undefined;
             if (dimName === undefined) {
               const db = resolveExpression(dimArg, callerEnv);
               if (db.kind === "literal") {
@@ -447,7 +392,7 @@ export function extractTiReferences(
           const subIdx = SUBSET_ARG_IDX.get(funcLower);
           if (subIdx !== undefined && subIdx < args.length) {
             const subArg = args[subIdx]!;
-            subName = extractStringLiteral(subArg) ?? undefined;
+            subName = quotedLiteral(subArg) ?? undefined;
             if (subName === undefined) {
               const sb = resolveExpression(subArg, callerEnv);
               if (sb.kind === "literal") {
@@ -455,7 +400,7 @@ export function extractTiReferences(
               }
             }
           }
-          let elemName = extractStringLiteral(elemArg);
+          let elemName = quotedLiteral(elemArg);
           if (elemName === null) {
             const eb = resolveExpression(elemArg, callerEnv);
             if (eb.kind === "literal") {
@@ -536,7 +481,7 @@ function extractRulesReferences(text: string): RawRuleRef[] {
       continue;
     }
 
-    const snippet = truncateSnippet(line);
+    const snippet = truncateSnippet(line, 200);
 
     // DB(...) → cube reference
     for (const call of extractDbCalls(line)) {

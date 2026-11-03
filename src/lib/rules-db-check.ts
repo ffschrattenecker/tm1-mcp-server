@@ -8,7 +8,8 @@
 // is never reported.
 import { TM1Error, TM1ErrorCode } from "../types.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
-import { callArgs, elementResolves, quotedLiteral } from "./process-refs.js";
+import { elementResolves } from "./process-refs.js";
+import { callArgs, quotedLiteral } from "./ti-lex.js";
 import { neutralizeLine } from "./callgraph/rulesLinter.js";
 import { withoutSandboxes } from "./tm1-name.js";
 
@@ -45,7 +46,7 @@ function findDbCalls(rulesText: string): DbCall[] {
     const args = callArgs(code, m.index + m[0].length - 1);
     if (args === null || args.length === 0) continue;
     const cube = quotedLiteral(args[0]!);
-    if (cube === null) continue;
+    if (!cube) continue;
     calls.push({
       cube,
       elements: args.slice(1).map((a) => quotedLiteral(a)),

@@ -1,3 +1,5 @@
+import { matchParen, quotedLiteral, splitTopLevel } from "../ti-lex.js";
+
 // ─── String/comment neutralization ──────────────────────────────────────────
 
 /** Replaces quoted strings with same-length spaces and strips trailing comments. */
@@ -66,7 +68,7 @@ export function validateBracketRefSyntax(content: string): string | null {
 
   // Identify the offending sub-spec: split content on top-level commas, find
   // the first part that doesn't match the dimSpec pattern.
-  const parts = splitTopLevelCommas(content);
+  const parts = splitTopLevel(content, ",", "{}").filter((p) => p !== "");
   const partRe = new RegExp(`^\\s*${dimSpec}\\s*$`);
   for (const part of parts) {
     if (!partRe.test(part)) {
@@ -74,28 +76,6 @@ export function validateBracketRefSyntax(content: string): string | null {
     }
   }
   return "[invalid-cell-ref-syntax] Cell reference does not match the format ['Dimension':'Element'] or ['Dimension':{'E1','E2'}].";
-}
-
-/** Splits a string by commas that are NOT inside `{...}` (brace-depth 0). */
-function splitTopLevelCommas(s: string): string[] {
-  const out: string[] = [];
-  let depth = 0;
-  let cur = "";
-  for (const ch of s) {
-    if (ch === "{") {
-      depth++;
-    } else if (ch === "}") {
-      depth = Math.max(0, depth - 1);
-    }
-    if (ch === "," && depth === 0) {
-      out.push(cur);
-      cur = "";
-    } else {
-      cur += ch;
-    }
-  }
-  out.push(cur);
-  return out.filter((p) => p.trim().length > 0);
 }
 
 /** Parsed dimension + element(s) from a single [...] spec. */
@@ -131,40 +111,6 @@ interface DbCall {
   cubeName: string | null; // null = not a string literal
 }
 
-/** Splits a comma-separated DB() argument string, respecting nested parens and quotes. */
-function splitArgs(argsStr: string): string[] {
-  if (!argsStr.trim()) {
-    return [];
-  }
-  const args: string[] = [];
-  let depth = 0;
-  let inString = false;
-  let current = "";
-
-  for (const ch of argsStr) {
-    if (ch === "'" && !inString) {
-      inString = true;
-      current += ch;
-    } else if (ch === "'" && inString) {
-      inString = false;
-      current += ch;
-    } else if (!inString && ch === "(") {
-      depth++;
-      current += ch;
-    } else if (!inString && ch === ")") {
-      depth--;
-      current += ch;
-    } else if (!inString && depth === 0 && ch === ",") {
-      args.push(current.trim());
-      current = "";
-    } else {
-      current += ch;
-    }
-  }
-  args.push(current.trim());
-  return args.filter((a) => a !== "");
-}
-
 /**
  * Extracts all DB(...) calls from a line with their parsed arguments.
  * Uses neutralized positions to skip DB() inside strings/comments.
@@ -177,27 +123,15 @@ export function extractDbCalls(line: string): DbCall[] {
 
   while ((m = dbRe.exec(neutralized)) !== null) {
     const openPos = m.index + m[0].length - 1; // index of '('
-    let depth = 1;
-    let i = openPos + 1;
-    while (i < neutralized.length && depth > 0) {
-      if (neutralized[i] === "(") {
-        depth++;
-      } else if (neutralized[i] === ")") {
-        depth--;
-      }
-      i++;
-    }
-    if (depth !== 0) {
+    const close = matchParen(neutralized, openPos);
+    if (close === -1) {
       continue;
     } // unmatched paren — skip
 
-    const argsStr = line.slice(openPos + 1, i - 1);
-    const args = splitArgs(argsStr);
-    const first = args[0]?.trim() ?? "";
-    const cubeName =
-      first.startsWith("'") && first.endsWith("'") && first.length >= 3
-        ? first.slice(1, -1)
-        : null;
+    const argsStr = line.slice(openPos + 1, close);
+    const args = splitTopLevel(argsStr, ",").filter((a) => a !== "");
+    // An empty name is no cube name (null, as for a non-literal first arg).
+    const cubeName = quotedLiteral(args[0] ?? "") || null;
 
     results.push({ args, cubeName });
   }

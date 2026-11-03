@@ -11,6 +11,12 @@
  */
 
 import { TI_VAR } from "../ti-identifier.js";
+import {
+  ASSIGNMENT_RE,
+  SECTION_MARKER_RE,
+  quotedLiteral,
+  splitTopLevel,
+} from "../ti-lex.js";
 import { neutralizeLine } from "./rulesLinter.js";
 
 export type VarBinding =
@@ -27,42 +33,8 @@ export interface ProcessEnv {
   vars: Map<string, VarBinding>;
 }
 
-const STRING_LITERAL_RE = /^'([^']*)'$/;
 const NUMERIC_LITERAL_RE = /^-?\d+(?:\.\d+)?$/;
 const IDENTIFIER_RE = new RegExp(`^${TI_VAR}$`);
-
-const SECTION_MARKER_RE = /^57[2345],\d*$/;
-
-/**
- * Split an expression on top-level '|' (TI string-concat), ignoring '|' inside
- * 'string literals' or (parens). A single-element result means no top-level '|'
- * was found (not a concatenation).
- */
-function splitTopLevelConcat(expr: string): string[] {
-  const parts: string[] = [];
-  let cur = "";
-  let inStr = false;
-  let depth = 0;
-  for (const ch of expr) {
-    if (ch === "'") {
-      inStr = !inStr;
-      cur += ch;
-    } else if (!inStr && ch === "(") {
-      depth++;
-      cur += ch;
-    } else if (!inStr && ch === ")") {
-      depth--;
-      cur += ch;
-    } else if (!inStr && depth === 0 && ch === "|") {
-      parts.push(cur);
-      cur = "";
-    } else {
-      cur += ch;
-    }
-  }
-  parts.push(cur);
-  return parts;
-}
 
 /**
  * Classify a single right-hand-side expression (no surrounding whitespace).
@@ -75,9 +47,9 @@ export function resolveExpression(expr: string, env: ProcessEnv): VarBinding {
   const e = expr.trim().replace(/;+$/, "").trim();
 
   // String literal
-  const strM = STRING_LITERAL_RE.exec(e);
-  if (strM) {
-    return { kind: "literal", value: strM[1]! };
+  const str = quotedLiteral(e);
+  if (str !== null) {
+    return { kind: "literal", value: str };
   }
 
   // Numeric literal
@@ -103,7 +75,7 @@ export function resolveExpression(expr: string, env: ProcessEnv): VarBinding {
   }
 
   // Constant string-concatenation: fold if every operand resolves to a literal.
-  const parts = splitTopLevelConcat(e);
+  const parts = splitTopLevel(e, "|");
   if (parts.length >= 2) {
     const values: string[] = [];
     for (const part of parts) {
@@ -141,9 +113,6 @@ export function buildProcessEnv(
   const assignedOnce = new Map<string, VarBinding>();
   const seen = new Set<string>();
 
-  const assignRe = new RegExp(
-    `^\\s*(${TI_VAR})\\s*=\\s*(.+?)\\s*;?\\s*(?:#.*)?$`,
-  );
   const lines = text.split("\n");
 
   for (let i = 0; i < lines.length; i++) {
@@ -159,7 +128,7 @@ export function buildProcessEnv(
     }
 
     // Skip if line does not look like a pure assignment (contains `==` or similar comparisons in condition context)
-    const m = assignRe.exec(line);
+    const m = ASSIGNMENT_RE.exec(line);
     if (!m) {
       continue;
     }

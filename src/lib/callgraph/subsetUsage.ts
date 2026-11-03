@@ -8,7 +8,7 @@ import {
   resolveExpression,
   type ProcessEnv,
 } from "./variableEnv.js";
-import { splitArgs, extractStringLiteral } from "./referenceIndex.js";
+import { matchParen, quotedLiteral, splitTopLevel } from "../ti-lex.js";
 import { classifyAccess } from "./callGraph.js";
 
 interface ViewUsage {
@@ -32,7 +32,7 @@ function resolveArg(
   env: ProcessEnv,
 ): { value?: string; resolved: boolean } {
   if (raw === undefined) return { resolved: false };
-  const lit = extractStringLiteral(raw);
+  const lit = quotedLiteral(raw);
   if (lit !== null) return { value: lit, resolved: true };
   const b = resolveExpression(raw, env);
   if (b.kind === "literal") return { value: b.value, resolved: true };
@@ -82,8 +82,13 @@ export function extractSubsetUsage(
     while ((m = CALL_RE.exec(line)) !== null) {
       const fn = m[1]!.toLowerCase();
       const open = m.index + m[0].length - 1;
-      const argStr = sliceArgs(line, open);
-      const args = argStr === null ? [] : splitArgs(argStr);
+      const close = matchParen(line, open);
+      const args =
+        close === -1
+          ? []
+          : splitTopLevel(line.slice(open + 1, close), ",").filter(
+              (a) => a !== "",
+            );
 
       if (fn === "viewsubsetassign") {
         const cube = resolveArg(args[0], baseEnv);
@@ -146,18 +151,4 @@ export function extractSubsetUsage(
 
 function isLiteralZero(raw: string | undefined): boolean {
   return raw !== undefined && raw.trim() === "0";
-}
-
-// Extract the substring between the '(' at openIdx and its matching ')' on the same line.
-function sliceArgs(line: string, openIdx: number): string | null {
-  let depth = 0;
-  for (let i = openIdx; i < line.length; i++) {
-    const c = line[i];
-    if (c === "(") depth++;
-    else if (c === ")") {
-      depth--;
-      if (depth === 0) return line.slice(openIdx + 1, i);
-    }
-  }
-  return null;
 }

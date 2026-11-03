@@ -47,6 +47,7 @@
 import { isControlName } from "./control-name.js";
 import { buildProcessEnv, type ProcessEnv } from "./callgraph/variableEnv.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
+import { callArgs, quotedLiteral, truncateSnippet } from "./ti-lex.js";
 import { tm1NameKey, withoutSandboxes } from "./tm1-name.js";
 
 const TABS = ["prolog", "metadata", "data", "epilog"] as const;
@@ -143,60 +144,8 @@ const CUBE_ARG2_FN_RE =
 
 const DIM_ARG2_FN_RE = /\b(?:AttrPutS|AttrPutN|ElementSecurityPut)\s*\(/gi;
 
-// Cap the argument walk so a pathological unterminated call cannot scan the
-// whole remaining tab.
-const ARG_SCAN_MAX_CHARS = 2000;
-
-// Walk the argument list starting after `(` at openParen, tracking paren depth
-// and TI string state ('' is the quote escape), and return the raw text of
-// every top-level argument, or null for an unterminated call. Newlines are
-// ordinary whitespace, so multi-line calls resolve too; TI strings cannot span
-// lines, so an open string is closed at end-of-line to resync.
-export function callArgs(text: string, openParen: number): string[] | null {
-  let depth = 0;
-  let inStr = false;
-  const args: string[] = [];
-  let argStart = openParen + 1;
-  const end = Math.min(text.length, openParen + 1 + ARG_SCAN_MAX_CHARS);
-  for (let i = openParen + 1; i < end; i++) {
-    const ch = text[i]!;
-    if (inStr) {
-      if (ch === "'") {
-        if (text[i + 1] === "'") {
-          i++;
-          continue;
-        }
-        inStr = false;
-      } else if (ch === "\n") {
-        inStr = false;
-      }
-      continue;
-    }
-    if (ch === "'") {
-      inStr = true;
-    } else if (ch === "(") {
-      depth++;
-    } else if (ch === ")") {
-      if (depth === 0) {
-        args.push(text.slice(argStart, i));
-        return args;
-      }
-      depth--;
-    } else if (ch === "," && depth === 0) {
-      args.push(text.slice(argStart, i));
-      argStart = i + 1;
-    }
-  }
-  return null;
-}
-
 function secondArgText(text: string, openParen: number): string | null {
   return callArgs(text, openParen)?.[1] ?? null;
-}
-
-export function quotedLiteral(argText: string): string | null {
-  const m = /^\s*'((?:[^']|'')+)'\s*$/.exec(argText);
-  return m ? m[1]!.replace(/''/g, "'") : null;
 }
 
 // Resolve a bare identifier through the process env: only a variable bound to
@@ -236,7 +185,7 @@ function scanCode(
         continue;
       }
       if (!into.has(name))
-        into.set(name, { tab, line: i + 1, context: ln.trim().slice(0, 200) });
+        into.set(name, { tab, line: i + 1, context: truncateSnippet(ln, 200) });
     }
   }
 }
@@ -270,7 +219,7 @@ function scanArg2(
     into.set(name, {
       tab,
       line,
-      context: lines[line - 1]!.trim().slice(0, 200),
+      context: truncateSnippet(lines[line - 1]!, 200),
     });
   }
 }
@@ -339,7 +288,7 @@ function forEachCall(
       m[1]!.toLowerCase(),
       args,
       line,
-      lines[line - 1]!.trim().slice(0, 200),
+      truncateSnippet(lines[line - 1]!, 200),
       m.index,
     );
   }
@@ -632,7 +581,7 @@ async function checkElementRefs(
     const dims = dimsOf.get(tm1NameKey(call.cube));
     if (!dims || dims.length !== call.elements.length) continue;
     call.elements.forEach((el, i) => {
-      if (el === null) return;
+      if (!el) return; // null (not a literal) or empty: nothing to look up
       const dim = dims[i]!;
       const dk = tm1NameKey(dim);
       if (scan.inserts.dynamicDims.has(dk)) return;

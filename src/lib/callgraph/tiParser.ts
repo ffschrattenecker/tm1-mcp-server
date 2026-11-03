@@ -7,6 +7,7 @@ import {
   type TiFunctionCall,
 } from "./types.js";
 import { TI_VAR } from "../ti-identifier.js";
+import { keywordPositions, matchParen, splitTopLevel } from "../ti-lex.js";
 
 const ASSIGN_RE = new RegExp(`^(${TI_VAR})\\s*=\\s*(.+?)\\s*;?\\s*$`);
 const EMPTY_ASSIGN_RE = new RegExp(`^${TI_VAR}\\s*=\\s*;$`);
@@ -222,7 +223,7 @@ function parseBlock(
     if (
       upper.startsWith("IF") &&
       /^IF\s*\(/i.test(trimmed) &&
-      hasTrailingEndif(trimmed)
+      keywordPositions(trimmed, "ENDIF").length > 0
     ) {
       const inlineIf = tryParseSingleLineIf(trimmed, lineNum);
       if (inlineIf) {
@@ -452,19 +453,7 @@ function extractCondition(line: string, keyword: string): string {
     return afterKeyword.replace(/;$/, "").trim();
   }
 
-  let depth = 0;
-  let endIdx = -1;
-  for (let j = 0; j < afterKeyword.length; j++) {
-    if (afterKeyword[j] === "(") depth++;
-    if (afterKeyword[j] === ")") {
-      depth--;
-      if (depth === 0) {
-        endIdx = j;
-        break;
-      }
-    }
-  }
-
+  const endIdx = matchParen(afterKeyword, 0);
   if (endIdx === -1) {
     return afterKeyword.replace(/;$/, "").trim();
   }
@@ -522,66 +511,9 @@ function detectCellGet(
     ? "CellGetN"
     : "CellGetS";
 
-  const paramsStr = match[2]!.trim();
-  const params = paramsStr ? splitParams(paramsStr) : [];
+  const params = splitTopLevel(match[2]!, ",");
 
   return { fn: normalizedFn, params };
-}
-
-/**
- * Split function parameters, respecting nested parentheses and string literals.
- */
-function splitParams(paramsStr: string): string[] {
-  const params: string[] = [];
-  let current = "";
-  let depth = 0;
-  let inString = false;
-  let stringChar = "";
-
-  for (let i = 0; i < paramsStr.length; i++) {
-    const ch = paramsStr[i];
-
-    if (inString) {
-      current += ch;
-      if (ch === stringChar) {
-        inString = false;
-      }
-      continue;
-    }
-
-    if (ch === "'" || ch === '"') {
-      inString = true;
-      stringChar = ch;
-      current += ch;
-      continue;
-    }
-
-    if (ch === "(") {
-      depth++;
-      current += ch;
-      continue;
-    }
-
-    if (ch === ")") {
-      depth--;
-      current += ch;
-      continue;
-    }
-
-    if (ch === "," && depth === 0) {
-      params.push(current.trim());
-      current = "";
-      continue;
-    }
-
-    current += ch;
-  }
-
-  if (current.trim()) {
-    params.push(current.trim());
-  }
-
-  return params;
 }
 
 /**
@@ -603,29 +535,15 @@ function tryParseFunctionCall(
     return null;
   }
 
-  // Find matching closing paren (handles nested parens)
   const argsStart = nameMatch[0].length;
-  let depth = 1;
-  let argsEnd = -1;
-  for (let j = argsStart; j < line.length; j++) {
-    if (line[j] === "(") depth++;
-    if (line[j] === ")") {
-      depth--;
-      if (depth === 0) {
-        argsEnd = j;
-        break;
-      }
-    }
-  }
-
+  const argsEnd = matchParen(line, argsStart - 1);
   if (argsEnd === -1) return null;
 
   // Check that after the closing paren there's only optional semicolon and whitespace
   const remainder = line.substring(argsEnd + 1).trim();
   if (remainder !== "" && remainder !== ";") return null;
 
-  const argsStr = line.substring(argsStart, argsEnd).trim();
-  const args = argsStr ? splitParams(argsStr) : [];
+  const args = splitTopLevel(line.substring(argsStart, argsEnd), ",");
 
   return {
     type: "functionCall",
@@ -633,63 +551,6 @@ function tryParseFunctionCall(
     args,
     line: lineNum,
   };
-}
-
-function hasTrailingEndif(line: string): boolean {
-  const upper = line.toUpperCase();
-  let inStr = false;
-  for (let k = 0; k <= upper.length - 5; k++) {
-    const ch = line[k] ?? "";
-    if (ch === "'") {
-      inStr = !inStr;
-      continue;
-    }
-    if (inStr) {
-      continue;
-    }
-    if (upper.slice(k, k + 5) === "ENDIF") {
-      const prev = k > 0 ? (line[k - 1] ?? "") : "";
-      const next = k + 5 < line.length ? (line[k + 5] ?? "") : "";
-      if (/\w/.test(prev) || /\w/.test(next)) {
-        continue;
-      }
-      return true;
-    }
-  }
-  return false;
-}
-
-function splitStatementsAtDepthZero(text: string): string[] {
-  const out: string[] = [];
-  let current = "";
-  let depth = 0;
-  let inStr = false;
-  for (let k = 0; k < text.length; k++) {
-    const ch = text[k];
-    if (ch === "'") {
-      inStr = !inStr;
-      current += ch;
-      continue;
-    }
-    if (!inStr) {
-      if (ch === "(") {
-        depth++;
-      } else if (ch === ")") {
-        depth--;
-      } else if (ch === ";" && depth === 0) {
-        if (current.trim()) {
-          out.push(current.trim());
-        }
-        current = "";
-        continue;
-      }
-    }
-    current += ch;
-  }
-  if (current.trim()) {
-    out.push(current.trim());
-  }
-  return out;
 }
 
 function parseInlineStatements(
@@ -733,29 +594,7 @@ function tryParseSingleLineIf(line: string, lineNum: number): TiIfBlock | null {
     return null;
   }
   const openParen = ifMatch[1]!.length;
-
-  let depth = 1;
-  let inStr = false;
-  let condEnd = -1;
-  for (let j = openParen + 1; j < line.length; j++) {
-    const ch = line[j];
-    if (ch === "'") {
-      inStr = !inStr;
-      continue;
-    }
-    if (inStr) {
-      continue;
-    }
-    if (ch === "(") {
-      depth++;
-    } else if (ch === ")") {
-      depth--;
-      if (depth === 0) {
-        condEnd = j;
-        break;
-      }
-    }
-  }
+  const condEnd = matchParen(line, openParen);
   if (condEnd === -1) {
     return null;
   }
@@ -766,33 +605,15 @@ function tryParseSingleLineIf(line: string, lineNum: number): TiIfBlock | null {
     rest = rest.substring(1).trim();
   }
 
-  const upperRest = rest.toUpperCase();
-  let endifStart = -1;
-  let inStr2 = false;
-  for (let k = 0; k <= upperRest.length - 5; k++) {
-    const ch = rest[k] ?? "";
-    if (ch === "'") {
-      inStr2 = !inStr2;
-      continue;
-    }
-    if (inStr2) {
-      continue;
-    }
-    if (upperRest.slice(k, k + 5) === "ENDIF") {
-      const prev = k > 0 ? (rest[k - 1] ?? "") : "";
-      const next = k + 5 < rest.length ? (rest[k + 5] ?? "") : "";
-      if (/\w/.test(prev) || /\w/.test(next)) {
-        continue;
-      }
-      endifStart = k;
-    }
-  }
-  if (endifStart === -1) {
+  // The last ENDIF closes the inline IF.
+  const endifs = keywordPositions(rest, "ENDIF");
+  const endifStart = endifs[endifs.length - 1];
+  if (endifStart === undefined) {
     return null;
   }
 
   const bodyText = rest.substring(0, endifStart).trim();
-  const stmts = splitStatementsAtDepthZero(bodyText);
+  const stmts = splitTopLevel(bodyText, ";").filter((st) => st !== "");
   const thenBody = parseInlineStatements(stmts, lineNum);
   if (thenBody === null) {
     return null;
