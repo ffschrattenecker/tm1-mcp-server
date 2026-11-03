@@ -18,7 +18,6 @@
 // All three are exercised below against the same structural detection: the
 // untranslated denial identifier, then `GET Cubes('}StatsByCube')`.
 import { describe, it, expect } from "vitest";
-import { z, type ZodRawShape } from "zod";
 import {
   fetchCubeStats,
   CubeStatsUnavailableError,
@@ -26,33 +25,7 @@ import {
 import { registerGetCubeStats } from "../../src/tools/operations/get-cube-stats.js";
 import { TM1Error, TM1ErrorCode } from "../../src/types.js";
 import type { TM1Client } from "../../src/tm1-client.js";
-
-type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>;
-
-function makeFakeServer() {
-  let captured: ToolHandler | null = null;
-  let parser: z.ZodObject<ZodRawShape> | null = null;
-  const server = {
-    tool: (
-      _name: string,
-      _desc: string,
-      schema: ZodRawShape,
-      handler: ToolHandler,
-    ) => {
-      parser = z.object(schema);
-      captured = handler;
-    },
-  };
-  return {
-    server: server as unknown as Parameters<typeof registerGetCubeStats>[0],
-    getHandler: (): ToolHandler => {
-      if (!captured || !parser) throw new Error("handler not registered");
-      const p = parser;
-      const h = captured;
-      return (args) => h(p.parse(args));
-    },
-  };
-}
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 function mdxError(text: string): TM1Error {
   return new TM1Error({
@@ -283,29 +256,25 @@ describe("fetchCubeStats: }StatsByCube unavailability", () => {
     await fetchCubeStats(stub.client, "B").catch(() => undefined);
     expect(stub.mdxCalls()).toBe(2);
   });
-
-  it("still returns statistics on a healthy v11 server", async () => {
-    const stub = makeClientStub({ version: 11, stats: HEALTHY_STATS });
-    const item = await fetchCubeStats(stub.client, "Sales");
-    expect(item.cubeName).toBe("Sales");
-    expect(item.memoryTotal).toBe(2048);
-    expect(item.fedCells).toBe(400);
-    expect(item.feederEfficiency).toBe(4);
-  });
 });
 
 // ── tm1_get_cube_stats ──────────────────────────────────────────────────────
 
+const BOOM = new TM1Error({
+  code: TM1ErrorCode.TM1_ERROR,
+  message: "some other failure",
+  httpStatus: 500,
+});
+
 describe("tm1_get_cube_stats on a server without }Stats* cubes", () => {
   it("reports statsUnavailable (absent) instead of a raw OData error", async () => {
-    const fake = makeFakeServer();
     const stub = makeClientStub({
       version: 12,
       failWith: V12_MISSING,
       statsCubeExists: false,
     });
-    registerGetCubeStats(fake.server, stub.client);
-    const out = parseJson(await fake.getHandler()({ cubeName: "Sales" }));
+    const call = captureParsedTool(registerGetCubeStats, stub.client);
+    const out = parseJson(await call({ cubeName: "Sales" }));
 
     expect(out.statsUnavailable).toBeTruthy();
     expect(out.statsUnavailable.reason).toBe("absent");
@@ -317,10 +286,9 @@ describe("tm1_get_cube_stats on a server without }Stats* cubes", () => {
   });
 
   it("reports a denial as a different, permissions-specific message", async () => {
-    const fake = makeFakeServer();
     const stub = makeClientStub({ version: 11, failWith: DENIED });
-    registerGetCubeStats(fake.server, stub.client);
-    const out = parseJson(await fake.getHandler()({ cubeName: "Sales" }));
+    const call = captureParsedTool(registerGetCubeStats, stub.client);
+    const out = parseJson(await call({ cubeName: "Sales" }));
 
     expect(out.statsUnavailable.reason).toBe("denied");
     expect(out.statsUnavailable.message).toMatch(/permission|rights/i);
@@ -328,16 +296,13 @@ describe("tm1_get_cube_stats on a server without }Stats* cubes", () => {
   });
 
   it("annotates every requested cube once, not once per cube", async () => {
-    const fake = makeFakeServer();
     const stub = makeClientStub({
       version: 12,
       failWith: V12_MISSING,
       statsCubeExists: false,
     });
-    registerGetCubeStats(fake.server, stub.client);
-    const out = parseJson(
-      await fake.getHandler()({ cubeNames: ["A", "B", "C"] }),
-    );
+    const call = captureParsedTool(registerGetCubeStats, stub.client);
+    const out = parseJson(await call({ cubeNames: ["A", "B", "C"] }));
     expect(out.statsUnavailable.reason).toBe("absent");
     expect(out.count).toBe(3);
     expect(out.items.map((i: { cubeName: string }) => i.cubeName)).toEqual([
@@ -348,44 +313,39 @@ describe("tm1_get_cube_stats on a server without }Stats* cubes", () => {
   });
 
   it("returns statistics unchanged on v11 and sets no statsUnavailable", async () => {
-    const fake = makeFakeServer();
     const stub = makeClientStub({ version: 11, stats: HEALTHY_STATS });
-    registerGetCubeStats(fake.server, stub.client);
-    const out = parseJson(await fake.getHandler()({ cubeName: "Sales" }));
+    const call = captureParsedTool(registerGetCubeStats, stub.client);
+    const out = parseJson(await call({ cubeName: "Sales" }));
     expect(out.statsUnavailable).toBeUndefined();
     expect(out.items[0].memoryTotal).toBe(2048);
+    expect(out.items[0].feederEfficiency).toBe(4);
     expect(out.items[0].error).toBeUndefined();
   });
 
-  it("keeps a genuine per-cube error per-cube (no server-wide claim)", async () => {
-    const fake = makeFakeServer();
-    const boom = new TM1Error({
-      code: TM1ErrorCode.TM1_ERROR,
+  // A failure on one cube stays on that cube. Only a missing }StatsByCube
+  // (probe 404) or a denial may become a server-wide verdict.
+  it.each<{ label: string; opts: StubOpts; cube: string; message: string }>([
+    {
+      label: "a genuine per-cube error",
+      opts: { version: 11, failWith: BOOM },
+      cube: "Sales",
       message: "some other failure",
-      httpStatus: 500,
-    });
-    const stub = makeClientStub({ version: 11, failWith: boom });
-    registerGetCubeStats(fake.server, stub.client);
-    const out = parseJson(await fake.getHandler()({ cubeName: "Sales" }));
+    },
+    {
+      label: "a missing USER cube on a healthy server (German wording)",
+      opts: {
+        version: 11,
+        failWith: V11_DE_MISSING,
+        statsCubeExists: true,
+      },
+      cube: "ZZ_NO_SUCH_CUBE",
+      message: "Syntaxfehler",
+    },
+  ])("keeps $label per-cube, with no server-wide claim", async (row) => {
+    const stub = makeClientStub(row.opts);
+    const call = captureParsedTool(registerGetCubeStats, stub.client);
+    const out = parseJson(await call({ cubeName: row.cube }));
     expect(out.statsUnavailable).toBeUndefined();
-    expect(out.items[0].error).toContain("some other failure");
-  });
-
-  it("a missing USER cube stays a per-cube error on a healthy server", async () => {
-    // The regression the probe protects: }StatsByCube is present, so the
-    // failure belongs to this one cube — no server-wide verdict, and the
-    // German wording is irrelevant to the outcome.
-    const fake = makeFakeServer();
-    const stub = makeClientStub({
-      version: 11,
-      failWith: V11_DE_MISSING,
-      statsCubeExists: true,
-    });
-    registerGetCubeStats(fake.server, stub.client);
-    const out = parseJson(
-      await fake.getHandler()({ cubeName: "ZZ_NO_SUCH_CUBE" }),
-    );
-    expect(out.statsUnavailable).toBeUndefined();
-    expect(out.items[0].error).toContain("Syntaxfehler");
+    expect(out.items[0].error).toContain(row.message);
   });
 });

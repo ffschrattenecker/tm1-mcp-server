@@ -135,13 +135,22 @@ describe("P2 — invalidation is precise and cannot publish a stale index", () =
   });
 });
 
-describe("the callgraph cache is scoped per connection", () => {
+describe("invalidation is scoped to the mutating connection", () => {
+  const clientFor = (connectionId: string) =>
+    ({
+      connectionId,
+      processes: { fetchForCallgraph: async () => [] },
+      cubes: { getAllRules: async () => [] },
+      chores: { list: async () => [] },
+    }) as unknown as TM1Client;
+
   beforeEach(() => {
     invalidateCallgraphCache();
+    registerCallgraphCacheInvalidation();
   });
 
   it("does not answer one connection's index for another", async () => {
-    const clientFor = (connectionId: string, processName: string) =>
+    const withProcess = (connectionId: string, processName: string) =>
       ({
         connectionId,
         processes: {
@@ -161,29 +170,14 @@ describe("the callgraph cache is scoped per connection", () => {
         chores: { list: async () => [] },
       }) as unknown as TM1Client;
 
-    const a = await buildIndexFromTM1(clientFor("host-a_1", "OnlyOnA"));
-    const b = await buildIndexFromTM1(clientFor("host-b_1", "OnlyOnB"));
+    const a = await buildIndexFromTM1(withProcess("host-a_1", "OnlyOnA"));
+    const b = await buildIndexFromTM1(withProcess("host-b_1", "OnlyOnB"));
 
     expect(a).not.toBe(b);
     expect(__testing.cachedKeys()).toEqual([
       "host-a_1|inc=false",
       "host-b_1|inc=false",
     ]);
-  });
-});
-
-describe("invalidation is scoped to the mutating connection", () => {
-  const clientFor = (connectionId: string) =>
-    ({
-      connectionId,
-      processes: { fetchForCallgraph: async () => [] },
-      cubes: { getAllRules: async () => [] },
-      chores: { list: async () => [] },
-    }) as unknown as TM1Client;
-
-  beforeEach(() => {
-    invalidateCallgraphCache();
-    registerCallgraphCacheInvalidation();
   });
 
   it("a mutation on one connection keeps the other's index", async () => {

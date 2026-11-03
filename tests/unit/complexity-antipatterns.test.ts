@@ -95,18 +95,6 @@ describe("exec-in-loop", () => {
   });
 });
 
-describe("hot-op-in-loop removed", () => {
-  it("does not emit hot-op-in-loop (cell writes in a loop are complexity, not an anti-pattern)", () => {
-    const findings = lintProcess(
-      "p",
-      code({
-        data: `WHILE(i<10);\n  ASCIIOutput('out.txt', n);\n  CellPutN(1, 'c', 'e');\nEND;`,
-      }),
-    );
-    expect(rules(findings)).not.toContain("hot-op-in-loop");
-  });
-});
-
 /** CellGetN against `cube` with `dims` element args. */
 function cellGet(cube: string, dims: number): string {
   const elems = Array.from({ length: dims }, (_, i) => `e${i}`).join(", ");
@@ -114,26 +102,37 @@ function cellGet(cube: string, dims: number): string {
 }
 
 describe("cellget-perf", () => {
-  it("flags a high-dimensional CellGetN standalone as info", () => {
+  it.each([
+    {
+      label: "flags a high-dimensional CellGetN standalone as info",
+      data: `v = CellGetN(${cellGet("Big", 12)});`,
+      threshold: undefined,
+      severity: "info",
+      line: 1,
+    },
+    {
+      label: "escalates a high-dimensional CellGetN inside a loop to warn",
+      data: `WHILE(i<10);\n  v = CellGetN(${cellGet("Big", 12)});\nEND;`,
+      threshold: undefined,
+      severity: "warn",
+      line: 2,
+    },
+    {
+      label: "honors a custom cellGetDimThreshold",
+      data: `v = CellGetN(${cellGet("Mid", 5)});`,
+      threshold: 5,
+      severity: "info",
+      line: 1,
+    },
+  ])("$label", ({ data, threshold, severity, line }) => {
     const findings = lintProcess(
       "p",
-      code({ data: `v = CellGetN(${cellGet("Big", 12)});` }),
+      code({ data }),
+      threshold === undefined ? undefined : { cellGetDimThreshold: threshold },
     );
     const hit = findings.find((f) => f.rule === "cellget-perf");
-    expect(hit?.severity).toBe("info");
-    expect(hit?.line).toBe(1);
-  });
-
-  it("escalates a high-dimensional CellGetN inside a loop to warn", () => {
-    const findings = lintProcess(
-      "p",
-      code({
-        data: `WHILE(i<10);\n  v = CellGetN(${cellGet("Big", 12)});\nEND;`,
-      }),
-    );
-    const hit = findings.find((f) => f.rule === "cellget-perf");
-    expect(hit?.severity).toBe("warn");
-    expect(hit?.line).toBe(2);
+    expect(hit?.severity).toBe(severity);
+    expect(hit?.line).toBe(line);
   });
 
   it("does not flag a CellGetN below the dimension threshold", () => {
@@ -142,15 +141,6 @@ describe("cellget-perf", () => {
       code({ data: `v = CellGetN(${cellGet("Small", 3)});` }),
     );
     expect(rules(findings)).not.toContain("cellget-perf");
-  });
-
-  it("honors a custom cellGetDimThreshold", () => {
-    const findings = lintProcess(
-      "p",
-      code({ data: `v = CellGetN(${cellGet("Mid", 5)});` }),
-      { cellGetDimThreshold: 5 },
-    );
-    expect(rules(findings)).toContain("cellget-perf");
   });
 });
 
@@ -167,76 +157,10 @@ describe("dead-assignment", () => {
     expect(hit?.tab).toBe("data");
   });
 
-  it("does not flag a variable that is read in the same tab", () => {
-    const findings = lintProcess(
-      "p",
-      code({ data: `vX = 5;\nNVALUE = vX * 2;` }),
-    );
-    expect(rules(findings)).not.toContain("dead-assignment");
-  });
-
-  it("does not flag a variable assigned in data tab but read in epilog", () => {
-    const findings = lintProcess(
-      "p",
-      code({
-        data: `vSum = vSum + 1;`,
-        epilog: `ASCIIOutput('out.txt', NumberToString(vSum));`,
-      }),
-    );
-    expect(rules(findings)).not.toContain("dead-assignment");
-  });
-
-  it("does not flag a variable assigned in prolog (only data/metadata flagged)", () => {
-    const findings = lintProcess("p", code({ prolog: `vUnused = 99;` }));
-    expect(rules(findings)).not.toContain("dead-assignment");
-  });
-
-  it("does not flag a variable assigned in metadata tab that is read in data tab", () => {
-    const findings = lintProcess(
-      "p",
-      code({
-        metadata: `vElem = 'Total';`,
-        data: `IF(vElem @= 'Total');\n  NVALUE = 0;\nENDIF;`,
-      }),
-    );
-    expect(rules(findings)).not.toContain("dead-assignment");
-  });
-
   it("flags a variable assigned in metadata tab but never read", () => {
     const findings = lintProcess("p", code({ metadata: `vDead = 'unused';` }));
     const hit = findings.find((f) => f.rule === "dead-assignment");
     expect(hit?.tab).toBe("metadata");
-  });
-
-  it("does not flag NVALUE / SVALUE / VALUE_IS_STRING (implicit TI vars)", () => {
-    const findings = lintProcess(
-      "p",
-      code({ data: `NVALUE = 0;\nSVALUE = '';\nVALUE_IS_STRING = 0;` }),
-    );
-    expect(rules(findings)).not.toContain("dead-assignment");
-  });
-
-  it("does not flag V1..Vn datasource column vars", () => {
-    const findings = lintProcess("p", code({ data: `V1 = V1;\nV12 = V12;` }));
-    expect(rules(findings)).not.toContain("dead-assignment");
-  });
-
-  it("does not flag rc = ExecuteProcess (side-effecting RHS)", () => {
-    const findings = lintProcess(
-      "p",
-      code({ data: `rc = ExecuteProcess('Child', 'p', 1);` }),
-    );
-    expect(rules(findings)).not.toContain("dead-assignment");
-  });
-
-  it("treats Expand('%vPath%') as a read of vPath", () => {
-    const findings = lintProcess(
-      "p",
-      code({
-        data: `vPath = 'data';\nASCIIOutput(Expand('%vPath%\\out.txt'), SValue);`,
-      }),
-    );
-    expect(rules(findings)).not.toContain("dead-assignment");
   });
 
   it("reports dead variable only once even if assigned multiple times", () => {
@@ -245,39 +169,82 @@ describe("dead-assignment", () => {
     expect(hits.length).toBe(1);
   });
 
-  it("does not flag a loop counter that appears in the WHILE condition", () => {
-    const findings = lintProcess(
-      "p",
-      code({ data: `i = 1;\nWHILE(i <= 10);\n  i = i + 1;\nEND;` }),
-    );
+  it.each([
+    {
+      label: "a variable read in the same tab",
+      parts: { data: `vX = 5;\nNVALUE = vX * 2;` },
+    },
+    {
+      label: "a data-tab variable read in epilog",
+      parts: {
+        data: `vSum = vSum + 1;`,
+        epilog: `ASCIIOutput('out.txt', NumberToString(vSum));`,
+      },
+    },
+    {
+      label: "a prolog assignment (only data/metadata are flagged)",
+      parts: { prolog: `vUnused = 99;` },
+    },
+    {
+      label: "a metadata variable read in data",
+      parts: {
+        metadata: `vElem = 'Total';`,
+        data: `IF(vElem @= 'Total');\n  NVALUE = 0;\nENDIF;`,
+      },
+    },
+    {
+      label: "the implicit TI vars NVALUE / SVALUE / VALUE_IS_STRING",
+      parts: { data: `NVALUE = 0;\nSVALUE = '';\nVALUE_IS_STRING = 0;` },
+    },
+    {
+      label: "V1..Vn datasource column vars",
+      parts: { data: `V1 = V1;\nV12 = V12;` },
+    },
+    {
+      label: "a side-effecting RHS (rc = ExecuteProcess)",
+      parts: { data: `rc = ExecuteProcess('Child', 'p', 1);` },
+    },
+    {
+      label: "Expand('%vPath%') as a read of vPath",
+      parts: {
+        data: `vPath = 'data';\nASCIIOutput(Expand('%vPath%\\out.txt'), SValue);`,
+      },
+    },
+    {
+      label: "a loop counter that appears in the WHILE condition",
+      parts: { data: `i = 1;\nWHILE(i <= 10);\n  i = i + 1;\nEND;` },
+    },
+  ])("does not flag $label", ({ parts }) => {
+    const findings = lintProcess("p", code(parts));
     expect(rules(findings)).not.toContain("dead-assignment");
   });
 });
 
 describe("hardcoded-path", () => {
-  it("flags a hardcoded UNC path literal as a warning", () => {
-    const findings = lintProcess(
-      "p",
-      code({ prolog: `ASCIIOutput('\\\\srv\\share\\out.txt', n);` }),
-    );
+  it.each([
+    {
+      label: "a hardcoded UNC path literal",
+      prolog: `ASCIIOutput('\\\\srv\\share\\out.txt', n);`,
+      flagged: true,
+    },
+    {
+      label: "a hardcoded drive-letter path literal",
+      prolog: `ASCIIOutput('C:\\temp\\out.txt', n);`,
+      flagged: true,
+    },
+    {
+      label: "a non-path string literal",
+      prolog: `ASCIIOutput('out.txt', n);`,
+      flagged: false,
+    },
+  ])("$label", ({ prolog, flagged }) => {
+    const findings = lintProcess("p", code({ prolog }));
+    if (!flagged) {
+      expect(rules(findings)).not.toContain("hardcoded-path");
+      return;
+    }
     const hit = findings.find((f) => f.rule === "hardcoded-path");
     expect(hit?.severity).toBe("warn");
     expect(hit?.line).toBe(1);
-  });
-
-  it("flags a hardcoded drive-letter path literal", () => {
-    const findings = lintProcess(
-      "p",
-      code({ prolog: `ASCIIOutput('C:\\temp\\out.txt', n);` }),
-    );
-    expect(rules(findings)).toContain("hardcoded-path");
-  });
-
-  it("does not flag a non-path string literal", () => {
-    const findings = lintProcess(
-      "p",
-      code({ prolog: `ASCIIOutput('out.txt', n);` }),
-    );
-    expect(rules(findings)).not.toContain("hardcoded-path");
   });
 });

@@ -78,61 +78,83 @@ describe("tm1_get_all_cube_rules default cap", () => {
   );
   const client = bulkRulesClient(rows);
 
-  it("caps full-rules responses at 50 by default and flags truncation", async () => {
-    const parsed = await run(client, {});
-    expect(parsed.returned).toBe(50);
-    expect(parsed.cubes).toHaveLength(50);
-    expect(parsed.truncated).toBe(true);
-    expect(parsed.count).toBe(60);
+  it.each([
+    {
+      label: "caps full-rules responses at 50 by default and flags truncation",
+      input: {},
+      returned: 50,
+      truncated: true,
+      count: 60,
+    },
+    {
+      label: "an explicit limit overrides the default cap",
+      input: { limit: 10 },
+      returned: 10,
+      truncated: true,
+      count: 60,
+    },
+    {
+      label: "limit=0 returns everything uncapped",
+      input: { limit: 0 },
+      returned: 60,
+      truncated: false,
+      count: 60,
+    },
+    {
+      label:
+        "summary mode surveys all cubes by default (no cap) and drops rulesText",
+      input: { summary: true },
+      returned: 60,
+      truncated: false,
+      count: 60,
+    },
+    {
+      label: "an explicit limit also caps summary mode",
+      input: { summary: true, limit: 5 },
+      returned: 5,
+      truncated: true,
+      count: 60,
+    },
+    {
+      // 30 of the 60 cubes carry rules — under the default cap of 50, so no
+      // truncation; count must be the post-filter total, like before the cap.
+      label:
+        "onlyWithRules filters client-side; count reflects the post-filter set",
+      input: { onlyWithRules: true },
+      returned: 30,
+      truncated: false,
+      count: 30,
+    },
+    {
+      label:
+        "onlyWithRules with a smaller limit truncates deterministically by name",
+      input: { onlyWithRules: true, limit: 3 },
+      returned: 3,
+      truncated: true,
+      count: 30,
+    },
+  ])("$label", async ({ input, returned, truncated, count }) => {
+    const parsed = await run(client, input);
+    expect(parsed.returned).toBe(returned);
+    expect(parsed.truncated).toBe(truncated);
+    expect(parsed.count).toBe(count);
   });
 
-  it("explicit limit overrides the default cap", async () => {
-    const parsed = await run(client, { limit: 10 });
-    expect(parsed.returned).toBe(10);
-    expect(parsed.truncated).toBe(true);
-    expect(parsed.count).toBe(60);
+  it("returns the full cube list for the default cap and the summary shape", async () => {
+    const full = await run(client, {});
+    expect(full.cubes).toHaveLength(50);
+    const summary = await run(client, { summary: true });
+    expect(summary.cubes[0].rulesText).toBeUndefined();
+    expect(summary.cubes[0].lineCount).toBeDefined();
   });
 
-  it("limit=0 returns everything uncapped", async () => {
-    const parsed = await run(client, { limit: 0 });
-    expect(parsed.returned).toBe(60);
-    expect(parsed.truncated).toBe(false);
-    expect(parsed.count).toBe(60);
-  });
-
-  it("summary mode surveys all cubes by default (no cap) and drops rulesText", async () => {
-    const parsed = await run(client, { summary: true });
-    expect(parsed.returned).toBe(60);
-    expect(parsed.truncated).toBe(false);
-    expect(parsed.cubes[0].rulesText).toBeUndefined();
-    expect(parsed.cubes[0].lineCount).toBeDefined();
-  });
-
-  it("explicit limit also caps summary mode", async () => {
-    const parsed = await run(client, { summary: true, limit: 5 });
-    expect(parsed.returned).toBe(5);
-    expect(parsed.truncated).toBe(true);
-    expect(parsed.count).toBe(60);
-  });
-
-  it("onlyWithRules filters client-side; count reflects the post-filter set", async () => {
-    // 30 of the 60 cubes carry rules — under the default cap of 50, so no
-    // truncation; count must be the post-filter total, like before the cap.
-    const parsed = await run(client, { onlyWithRules: true });
-    expect(parsed.returned).toBe(30);
-    expect(parsed.truncated).toBe(false);
-    expect(parsed.count).toBe(30);
+  it("onlyWithRules keeps only cubes with rule text, truncated by name order", async () => {
+    const filtered = await run(client, { onlyWithRules: true });
     expect(
-      parsed.cubes.every((c) => String(c.rulesText).trim().length > 0),
+      filtered.cubes.every((c) => String(c.rulesText).trim().length > 0),
     ).toBe(true);
-  });
-
-  it("onlyWithRules with a smaller limit truncates deterministically by name", async () => {
-    const parsed = await run(client, { onlyWithRules: true, limit: 3 });
-    expect(parsed.returned).toBe(3);
-    expect(parsed.truncated).toBe(true);
-    expect(parsed.count).toBe(30);
-    expect(parsed.cubes.map((c) => c.cubeName)).toEqual([
+    const capped = await run(client, { onlyWithRules: true, limit: 3 });
+    expect(capped.cubes.map((c) => c.cubeName)).toEqual([
       "Cube.00",
       "Cube.02",
       "Cube.04",
@@ -149,6 +171,6 @@ describe("tm1_get_all_cube_rules summary", () => {
       ),
     ]);
     const parsed = await run(client, { summary: true });
-    expect(parsed.cubes[0]!.referencedCubes).toEqual(["Rates"]);
+    expect(parsed.cubes[0].referencedCubes).toEqual(["Rates"]);
   });
 });

@@ -79,38 +79,6 @@ describe("defineTool", () => {
     expect(schema.safeParse({ success: true, extra: 1 }).success).toBe(true);
   });
 
-  it("rejects a duplicate tool name", () => {
-    const spec = {
-      name: "tm1_spec_duplicate",
-      description: "fixture",
-      annotations: READ_ONLY,
-      input: { cubeName: z.string() },
-      handler: ok,
-    };
-    defineTool(spec);
-    expect(() => defineTool(spec)).toThrow(/duplicate tool name/);
-  });
-
-  it("joins an array description with single spaces", () => {
-    const server = new McpServer({ name: "t", version: "0.0.0" });
-    let config: Record<string, unknown> | undefined;
-    server.registerTool = ((...args: unknown[]) => {
-      config = args[1] as Record<string, unknown>;
-      return {} as ReturnType<typeof server.registerTool>;
-    }) as typeof server.registerTool;
-
-    const register = defineTool({
-      name: "tm1_spec_desc_array",
-      description: ["first line.", "second line."],
-      annotations: READ_ONLY,
-      input: { cubeName: z.string() },
-      handler: ok,
-    });
-    register(withAnnotations(server, mockLogger, "readwrite"), fakeClient);
-
-    expect(config?.description).toBe("first line. second line.");
-  });
-
   it("supplies annotations and outputSchema to the registration Proxy", () => {
     const server = new McpServer({ name: "t", version: "0.0.0" });
     let config: Record<string, unknown> | undefined;

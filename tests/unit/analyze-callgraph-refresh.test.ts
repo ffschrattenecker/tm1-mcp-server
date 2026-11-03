@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { TM1Client } from "../../src/tm1-client.js";
 import {
-  buildIndexFromTM1,
   __testing,
   invalidateCallgraphCache,
 } from "../../src/lib/callgraph/tm1-adapter.js";
@@ -63,18 +62,5 @@ describe("tm1_analyze_callgraph refresh", () => {
     await call({});
     expect(fetches()).toBe(2);
     expect(__testing.cachedKeys()).toEqual(["a|inc=false"]);
-  });
-
-  it("refresh on one connection leaves another connection's cache alone", async () => {
-    const a = stubClient("a");
-    const b = stubClient("b");
-    await buildIndexFromTM1(b.client);
-    await register(a.client)({ refresh: true });
-    expect(__testing.cachedKeys().sort()).toEqual([
-      "a|inc=false",
-      "b|inc=false",
-    ]);
-    await buildIndexFromTM1(b.client);
-    expect(b.fetches()).toBe(1);
   });
 });

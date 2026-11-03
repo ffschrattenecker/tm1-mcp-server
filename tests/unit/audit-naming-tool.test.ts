@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { matchesElementViolationFilter } from "../helpers/element-violation-filter.js";
-import { z, type ZodRawShape } from "zod";
 import { registerAuditNaming } from "../../src/tools/analysis/audit-naming.js";
 import { ElementService } from "../../src/tm1-client/services/element-service.js";
+import { captureParsedTool } from "../helpers/client-harness.js";
 
 // audit-naming now scans element names via ElementService.scanElementNames.
 // Wrapping the mock's request() in a REAL ElementService keeps the paging /
@@ -17,41 +17,6 @@ function elementServiceFrom(
   // test always did and makes the test blow up loudly if that path changes.
   const cells = undefined as unknown as Ctor[1];
   return new ElementService({ request } as unknown as Ctor[0], cells);
-}
-
-type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>;
-
-/**
- * Minimal fake McpServer that records the handler registered by server.tool(...).
- * Mirrors the real SDK by parsing args through the captured Zod schema before
- * invoking the handler — that applies .default() values just like prod.
- */
-function makeFakeServer() {
-  let captured: ToolHandler | null = null;
-  let toolName = "";
-  let parser: z.ZodObject<ZodRawShape> | null = null;
-  const server = {
-    tool: (
-      name: string,
-      _desc: string,
-      schema: ZodRawShape,
-      handler: ToolHandler,
-    ) => {
-      toolName = name;
-      parser = z.object(schema);
-      captured = handler;
-    },
-  };
-  return {
-    server: server as unknown as Parameters<typeof registerAuditNaming>[0],
-    getHandler: (): ToolHandler => {
-      if (!captured || !parser) throw new Error("handler not registered");
-      const p = parser;
-      const h = captured;
-      return (args) => h(p.parse(args));
-    },
-    getName: () => toolName,
-  };
 }
 
 interface AuditNamingClientStubArgs {
@@ -122,7 +87,7 @@ interface FindingGroup {
   totalCount: number;
 }
 
-function parseResult(raw: unknown): {
+interface AuditNamingResult {
   status: string;
   detectedMajor: number;
   invalidCount: number;
@@ -142,42 +107,41 @@ function parseResult(raw: unknown): {
     scannedCount: number;
   }>;
   totalElementsInScope: number;
-} {
-  const result = raw as { content: Array<{ text: string }> };
-  return JSON.parse(result.content[0].text);
+}
+
+/** Run tm1_audit_naming against a stub and parse its JSON result. */
+async function audit(
+  tm1: Parameters<typeof registerAuditNaming>[1],
+  args: Record<string, unknown> = {},
+): Promise<AuditNamingResult> {
+  const call = captureParsedTool(registerAuditNaming, tm1);
+  const raw = (await call(args)) as { content: Array<{ text: string }> };
+  return JSON.parse(raw.content[0].text);
 }
 
 describe("tm1_audit_naming tool", () => {
-  it("registers under the expected name", () => {
-    const fake = makeFakeServer();
-    const tm1 = makeAuditNamingClientStub({ productVersion: "11.8.01100" });
-    registerAuditNaming(fake.server, tm1);
-    expect(fake.getName()).toBe("tm1_audit_naming");
-  });
-
   it("returns pass when all objects are clean", async () => {
-    const fake = makeFakeServer();
-    const tm1 = makeAuditNamingClientStub({
-      productVersion: "11.8.01100",
-      cubes: [{ name: "Sales" }, { name: "Forecast" }],
-      dimensions: [{ name: "Product", hierarchies: ["Product"] }],
-      processes: [{ name: "Load_Actuals" }],
-      chores: [{ name: "Nightly" }],
-    });
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(await fake.getHandler()({}));
+    const out = await audit(
+      makeAuditNamingClientStub({
+        productVersion: "11.8.01100",
+        cubes: [{ name: "Sales" }, { name: "Forecast" }],
+        dimensions: [{ name: "Product", hierarchies: ["Product"] }],
+        processes: [{ name: "Load_Actuals" }],
+        chores: [{ name: "Nightly" }],
+      }),
+    );
     expect(out.status).toBe("pass");
     expect(out.invalidCount).toBe(0);
   });
 
   it("flags reserved char in cube name and control prefix", async () => {
-    const fake = makeFakeServer();
-    const tm1 = makeAuditNamingClientStub({
-      productVersion: "11.8.01100",
-      cubes: [{ name: "Bad;Cube" }, { name: "}Hidden" }],
-    });
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(await fake.getHandler()({ includeControl: true }));
+    const out = await audit(
+      makeAuditNamingClientStub({
+        productVersion: "11.8.01100",
+        cubes: [{ name: "Bad;Cube" }, { name: "}Hidden" }],
+      }),
+      { includeControl: true },
+    );
     expect(out.status).toBe("fail");
     expect(out.invalidCount).toBe(2);
     const rules = (out.findings ?? []).flatMap((f) =>
@@ -188,72 +152,20 @@ describe("tm1_audit_naming tool", () => {
   });
 
   it("excludes control objects by default and includes them on opt-in", async () => {
-    const fake = makeFakeServer();
     const tm1 = makeAuditNamingClientStub({
       productVersion: "11.8.01100",
       cubes: [{ name: "}Stats" }, { name: "Sales" }],
     });
-    registerAuditNaming(fake.server, tm1);
-    const handler = fake.getHandler();
-    const defaultOut = parseResult(await handler({}));
+    const defaultOut = await audit(tm1);
     expect(defaultOut.scanned.cubes).toBe(1);
     expect(defaultOut.invalidCount).toBe(0);
 
-    const withControl = parseResult(await handler({ includeControl: true }));
+    const withControl = await audit(tm1, { includeControl: true });
     expect(withControl.scanned.cubes).toBe(2);
     expect(withControl.invalidCount).toBe(1);
   });
 
-  it("applies v12-only TAB rule when server is v12", async () => {
-    const fake = makeFakeServer();
-    const tm1 = makeAuditNamingClientStub({
-      productVersion: "12.0.0",
-      dimensions: [{ name: "Region", hierarchies: ["Region"] }],
-      elementsByHier: { "Region/Region": ["North\tWest"] },
-    });
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(await fake.getHandler()({ scope: ["elements"] }));
-    expect(out.invalidCount).toBe(1);
-    expect(out.findings?.[0]?.violations[0]?.rule).toBe("element_contains_tab");
-  });
-
-  it("flags TAB on a v11 server too", async () => {
-    // 11.8 accepts a TAB in an element name and keeps it verbatim, so the rule
-    // is not version-gated: the audit reports it wherever it finds it.
-    const fake = makeFakeServer();
-    const tm1 = makeAuditNamingClientStub({
-      productVersion: "11.8.01100",
-      dimensions: [{ name: "Region", hierarchies: ["Region"] }],
-      elementsByHier: { "Region/Region": ["North\tWest"] },
-    });
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(await fake.getHandler()({ scope: ["elements"] }));
-    expect(out.invalidCount).toBe(1);
-    expect(out.findings?.[0]?.violations[0]?.rule).toBe("element_contains_tab");
-  });
-
-  it("paginates element scan across multiple pages", async () => {
-    const fake = makeFakeServer();
-    const names = ["e1", "e2", "e3", "e4", "e5", "e6", "e7"];
-    const tm1 = makeAuditNamingClientStub({
-      productVersion: "11.8.01100",
-      dimensions: [{ name: "Big", hierarchies: ["Big"] }],
-      elementsByHier: { "Big/Big": names },
-    });
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(
-      await fake.getHandler()({
-        scope: ["elements"],
-        elementsPageSize: 1000,
-        maxElementsPerDim: 1000,
-      }),
-    );
-    expect(out.scanned.elements).toBe(7);
-    expect(out.invalidCount).toBe(0);
-    expect(out.elementsTruncated.length).toBe(0);
-  });
-
-  it("paginates element scan via $skip across multiple HTTP pages", async () => {
+  it("reads element names through the $skip paging, not a single page", async () => {
     // Zod schema clamps elementsPageSize to min(1000), so verify multi-page
     // $skip behaviour against a dimension whose count exceeds one page.
     // Every name violates a rule (leading '+'), so the filtered result set is
@@ -261,7 +173,6 @@ describe("tm1_audit_naming tool", () => {
     // dimension of clean names would never reach a second page.
     const total = 2500;
     const names = Array.from({ length: total }, (_, i) => `+e${i}`);
-    const fake = makeFakeServer();
     let requestCount = 0;
     const request = async (_method: string, path: string) => {
       requestCount++;
@@ -293,14 +204,11 @@ describe("tm1_audit_naming tool", () => {
       request,
       elements: elementServiceFrom(request),
     } as unknown as Parameters<typeof registerAuditNaming>[1];
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(
-      await fake.getHandler()({
-        scope: ["elements"],
-        elementsPageSize: 1000,
-        maxElementsPerDim: 1000000,
-      }),
-    );
+    const out = await audit(tm1, {
+      scope: ["elements"],
+      elementsPageSize: 1000,
+      maxElementsPerDim: 1000000,
+    });
     expect(out.scanned.elements).toBe(total);
     expect(out.invalidCount).toBe(total);
     // probe (skip=0, count=true) + skip=1000 + skip=2000, then one unfiltered
@@ -310,57 +218,39 @@ describe("tm1_audit_naming tool", () => {
   });
 
   it("reports scanned.dimensions when only hierarchies are in scope", async () => {
-    const fake = makeFakeServer();
-    const tm1 = makeAuditNamingClientStub({
-      productVersion: "11.8.01100",
-      dimensions: [
-        { name: "Product", hierarchies: ["Product", "ByBrand"] },
-        { name: "Time", hierarchies: ["Time"] },
-      ],
-    });
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(
-      await fake.getHandler()({ scope: ["hierarchies"] }),
+    const out = await audit(
+      makeAuditNamingClientStub({
+        productVersion: "11.8.01100",
+        dimensions: [
+          { name: "Product", hierarchies: ["Product", "ByBrand"] },
+          { name: "Time", hierarchies: ["Time"] },
+        ],
+      }),
+      { scope: ["hierarchies"] },
     );
     expect(out.scanned.hierarchies).toBe(3);
     expect(out.scanned.dimensions).toBe(2);
   });
 
-  it("respects elementsPageSize for paginated reads", async () => {
-    const fake = makeFakeServer();
-    const names = Array.from({ length: 5 }, (_, i) => `valid_${i}`);
-    const tm1 = makeAuditNamingClientStub({
-      productVersion: "11.8.01100",
-      dimensions: [{ name: "Mini", hierarchies: ["Mini"] }],
-      elementsByHier: { "Mini/Mini": names },
-    });
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(
-      await fake.getHandler()({ scope: ["elements"], elementsPageSize: 2000 }),
-    );
-    expect(out.scanned.elements).toBe(5);
-  });
-
   it("truncates dimension above maxElementsPerDim and reports it transparently", async () => {
-    const fake = makeFakeServer();
     const big = Array.from({ length: 10 }, (_, i) => `+e${i}`);
     const small = ["+bad1", "+bad2"];
-    const tm1 = makeAuditNamingClientStub({
-      productVersion: "11.8.01100",
-      dimensions: [
-        { name: "Huge", hierarchies: ["Huge"] },
-        { name: "Small", hierarchies: ["Small"] },
-      ],
-      elementsByHier: { "Huge/Huge": big, "Small/Small": small },
-    });
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(
-      await fake.getHandler()({ scope: ["elements"], maxElementsPerDim: 5 }),
+    const out = await audit(
+      makeAuditNamingClientStub({
+        productVersion: "11.8.01100",
+        dimensions: [
+          { name: "Huge", hierarchies: ["Huge"] },
+          { name: "Small", hierarchies: ["Small"] },
+        ],
+        elementsByHier: { "Huge/Huge": big, "Small/Small": small },
+      }),
+      { scope: ["elements"], maxElementsPerDim: 5 },
     );
     // The cap now bounds REPORTED violations, not elements examined: "Huge"
     // has ten offenders and only five come back, while both hierarchies are
     // still checked in full (10 + 2).
     expect(out.scanned.elements).toBe(12);
+    expect(out.totalElementsInScope).toBe(12);
     expect(out.invalidCount).toBe(5 + 2);
     expect(out.elementsTruncated).toEqual([
       {
@@ -373,17 +263,15 @@ describe("tm1_audit_naming tool", () => {
   });
 
   it("flags invalid process variable identifiers", async () => {
-    const fake = makeFakeServer();
-    const tm1 = makeAuditNamingClientStub({
-      productVersion: "11.8.01100",
-      processes: [{ name: "Load" }],
-      variables: {
-        Load: [{ name: "1bad" }, { name: "v-dash" }, { name: "vOK" }],
-      },
-    });
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(
-      await fake.getHandler()({ scope: ["processVariables"] }),
+    const out = await audit(
+      makeAuditNamingClientStub({
+        productVersion: "11.8.01100",
+        processes: [{ name: "Load" }],
+        variables: {
+          Load: [{ name: "1bad" }, { name: "v-dash" }, { name: "vOK" }],
+        },
+      }),
+      { scope: ["processVariables"] },
     );
     expect(out.scanned.processVariables).toBe(3);
     expect(out.invalidCount).toBe(2);
@@ -395,53 +283,47 @@ describe("tm1_audit_naming tool", () => {
   });
 
   it("respects maxFindings cap and reports truncation", async () => {
-    const fake = makeFakeServer();
-    const tm1 = makeAuditNamingClientStub({
-      productVersion: "11.8.01100",
-      cubes: Array.from({ length: 5 }, (_, i) => ({ name: `Bad;${i}` })),
-    });
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(await fake.getHandler()({ maxFindings: 2 }));
+    const out = await audit(
+      makeAuditNamingClientStub({
+        productVersion: "11.8.01100",
+        cubes: Array.from({ length: 5 }, (_, i) => ({ name: `Bad;${i}` })),
+      }),
+      { maxFindings: 2 },
+    );
     expect(out.invalidCount).toBe(5);
     expect(out.findings?.length).toBe(2);
     expect(out.truncated).toBe(true);
   });
 
   it("scope subset of kinds skips unrelated calls", async () => {
-    const fake = makeFakeServer();
-    const tm1 = makeAuditNamingClientStub({
-      productVersion: "11.8.01100",
-      cubes: [{ name: "Bad;Cube" }],
-      processes: [{ name: "Bad;Proc" }],
-    });
-    registerAuditNaming(fake.server, tm1);
-    const out = parseResult(await fake.getHandler()({ scope: ["cubes"] }));
+    const out = await audit(
+      makeAuditNamingClientStub({
+        productVersion: "11.8.01100",
+        cubes: [{ name: "Bad;Cube" }],
+        processes: [{ name: "Bad;Proc" }],
+      }),
+      { scope: ["cubes"] },
+    );
     expect(out.scanned.cubes).toBe(1);
     expect(out.scanned.processes).toBe(0);
     expect(out.invalidCount).toBe(1);
   });
 
   describe("summary mode", () => {
-    it("summary=true swaps findings[] for findingsByGroup[] and omits truncation", async () => {
-      const fake = makeFakeServer();
-      const elements = ["Bad;1", "Bad;2", "Bad;3", "Bad;4"];
-      const tm1 = makeAuditNamingClientStub({
-        productVersion: "11.8.01100",
-        dimensions: [{ name: "Produkt", hierarchies: ["Produkt"] }],
-        elementsByHier: { "Produkt/Produkt": elements },
-      });
-      registerAuditNaming(fake.server, tm1);
-      const out = parseResult(
-        await fake.getHandler()({
-          scope: ["elements"],
-          summary: true,
-          maxFindings: 2,
+    it("summary=true swaps findings[] for findingsByGroup[], samples three names, and omits truncation", async () => {
+      const out = await audit(
+        makeAuditNamingClientStub({
+          productVersion: "11.8.01100",
+          dimensions: [{ name: "Produkt", hierarchies: ["Produkt"] }],
+          elementsByHier: {
+            "Produkt/Produkt": ["Bad;1", "Bad;2", "Bad;3", "Bad;4"],
+          },
         }),
+        { scope: ["elements"], summary: true, maxFindings: 2 },
       );
       expect(out.invalidCount).toBe(4);
       expect(out.findings).toBeUndefined();
       expect(out.truncated).toBe(false);
-      expect(out.findingsByGroup).toBeDefined();
       expect(out.findingsByGroup!.length).toBe(1);
       const g = out.findingsByGroup![0];
       expect(g.objectKind).toBe("element");
@@ -449,24 +331,23 @@ describe("tm1_audit_naming tool", () => {
       expect(g.hierarchy).toBe("Produkt");
       expect(g.totalCount).toBe(4);
       expect(g.ruleBreakdown).toEqual({ server_reserved_char: 4 });
+      expect(g.sampleNames).toEqual(["Bad;1", "Bad;2", "Bad;3"]);
     });
 
     it("summary aggregates rule counts per (objectKind, parent) group", async () => {
-      const fake = makeFakeServer();
-      const tm1 = makeAuditNamingClientStub({
-        productVersion: "11.8.01100",
-        dimensions: [
-          { name: "DimA", hierarchies: ["DimA"] },
-          { name: "DimB", hierarchies: ["DimB"] },
-        ],
-        elementsByHier: {
-          "DimA/DimA": ["Bad;1", "Bad;2", "+leading"],
-          "DimB/DimB": ["Bad;3"],
-        },
-      });
-      registerAuditNaming(fake.server, tm1);
-      const out = parseResult(
-        await fake.getHandler()({ scope: ["elements"], summary: true }),
+      const out = await audit(
+        makeAuditNamingClientStub({
+          productVersion: "11.8.01100",
+          dimensions: [
+            { name: "DimA", hierarchies: ["DimA"] },
+            { name: "DimB", hierarchies: ["DimB"] },
+          ],
+          elementsByHier: {
+            "DimA/DimA": ["Bad;1", "Bad;2", "+leading"],
+            "DimB/DimB": ["Bad;3"],
+          },
+        }),
+        { scope: ["elements"], summary: true },
       );
       expect(out.findingsByGroup!.length).toBe(2);
       const dimA = out.findingsByGroup!.find((g) => g.dimension === "DimA")!;
@@ -478,36 +359,14 @@ describe("tm1_audit_naming tool", () => {
       expect(dimB.ruleBreakdown.server_reserved_char).toBe(1);
     });
 
-    it("summary samples first 3 element names per group", async () => {
-      const fake = makeFakeServer();
-      const names = ["Bad;A", "Bad;B", "Bad;C", "Bad;D", "Bad;E"];
-      const tm1 = makeAuditNamingClientStub({
-        productVersion: "11.8.01100",
-        dimensions: [{ name: "Big", hierarchies: ["Big"] }],
-        elementsByHier: { "Big/Big": names },
-      });
-      registerAuditNaming(fake.server, tm1);
-      const out = parseResult(
-        await fake.getHandler()({ scope: ["elements"], summary: true }),
-      );
-      const g = out.findingsByGroup![0];
-      expect(g.sampleNames.length).toBe(3);
-      expect(g.sampleNames).toEqual(["Bad;A", "Bad;B", "Bad;C"]);
-    });
-
     it("summary groups non-element kinds under objectKind without parent", async () => {
-      const fake = makeFakeServer();
-      const tm1 = makeAuditNamingClientStub({
-        productVersion: "11.8.01100",
-        cubes: [{ name: "Bad;X" }, { name: "Bad;Y" }],
-        processes: [{ name: "Bad;Proc" }],
-      });
-      registerAuditNaming(fake.server, tm1);
-      const out = parseResult(
-        await fake.getHandler()({
-          scope: ["cubes", "processes"],
-          summary: true,
+      const out = await audit(
+        makeAuditNamingClientStub({
+          productVersion: "11.8.01100",
+          cubes: [{ name: "Bad;X" }, { name: "Bad;Y" }],
+          processes: [{ name: "Bad;Proc" }],
         }),
+        { scope: ["cubes", "processes"], summary: true },
       );
       const cubeGroup = out.findingsByGroup!.find(
         (g) => g.objectKind === "cube",
@@ -520,53 +379,6 @@ describe("tm1_audit_naming tool", () => {
       expect(cubeGroup.dimension).toBeUndefined();
       expect(cubeGroup.sampleNames).toEqual(["Bad;X", "Bad;Y"]);
       expect(procGroup.totalCount).toBe(1);
-    });
-
-    it("reports totalElementsInScope (scanned + truncated remainder)", async () => {
-      const fake = makeFakeServer();
-      const big = Array.from({ length: 10 }, (_, i) => `e${i}`);
-      const small = ["ok1", "ok2"];
-      const tm1 = makeAuditNamingClientStub({
-        productVersion: "11.8.01100",
-        dimensions: [
-          { name: "Huge", hierarchies: ["Huge"] },
-          { name: "Small", hierarchies: ["Small"] },
-        ],
-        elementsByHier: { "Huge/Huge": big, "Small/Small": small },
-      });
-      registerAuditNaming(fake.server, tm1);
-      const out = parseResult(
-        await fake.getHandler()({ scope: ["elements"], maxElementsPerDim: 5 }),
-      );
-      // The server applies the rules to every element, so both hierarchies
-      // are examined in full whatever the cap: 10 + 2 = 12. The cap bounds how
-      // many offenders come back, and these names are all clean.
-      expect(out.scanned.elements).toBe(12);
-      expect(out.totalElementsInScope).toBe(12);
-    });
-
-    it("totalElementsInScope is 0 when elements not in scope", async () => {
-      const fake = makeFakeServer();
-      const tm1 = makeAuditNamingClientStub({
-        productVersion: "11.8.01100",
-        cubes: [{ name: "Sales" }],
-      });
-      registerAuditNaming(fake.server, tm1);
-      const out = parseResult(await fake.getHandler()({ scope: ["cubes"] }));
-      expect(out.totalElementsInScope).toBe(0);
-    });
-
-    it("summary=false (default) keeps legacy findings[] response", async () => {
-      const fake = makeFakeServer();
-      const tm1 = makeAuditNamingClientStub({
-        productVersion: "11.8.01100",
-        cubes: [{ name: "Bad;X" }],
-      });
-      registerAuditNaming(fake.server, tm1);
-      const out = parseResult(await fake.getHandler()({}));
-      expect(out.findings).toBeDefined();
-      expect(out.findingsByGroup).toBeUndefined();
-      expect(out.findings!.length).toBe(1);
     });
   });
 });

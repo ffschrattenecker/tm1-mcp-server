@@ -79,7 +79,7 @@ describe("skipCheck: the directive, not a comment that names it", () => {
       makeHttp(async () => ({ value: [{ Name: "Sales", Rules: rules }] })),
     );
     const [c] = await cubes.getAllRules(false);
-    expect(c!.skipCheck).toBe(false);
+    expect(c.skipCheck).toBe(false);
   });
 
   it("getAllRules reads a SKIPCHECK; line as the directive", async () => {
@@ -89,6 +89,6 @@ describe("skipCheck: the directive, not a comment that names it", () => {
       })),
     );
     const [c] = await cubes.getAllRules(false);
-    expect(c!.skipCheck).toBe(true);
+    expect(c.skipCheck).toBe(true);
   });
 });

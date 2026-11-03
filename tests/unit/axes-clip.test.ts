@@ -67,6 +67,7 @@ function mockHttp() {
 
 type ToolHandler = (a: Record<string, unknown>) => Promise<{
   content: Array<{ type: string; text: string }>;
+  structuredContent?: Record<string, unknown>;
 }>;
 function fakeServer() {
   let handler: ToolHandler | null = null;
@@ -94,6 +95,19 @@ function mdxClient(): TM1Client {
 function viewClient(): TM1Client {
   return contractCheckedClient({
     views: new ViewService(mockHttp()),
+  } as unknown as TM1Client);
+}
+// viewClient, also recording the request paths so pagination params can be checked.
+function recordingViewClient(paths: string[]): TM1Client {
+  const http = mockHttp();
+  const request = (m: string, p: string) => {
+    paths.push(p);
+    return http.request(m, p);
+  };
+  return contractCheckedClient({
+    views: new ViewService({ request } as unknown as ConstructorParameters<
+      typeof ViewService
+    >[0]),
   } as unknown as TM1Client);
 }
 
@@ -237,6 +251,52 @@ describe("tm1_get_view axes clipping", () => {
 
     expect(env.axes[1].tuples).toHaveLength(5);
     expect(env.axes_clipped).toBeUndefined();
+  });
+
+  it("pushes $top/$skip server-side and reports has_more / next_offset", async () => {
+    const paths: string[] = [];
+    const { server, run } = fakeServer();
+    registerGetView(server, recordingViewClient(paths));
+    const env = JSON.parse(
+      (await run({ cubeName: "C", viewName: "V", limit: 4 })).content[0].text,
+    );
+    expect(paths[0]).toContain("$top=4");
+    expect(paths[0]).toContain("$skip=0");
+    expect(env.count).toBe(4);
+    expect(env.has_more).toBe(true);
+    expect(env.next_offset).toBe(4);
+  });
+
+  it("last page at a non-zero offset: has_more false, next_offset null", async () => {
+    const paths: string[] = [];
+    const { server, run } = fakeServer();
+    registerGetView(server, recordingViewClient(paths));
+    const env = JSON.parse(
+      (await run({ cubeName: "C", viewName: "V", limit: 4, offset: 8 }))
+        .content[0].text,
+    );
+    expect(paths[0]).toContain("$top=4");
+    expect(paths[0]).toContain("$skip=8");
+    expect(env.offset).toBe(8);
+    expect(env.count).toBe(2);
+    expect(env.has_more).toBe(false);
+    expect(env.next_offset).toBeNull();
+  });
+
+  it("format='markdown' renders a pivot grid for the full result", async () => {
+    const { server, run } = fakeServer();
+    registerGetView(server, viewClient());
+    const res = await run({
+      cubeName: "C",
+      viewName: "V",
+      limit: 0,
+      format: "markdown",
+    });
+    const md = res.content[0].text;
+    expect(md).toContain("| R1 | 10 | 11 |");
+    expect(md).toContain("| R5 | 50 | 51 |");
+    // The table, not the JSON payload, is what structuredContent carries.
+    expect(res.structuredContent).toEqual({ markdown: md });
   });
 });
 
