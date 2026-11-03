@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { dataSourceSchema } from "../../src/lib/process-parts-schema.js";
+import {
+  DataSourceInputSchema,
+  DataSourceSchema,
+} from "../../src/schemas/processes.js";
 
 // The exact field set a real ODBC source carries on the wire. Measured
 // 2026-08-18 against two TM1 11.8.02900.8 instances: 29 ODBC processes, every
@@ -16,7 +19,7 @@ const ODBC_WIRE_FIELDS = {
 
 describe("dataSourceSchema", () => {
   it("accepts every field a real ODBC source has", () => {
-    const parsed = dataSourceSchema.parse(ODBC_WIRE_FIELDS);
+    const parsed = DataSourceSchema.parse(ODBC_WIRE_FIELDS);
     expect(parsed).toEqual(ODBC_WIRE_FIELDS);
   });
 
@@ -27,27 +30,30 @@ describe("dataSourceSchema", () => {
   it("takes only the two ASCII delimiter types TM1 knows", () => {
     for (const asciiDelimiterType of ["Character", "FixedWidth"]) {
       expect(
-        dataSourceSchema.safeParse({ type: "ASCII", asciiDelimiterType })
+        DataSourceInputSchema.safeParse({ type: "ASCII", asciiDelimiterType })
           .success,
       ).toBe(true);
     }
     expect(
-      dataSourceSchema.safeParse({ type: "ASCII", asciiDelimiterType: "Fixed" })
-        .success,
+      DataSourceInputSchema.safeParse({
+        type: "ASCII",
+        asciiDelimiterType: "Fixed",
+      }).success,
     ).toBe(false);
   });
 
   it("rejects oDBCConnection, which TM1 has never had", () => {
-    const result = dataSourceSchema
-      .strict()
-      .safeParse({ ...ODBC_WIRE_FIELDS, oDBCConnection: "DRIVER={x};" });
+    const result = DataSourceSchema.strict().safeParse({
+      ...ODBC_WIRE_FIELDS,
+      oDBCConnection: "DRIVER={x};",
+    });
 
     expect(result.success).toBe(false);
     expect(JSON.stringify(result.error?.issues)).toContain("oDBCConnection");
   });
 
   it("is non-strict by default, so a read path can carry unknown server keys", () => {
-    const parsed = dataSourceSchema.parse({
+    const parsed = DataSourceSchema.parse({
       ...ODBC_WIRE_FIELDS,
       someFutureField: "x",
     });

@@ -5,13 +5,14 @@ import {
   MASK_SECRETS_DESCRIPTION,
   maskCode,
   resolveMaskSecrets,
+  maskSecretsInput,
 } from "../../lib/mask-secrets.js";
+import { TI_TABS, type TiTab } from "../../schemas/processes.js";
 import { GetProcessResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { jsonResult } from "../format.js";
 
-const TABS = ["prolog", "metadata", "data", "epilog"] as const;
 const HEAVY_MIN_LINES = 20;
 const HEAVY_RATIO = 0.4;
 
@@ -54,13 +55,9 @@ export const registerGetProcess = defineTool({
       .optional()
       .default(true)
       .describe("Include the HasSecurityAccess elevation flag (default true)."),
-    maskSecrets: z
-      .boolean()
-      .optional()
-      .default(true)
-      .describe(
-        `${MASK_SECRETS_DESCRIPTION} Also redacts PWD=/UID= pairs in the datasource's ODBC connection string. The datasource password field is always redacted.`,
-      ),
+    maskSecrets: maskSecretsInput(
+      `${MASK_SECRETS_DESCRIPTION} Also redacts PWD=/UID= pairs in the datasource's ODBC connection string. The datasource password field is always redacted.`,
+    ),
     stripComments: z
       .boolean()
       .optional()
@@ -108,7 +105,7 @@ export const registerGetProcess = defineTool({
       ]);
 
     if (code !== undefined) {
-      const tabs: Record<(typeof TABS)[number], string> = {
+      const tabs: Record<TiTab, string> = {
         prolog: code.prolog,
         metadata: code.metadata,
         data: code.data,
@@ -118,7 +115,7 @@ export const registerGetProcess = defineTool({
       if (stripComments) {
         let removedLines = 0;
         let collapsedBlocks = 0;
-        for (const tab of TABS) {
+        for (const tab of TI_TABS) {
           const r = stripCommentBlocks(tabs[tab]);
           tabs[tab] = r.code;
           removedLines += r.removedLines;
@@ -133,7 +130,7 @@ export const registerGetProcess = defineTool({
         let worst:
           | { tab: string; total: number; comment: number; ratio: number }
           | undefined;
-        for (const tab of TABS) {
+        for (const tab of TI_TABS) {
           const s = commentStats(tabs[tab]);
           if (s.totalLines < HEAVY_MIN_LINES) continue;
           const ratio = s.commentLines / s.totalLines;
@@ -155,7 +152,7 @@ export const registerGetProcess = defineTool({
       }
 
       if (maskSecrets) {
-        for (const tab of TABS) tabs[tab] = maskCode(tabs[tab]);
+        for (const tab of TI_TABS) tabs[tab] = maskCode(tabs[tab]);
       }
       Object.assign(payload, tabs);
     }

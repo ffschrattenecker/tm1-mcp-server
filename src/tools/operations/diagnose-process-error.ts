@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   fetchRelatedLogs,
   matchesProcessName,
+  relatedLogFields,
+  RELATED_DEFAULTS,
   tailLines,
   tsFromFilename,
 } from "./error-log-helpers.js";
@@ -12,9 +14,6 @@ import { jsonResult } from "../format.js";
 
 const DEFAULT_TAIL_LINES = 60;
 const DEFAULT_MAX_LOGS = 3;
-const DEFAULT_RELATED_WINDOW_SEC = 10;
-const DEFAULT_RELATED_MAX_FILES = 5;
-const DEFAULT_RELATED_MAX_BYTES = 16 * 1024;
 
 export const registerDiagnoseProcessError = defineTool({
   name: "tm1_diagnose_process_error",
@@ -57,33 +56,7 @@ export const registerDiagnoseProcessError = defineTool({
       .describe(
         `Lines to return from the end of each log (default ${DEFAULT_TAIL_LINES}).`,
       ),
-    includeRelated: z
-      .boolean()
-      .optional()
-      .default(true)
-      .describe(
-        "Also fetch sibling logs within ±relatedWindowSec of each log's timestamp (cascade failure tracing). Default: true.",
-      ),
-    relatedWindowSec: z
-      .number()
-      .int()
-      .min(1)
-      .max(300)
-      .optional()
-      .default(DEFAULT_RELATED_WINDOW_SEC)
-      .describe(
-        `Time window in seconds for cascade log discovery (default ${DEFAULT_RELATED_WINDOW_SEC}).`,
-      ),
-    relatedMaxFiles: z
-      .number()
-      .int()
-      .min(1)
-      .max(20)
-      .optional()
-      .default(DEFAULT_RELATED_MAX_FILES)
-      .describe(
-        `Max related logs per primary log (default ${DEFAULT_RELATED_MAX_FILES}).`,
-      ),
+    ...relatedLogFields(true),
   },
   handler: async (
     {
@@ -154,7 +127,7 @@ export const registerDiagnoseProcessError = defineTool({
               {
                 windowSec: relatedWindowSec,
                 maxFiles: relatedMaxFiles,
-                maxBytes: DEFAULT_RELATED_MAX_BYTES,
+                maxBytes: RELATED_DEFAULTS.maxBytes,
               },
             );
 

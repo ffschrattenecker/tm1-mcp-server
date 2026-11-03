@@ -5,10 +5,13 @@ import type {
   ProcessVariable,
 } from "../types.js";
 import {
-  parameterSchema,
-  variableSchema,
-  dataSourceSchema,
-} from "./process-parts-schema.js";
+  DataSourceInputSchema,
+  DataSourceSchema,
+  ProcessParameterSchema,
+  ProcessVariableSchema,
+  TI_TABS,
+  type TiTab,
+} from "../schemas/processes.js";
 
 /**
  * tm1-git two-file representation of a TI process.
@@ -76,8 +79,6 @@ export interface ParsedGitProcess {
   hasSecurityAccess?: boolean;
 }
 
-type Tab = "prolog" | "metadata" | "data" | "epilog";
-
 /**
  * Build the `{name}.json`: the server payload as it came, the password
  * stripped unless asked for. Key order is the server's, so nothing is rebuilt
@@ -111,8 +112,7 @@ export function serializeProcessToGit(
   return { json, credentialsOmitted };
 }
 
-const TABS: readonly Tab[] = ["prolog", "metadata", "data", "epilog"];
-const TITLE: Record<Tab, string> = {
+const TITLE: Record<TiTab, string> = {
   prolog: "Prolog",
   metadata: "Metadata",
   data: "Data",
@@ -146,7 +146,7 @@ function isLegacyLayout(ti: string): boolean {
  */
 export function toCodeBlob(ti: string, parsed: ParsedGitProcess): string {
   if (!isLegacyLayout(ti)) return ti.replace(/\r?\n/g, "\r\n");
-  const blob = TABS.filter((t) => parsed[t] !== "")
+  const blob = TI_TABS.filter((t) => parsed[t] !== "")
     .map((t) => `#region ${TITLE[t]}\n${parsed[t]}\n#endregion`)
     .join("\n");
   return (blob || EMPTY_CODE_BLOB).replace(/\r?\n/g, "\r\n");
@@ -171,10 +171,10 @@ function regionBlobError(problem: string): Error {
 function openedTab(
   line: string,
   form: "any" | "native" | "legacy",
-): Tab | undefined {
+): TiTab | undefined {
   const m = /^[ \t]*#region[ \t]+(\w+)[ \t]*$/.exec(line);
   const name = m?.[1];
-  return TABS.find((t) =>
+  return TI_TABS.find((t) =>
     form === "any"
       ? name?.toLowerCase() === t
       : name === (form === "legacy" ? t : TITLE[t]),
@@ -186,7 +186,7 @@ function openedTab(
  * `#endregion <tab>` naming that tab — there a bare `#endregion` is a user
  * fold's close, which is what keeps that layout unambiguous.
  */
-function isTabClose(line: string, tab: Tab, legacy: boolean): boolean {
+function isTabClose(line: string, tab: TiTab, legacy: boolean): boolean {
   return new RegExp(
     `^[ \\t]*#endregion${legacy ? ` ${tab}` : ""}[ \\t]*$`,
   ).test(line);
@@ -215,8 +215,8 @@ function isTabClose(line: string, tab: Tab, legacy: boolean): boolean {
  * `#endregion` was deleted — reading on would swallow that tab), or a tab
  * that never closes.
  */
-function parseCodeBlob(ti: string): Record<Tab, string> {
-  const out: Record<Tab, string> = {
+function parseCodeBlob(ti: string): Record<TiTab, string> {
+  const out: Record<TiTab, string> = {
     prolog: "",
     metadata: "",
     data: "",
@@ -253,7 +253,7 @@ function parseCodeBlob(ti: string): Record<Tab, string> {
           "(expected `#region Prolog`/`Metadata`/`Data`/`Epilog`).",
       );
     }
-    if (TABS.indexOf(tab) <= last) {
+    if (TI_TABS.indexOf(tab) <= last) {
       throw regionBlobError(
         `tab "${tab}" appears twice or out of order (expected Prolog, Metadata, Data, Epilog).`,
       );
@@ -267,7 +267,7 @@ function parseCodeBlob(ti: string): Record<Tab, string> {
         );
       }
       const inner = openedTab(text(j), form);
-      if (inner && TABS.indexOf(inner) > TABS.indexOf(tab)) {
+      if (inner && TI_TABS.indexOf(inner) > TI_TABS.indexOf(tab)) {
         throw regionBlobError(
           `"#region ${inner}" opens inside "${tab}" — the #endregion closing "${tab}" is missing.`,
         );
@@ -279,7 +279,7 @@ function parseCodeBlob(ti: string): Record<Tab, string> {
     }
     // Strip the single line break the server places before #endregion.
     out[tab] = ti.slice(offsets[i + 1], offsets[j]).replace(/\r?\n$/, "");
-    last = TABS.indexOf(tab);
+    last = TI_TABS.indexOf(tab);
     i = nextNonBlank(j + 1);
   }
   return out;
@@ -302,7 +302,7 @@ const LEGACY_KEYS = [
   "variablesUIData",
   "dataSource",
 ] as const;
-const DATASOURCE_KEYS = new Set(Object.keys(dataSourceSchema.shape));
+const DATASOURCE_KEYS = new Set(Object.keys(DataSourceSchema.shape));
 
 /**
  * Import deploys the .json as the whole truth: a missing parameter or variable
@@ -447,7 +447,7 @@ export function parseProcessFromGit(
       })
     : (meta.parameters ?? []);
 
-  const paramsResult = z.array(parameterSchema).safeParse(rawParams);
+  const paramsResult = z.array(ProcessParameterSchema).safeParse(rawParams);
   if (!paramsResult.success) {
     throw new Error(
       `Process JSON has invalid 'parameters': ${paramsResult.error.issues[0]?.message ?? "shape mismatch"}`,
@@ -455,7 +455,9 @@ export function parseProcessFromGit(
   }
   const parameters: ProcessParameter[] = paramsResult.data;
 
-  const varsResult = z.array(variableSchema).safeParse(meta.variables ?? []);
+  const varsResult = z
+    .array(ProcessVariableSchema)
+    .safeParse(meta.variables ?? []);
   if (!varsResult.success) {
     throw new Error(
       `Process JSON has invalid 'variables': ${varsResult.error.issues[0]?.message ?? "shape mismatch"}`,
@@ -471,7 +473,7 @@ export function parseProcessFromGit(
   }
   const variablesUIData: string[] = uiResult.data;
 
-  const dsResult = dataSourceSchema.safeParse(
+  const dsResult = DataSourceInputSchema.safeParse(
     meta.dataSource ?? { type: "None" },
   );
   if (!dsResult.success) {

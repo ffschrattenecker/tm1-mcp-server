@@ -5,6 +5,7 @@ import { z } from "zod";
 import { FedCellDescriptorSchema } from "../../schemas/cells.js";
 
 import { CellValueSchema } from "./items-common.js";
+import { pageShapeFor } from "./common.js";
 
 // ── Analysis tools ───────────────────────────────────────────────────────────
 
@@ -351,12 +352,7 @@ export const SearchCodeResultSchema = z.object({
   // Present only in groupBy mode.
   groupBy: z.enum(["process", "tab"]).optional(),
   groupCount: z.number().int().optional(),
-  total: z.number().int(),
-  count: z.number().int(),
-  offset: z.number().int(),
-  has_more: z.boolean(),
-  next_offset: z.number().int().nullable(),
-  items: z.array(z.union([SearchCodeMatchSchema, SearchCodeGroupSchema])),
+  ...pageShapeFor(z.union([SearchCodeMatchSchema, SearchCodeGroupSchema])),
   // Present only when deduplicateByLine=true: rawMatchCount is the pre-collapse
   // total, deduplicated flags that the collapse ran.
   rawMatchCount: z.number().int().optional(),
@@ -416,12 +412,7 @@ export const SearchRulesResultSchema = z
     matchCount: z.number().int(),
     truncated: z.boolean(),
     includeFeeders: z.boolean(),
-    total: z.number().int(),
-    count: z.number().int(),
-    offset: z.number().int(),
-    has_more: z.boolean(),
-    next_offset: z.number().int().nullable(),
-    items: z.array(
+    ...pageShapeFor(
       z
         .object({ cube: z.string(), line: z.number().int(), text: z.string() })
         .passthrough(),

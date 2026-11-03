@@ -10,6 +10,7 @@
 //
 // Checks references as well as syntax (see src/lib/process-refs.ts).
 import type { TM1Client } from "../../tm1-client.js";
+import type { TiTab } from "../../schemas/processes.js";
 import type {
   DataSource,
   ProcessParameter,
@@ -253,7 +254,7 @@ export function installHints(n: string, exists: boolean, dsType: string) {
 export async function writeInstall(
   processes: TM1Client["processes"],
   processName: string,
-  def: DeployParts & Record<"prolog" | "metadata" | "data" | "epilog", string>,
+  def: DeployParts & Record<TiTab, string>,
   opts: {
     exists: boolean;
     skipEmptyIfNew?: boolean;

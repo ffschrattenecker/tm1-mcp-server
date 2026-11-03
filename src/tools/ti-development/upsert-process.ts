@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { invalidateCallgraphCache } from "../../lib/callgraph/tm1-adapter.js";
-import { dataSourceSchema as sharedDataSourceSchema } from "../../lib/process-parts-schema.js";
+import {
+  DataSourceInputSchema,
+  ProcessParameterSchema,
+  ProcessVariableInputSchema,
+  TI_TABS,
+} from "../../schemas/processes.js";
 import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { UpsertProcessResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
@@ -21,28 +26,6 @@ import { maskCode } from "../../lib/mask-secrets.js";
 import { backupProcess } from "./process-backup.js";
 import { jsonError, jsonResult } from "../format.js";
 
-// The same data source shape the git round-trip and check_process_code use.
-// Accepts `query` too: an ODBC source's SQL is read back by tm1_get_process.
-// Strict, so a misspelled field is rejected instead of silently dropped.
-const dataSourceSchema = sharedDataSourceSchema.strict();
-
-const parameterSchema = z.object({
-  name: z.string(),
-  type: z.enum(["String", "Numeric"]),
-  defaultValue: z.union([z.string(), z.number()]),
-  prompt: z.string().optional(),
-});
-
-const TABS = ["prolog", "metadata", "data", "epilog"] as const;
-
-const variableSchema = z.object({
-  name: z.string(),
-  type: z.enum(["String", "Numeric"]),
-  position: z.number().int().positive(),
-  startByte: z.number().int().optional(),
-  endByte: z.number().int().optional(),
-});
-
 export const registerUpsertProcess = defineTool({
   name: "tm1_upsert_process",
   description:
@@ -55,9 +38,9 @@ export const registerUpsertProcess = defineTool({
     metadata: z.string().optional(),
     data: z.string().optional(),
     epilog: z.string().optional(),
-    parameters: z.array(parameterSchema).optional(),
+    parameters: z.array(ProcessParameterSchema).optional(),
     variables: z
-      .array(variableSchema)
+      .array(ProcessVariableInputSchema)
       .optional()
       .describe(
         "Replaces the complete variable list; [] removes every variable.",
@@ -68,7 +51,8 @@ export const registerUpsertProcess = defineTool({
       .describe(
         "Raw per-column layout (VariablesUIData), one entry per source column including ignored ones, sent verbatim. Take it from tm1_rest_read Processes('P')?$select=VariablesUIData or an export; do not construct entries. Omitted: the server keeps its current layout.",
       ),
-    dataSource: dataSourceSchema.optional(),
+    // Strict, so a misspelled datasource field is rejected instead of silently dropped.
+    dataSource: DataSourceInputSchema.strict().optional(),
     hasSecurityAccess: z
       .boolean()
       .optional()
@@ -163,7 +147,7 @@ export const registerUpsertProcess = defineTool({
           : Promise.resolve([]),
       ]);
       const tabs = Object.fromEntries(
-        TABS.map((t) => [
+        TI_TABS.map((t) => [
           t,
           tabCodeDiff(maskCode(installed[t] ?? ""), maskCode(payload[t]), 3),
         ]),
@@ -289,7 +273,7 @@ export const registerUpsertProcess = defineTool({
     // Read the code back: TM1 stores what REST sent, so a mismatch means the
     // write did not land as sent. Saves the caller a get_process turn.
     const sent = { prolog, metadata, data, epilog };
-    const sentTabs = TABS.filter((t) => sent[t] !== undefined);
+    const sentTabs = TI_TABS.filter((t) => sent[t] !== undefined);
     let verified:
       { codeMatches: boolean; mismatchedTabs: string[] } | undefined;
     if (sentTabs.length > 0) {

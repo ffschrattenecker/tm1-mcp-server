@@ -6,6 +6,7 @@ import {
   isSecretName,
   MASK,
   resolveMaskSecrets,
+  maskSecretsInput,
 } from "../../lib/mask-secrets.js";
 import { ChoreGraphResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -42,13 +43,9 @@ export const registerAnalyzeChoreGraph = defineTool({
       .describe(
         "Index control objects when building the index. Default: false.",
       ),
-    maskSecrets: z
-      .boolean()
-      .optional()
-      .default(true)
-      .describe(
-        "Redact param values whose name matches /pass|pwd|secret|token|key|credential|auth/i to '***', including chore-task params, edge params, env and snippet.",
-      ),
+    maskSecrets: maskSecretsInput(
+      "Redact param values whose name matches /pass|pwd|secret|token|key|credential|auth/i to '***', including chore-task params, edge params, env and snippet.",
+    ),
   },
   handler: async (
     {

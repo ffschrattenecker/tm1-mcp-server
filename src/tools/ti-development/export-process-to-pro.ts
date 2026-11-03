@@ -7,6 +7,7 @@ import {
   MASK_SECRETS_DESCRIPTION,
   maskCode,
   resolveMaskSecrets,
+  maskSecretsInput,
 } from "../../lib/mask-secrets.js";
 import { supportsCredentialExport } from "../../lib/credential-format.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
@@ -34,13 +35,9 @@ export const registerExportProcessToPro = defineTool({
       .describe(
         "Optional absolute host path to write the .pro file to. If omitted, content is only returned inline.",
       ),
-    maskSecrets: z
-      .boolean()
-      .optional()
-      .default(true)
-      .describe(
-        `${MASK_SECRETS_DESCRIPTION} Inline copy only; a file written via writeToFile stays unmasked.`,
-      ),
+    maskSecrets: maskSecretsInput(
+      `${MASK_SECRETS_DESCRIPTION} Inline copy only; a file written via writeToFile stays unmasked.`,
+    ),
     includeDataSourcePassword: z
       .boolean()
       .optional()

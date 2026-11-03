@@ -42,6 +42,9 @@ export const ProcessCodeSchema = z.object({
 });
 export type ProcessCode = z.infer<typeof ProcessCodeSchema>;
 
+export const TI_TABS = ["prolog", "metadata", "data", "epilog"] as const;
+export type TiTab = (typeof TI_TABS)[number];
+
 // TI datasource. Field set measured against 11.8.02900.8 (29 real ODBC
 // sources) — `ProcessDataSource` is declared OpenType in $metadata, so the
 // server accepts unknown properties and hands them back only sometimes. Two
@@ -72,3 +75,17 @@ export const DataSourceSchema = z.object({
   subset: z.string().optional(),
 });
 export type DataSource = z.infer<typeof DataSourceSchema>;
+
+// Write-side datasource (tool inputs and the tm1-git import): TM1 knows only
+// these two ASCII delimiter types, so anything else is rejected here. The read
+// schema above stays a plain string — process-service passes unknown server
+// values through on purpose.
+export const DataSourceInputSchema = DataSourceSchema.extend({
+  asciiDelimiterType: z.enum(["Character", "FixedWidth"]).optional(),
+});
+
+// tm1_upsert_process input: a variable position must be positive. The read
+// and tm1-git paths keep the plain ProcessVariableSchema.
+export const ProcessVariableInputSchema = ProcessVariableSchema.extend({
+  position: z.number().int().positive(),
+});

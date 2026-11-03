@@ -5,10 +5,12 @@ import type {
   ProcessVariable,
   DataSource,
 } from "../../types.js";
+import { TI_TABS, type TiTab } from "../../schemas/processes.js";
 import {
   MASK_SECRETS_DESCRIPTION,
   maskCode,
   resolveMaskSecrets,
+  maskSecretsInput,
 } from "../../lib/mask-secrets.js";
 import { DiffProcessesResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -155,9 +157,6 @@ export function diffDs(a: DataSource, b: DataSource) {
 
 // ── tool ──────────────────────────────────────────────────────────────────────
 
-const ALL_TABS = ["prolog", "metadata", "data", "epilog"] as const;
-type Tab = (typeof ALL_TABS)[number];
-
 export const registerDiffProcesses = defineTool({
   name: "tm1_diff_processes",
   description: [
@@ -178,7 +177,7 @@ export const registerDiffProcesses = defineTool({
         "Second process name (case-sensitive), read from connectionB. Default: processA, i.e. the same process on the other connection.",
       ),
     tabs: z
-      .array(z.enum(["prolog", "metadata", "data", "epilog"]))
+      .array(z.enum(TI_TABS))
       .optional()
       .describe("Tabs to diff (default: all four)"),
     contextLines: z
@@ -191,20 +190,16 @@ export const registerDiffProcesses = defineTool({
       .describe(
         "Lines of context around each changed hunk (default 3, max 10)",
       ),
-    maskSecrets: z
-      .boolean()
-      .optional()
-      .default(true)
-      .describe(
-        `${MASK_SECRETS_DESCRIPTION} Applied to both sides before diffing, so a credential on one side cannot leak through the diff.`,
-      ),
+    maskSecrets: maskSecretsInput(
+      `${MASK_SECRETS_DESCRIPTION} Applied to both sides before diffing, so a credential on one side cannot leak through the diff.`,
+    ),
   },
   handler: async (
     { processA, processB: processBArg, tabs, contextLines, maskSecrets },
     { a, b },
   ) => {
     const processB = processBArg ?? processA;
-    const diffTabs: readonly Tab[] = tabs && tabs.length > 0 ? tabs : ALL_TABS;
+    const diffTabs: readonly TiTab[] = tabs && tabs.length > 0 ? tabs : TI_TABS;
     const mask = resolveMaskSecrets(maskSecrets) ? maskCode : (s: string) => s;
 
     const [codeA, codeB, paramsA, paramsB, varsA, varsB, dsA, dsB] =

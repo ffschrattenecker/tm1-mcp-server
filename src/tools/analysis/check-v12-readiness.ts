@@ -3,6 +3,7 @@ import {
   scanForDeprecatedTi,
   type ScanHit,
 } from "../../lib/v12-compat/scanner.js";
+import type { TiTab } from "../../schemas/processes.js";
 import { READ_ONLY } from "../annotations.js";
 import { V12ReadinessResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
@@ -16,7 +17,7 @@ type Finding = {
   category: "deprecated_ti_function";
   objectKind: "process" | "cube";
   objectName: string;
-  section: "prolog" | "metadata" | "data" | "epilog" | "rules";
+  section: TiTab | "rules";
   line: number;
   function: string;
   snippet: string;

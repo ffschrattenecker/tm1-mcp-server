@@ -145,19 +145,22 @@ export const InstallProBundleResultSchema = z
   })
   .passthrough();
 
+// Line and count summary of a parsed .pro or git-imported process.
+const ParsedProcessSchema = z.object({
+  prologLines: z.number().int(),
+  metadataLines: z.number().int(),
+  dataLines: z.number().int(),
+  epilogLines: z.number().int(),
+  parameterCount: z.number().int(),
+  variableCount: z.number().int(),
+  dataSourceType: z.string(),
+});
+
 export const ImportProFileResultSchema = z.object({
   action: z.string(),
   processName: z.string(),
   backup: ProcessBackupSchema.optional(),
-  parsed: z.object({
-    prologLines: z.number().int(),
-    metadataLines: z.number().int(),
-    dataLines: z.number().int(),
-    epilogLines: z.number().int(),
-    parameterCount: z.number().int(),
-    variableCount: z.number().int(),
-    dataSourceType: z.string(),
-  }),
+  parsed: ParsedProcessSchema,
 });
 
 // Dedicated schema for tm1_import_process_from_git. Currently identical in
@@ -169,15 +172,7 @@ export const ImportProcessFromGitResultSchema = z.object({
   processName: z.string(),
   backup: ProcessBackupSchema.optional(),
   hasSecurityAccess: z.boolean().optional(),
-  parsed: z.object({
-    prologLines: z.number().int(),
-    metadataLines: z.number().int(),
-    dataLines: z.number().int(),
-    epilogLines: z.number().int(),
-    parameterCount: z.number().int(),
-    variableCount: z.number().int(),
-    dataSourceType: z.string(),
-  }),
+  parsed: ParsedProcessSchema,
 });
 
 export const CopyProcessResultSchema = z.object({

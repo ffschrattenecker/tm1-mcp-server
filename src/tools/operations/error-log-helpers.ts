@@ -1,6 +1,49 @@
+import { z } from "zod";
 import type { ServerService } from "../../tm1-client/services/server-service.js";
 
 const TS_RE = /(\d{14})/;
+
+// Defaults for the sibling-log lookup both error-log tools expose.
+export const RELATED_DEFAULTS = {
+  windowSec: 10,
+  maxFiles: 5,
+  maxBytes: 16 * 1024,
+} as const;
+const RELATED_MAX_WINDOW_SEC = 300;
+const RELATED_MAX_FILES = 20;
+
+/** The includeRelated / relatedWindowSec / relatedMaxFiles inputs. */
+export function relatedLogFields(includeRelatedDefault: boolean) {
+  return {
+    includeRelated: z
+      .boolean()
+      .optional()
+      .default(includeRelatedDefault)
+      .describe(
+        "If true, also fetch sibling error logs whose embedded YYYYMMDDHHMMSS timestamp is within ±relatedWindowSec of the source log.",
+      ),
+    relatedWindowSec: z
+      .number()
+      .int()
+      .positive()
+      .max(RELATED_MAX_WINDOW_SEC)
+      .optional()
+      .default(RELATED_DEFAULTS.windowSec)
+      .describe(
+        `Time window in seconds for related-log discovery (default ${RELATED_DEFAULTS.windowSec}, max ${RELATED_MAX_WINDOW_SEC}).`,
+      ),
+    relatedMaxFiles: z
+      .number()
+      .int()
+      .positive()
+      .max(RELATED_MAX_FILES)
+      .optional()
+      .default(RELATED_DEFAULTS.maxFiles)
+      .describe(
+        `Cap on number of related logs returned (default ${RELATED_DEFAULTS.maxFiles}, max ${RELATED_MAX_FILES}).`,
+      ),
+  };
+}
 
 /**
  * Match a TI error log filename against a process name.

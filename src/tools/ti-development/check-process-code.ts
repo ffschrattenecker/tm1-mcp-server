@@ -2,10 +2,10 @@ import { z } from "zod";
 import type { ProcessParameter, ProcessVariable } from "../../types.js";
 import { TM1ErrorCode } from "../../types.js";
 import {
-  parameterSchema,
-  variableSchema,
-  dataSourceSchema,
-} from "../../lib/process-parts-schema.js";
+  DataSourceInputSchema,
+  ProcessParameterSchema,
+  ProcessVariableSchema,
+} from "../../schemas/processes.js";
 import { CompileErrorSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -40,22 +40,20 @@ export const registerCheckProcessCode = defineTool({
     data: z.string().optional(),
     epilog: z.string().optional(),
     parameters: z
-      .array(parameterSchema)
+      .array(ProcessParameterSchema)
       .optional()
       .describe(
         "TI parameters (Name, Type, defaultValue, optional Prompt). When omitted and baseProcess is set, inherited from baseProcess.",
       ),
     variables: z
-      .array(variableSchema)
+      .array(ProcessVariableSchema)
       .optional()
       .describe(
         "TI variables (column mapping for ASCII/ODBC). When omitted and baseProcess is set, inherited from baseProcess.",
       ),
-    dataSource: dataSourceSchema
-      .optional()
-      .describe(
-        "DataSource config — defaults to { type: 'None' } when omitted",
-      ),
+    dataSource: DataSourceInputSchema.optional().describe(
+      "DataSource config — defaults to { type: 'None' } when omitted",
+    ),
     baseProcess: z
       .string()
       .optional()
@@ -77,8 +75,8 @@ export const registerCheckProcessCode = defineTool({
     },
     tm1Client,
   ) => {
-    let resolvedParams = parameters as ProcessParameter[] | undefined;
-    let resolvedVars = variables as ProcessVariable[] | undefined;
+    let resolvedParams: ProcessParameter[] | undefined = parameters;
+    let resolvedVars: ProcessVariable[] | undefined = variables;
     if (baseProcess) {
       if (!resolvedParams)
         resolvedParams = await tm1Client.processes.getParameters(baseProcess);

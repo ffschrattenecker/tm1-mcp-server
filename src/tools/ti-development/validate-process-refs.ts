@@ -1,13 +1,11 @@
-import { promises as fs } from "node:fs";
-import { resolveLocalPath } from "../local-file.js";
 import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
-import { parseProFile } from "../../lib/pro-parser.js";
 import { checkProcessRefs, type ProcessCode } from "../../lib/process-refs.js";
 import { READ_ONLY } from "../annotations.js";
 import { ValidateProcessRefsResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { jsonResult } from "../format.js";
+import { loadProSource, PRO_SOURCE_SCHEMA } from "./pro-source.js";
 
 export const registerValidateProcessRefs = defineTool({
   name: "tm1_validate_process_refs",
@@ -25,13 +23,7 @@ export const registerValidateProcessRefs = defineTool({
       .string()
       .optional()
       .describe("Validate an installed process by name"),
-    filePath: z
-      .string()
-      .optional()
-      .describe(
-        "Validate a .pro file (absolute host path). Otherwise pass 'content' inline.",
-      ),
-    content: z.string().optional().describe("Validate raw .pro content"),
+    ...PRO_SOURCE_SCHEMA,
     includeControl: z
       .boolean()
       .optional()
@@ -56,11 +48,7 @@ export const registerValidateProcessRefs = defineTool({
     if (processName) {
       code = await tm1Client.processes.getCode(processName);
     } else {
-      let body = content ?? "";
-      if (!body && filePath) {
-        body = await fs.readFile(resolveLocalPath(filePath), "utf8");
-      }
-      const parsed = parseProFile(body);
+      const parsed = await loadProSource({ filePath, content });
       code = {
         prolog: parsed.prolog,
         metadata: parsed.metadata,

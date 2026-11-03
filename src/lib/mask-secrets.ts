@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 // Credential redaction helpers shared by call-graph analysis and code search.
 //
 // Param-name regex: matches typical credential identifiers (case-insensitive).
@@ -11,6 +13,12 @@ export const MASK = "***";
 // `maskSecrets` param text shared by every TI tool that takes it.
 export const MASK_SECRETS_DESCRIPTION =
   "Redact credential literals to '***': the password arg of ODBCOpen() and quoted values assigned to credential-named identifiers (pPwd, sToken, …). Set false only when explicitly auditing credentials.";
+
+// The `maskSecrets` input field. Each tool passes its own description, so the
+// text the schema publishes stays exactly what the tool documents.
+export function maskSecretsInput(description: string) {
+  return z.boolean().optional().default(true).describe(description);
+}
 
 export function isSecretName(name: string): boolean {
   return SECRET_NAME_RE.test(name);

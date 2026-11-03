@@ -3,6 +3,7 @@ import {
   MASK_SECRETS_DESCRIPTION,
   maskCode,
   resolveMaskSecrets,
+  maskSecretsInput,
 } from "../../lib/mask-secrets.js";
 import { commentStats } from "../../lib/strip-comments.js";
 import { ProcessCodeBundleSchema } from "../schemas/items.js";
@@ -91,13 +92,9 @@ export const registerGetAllProcessesCode = defineTool({
       .describe(
         "Max processes returned (default 50, max 500, 0 = all). Summary mode defaults to 0 (full survey).",
       ),
-    maskSecrets: z
-      .boolean()
-      .optional()
-      .default(true)
-      .describe(
-        `${MASK_SECRETS_DESCRIPTION} Also redacts conn-string PWD/UID pairs.`,
-      ),
+    maskSecrets: maskSecretsInput(
+      `${MASK_SECRETS_DESCRIPTION} Also redacts conn-string PWD/UID pairs.`,
+    ),
     summary: z
       .boolean()
       .optional()

@@ -10,7 +10,10 @@ import {
 } from "../../lib/callgraph/callGraph.js";
 import type { ReferenceIndex } from "../../lib/callgraph/referenceIndex.js";
 import { serializeNode } from "../../lib/callgraph/serialize.js";
-import { resolveMaskSecrets } from "../../lib/mask-secrets.js";
+import {
+  resolveMaskSecrets,
+  maskSecretsInput,
+} from "../../lib/mask-secrets.js";
 import { CallgraphResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
@@ -269,13 +272,9 @@ export const registerAnalyzeCallgraph = defineTool({
       .describe(
         "Output mode. 'full': nested tree with incomingEdge/env/effectiveParams (large for deep graphs). 'summary': flat per-process aggregates for triage. 'compact': nested tree without params, env, snippets or effectiveParams.",
       ),
-    maskSecrets: z
-      .boolean()
-      .optional()
-      .default(true)
-      .describe(
-        "Redact param values whose name matches /pass|pwd|secret|token|key|credential|auth/i to '***', and the inline snippet. Set false only when debugging credential propagation locally.",
-      ),
+    maskSecrets: maskSecretsInput(
+      "Redact param values whose name matches /pass|pwd|secret|token|key|credential|auth/i to '***', and the inline snippet. Set false only when debugging credential propagation locally.",
+    ),
     rankBy: z
       .enum(["outgoing", "incoming"])
       .optional()

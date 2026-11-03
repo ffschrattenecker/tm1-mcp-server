@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   fetchRelatedLogs,
+  relatedLogFields,
+  RELATED_DEFAULTS,
   tailLines,
   truncateTail,
   tsFromFilename,
@@ -12,11 +14,6 @@ import { jsonResult } from "../format.js";
 
 const DEFAULT_MAX_BYTES = 64 * 1024;
 const HARD_MAX_BYTES = 4 * 1024 * 1024;
-const DEFAULT_RELATED_WINDOW_SEC = 10;
-const HARD_MAX_RELATED_WINDOW_SEC = 300;
-const DEFAULT_RELATED_MAX_FILES = 5;
-const HARD_MAX_RELATED_FILES = 20;
-const DEFAULT_RELATED_MAX_BYTES = 16 * 1024;
 
 export const registerGetErrorLogContent = defineTool({
   name: "tm1_get_error_log_content",
@@ -52,42 +49,16 @@ export const registerGetErrorLogContent = defineTool({
       .describe(
         `Truncate to last N bytes if no tail is given (default ${DEFAULT_MAX_BYTES}, hard max ${HARD_MAX_BYTES}).`,
       ),
-    includeRelated: z
-      .boolean()
-      .optional()
-      .default(false)
-      .describe(
-        "If true, also fetch sibling error logs whose embedded YYYYMMDDHHMMSS timestamp is within ±relatedWindowSec of the source log.",
-      ),
-    relatedWindowSec: z
-      .number()
-      .int()
-      .positive()
-      .max(HARD_MAX_RELATED_WINDOW_SEC)
-      .optional()
-      .default(DEFAULT_RELATED_WINDOW_SEC)
-      .describe(
-        `Time window in seconds for related-log discovery (default ${DEFAULT_RELATED_WINDOW_SEC}, max ${HARD_MAX_RELATED_WINDOW_SEC}).`,
-      ),
-    relatedMaxFiles: z
-      .number()
-      .int()
-      .positive()
-      .max(HARD_MAX_RELATED_FILES)
-      .optional()
-      .default(DEFAULT_RELATED_MAX_FILES)
-      .describe(
-        `Cap on number of related logs returned (default ${DEFAULT_RELATED_MAX_FILES}, max ${HARD_MAX_RELATED_FILES}).`,
-      ),
+    ...relatedLogFields(false),
     relatedMaxBytes: z
       .number()
       .int()
       .positive()
       .max(HARD_MAX_BYTES)
       .optional()
-      .default(DEFAULT_RELATED_MAX_BYTES)
+      .default(RELATED_DEFAULTS.maxBytes)
       .describe(
-        `Per-related-log byte cap (tail-truncated, default ${DEFAULT_RELATED_MAX_BYTES}).`,
+        `Per-related-log byte cap (tail-truncated, default ${RELATED_DEFAULTS.maxBytes}).`,
       ),
   },
   handler: async (

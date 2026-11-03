@@ -9,6 +9,7 @@ import {
   MASK_SECRETS_DESCRIPTION,
   maskCode,
   resolveMaskSecrets,
+  maskSecretsInput,
 } from "../../lib/mask-secrets.js";
 import { ExportProcessToGitResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
@@ -34,13 +35,9 @@ export const registerExportProcessToGit = defineTool({
       .describe(
         "Optional absolute host directory to write '{name}.json' and '{name}.ti' into. If omitted, content is only returned inline.",
       ),
-    maskSecrets: z
-      .boolean()
-      .optional()
-      .default(true)
-      .describe(
-        `${MASK_SECRETS_DESCRIPTION} Inline copy only; written files stay unmasked.`,
-      ),
+    maskSecrets: maskSecretsInput(
+      `${MASK_SECRETS_DESCRIPTION} Inline copy only; written files stay unmasked.`,
+    ),
     includeDataSourcePassword: z
       .boolean()
       .optional()

@@ -1,8 +1,5 @@
-import { promises as fs } from "node:fs";
-import { resolveLocalPath } from "../local-file.js";
 import { z } from "zod";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
-import { parseProFile } from "../../lib/pro-parser.js";
 import { IDEMPOTENT_DESTRUCTIVE } from "../annotations.js";
 import { ImportProFileResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
@@ -17,6 +14,7 @@ import {
   writeInstall,
 } from "./preflight.js";
 import { backupProcess } from "./process-backup.js";
+import { loadProSource, PRO_SOURCE_SCHEMA } from "./pro-source.js";
 import { jsonError, jsonResult } from "../format.js";
 
 export const registerImportProFile = defineTool({
@@ -26,16 +24,7 @@ export const registerImportProFile = defineTool({
   annotations: IDEMPOTENT_DESTRUCTIVE,
   output: ImportProFileResultSchema,
   input: {
-    filePath: z
-      .string()
-      .optional()
-      .describe(
-        "Absolute path to the .pro file on the MCP server host. Otherwise pass 'content' inline.",
-      ),
-    content: z
-      .string()
-      .optional()
-      .describe("Raw .pro file content as string (alternative to filePath)"),
+    ...PRO_SOURCE_SCHEMA,
     processName: z
       .string()
       .optional()
@@ -74,19 +63,7 @@ export const registerImportProFile = defineTool({
     },
     tm1Client,
   ) => {
-    if (!filePath && !content) {
-      throw new TM1Error({
-        code: TM1ErrorCode.VALIDATION_ERROR,
-        message: "Provide filePath or content",
-      });
-    }
-
-    let body = content ?? "";
-    if (!body && filePath) {
-      body = await fs.readFile(resolveLocalPath(filePath), "utf8");
-    }
-
-    const parsed = parseProFile(body);
+    const parsed = await loadProSource({ filePath, content });
     if (parsed.dataSource.type === "ODBC" && dataSourcePassword !== undefined)
       parsed.dataSource.password = dataSourcePassword;
     const processName = nameOverride ?? parsed.name;

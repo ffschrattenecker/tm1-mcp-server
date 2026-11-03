@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { compileUserRegex } from "../../lib/safe-regex.js";
+import { TI_TABS, type TiTab } from "../../schemas/processes.js";
 import {
   MASK_SECRETS_DESCRIPTION,
   maskCodeLine,
@@ -11,14 +12,11 @@ import { READ_ONLY } from "../annotations.js";
 import { SearchCodeResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 
-type Tab = "prolog" | "metadata" | "data" | "epilog";
-const ALL_TABS: Tab[] = ["prolog", "metadata", "data", "epilog"];
-
 const COMMENT_RE = /^\s*(?:#|\/\/)/;
 
 interface Match {
   process: string;
-  tab: Tab;
+  tab: TiTab;
   line: number;
   text: string;
   alsoFoundIn?: string[];
@@ -43,7 +41,7 @@ export const registerSearchCode = defineTool({
         "Regex pattern (JavaScript flavor). Anchors and groups supported.",
       ),
     tabs: z
-      .array(z.enum(["prolog", "metadata", "data", "epilog"]))
+      .array(z.enum(TI_TABS))
       .optional()
       .describe("Tabs to search (default: all four)"),
     caseSensitive: z
@@ -124,7 +122,7 @@ export const registerSearchCode = defineTool({
     const flags = caseSensitive ? "g" : "gi";
     const regex = compileUserRegex(pattern, flags);
 
-    const searchTabs = tabs && tabs.length > 0 ? tabs : ALL_TABS;
+    const searchTabs = tabs && tabs.length > 0 ? tabs : TI_TABS;
     const all = await tm1Client.processes.getAllCode(includeControl);
 
     if (groupBy) {
@@ -135,7 +133,7 @@ export const registerSearchCode = defineTool({
       let totalMatches = 0;
       for (const proc of all) {
         for (const tab of searchTabs) {
-          const code = (proc as Record<Tab, string>)[tab] ?? "";
+          const code = (proc as Record<TiTab, string>)[tab] ?? "";
           if (!code) continue;
           const lines = code.split(/\r?\n/);
           for (let i = 0; i < lines.length; i++) {
@@ -180,7 +178,7 @@ export const registerSearchCode = defineTool({
     outer: for (const proc of all) {
       let perProcess = 0;
       for (const tab of searchTabs) {
-        const code = (proc as Record<Tab, string>)[tab] ?? "";
+        const code = (proc as Record<TiTab, string>)[tab] ?? "";
         if (!code) continue;
         const lines = code.split(/\r?\n/);
         for (let i = 0; i < lines.length; i++) {
