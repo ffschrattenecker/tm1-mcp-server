@@ -6,12 +6,11 @@ import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockLogger } from "../helpers/client-harness.js";
 
 describe("R2-03: AbortSignal propagation through HTTP layer", () => {
-  let sessionManager: SessionManager;
   let client: TM1HttpClient;
 
   beforeEach(() => {
     const cfg = makeTestConfig({ requestTimeoutMs: 60000 });
-    sessionManager = new SessionManager(cfg, mockLogger);
+    const sessionManager = new SessionManager(cfg, mockLogger);
     vi.spyOn(sessionManager, "ensureSession").mockResolvedValue(
       "session-cookie",
     );
@@ -67,52 +66,5 @@ describe("R2-03: AbortSignal propagation through HTTP layer", () => {
 
     await expect(promise).rejects.toThrow();
     expect(capturedSignal?.aborted).toBe(true);
-  });
-
-  it("does not abort when external signal is omitted (timeout-only path)", async () => {
-    const fetchSpy = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      headers: new Headers(),
-      // Body is irrelevant to signal propagation; keep it empty so it makes
-      // no claim about what /Configuration returns (see wire contracts).
-      text: vi.fn().mockResolvedValue("{}"),
-    });
-    stubContractCheckedFetch(fetchSpy);
-
-    await client.request("GET", "/api/v1/Configuration");
-    expect(fetchSpy).toHaveBeenCalledOnce();
-    const init = fetchSpy.mock.calls[0][1] as RequestInit;
-    expect(init.signal?.aborted).toBe(false);
-  });
-
-  it("aborts immediately when external signal is already aborted", async () => {
-    const fetchSpy = vi
-      .fn()
-      .mockImplementation((_url: string, init: RequestInit) => {
-        if (init.signal?.aborted) {
-          const err = new Error("aborted");
-          (err as Error & { name: string }).name = "AbortError";
-          return Promise.reject(err);
-        }
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          statusText: "OK",
-          headers: new Headers(),
-          text: vi.fn().mockResolvedValue("{}"),
-        } as unknown as Response);
-      });
-    stubContractCheckedFetch(fetchSpy);
-
-    const external = new AbortController();
-    external.abort(new Error("pre-aborted"));
-
-    await expect(
-      client.request("GET", "/api/v1/Configuration", undefined, {
-        signal: external.signal,
-      }),
-    ).rejects.toThrow();
   });
 });

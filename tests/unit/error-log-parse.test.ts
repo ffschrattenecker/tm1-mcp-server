@@ -82,31 +82,17 @@ describe("parseLogName", () => {
   });
 });
 
-describe("formatTs", () => {
-  it("formats a full 14-digit timestamp", () => {
-    expect(formatTs("20260615123045")).toBe("2026-06-15T12:30:45");
-  });
-
-  it("pads missing time components for an 8-digit date", () => {
-    expect(formatTs("20260615")).toBe("2026-06-15T00:00:00");
-  });
-
-  it("returns null for null or too-short input", () => {
-    expect(formatTs(null)).toBeNull();
-    expect(formatTs("2026")).toBeNull();
-  });
-});
-
-describe("spanDays", () => {
-  it("is 1 for the same day", () => {
-    expect(spanDays("20260615000000", "20260615235959")).toBe(1);
-  });
-
-  it("counts inclusive whole days across a range", () => {
-    expect(spanDays("20260601000000", "20260605000000")).toBe(5);
-  });
-
-  it("falls back to 1 on unparseable input", () => {
-    expect(spanDays("bogus", "20260605000000")).toBe(1);
+describe("formatTs and spanDays", () => {
+  // prettier-ignore
+  it.each<[string, () => unknown, unknown]>([
+    ["formatTs: 14-digit timestamp", () => formatTs("20260615123045"), "2026-06-15T12:30:45"],
+    ["formatTs: 8-digit date pads time", () => formatTs("20260615"), "2026-06-15T00:00:00"],
+    ["formatTs: null input", () => formatTs(null), null],
+    ["formatTs: too-short input", () => formatTs("2026"), null],
+    ["spanDays: same day", () => spanDays("20260615000000", "20260615235959"), 1],
+    ["spanDays: inclusive range", () => spanDays("20260601000000", "20260605000000"), 5],
+    ["spanDays: unparseable falls back to 1", () => spanDays("bogus", "20260605000000"), 1],
+  ])("%s", (_name, call, expected) => {
+    expect(call()).toEqual(expected);
   });
 });

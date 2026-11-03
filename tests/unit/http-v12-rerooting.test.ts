@@ -1,14 +1,7 @@
-// Task 5 (v12 connection layer): TM1HttpClient must reroot every outbound
-// request path through ConnectionProfile.resolveApiPath() so a v12 (Planning
-// Analytics Engine) target gets `/{instance}/api/v1/Databases('{db}')/...`
-// while v11 stays byte-identical (identity reroot, covered by the sibling
-// http-network-error/http-mutation-events tests which use a v11 config).
-//
-// Harness copied from tests/unit/http-mutation-events.test.ts (mocked
-// SessionManager.ensureSession + stubbed global fetch) — that is the file
-// with the actual TM1HttpClient construction pattern; tests/unit/http-transport.test.ts
-// (named in the task brief) tests the unrelated MCP Streamable HTTP transport
-// (startHttpTransport), not TM1HttpClient, so it was not the right host file.
+// v12 connection layer: TM1HttpClient reroots every outbound request path
+// through ConnectionProfile.resolveApiPath(), so a v12 target gets
+// `/{instance}/api/v1/Databases('{db}')/...`. v11 is covered by the identity
+// reroot in the http-network-error and http-mutation-events tests.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { stubContractCheckedFetch } from "../helpers/contract-fetch.js";
 import type { FnSpy } from "../helpers/spy-types.js";
@@ -43,7 +36,7 @@ function makeV12Config(): TM1Config {
   };
 }
 
-function okJsonResponse(): Response {
+function okResponse(): Response {
   return {
     ok: true,
     status: 200,
@@ -63,7 +56,7 @@ describe("v12 rerooting: TM1HttpClient prefixes request paths with the database 
     vi.spyOn(sm, "ensureSession").mockResolvedValue("cookie");
     client = new TM1HttpClient(cfg, sm, mockLogger);
 
-    fetchSpy = vi.fn().mockResolvedValue(okJsonResponse());
+    fetchSpy = vi.fn().mockResolvedValue(okResponse());
     stubContractCheckedFetch(fetchSpy);
   });
 
@@ -72,47 +65,32 @@ describe("v12 rerooting: TM1HttpClient prefixes request paths with the database 
     vi.unstubAllGlobals();
   });
 
-  it("request(): rewrites /api/v1/... to the database-rooted path", async () => {
-    await client.request("GET", "/api/v1/Cubes('Sales')");
-    const url = fetchSpy.mock.calls.at(-1)![0];
-    expect(url).toBe(
+  it.each<[string, (c: TM1HttpClient) => Promise<unknown>, string]>([
+    [
+      "request()",
+      (c) => c.request("GET", "/api/v1/Cubes('Sales')"),
       "http://host:4444/tm1/api/v1/Databases('db1')/Cubes('Sales')",
-    );
-  });
-
-  it("requestRaw(): rewrites /api/v1/... to the database-rooted path", async () => {
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      headers: new Headers(),
-      text: vi.fn().mockResolvedValue("raw text"),
-    });
-
-    await client.requestRaw("GET", "/api/v1/Processes('P1')/ExecuteWithReturn");
-    const url = fetchSpy.mock.calls.at(-1)![0];
-    expect(url).toBe(
+    ],
+    [
+      "requestRaw()",
+      (c) => c.requestRaw("GET", "/api/v1/Processes('P1')/ExecuteWithReturn"),
       "http://host:4444/tm1/api/v1/Databases('db1')/Processes('P1')/ExecuteWithReturn",
-    );
-  });
-
-  it("requestBinary(): rewrites /api/v1/... to the database-rooted path", async () => {
-    fetchSpy.mockResolvedValue({
-      ok: true,
-      status: 204,
-      statusText: "No Content",
-      headers: new Headers(),
-      text: vi.fn().mockResolvedValue(""),
-    });
-
-    await client.requestBinary(
-      "PUT",
-      "/api/v1/Contents('file.blob')/Content",
-      new Uint8Array([1, 2, 3]),
-    );
-    const url = fetchSpy.mock.calls.at(-1)![0];
-    expect(url).toBe(
+    ],
+    [
+      "requestBinary()",
+      (c) =>
+        c.requestBinary(
+          "PUT",
+          "/api/v1/Contents('file.blob')/Content",
+          new Uint8Array([1, 2, 3]),
+        ),
       "http://host:4444/tm1/api/v1/Databases('db1')/Contents('file.blob')/Content",
-    );
-  });
+    ],
+  ])(
+    "%s rewrites /api/v1/... to the database-rooted path",
+    async (_name, call, url) => {
+      await call(client);
+      expect(fetchSpy.mock.calls.at(-1)![0]).toBe(url);
+    },
+  );
 });

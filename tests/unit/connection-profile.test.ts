@@ -23,6 +23,17 @@ function baseConfig(overrides: Partial<TM1Config>): TM1Config {
   } as TM1Config;
 }
 
+const v12Config = (o: Partial<TM1Config> = {}) =>
+  baseConfig({
+    version: 12,
+    instance: "tm1",
+    database: "db1",
+    authMode: "s2s",
+    clientId: "c",
+    clientSecret: "s",
+    ...o,
+  });
+
 describe("resolveApiPath", () => {
   it("is identity for v11", () => {
     const p = createConnectionProfile(baseConfig({ version: 11 }));
@@ -30,16 +41,7 @@ describe("resolveApiPath", () => {
   });
 
   it("reroots v12 paths under the database", () => {
-    const p = createConnectionProfile(
-      baseConfig({
-        version: 12,
-        instance: "tm1",
-        database: "db1",
-        authMode: "s2s",
-        clientId: "c",
-        clientSecret: "s",
-      }),
-    );
+    const p = createConnectionProfile(v12Config());
     expect(p.resolveApiPath("/api/v1/Cubes('x')")).toBe(
       "/tm1/api/v1/Databases('db1')/Cubes('x')",
     );
@@ -48,129 +50,65 @@ describe("resolveApiPath", () => {
     );
   });
 
-  it("odata-escapes a database name with an apostrophe", () => {
-    const p = createConnectionProfile(
-      baseConfig({
-        version: 12,
-        instance: "tm1",
-        database: "d'b",
-        authMode: "s2s",
-        clientId: "c",
-        clientSecret: "s",
-      }),
-    );
-    expect(p.resolveApiPath("/api/v1/Cubes")).toBe(
-      "/tm1/api/v1/Databases('d''b')/Cubes",
-    );
-  });
-
-  it("url-encodes an instance segment containing reserved/special characters", () => {
-    const p = createConnectionProfile(
-      baseConfig({
-        version: 12,
-        instance: "my instance$1",
-        database: "db1",
-        authMode: "s2s",
-        clientId: "c",
-        clientSecret: "s",
-      }),
-    );
-    expect(p.resolveApiPath("/api/v1/Cubes('Sales')")).toBe(
+  // The instance/database segments are escaped, and the replacement is a
+  // literal string: a raw String.replace would read "$&" in the root as a
+  // replacement pattern.
+  it.each<[string, Partial<TM1Config>, string]>([
+    [
+      "apostrophe in database name is OData-escaped",
+      { database: "d'b" },
+      "/tm1/api/v1/Databases('d''b')/Cubes('Sales')",
+    ],
+    [
+      "reserved characters in instance are URL-encoded",
+      { instance: "my instance$1" },
       "/my%20instance%241/api/v1/Databases('db1')/Cubes('Sales')",
-    );
-  });
-
-  it("does not corrupt the path when instance contains $-replacement-pattern characters", () => {
-    // A raw String.replace(regex, dbRoot) would interpret "$&"/"$1"/"$$" inside
-    // dbRoot specially. Use an instance with a literal "$" to prove the
-    // replacement is treated as a literal string, not a pattern.
-    const p = createConnectionProfile(
-      baseConfig({
-        version: 12,
-        instance: "$&",
-        database: "db1",
-        authMode: "s2s",
-        clientId: "c",
-        clientSecret: "s",
-      }),
-    );
-    expect(p.resolveApiPath("/api/v1/Cubes('Sales')")).toBe(
+    ],
+    [
+      "$-replacement characters in instance are literal",
+      { instance: "$&" },
       "/%24%26/api/v1/Databases('db1')/Cubes('Sales')",
-    );
-  });
-
-  it("still yields the plain reroot for a normal instance (no regression)", () => {
-    const p = createConnectionProfile(
-      baseConfig({
-        version: 12,
-        instance: "tm1",
-        database: "db1",
-        authMode: "s2s",
-        clientId: "c",
-        clientSecret: "s",
-      }),
-    );
-    expect(p.resolveApiPath("/api/v1/Cubes('Sales')")).toBe(
-      "/tm1/api/v1/Databases('db1')/Cubes('Sales')",
-    );
+    ],
+  ])("%s", (_name, overrides, expected) => {
+    expect(
+      createConnectionProfile(v12Config(overrides)).resolveApiPath(
+        "/api/v1/Cubes('Sales')",
+      ),
+    ).toBe(expected);
   });
 });
 
 describe("v12 buildLoginRequest", () => {
   const v12 = (o: Partial<TM1Config>) =>
-    createConnectionProfile(
-      baseConfig({
-        version: 12,
-        instance: "tm1",
-        database: "db1",
-        user: "admin",
-        ...o,
-      }),
-    );
+    createConnectionProfile(v12Config({ user: "admin", ...o }));
 
-  it("s2s: POST session, Basic(client:secret), User body", async () => {
-    const req = await v12({
-      authMode: "s2s",
-      clientId: "cid",
-      clientSecret: "csec",
-    }).buildLoginRequest();
-    expect(req.method).toBe("POST");
-    expect(req.url).toBe("http://host:4444/tm1/auth/v1/session");
-    expect(req.headers["Content-Type"]).toBe("application/json");
-    expect(req.headers.Authorization).toBe(
+  it.each<[string, Partial<TM1Config>, string]>([
+    [
+      "s2s: Basic(client:secret)",
+      { authMode: "s2s", clientId: "cid", clientSecret: "csec" },
       "Basic " + Buffer.from("cid:csec").toString("base64"),
-    );
-    expect(req.body).toBe(JSON.stringify({ User: "admin" }));
-  });
-
-  it("basic (native): Basic(user:password)", async () => {
-    const req = await v12({
-      authMode: "basic",
-      password: "pw",
-    }).buildLoginRequest();
-    expect(req.headers.Authorization).toBe(
+    ],
+    [
+      "basic (native): Basic(user:password)",
+      { authMode: "basic", password: "pw" },
       "Basic " + Buffer.from("admin:pw").toString("base64"),
-    );
-    expect(req.body).toBe(JSON.stringify({ User: "admin" }));
-  });
-
-  it("access_token: Bearer <token>", async () => {
-    const req = await v12({
-      authMode: "access_token",
-      accessToken: "tok123",
-    }).buildLoginRequest();
-    expect(req.headers.Authorization).toBe("Bearer tok123");
-  });
-
-  it("oidc: Bearer <token>", async () => {
-    const req = await v12({
-      authMode: "oidc",
-      accessToken: "tok456",
-    }).buildLoginRequest();
-    expect(req.headers.Authorization).toBe("Bearer tok456");
-  });
-
-  it("iam: exchanges api_key for a bearer token", async () => {
+    ],
+    [
+      "access_token: Bearer token",
+      { authMode: "access_token", accessToken: "tok123" },
+      "Bearer tok123",
+    ],
+    [
+      "oidc: Bearer token",
+      { authMode: "oidc", accessToken: "tok456" },
+      "Bearer tok456",
+    ],
+    [
+      "iam: exchanges api_key for a bearer token",
+      { authMode: "iam", apiKey: "key", iamUrl: "https://iam/token" },
+      "Bearer iam-tok",
+    ],
+  ])("%s", async (_name, overrides, authorization) => {
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ access_token: "iam-tok" }),
@@ -178,16 +116,18 @@ describe("v12 buildLoginRequest", () => {
     });
     stubContractCheckedFetch(fetchSpy);
     try {
-      const req = await v12({
-        authMode: "iam",
-        apiKey: "key",
-        iamUrl: "https://iam/token",
-      }).buildLoginRequest();
-      expect(fetchSpy).toHaveBeenCalledWith(
-        "https://iam/token",
-        expect.objectContaining({ method: "POST" }),
-      );
-      expect(req.headers.Authorization).toBe("Bearer iam-tok");
+      const req = await v12(overrides).buildLoginRequest();
+      expect(req.method).toBe("POST");
+      expect(req.url).toBe("http://host:4444/tm1/auth/v1/session");
+      expect(req.headers["Content-Type"]).toBe("application/json");
+      expect(req.headers.Authorization).toBe(authorization);
+      expect(req.body).toBe(JSON.stringify({ User: "admin" }));
+      if (overrides.authMode === "iam") {
+        expect(fetchSpy).toHaveBeenCalledWith(
+          "https://iam/token",
+          expect.objectContaining({ method: "POST" }),
+        );
+      }
     } finally {
       vi.unstubAllGlobals();
     }

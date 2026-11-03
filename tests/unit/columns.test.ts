@@ -21,20 +21,7 @@ const ROWS: Row[] = [
 ];
 
 describe("columnsOf", () => {
-  it("renders a named field exactly like the explicit getter it replaced", () => {
-    const explicit: Column<Row>[] = [
-      { header: "name", get: (r) => r.name },
-      { header: "count", get: (r) => r.count },
-      { header: "flag", get: (r) => r.flag },
-      { header: "note", get: (r) => r.note },
-      { header: "tags", get: (r) => r.tags },
-    ];
-    const derived = columnsOf<Row>(["name", "count", "flag", "note", "tags"]);
-
-    expect(renderTable(ROWS, derived)).toBe(renderTable(ROWS, explicit));
-  });
-
-  it('renders a named field exactly like the `?? ""` getter it replaced', () => {
+  it('renders a named field exactly like the `?? ""` getter it replaced (0 and false stay visible)', () => {
     // The codemod collapsed this form too. `??` only fires on null/undefined,
     // which the escaper already prints as an empty cell — so 0 and false must
     // stay 0 and false on both paths.

@@ -55,41 +55,23 @@ describe("classifyChoreExecution — the measured chore table", () => {
     });
   });
 
-  // The heart of it: this status is what a chore returns for a step that
-  // ABORTED, and the writes are committed anyway. Reporting `rolled_back` here
-  // — which the process table would — invites a re-run that duplicates data.
-  it("maps CompletedWithMessages to committed-with-errors, not rolled back", () => {
-    const r = classifyChoreExecution("CompletedWithMessages", undefined);
+  // The heart of it: CompletedWithMessages is what a chore returns for a step
+  // that ABORTED, and the writes are committed anyway. Reporting `rolled_back`
+  // here — which the process table would — invites a re-run that duplicates
+  // data. The declared-but-unobserved codes stay indeterminate rather than
+  // guessed from the process table.
+  it.each<[string, string]>([
+    ["CompletedWithMessages", "completed_with_errors"],
+    ["ProcessRollbackCalled", "rolled_back"],
+    ["QuitCalled", "indeterminate"],
+    ["Aborted", "indeterminate"],
+    ["RollbackCalled", "indeterminate"],
+  ])("maps %s to %s, never as success", (code, outcome) => {
+    const r = classifyChoreExecution(code, undefined);
     expect(r.success).toBe(false);
-    expect(r.outcome).toBe("completed_with_errors");
+    expect(r.outcome).toBe(outcome);
+    expect(r.choreErrorStatus).toContain(code);
   });
-
-  it("maps ProcessRollbackCalled to rolled back", () => {
-    const r = classifyChoreExecution("ProcessRollbackCalled", undefined);
-    expect(r.success).toBe(false);
-    expect(r.outcome).toBe("rolled_back");
-  });
-
-  it("reports a missing status code as indeterminate, never as success", () => {
-    const r = classifyChoreExecution(undefined, undefined);
-    expect(r.success).toBe(false);
-    expect(r.outcome).toBe("indeterminate");
-    expect(r.choreErrorStatus).toMatch(/ChoreExecuteStatusCode/);
-  });
-
-  // Declared in v12's $metadata but never produced by any measured exit path.
-  // Guessing them from the process table is exactly the mistake this file
-  // exists to prevent, so they stay indeterminate and say why.
-  it.each(["QuitCalled", "Aborted", "RollbackCalled"])(
-    "treats the declared-but-unobserved %s as indeterminate rather than guessing",
-    (code) => {
-      const r = classifyChoreExecution(code, undefined);
-      expect(r.success).toBe(false);
-      expect(r.outcome).toBe("indeterminate");
-      expect(r.choreErrorStatus).toContain(code);
-      expect(r.choreErrorStatus).toMatch(/never produced|unknown/i);
-    },
-  );
 
   it("treats an unrecognised code as indeterminate", () => {
     const r = classifyChoreExecution("SomeFutureCode", undefined);

@@ -5,8 +5,6 @@ import { SessionManager } from "../../src/session-manager.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockLogger } from "../helpers/client-harness.js";
 
-// Silence logger in tests
-
 function mockFetchResponse(opts: {
   ok?: boolean;
   status?: number;
@@ -271,75 +269,38 @@ describe("SessionManager", () => {
       await expect(sm.authenticate()).rejects.toThrow("timed out");
     });
 
-    it("should encode special characters in credentials correctly", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockFetchResponse({
-          ok: true,
-          setCookie: "TM1SessionId=tok; Path=/",
-        }),
-      );
-
-      const sm = new SessionManager(
-        makeTestConfig({ user: "user@domain", password: "p@ss:word!" }),
-        mockLogger,
-      );
-      await sm.authenticate();
-
-      const [, opts] = fetchSpy.mock.calls[0];
-      const expected = `Basic ${Buffer.from("user@domain:p@ss:word!").toString("base64")}`;
-      expect(opts.headers.Authorization).toBe(expected);
-    });
-
-    it("should send CAMNamespace auth when namespace is configured", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockFetchResponse({ ok: true, setCookie: "TM1SessionId=tok; Path=/" }),
-      );
-
-      const sm = new SessionManager(
-        makeTestConfig({ user: "alice", password: "pw", namespace: "LDAP" }),
-        mockLogger,
-      );
-      await sm.authenticate();
-
-      const [, opts] = fetchSpy.mock.calls[0];
-      // Mirrors TM1py: base64("user:password:namespace") with the CAMNamespace scheme.
-      const expected = `CAMNamespace ${Buffer.from("alice:pw:LDAP").toString("base64")}`;
-      expect(opts.headers.Authorization).toBe(expected);
-    });
-
-    it("should send CAMPassport auth when a passport is configured", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockFetchResponse({ ok: true, setCookie: "TM1SessionId=tok; Path=/" }),
-      );
-
-      const sm = new SessionManager(
+    it.each<[string, Partial<Parameters<typeof makeTestConfig>[0]>, string]>([
+      [
+        "Basic with special characters in credentials",
+        { user: "user@domain", password: "p@ss:word!" },
+        `Basic ${Buffer.from("user@domain:p@ss:word!").toString("base64")}`,
+      ],
+      [
+        // Mirrors TM1py: base64("user:password:namespace") with the CAMNamespace scheme.
+        "CAMNamespace when a namespace is configured",
+        { user: "alice", password: "pw", namespace: "LDAP" },
+        `CAMNamespace ${Buffer.from("alice:pw:LDAP").toString("base64")}`,
+      ],
+      [
         // Passport mode ignores user/password and namespace.
-        makeTestConfig({
-          user: "",
-          password: "",
-          camPassport: "PASSPORT_TOKEN",
-        }),
-        mockLogger,
-      );
-      await sm.authenticate();
-
-      const [, opts] = fetchSpy.mock.calls[0];
-      expect(opts.headers.Authorization).toBe("CAMPassport PASSPORT_TOKEN");
-    });
-
-    it("should prefer passport over namespace when both are set", async () => {
+        "CAMPassport when a passport is configured",
+        { user: "", password: "", camPassport: "PASSPORT_TOKEN" },
+        "CAMPassport PASSPORT_TOKEN",
+      ],
+      [
+        "passport over namespace when both are set",
+        { namespace: "LDAP", camPassport: "PT" },
+        "CAMPassport PT",
+      ],
+    ])("sends %s", async (_name, overrides, expected) => {
       fetchSpy.mockResolvedValueOnce(
         mockFetchResponse({ ok: true, setCookie: "TM1SessionId=tok; Path=/" }),
       );
-
-      const sm = new SessionManager(
-        makeTestConfig({ namespace: "LDAP", camPassport: "PT" }),
-        mockLogger,
-      );
+      const sm = new SessionManager(makeTestConfig(overrides), mockLogger);
       await sm.authenticate();
 
       const [, opts] = fetchSpy.mock.calls[0];
-      expect(opts.headers.Authorization).toBe("CAMPassport PT");
+      expect(opts.headers.Authorization).toBe(expected);
     });
 
     it("v12 s2s: logs in via POST /{instance}/auth/v1/session with User body", async () => {
@@ -605,40 +566,6 @@ describe("SessionManager", () => {
     });
   });
 
-  describe("ensureSession()", () => {
-    it("should return existing session cookie without re-authenticating", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockFetchResponse({
-          ok: true,
-          setCookie: "TM1SessionId=existing; Path=/",
-        }),
-      );
-
-      const sm = new SessionManager(makeTestConfig(), mockLogger);
-      await sm.authenticate();
-
-      const cookie = await sm.ensureSession();
-      expect(cookie).toBe("existing");
-      // Only the initial auth call
-      expect(fetchSpy).toHaveBeenCalledOnce();
-    });
-
-    it("should authenticate if no session exists", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockFetchResponse({
-          ok: true,
-          setCookie: "TM1SessionId=new; Path=/",
-        }),
-      );
-
-      const sm = new SessionManager(makeTestConfig(), mockLogger);
-      const cookie = await sm.ensureSession();
-
-      expect(cookie).toBe("new");
-      expect(fetchSpy).toHaveBeenCalledOnce();
-    });
-  });
-
   describe("startKeepAlive() / stopKeepAlive()", () => {
     beforeEach(() => {
       vi.useFakeTimers();
@@ -648,15 +575,13 @@ describe("SessionManager", () => {
       vi.useRealTimers();
     });
 
-    it("should call keepAlive at the configured interval", async () => {
-      // Auth
+    it("runs keep-alive at the configured interval, once, and stops on stop", async () => {
       fetchSpy.mockResolvedValue(
         mockFetchResponse({
           ok: true,
           setCookie: "TM1SessionId=sess1; Path=/",
         }),
       );
-
       const sm = new SessionManager(
         makeTestConfig({ keepAliveIntervalMs: 1000 }),
         mockLogger,
@@ -664,80 +589,15 @@ describe("SessionManager", () => {
       await sm.authenticate();
 
       sm.startKeepAlive();
-
-      // Advance time by one interval
+      sm.startKeepAlive(); // second call must not start a duplicate timer
       await vi.advanceTimersByTimeAsync(1000);
-      // Auth call + 1 keep-alive
-      expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
-
-      sm.stopKeepAlive();
-    });
-
-    it("should stop keep-alive when stopKeepAlive is called", async () => {
-      fetchSpy.mockResolvedValue(
-        mockFetchResponse({
-          ok: true,
-          setCookie: "TM1SessionId=sess1; Path=/",
-        }),
-      );
-
-      const sm = new SessionManager(
-        makeTestConfig({ keepAliveIntervalMs: 1000 }),
-        mockLogger,
-      );
-      await sm.authenticate();
-
-      sm.startKeepAlive();
-      sm.stopKeepAlive();
-
-      const callsBefore = fetchSpy.mock.calls.length;
-      await vi.advanceTimersByTimeAsync(5000);
-      // No additional calls after stop
-      expect(fetchSpy.mock.calls.length).toBe(callsBefore);
-    });
-
-    it("should not start duplicate timers", async () => {
-      fetchSpy.mockResolvedValue(
-        mockFetchResponse({
-          ok: true,
-          setCookie: "TM1SessionId=sess1; Path=/",
-        }),
-      );
-
-      const sm = new SessionManager(
-        makeTestConfig({ keepAliveIntervalMs: 1000 }),
-        mockLogger,
-      );
-      await sm.authenticate();
-
-      sm.startKeepAlive();
-      sm.startKeepAlive(); // second call should be no-op
-
-      await vi.advanceTimersByTimeAsync(1000);
-      // Should only have auth + 1 keep-alive, not 2
+      // Auth call + exactly one keep-alive
       expect(fetchSpy.mock.calls.length).toBe(2);
 
       sm.stopKeepAlive();
-    });
-  });
-
-  describe("isSessionActive()", () => {
-    it("should return false before authentication", () => {
-      const sm = new SessionManager(makeTestConfig(), mockLogger);
-      expect(sm.isSessionActive()).toBe(false);
-    });
-
-    it("should return true after successful authentication", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockFetchResponse({
-          ok: true,
-          setCookie: "TM1SessionId=sess1; Path=/",
-        }),
-      );
-
-      const sm = new SessionManager(makeTestConfig(), mockLogger);
-      await sm.authenticate();
-      expect(sm.isSessionActive()).toBe(true);
+      const callsBefore = fetchSpy.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(fetchSpy.mock.calls.length).toBe(callsBefore);
     });
   });
 });

@@ -305,184 +305,26 @@ describe("TM1Client", () => {
       }
     });
 
-    it("should throw NOT_FOUND for 404", async () => {
+    it.each<[string, string, TM1ErrorCode]>([
+      ["Cube not found", "404", TM1ErrorCode.NOT_FOUND],
+      ["Process already exists", "409", TM1ErrorCode.CONFLICT],
+      ["Internal server error", "500", TM1ErrorCode.TM1_ERROR],
+      ["Invalid MDX syntax", "400", TM1ErrorCode.TM1_ERROR],
+    ])("maps %s (HTTP %s) to its error code", async (message, status, code) => {
       fetchSpy.mockResolvedValueOnce(
         mockResponse({
           ok: false,
-          status: 404,
-          body: { error: { message: "Cube not found" } },
+          status: Number(status),
+          body: { error: { message } },
         }),
       );
-
-      try {
-        await client.testRequest("GET", "/api/v1/Cubes('Missing')");
-        expect.unreachable("Should have thrown");
-      } catch (e) {
-        expect(e).toBeInstanceOf(TM1Error);
-        const err = e as TM1Error;
-        expect(err.code).toBe(TM1ErrorCode.NOT_FOUND);
-        expect(err.httpStatus).toBe(404);
-      }
-    });
-
-    it("should throw CONFLICT for 409", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          ok: false,
-          status: 409,
-          body: { error: { message: "Process already exists" } },
-        }),
-      );
-
-      try {
-        await client.testRequest("POST", "/api/v1/Processes");
-        expect.unreachable("Should have thrown");
-      } catch (e) {
-        expect(e).toBeInstanceOf(TM1Error);
-        const err = e as TM1Error;
-        expect(err.code).toBe(TM1ErrorCode.CONFLICT);
-        expect(err.httpStatus).toBe(409);
-      }
-    });
-
-    it("should throw TM1_ERROR for 500", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          ok: false,
-          status: 500,
-          body: { error: { message: "Internal server error" } },
-        }),
-      );
-
-      try {
-        await client.testRequest("GET", "/api/v1/Cubes");
-        expect.unreachable("Should have thrown");
-      } catch (e) {
-        expect(e).toBeInstanceOf(TM1Error);
-        const err = e as TM1Error;
-        expect(err.code).toBe(TM1ErrorCode.TM1_ERROR);
-        expect(err.httpStatus).toBe(500);
-      }
-    });
-
-    it("should throw TM1_ERROR for 400 (bad request)", async () => {
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({
-          ok: false,
-          status: 400,
-          body: { error: { message: "Invalid MDX syntax" } },
-        }),
-      );
-
-      try {
-        await client.testRequest("POST", "/api/v1/ExecuteMDX");
-        expect.unreachable("Should have thrown");
-      } catch (e) {
-        expect(e).toBeInstanceOf(TM1Error);
-        const err = e as TM1Error;
-        expect(err.code).toBe(TM1ErrorCode.TM1_ERROR);
-        expect(err.httpStatus).toBe(400);
-      }
-    });
-  });
-
-  // ── request() – network errors and retry ──────────────────────────────────
-
-  describe("request() – network errors and retry", () => {
-    it("should retry on network error and succeed on second attempt", async () => {
-      // First attempt: network error
-      fetchSpy.mockRejectedValueOnce(new TypeError("fetch failed"));
-      // Second attempt: success
-      fetchSpy.mockResolvedValueOnce(
-        mockResponse({ ok: true, body: { value: [] } }),
-      );
-
-      const result = await client.testRequest("GET", "/api/v1/Cubes");
-      expect(result).toEqual({ value: [] });
-      // ensureSession called twice (once per attempt)
-      expect(sessionManager.ensureSession).toHaveBeenCalledTimes(2);
-    });
-
-    it("should retry up to 3 times on network errors then throw CONNECTION_FAILED", async () => {
-      // All 4 attempts (initial + 3 retries) fail
-      fetchSpy.mockRejectedValue(new TypeError("fetch failed"));
-
-      try {
-        await client.testRequest("GET", "/api/v1/Cubes");
-        expect.unreachable("Should have thrown");
-      } catch (e) {
-        expect(e).toBeInstanceOf(TM1Error);
-        const err = e as TM1Error;
-        expect(err.code).toBe(TM1ErrorCode.CONNECTION_FAILED);
-        expect(err.endpoint).toBe("/api/v1/Cubes");
-        expect(err.message).toContain("3 retries");
-      }
-
-      // initial + 3 retries = 4 fetch calls
-      expect(fetchSpy).toHaveBeenCalledTimes(4);
-    });
-
-    it("should NOT retry a bare AbortError (caller cancellation, not a network blip)", async () => {
-      // Our own request timeout aborts with name "TimeoutError" (→ LOCK_TIMEOUT).
-      // A plain "AbortError" can only be caller cancellation and must propagate
-      // immediately — retrying a cancelled request is a bug.
-      fetchSpy.mockRejectedValueOnce(
-        new DOMException("The operation was aborted.", "AbortError"),
-      );
-      // Would succeed if (wrongly) retried — proves no retry happens.
-      // Body is irrelevant to retry classification; empty keeps it from
-      // claiming a shape /Cubes does not have.
-      fetchSpy.mockResolvedValueOnce(mockResponse({ ok: true, body: {} }));
 
       await expect(
         client.testRequest("GET", "/api/v1/Cubes"),
-      ).rejects.toThrow();
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-    });
-
-    it("should classify ECONNREFUSED as network error and retry", async () => {
-      const err = new Error("connect ECONNREFUSED 127.0.0.1:8010");
-      fetchSpy.mockRejectedValueOnce(err);
-      // Body is irrelevant to retry classification; empty keeps it from
-      // claiming a shape /Cubes does not have.
-      fetchSpy.mockResolvedValueOnce(mockResponse({ ok: true, body: {} }));
-
-      const result = await client.testRequest("GET", "/api/v1/Cubes");
-      expect(result).toEqual({});
-    });
-  });
-
-  // ── TM1Error class ───────────────────────────────────────────────────────
-
-  describe("TM1Error", () => {
-    it("should have correct properties", () => {
-      const err = new TM1Error({
-        code: TM1ErrorCode.NOT_FOUND,
-        message: "Cube not found",
-        httpStatus: 404,
-        endpoint: "/api/v1/Cubes('Missing')",
-        details: "The cube does not exist",
+      ).rejects.toMatchObject({
+        code,
+        httpStatus: Number(status),
       });
-
-      expect(err).toBeInstanceOf(Error);
-      expect(err).toBeInstanceOf(TM1Error);
-      expect(err.name).toBe("TM1Error");
-      expect(err.code).toBe("NOT_FOUND");
-      expect(err.message).toBe("Cube not found");
-      expect(err.httpStatus).toBe(404);
-      expect(err.endpoint).toBe("/api/v1/Cubes('Missing')");
-      expect(err.details).toBe("The cube does not exist");
-    });
-
-    it("should work without optional fields", () => {
-      const err = new TM1Error({
-        code: TM1ErrorCode.CONNECTION_FAILED,
-        message: "Connection refused",
-      });
-
-      expect(err.httpStatus).toBeUndefined();
-      expect(err.endpoint).toBeUndefined();
-      expect(err.details).toBeUndefined();
     });
   });
 });

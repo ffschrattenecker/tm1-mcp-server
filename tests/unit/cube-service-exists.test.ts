@@ -18,24 +18,11 @@ function makeHttp(
 }
 
 describe("request shape: CubeService.exists", () => {
-  it("asks for the single cube by key with $select=Name", async () => {
-    const request = vi.fn(async () => ({ Name: "}StatsByCube" }));
-    const cubes = new CubeService(makeHttp(request));
-
-    await expect(cubes.exists("}StatsByCube")).resolves.toBe(true);
-    expect(request).toHaveBeenCalledTimes(1);
-    expect(request).toHaveBeenCalledWith(
-      "GET",
-      "/api/v1/Cubes('%7DStatsByCube')?$select=Name",
-    );
-  });
-
   it("doubles an embedded apostrophe per OData literal rules", async () => {
     const request = vi.fn(async () => ({ Name: "x" }));
     const cubes = new CubeService(makeHttp(request));
 
-    await cubes.exists("O'Brien");
-
+    await expect(cubes.exists("O'Brien")).resolves.toBe(true);
     expect(request).toHaveBeenCalledWith(
       "GET",
       "/api/v1/Cubes('O''Brien')?$select=Name",

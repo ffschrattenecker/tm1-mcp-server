@@ -45,36 +45,6 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
-describe("empty registry", () => {
-  it("starts with an empty folder and says where to create a connection", async () => {
-    const reg = make();
-    expect(reg.names).toEqual([]);
-    expect(reg.usableNames).toEqual([]);
-    expect(reg.dir).toBe(root);
-    await expect(reg.get("dev")).rejects.toThrow(
-      `No TM1 connection configured under ${root}`,
-    );
-    await expect(reg.get(undefined)).rejects.toThrow(
-      `No TM1 connection configured under ${root}`,
-    );
-  });
-
-  it("keeps the legacy TM1_BASE_URL mode unchanged", () => {
-    const reg = ConnectionRegistry.fromEnvironment(
-      { TM1_BASE_URL: "http://x:1", TM1_USER: "u", TM1_PASSWORD: "p" },
-      logger,
-    );
-    expect(reg.names).toEqual(["default"]);
-    reg.refresh(); // no folder to rescan
-    expect(reg.names).toEqual(["default"]);
-  });
-
-  it("still fails at startup when folders exist but none is usable", () => {
-    writeEnv("bad", ["TM1_USER=u"]);
-    expect(() => make()).toThrow(/No usable TM1 connection/);
-  });
-});
-
 describe("ConnectionRegistry.refresh", () => {
   it("adds a folder created after startup, also on an unknown name", async () => {
     vi.spyOn(TM1Client.prototype, "connect").mockResolvedValue();

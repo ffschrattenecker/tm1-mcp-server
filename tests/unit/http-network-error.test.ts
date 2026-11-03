@@ -4,6 +4,7 @@ import { TM1HttpClient } from "../../src/tm1-client/http.js";
 import { SessionManager } from "../../src/session-manager.js";
 import { makeTestConfig } from "../helpers/tm1-config.js";
 import { mockLogger } from "../helpers/client-harness.js";
+import { TM1ErrorCode } from "../../src/types.js";
 
 /** Build an error whose wrapped cause carries an OS-level `.code` (the undici shape). */
 function fetchFailedWithCause(code: string): TypeError {
@@ -102,5 +103,54 @@ describe("Watch-item #5: isNetworkError classifies via err.cause.code", () => {
       new Error("boom: unexpected server state"),
     );
     expect(calls).toBe(1);
+  });
+
+  it("retries a GET and returns the second attempt's result", async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("fetch failed"))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: new Headers(),
+        // Body is irrelevant to retry classification; keep it empty.
+        text: vi.fn().mockResolvedValue("{}"),
+      });
+    stubContractCheckedFetch(fetchSpy);
+
+    await expect(
+      client.request("GET", "/api/v1/Configuration"),
+    ).resolves.toEqual({});
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("gives up after 3 retries with CONNECTION_FAILED", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchSpy = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+      stubContractCheckedFetch(fetchSpy);
+      const assertion = expect(
+        client.request("GET", "/api/v1/Configuration"),
+      ).rejects.toMatchObject({
+        code: TM1ErrorCode.CONNECTION_FAILED,
+        endpoint: "/api/v1/Configuration",
+        message: expect.stringContaining("3 retries"),
+      });
+      await vi.runAllTimersAsync();
+      await assertion;
+      // initial attempt + 3 retries
+      expect(fetchSpy).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries when only the message names ECONNREFUSED (no code)", async () => {
+    const calls = await fetchCallsFor(
+      client,
+      new Error("connect ECONNREFUSED 127.0.0.1:8010"),
+    );
+    expect(calls).toBeGreaterThan(1);
   });
 });
