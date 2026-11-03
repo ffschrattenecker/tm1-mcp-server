@@ -2,37 +2,21 @@ import type { CallGraphNode, EffectiveValue } from "./callGraph.js";
 import type { CallParam } from "./referenceIndex.js";
 import { isSecretName, MASK, maskCodeLine } from "../mask-secrets.js";
 
-function maskParams(params: readonly CallParam[]): CallParam[] {
-  return params.map((p) =>
-    isSecretName(p.name)
-      ? {
-          ...p,
-          valueRaw: MASK,
-          resolution:
-            p.resolution.kind === "literal"
-              ? { kind: "literal" as const, value: MASK }
-              : p.resolution,
-        }
-      : p,
-  );
-}
-
-function maskEffective(
-  eff: ReadonlyArray<{
-    name: string;
-    effective: EffectiveValue;
-    valueRaw: string;
-  }>,
-): Array<{ name: string; effective: EffectiveValue; valueRaw: string }> {
-  return eff.map((e) =>
+// Redacts a secret-named entry: its raw text, and its `field` (a call param's
+// `resolution` or an effective param's `effective`) when that is a literal.
+function maskValueEntries<
+  K extends "resolution" | "effective",
+  T extends { name: string; valueRaw: string } & Record<K, { kind: string }>,
+>(entries: readonly T[], field: K): T[] {
+  return entries.map((e) =>
     isSecretName(e.name)
       ? {
           ...e,
           valueRaw: MASK,
-          effective:
-            e.effective.kind === "literal"
+          [field]:
+            e[field].kind === "literal"
               ? { kind: "literal" as const, value: MASK }
-              : e.effective,
+              : e[field],
         }
       : e,
   );
@@ -77,11 +61,11 @@ export function serializeNode(
             ? maskCodeLine(node.incomingEdge.snippet)
             : node.incomingEdge.snippet,
           params: mask
-            ? maskParams(node.incomingEdge.params)
+            ? maskValueEntries(node.incomingEdge.params, "resolution")
             : node.incomingEdge.params,
           effectiveParams: node.incomingEdge.effectiveParams
             ? mask
-              ? maskEffective(node.incomingEdge.effectiveParams)
+              ? maskValueEntries(node.incomingEdge.effectiveParams, "effective")
               : node.incomingEdge.effectiveParams
             : undefined,
         }
