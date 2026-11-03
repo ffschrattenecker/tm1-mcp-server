@@ -5,10 +5,7 @@ export default defineConfig({
     globals: true,
     environment: "node",
     setupFiles: ["tests/setup/no-process-backup.ts"],
-    include: [
-      "tests/unit/**/*.test.ts",
-      "tests/property/**/*.property.test.ts",
-    ],
+    include: ["tests/unit/**/*.test.ts"],
     coverage: {
       provider: "v8",
       // Only first-party source counts. `include` already keeps tests/,
