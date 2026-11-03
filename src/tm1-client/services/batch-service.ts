@@ -19,9 +19,9 @@
 // is the server's native behaviour, so per-item success/failure reporting is
 // preserved rather than collapsed into one all-or-nothing result.
 //
-// Scope: exactly one consumer today — `ElementService.bulkUpsert`
-// (`element-service.ts`), which folds the per-element writes of
-// tm1_bulk_upsert_elements into one round-trip. It stays a service of its own
+// Scope: one consumer today — `ElementService` (`element-service.ts`), which
+// folds the per-element writes of tm1_bulk_upsert_elements and
+// tm1_delete_elements into one round-trip each. It stays a service of its own
 // rather than moving into ElementService for two reasons that outlive the
 // single caller: `$batch` is the one endpoint bound to no TM1 object type, so
 // it belongs to no other service by the rule in docs/ARCHITECTURE.md; and the
@@ -308,9 +308,9 @@ export class BatchService {
    * batch has ever succeeded on this connection.
    *
    * That precondition is the whole safety argument for the caller's fallback.
-   * `BatchUnsupportedError` makes callers restart their operation on the
-   * per-request path. While `supported === null` no chunk has ever come back
-   * 200, so the failure can only be in the caller's FIRST pass. Note what that
+   * `BatchUnsupportedError` makes the caller re-send that request set one
+   * request at a time. While `supported === null` no chunk has ever come back
+   * 200, so the failure can only be in the caller's FIRST call. Note what that
    * bounds: WHICH writes may be replayed, not WHETHER anything was committed —
    * `$batch` is non-atomic, so sub-requests processed before the failure stay
    * committed. Callers must keep that first pass replay-safe.
