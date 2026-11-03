@@ -6,9 +6,13 @@
  * separate on purpose (rule violations, not a score). The same engine is meant
  * to be reusable later from a single-process pre-commit lint entry point.
  */
-import { parseTiCode } from "../callgraph/tiParser.js";
 import type { TiStatement } from "../callgraph/types.js";
-import type { ProcessCodeInput, TiTab } from "./process-metrics.js";
+import {
+  parseTab,
+  type ProcessCodeInput,
+  type TiTab,
+} from "./process-metrics.js";
+import { walkStatements } from "./walk.js";
 import { TI_VAR } from "../ti-identifier.js";
 import { quotedLiteral } from "../ti-lex.js";
 
@@ -132,26 +136,16 @@ function collectReads(text: string, out: Set<string>): void {
 }
 
 function collectReadsFromStmts(stmts: TiStatement[], out: Set<string>): void {
-  for (const s of stmts) {
+  for (const { stmt: s } of walkStatements(stmts)) {
     if (s.type === "assignment") {
       collectReads(s.expression, out);
     } else if (s.type === "if") {
-      const blk = s;
-      collectReads(blk.condition, out);
-      collectReadsFromStmts(blk.thenBody, out);
-      for (const c of blk.elseIfClauses) {
-        collectReads(c.condition, out);
-        collectReadsFromStmts(c.body, out);
-      }
-      collectReadsFromStmts(blk.elseBody, out);
+      collectReads(s.condition, out);
+      for (const c of s.elseIfClauses) collectReads(c.condition, out);
     } else if (s.type === "while") {
-      const blk = s;
-      collectReads(blk.condition, out);
-      collectReadsFromStmts(blk.body, out);
+      collectReads(s.condition, out);
     } else if (s.type === "functionCall") {
-      for (const arg of s.args) {
-        collectReads(arg, out);
-      }
+      for (const arg of s.args) collectReads(arg, out);
     }
   }
 }
@@ -166,28 +160,21 @@ interface DeadCandidate {
 function collectDeadCandidates(
   stmts: TiStatement[],
   tab: TiTab,
+  lineOrigin: number[],
   out: DeadCandidate[],
 ): void {
-  for (const s of stmts) {
-    if (s.type === "assignment") {
-      if (!isImplicitVar(s.variable) && !hasSideEffectRhs(s.expression)) {
-        out.push({
-          variable: s.variable.toLowerCase(),
-          originalVar: s.variable,
-          tab,
-          line: s.line,
-        });
-      }
-    } else if (s.type === "if") {
-      const blk = s;
-      collectDeadCandidates(blk.thenBody, tab, out);
-      for (const c of blk.elseIfClauses) {
-        collectDeadCandidates(c.body, tab, out);
-      }
-      collectDeadCandidates(blk.elseBody, tab, out);
-    } else if (s.type === "while") {
-      const blk = s;
-      collectDeadCandidates(blk.body, tab, out);
+  for (const { stmt: s } of walkStatements(stmts)) {
+    if (
+      s.type === "assignment" &&
+      !isImplicitVar(s.variable) &&
+      !hasSideEffectRhs(s.expression)
+    ) {
+      out.push({
+        variable: s.variable.toLowerCase(),
+        originalVar: s.variable,
+        tab,
+        line: sourceLine(lineOrigin, s.line),
+      });
     }
   }
 }
@@ -195,22 +182,24 @@ function collectDeadCandidates(
 /** UNC (`\\srv\…`) or drive-letter (`C:\…`) absolute path. */
 const PATH_LITERAL = /^(?:\\\\|[A-Za-z]:[\\/])/;
 
+/** Maps a 1-based line of a normalized tab back to the line the author wrote. */
+function sourceLine(lineOrigin: number[], line: number): number {
+  return lineOrigin[line - 1] ?? line;
+}
+
 interface WalkCtx {
   process: string;
   tab: TiTab;
   cellGetDimThreshold: number;
   /** True when the process name marks it a clear/init/reset proc (demotes destructive). */
   clearProc: boolean;
+  lineOrigin: number[];
   findings: Finding[];
 }
 
-function walk(
-  stmts: TiStatement[],
-  loopDepth: number,
-  ifDepth: number,
-  ctx: WalkCtx,
-): void {
-  for (const s of stmts) {
+function walk(stmts: TiStatement[], ctx: WalkCtx): void {
+  for (const { stmt: s, loopDepth, ifDepth } of walkStatements(stmts)) {
+    const line = sourceLine(ctx.lineOrigin, s.line);
     if (s.type === "assignment") {
       const cg = s.cellGetInfo;
       if (cg) {
@@ -222,7 +211,7 @@ function walk(
           ctx.findings.push({
             process: ctx.process,
             tab: ctx.tab,
-            line: s.line,
+            line,
             rule: "cellget-perf",
             severity: inLoop ? "warn" : "info",
             snippet: `${s.variable} = ${cg.fn}(${cg.params.join(", ")})`,
@@ -233,15 +222,6 @@ function walk(
           });
         }
       }
-    } else if (s.type === "if") {
-      const blk = s;
-      walk(blk.thenBody, loopDepth, ifDepth + 1, ctx);
-      for (const c of blk.elseIfClauses)
-        walk(c.body, loopDepth, ifDepth + 1, ctx);
-      walk(blk.elseBody, loopDepth, ifDepth + 1, ctx);
-    } else if (s.type === "while") {
-      const blk = s;
-      walk(blk.body, loopDepth + 1, ifDepth, ctx);
     } else if (s.type === "functionCall") {
       const name = s.name.toLowerCase();
       const snippet = `${s.name}(${s.args.join(", ")})`;
@@ -249,7 +229,7 @@ function walk(
         ctx.findings.push({
           process: ctx.process,
           tab: ctx.tab,
-          line: s.line,
+          line,
           rule: "destructive-unguarded",
           severity: ctx.clearProc ? "warn" : "error",
           snippet,
@@ -263,7 +243,7 @@ function walk(
         ctx.findings.push({
           process: ctx.process,
           tab: ctx.tab,
-          line: s.line,
+          line,
           rule: "exec-in-loop",
           severity: "warn",
           snippet,
@@ -278,7 +258,7 @@ function walk(
           ctx.findings.push({
             process: ctx.process,
             tab: ctx.tab,
-            line: s.line,
+            line,
             rule: "hardcoded-path",
             severity: "warn",
             snippet: `${s.name}(… ${arg} …)`,
@@ -301,33 +281,38 @@ export function lintProcess(
   const findings: Finding[] = [];
 
   // Parse all tabs once; reuse for both walk and dead-assignment passes.
-  const parsedTabs = new Map<
-    TiTab,
-    Extract<ReturnType<typeof parseTiCode>, { ok: true }>["ast"]
-  >();
+  const parsedTabs = new Map<TiTab, NonNullable<ReturnType<typeof parseTab>>>();
   for (const tab of TABS) {
     const src = code[tab] ?? "";
     if (src.trim() === "") continue;
-    const parsed = parseTiCode(src);
-    if (!parsed.ok) continue;
-    parsedTabs.set(tab, parsed.ast);
+    const parsed = parseTab(src);
+    if (parsed) parsedTabs.set(tab, parsed);
   }
 
   // Existing per-tab rules
-  for (const [tab, ast] of parsedTabs) {
-    walk(ast, 0, 0, { process, tab, cellGetDimThreshold, clearProc, findings });
+  for (const [tab, { ast, lineOrigin }] of parsedTabs) {
+    walk(ast, {
+      process,
+      tab,
+      cellGetDimThreshold,
+      clearProc,
+      lineOrigin,
+      findings,
+    });
   }
 
   // dead-assignment: two-pass over all parsed tabs
   const readSet = new Set<string>();
-  for (const ast of parsedTabs.values()) {
+  for (const { ast } of parsedTabs.values()) {
     collectReadsFromStmts(ast, readSet);
   }
 
   const deadCandidates: DeadCandidate[] = [];
   for (const tab of ["metadata", "data"] as const) {
-    const ast = parsedTabs.get(tab);
-    if (ast) collectDeadCandidates(ast, tab, deadCandidates);
+    const parsed = parsedTabs.get(tab);
+    if (parsed) {
+      collectDeadCandidates(parsed.ast, tab, parsed.lineOrigin, deadCandidates);
+    }
   }
 
   const reported = new Set<string>();

@@ -8,6 +8,7 @@
 import { parseTiCode } from "../callgraph/tiParser.js";
 import type { TiStatement } from "../callgraph/types.js";
 import { isCommentedOutCode } from "./comment-classifier.js";
+import { walkStatements } from "./walk.js";
 
 export type TiTab = "prolog" | "metadata" | "data" | "epilog";
 
@@ -160,22 +161,37 @@ const TABS: ReadonlyArray<TiTab> = ["prolog", "metadata", "data", "epilog"];
 // so we normalize by inserting a newline after every top-level `;` (outside
 // of strings and `#` line-comments) before parsing. Raw LOC counts use the
 // original source via classifyLines.
-function splitMultiStatementLines(src: string): string {
+//
+// `lineOrigin[i]` is the 1-based source line that normalized line i + 1 came from,
+// so findings can point at the line the author wrote.
+function splitMultiStatementLines(src: string): {
+  text: string;
+  lineOrigin: number[];
+} {
   let out = "";
+  const lineOrigin = [1];
+  let srcLine = 1;
+  const copy = (c: string) => {
+    out += c;
+    if (c === "\n") {
+      srcLine++;
+      lineOrigin.push(srcLine);
+    }
+  };
   let inString = false;
   let inLineComment = false;
   for (let i = 0; i < src.length; i++) {
-    const c = src[i];
+    const c = src[i]!;
     if (inLineComment) {
-      out += c;
+      copy(c);
       if (c === "\n") inLineComment = false;
       continue;
     }
     if (inString) {
-      out += c;
+      copy(c);
       if (c === "'") {
         if (src[i + 1] === "'") {
-          out += "'";
+          copy("'");
           i++;
         } else {
           inString = false;
@@ -185,25 +201,38 @@ function splitMultiStatementLines(src: string): string {
     }
     if (c === "'") {
       inString = true;
-      out += c;
+      copy(c);
       continue;
     }
     if (c === "#") {
       inLineComment = true;
-      out += c;
+      copy(c);
       continue;
     }
     if (c === ";") {
-      out += ";";
+      copy(c);
       const next = src[i + 1];
       if (next !== undefined && next !== "\n" && next !== "\r") {
         out += "\n";
+        lineOrigin.push(srcLine);
       }
       continue;
     }
-    out += c;
+    copy(c);
   }
-  return out;
+  return { text: out, lineOrigin };
+}
+
+/**
+ * Parses one tab the way metrics and the linter both need it: statements packed
+ * onto one line are split first. Returns null when the tab does not parse.
+ */
+export function parseTab(
+  src: string,
+): { ast: TiStatement[]; lineOrigin: number[] } | null {
+  const { text, lineOrigin } = splitMultiStatementLines(src);
+  const parsed = parseTiCode(text);
+  return parsed.ok ? { ast: parsed.ast, lineOrigin } : null;
 }
 
 function classifyLines(src: string): {
@@ -227,95 +256,55 @@ function classifyLines(src: string): {
   return { loc, commentLines, deadCodeLines, blankLines };
 }
 
-function walk(
-  stmts: TiStatement[],
-  depth: number,
-  acc: { branches: number; maxNesting: number },
-) {
-  for (const s of stmts) {
-    if (s.type === "if") {
-      const ifBlk = s;
-      acc.branches += 1 + ifBlk.elseIfClauses.length;
-      const nextDepth = depth + 1;
-      if (nextDepth > acc.maxNesting) acc.maxNesting = nextDepth;
-      walk(ifBlk.thenBody, nextDepth, acc);
-      for (const c of ifBlk.elseIfClauses) walk(c.body, nextDepth, acc);
-      walk(ifBlk.elseBody, nextDepth, acc);
-    } else if (s.type === "while") {
-      const whBlk = s;
-      acc.branches += 1;
-      const nextDepth = depth + 1;
-      if (nextDepth > acc.maxNesting) acc.maxNesting = nextDepth;
-      walk(whBlk.body, nextDepth, acc);
-    }
-  }
-}
-
-/**
- * v2 cost accumulator. Tracks loop and if nesting separately as it descends:
- * loop cost grows geometrically with enclosing loops, if cost grows with
- * condition complexity and if-depth, hot ops are penalised by loop depth.
- */
-function walkCost(
-  stmts: TiStatement[],
-  loopDepth: number,
-  ifDepth: number,
-  w: ScoreWeights,
-  acc: { loopCost: number; ifCost: number; hotInLoop: number },
-): void {
-  for (const s of stmts) {
-    if (s.type === "if") {
-      const ifBlk = s;
-      acc.ifCost +=
-        w.ifBase * conditionComplexity(ifBlk.condition) * (1 + ifDepth);
-      for (const c of ifBlk.elseIfClauses) {
-        acc.ifCost +=
-          w.ifBase * conditionComplexity(c.condition) * (1 + ifDepth);
-      }
-      walkCost(ifBlk.thenBody, loopDepth, ifDepth + 1, w, acc);
-      for (const c of ifBlk.elseIfClauses)
-        walkCost(c.body, loopDepth, ifDepth + 1, w, acc);
-      walkCost(ifBlk.elseBody, loopDepth, ifDepth + 1, w, acc);
-    } else if (s.type === "while") {
-      const whBlk = s;
-      acc.loopCost += w.loopBase * Math.pow(w.nestMult, loopDepth);
-      walkCost(whBlk.body, loopDepth + 1, ifDepth, w, acc);
-    } else if (s.type === "functionCall") {
-      const fn = s;
-      if (loopDepth > 0 && HOT_OPS.has(fn.name.toLowerCase())) {
-        acc.hotInLoop += w.hotPenalty * loopDepth;
-      }
-    }
-  }
-}
-
 export function computeTabMetrics(
   src: string,
   weights?: ScoreWeightsInput,
 ): TabMetrics {
   const w = resolveWeights(weights);
   const counts = classifyLines(src);
-  const parseRes = parseTiCode(splitMultiStatementLines(src));
-  const acc = { branches: 0, maxNesting: 0 };
-  const cost = { loopCost: 0, ifCost: 0, hotInLoop: 0 };
-  let parseError = false;
-  if (parseRes.ok) {
-    walk(parseRes.ast, 0, acc);
-    walkCost(parseRes.ast, 0, 0, w, cost);
-  } else {
-    parseError = true;
+  const parsed = parseTab(src);
+  const m = {
+    branches: 0,
+    maxNesting: 0,
+    loopCost: 0,
+    ifCost: 0,
+    hotInLoop: 0,
+  };
+  // loopCost grows geometrically with enclosing loops; ifCost grows with
+  // condition complexity and if-depth; hot ops are penalised by loop depth.
+  if (parsed) {
+    for (const { stmt, loopDepth, ifDepth } of walkStatements(parsed.ast)) {
+      if (stmt.type === "if") {
+        m.branches += 1 + stmt.elseIfClauses.length;
+        m.maxNesting = Math.max(m.maxNesting, loopDepth + ifDepth + 1);
+        m.ifCost +=
+          w.ifBase * conditionComplexity(stmt.condition) * (1 + ifDepth);
+        for (const c of stmt.elseIfClauses) {
+          m.ifCost +=
+            w.ifBase * conditionComplexity(c.condition) * (1 + ifDepth);
+        }
+      } else if (stmt.type === "while") {
+        m.branches += 1;
+        m.maxNesting = Math.max(m.maxNesting, loopDepth + ifDepth + 1);
+        m.loopCost += w.loopBase * Math.pow(w.nestMult, loopDepth);
+      } else if (stmt.type === "functionCall") {
+        if (loopDepth > 0 && HOT_OPS.has(stmt.name.toLowerCase())) {
+          m.hotInLoop += w.hotPenalty * loopDepth;
+        }
+      }
+    }
   }
   return {
     loc: counts.loc,
     commentLines: counts.commentLines,
     deadCodeLines: counts.deadCodeLines,
     blankLines: counts.blankLines,
-    branches: acc.branches,
-    maxNesting: acc.maxNesting,
-    loopCost: cost.loopCost,
-    ifCost: cost.ifCost,
-    hotInLoop: cost.hotInLoop,
-    parseError,
+    branches: m.branches,
+    maxNesting: m.maxNesting,
+    loopCost: m.loopCost,
+    ifCost: m.ifCost,
+    hotInLoop: m.hotInLoop,
+    parseError: parsed === null,
   };
 }
 
