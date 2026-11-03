@@ -1,6 +1,6 @@
-// Live validation for the 2026-08-09 performance/robustness fixes (P5, P8,
-// P10) and the $batch counter-probe. The unit suites prove the logic against
-// mocks; these prove the same paths behave against a real TM1 server.
+// Live $batch checks: the counter-probe for an ambiguous 400, and bulk upserts
+// that cross the chunk limits. The unit suites prove the logic against mocks;
+// these prove the same paths behave against a real TM1 server.
 //
 // The counter-probe in particular CANNOT be reached through the tool layer: it
 // only fires on an HTTP 400 from the FIRST $batch envelope on a connection, so
@@ -8,7 +8,7 @@
 // That is why the probe block is first in this file, and why the file is meant
 // to be run on its own:
 //
-//   npx vitest run --config vitest.live.config.ts tests/live/perf-fixes.live.test.ts
+//   npx vitest run --config vitest.live.config.ts tests/live/batch.live.test.ts
 //
 // Run inside the whole live suite it still passes, but the probe assertions
 // self-skip because another file will have marked the connection supported.
@@ -18,29 +18,19 @@ import {
   dropIfExists,
   getHarness,
   LIVE_ENABLED,
-  restGet,
   SANDBOX,
   seg,
   type LiveHarness,
 } from "./harness.js";
 import { BatchUnsupportedError } from "../../src/tm1-client/services/batch-service.js";
 
-const PROBE_DIM = `${SANDBOX}_P8_DIM`;
+const PROBE_DIM = `${SANDBOX}_BATCH_CHUNK_DIM`;
 
-describe.skipIf(!LIVE_ENABLED)("live: perf fixes 2026-08-09", () => {
+describe.skipIf(!LIVE_ENABLED)("live: $batch", () => {
   let h: LiveHarness;
   beforeAll(async () => {
     h = await getHarness();
   });
-
-  // Non-control names in a collection, first `top` of them.
-  const userNames = async (collection: string, top: number) =>
-    (
-      await restGet<Array<{ Name: string }>>(
-        h,
-        `${collection}?$select=Name&$filter=not startswith(Name,'}')&$top=${top}`,
-      )
-    ).map((r) => r.Name);
 
   afterAll(async () => {
     await dropIfExists(h, seg("Dimensions", PROBE_DIM));
@@ -113,73 +103,8 @@ describe.skipIf(!LIVE_ENABLED)("live: perf fixes 2026-08-09", () => {
     });
   });
 
-  // ---- P10: narrow element-type read ---------------------------------------
-  describe("P10 — getElementTypes reads Name,Type only", () => {
-    it("returns name/type pairs for a real hierarchy", async () => {
-      const names = await userNames("Dimensions", 25);
-      if (names.length === 0) {
-        // A bare v12 database has no user dimensions. Nothing to read types
-        // from — the P8 block below still exercises getElementTypes against the
-        // dimension it creates, so coverage is not lost.
-        console.log("[P10] model has no user dimensions — nothing to type");
-        return;
-      }
-
-      let checked = 0;
-      for (const dim of names) {
-        let elements;
-        try {
-          elements = await h.client.hierarchies.getElementTypes(dim, dim);
-        } catch {
-          continue; // alternate hierarchy naming or no read rights — try next
-        }
-        if (elements.length === 0) continue;
-        for (const e of elements.slice(0, 50)) {
-          expect(typeof e.name).toBe("string");
-          expect(["Numeric", "Consolidated", "String"]).toContain(e.type);
-        }
-        console.log(`[P10] ${dim}: ${elements.length} elements typed`);
-        checked++;
-        break;
-      }
-      expect(checked).toBe(1);
-    });
-  });
-
-  // ---- P5: consistency fan-out ---------------------------------------------
-  describe("P5 — audit_complexity consistency scope fans out", () => {
-    it("beats a serial walk of the same per-process reads", async () => {
-      const procs = await userNames("Processes", 500);
-      if (procs.length < 8) {
-        console.log(`[P5] only ${procs.length} processes — timing not telling`);
-        return;
-      }
-
-      // Measure one round-trip to get this server's per-call latency.
-      const t0 = Date.now();
-      await h.client.processes.getVariables(procs[0]);
-      const singleMs = Math.max(1, Date.now() - t0);
-
-      const t1 = Date.now();
-      const res = await h.ok("tm1_audit_complexity", {
-        scope: ["consistency"],
-      });
-      const fanOutMs = Date.now() - t1;
-
-      const serialEstimateMs = singleMs * procs.length;
-      console.log(
-        `[P5] ${procs.length} processes: single=${singleMs}ms, ` +
-          `serial estimate=${serialEstimateMs}ms, actual=${fanOutMs}ms`,
-      );
-      expect(res.isError).toBe(false);
-      // 8 in flight; allow generous slack for server-side contention and the
-      // scope's own aggregation work, but a serial walk cannot land here.
-      expect(fanOutMs).toBeLessThan(serialEstimateMs);
-    });
-  });
-
-  // ---- P8: byte-capped chunking still upserts correctly --------------------
-  describe("P8 — byte-capped $batch chunking", () => {
+  // ---- byte-capped chunking still upserts correctly ------------------------
+  describe("byte-capped $batch chunking", () => {
     it("bulk-upserts across chunk boundaries without loss", async () => {
       await dropIfExists(h, seg("Dimensions", PROBE_DIM));
       await createDimension(h, PROBE_DIM, ["Seed"]);
@@ -203,7 +128,7 @@ describe.skipIf(!LIVE_ENABLED)("live: perf fixes 2026-08-09", () => {
         PROBE_DIM,
       );
       const created = typed.filter((e) => e.name.startsWith("E")).length;
-      console.log(`[P8] upserted 250, found ${created} back`);
+      console.log(`[chunking] upserted 250, found ${created} back`);
       expect(created).toBe(250);
     });
   });

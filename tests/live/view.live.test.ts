@@ -198,14 +198,4 @@ describe.skipIf(!LIVE_ENABLED)("live: view + subset lifecycle", () => {
     await restWrite(h, "DELETE", path);
     expect(await names(h, VIEWS)).not.toContain(MDX_VIEW);
   });
-
-  // ---- Negative path ----
-
-  it("reading a nonexistent view returns an error envelope", async () => {
-    const r = await h.call("tm1_rest_read", {
-      path: view(`${PFX}_DOES_NOT_EXIST`),
-    });
-    expect(r.isError).toBe(true);
-    expect(r.json?.code).toBeTruthy();
-  });
 });

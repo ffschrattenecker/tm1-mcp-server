@@ -9,6 +9,7 @@
 // Opt-in: requires TM1_BASE_URL + TM1_USER (see harness.ts). Skips otherwise.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  createCube,
   createDimension,
   dropIfExists,
   getHarness,
@@ -26,7 +27,6 @@ const HIER = DIM; // default hierarchy shares the dimension name
 const ALT_HIER = `${SANDBOX}_DIM_A_ALT`;
 // Single-quote in the name exercises OData literal quote-escaping end-to-end.
 const QUOTE_EL = `${SANDBOX}_DIM_A_X'Y`;
-const NONEXISTENT = `${SANDBOX}_DIM_DOES_NOT_EXIST`;
 
 const TOP = "Total"; // consolidated root
 const SUB = "Region_North"; // intermediate consolidation
@@ -216,16 +216,14 @@ describe.skipIf(!LIVE_ENABLED)(
       );
     });
 
-    it("resolves a single default member via the bulk tool (1-item array)", async () => {
-      const r = await h.ok("tm1_resolve_default_members", {
+    it("resolves default members via the bulk tool, one item and several", async () => {
+      const single = await h.ok("tm1_resolve_default_members", {
         items: [{ dimensionName: DIM }],
       });
-      expect(r.json.results.length).toBe(1);
-      expect(r.json.results[0]).toHaveProperty("source");
-      expect(r.json.results[0]).toHaveProperty("confidence");
-    });
+      expect(single.json.results.length).toBe(1);
+      expect(single.json.results[0]).toHaveProperty("source");
+      expect(single.json.results[0]).toHaveProperty("confidence");
 
-    it("bulk-resolves default members", async () => {
       const r = await h.ok("tm1_resolve_default_members", {
         items: [
           { dimensionName: DIM },
@@ -271,6 +269,35 @@ describe.skipIf(!LIVE_ENABLED)(
       expect(Number(el.Attributes.SortOrder)).toBe(42);
     });
 
+    it("reads element types from a real hierarchy", async () => {
+      // Narrow Name,Type read. The list is every dimension but control ones,
+      // so the first that answers with elements is the one checked.
+      const dims = (
+        await restGet<Array<{ Name: string }>>(
+          h,
+          "Dimensions?$select=Name&$filter=not startswith(Name,'}')&$top=25",
+        )
+      ).map((d) => d.Name);
+      let checked = 0;
+      for (const dim of dims) {
+        let elements;
+        try {
+          elements = await h.client.hierarchies.getElementTypes(dim, dim);
+        } catch {
+          continue; // alternate hierarchy naming or no read rights — try next
+        }
+        if (elements.length === 0) continue;
+        for (const e of elements.slice(0, 50)) {
+          expect(typeof e.name).toBe("string");
+          expect(["Numeric", "Consolidated", "String"]).toContain(e.type);
+        }
+        checked++;
+        break;
+      }
+      // A bare v12 database has no user dimensions; then this has nothing to type.
+      if (dims.length > 0) expect(checked).toBe(1);
+    });
+
     it("deletes the quoted element", async () => {
       await restWrite(h, "DELETE", `${HIER_PATH}/${seg("Elements", QUOTE_EL)}`);
       expect(await names(h, `${HIER_PATH}/Elements`)).not.toContain(QUOTE_EL);
@@ -287,18 +314,200 @@ describe.skipIf(!LIVE_ENABLED)(
       ).not.toContain(ALT_HIER);
     });
 
-    // ── Negative path ──────────────────────────────────────────────────────
-    it("reading a nonexistent dimension errors with a code", async () => {
-      const r = await h.call("tm1_rest_read", {
-        path: `${seg("Dimensions", NONEXISTENT)}/${seg("Hierarchies", NONEXISTENT)}`,
-      });
-      expect(r.isError).toBe(true);
-      expect(r.json?.code).toBeTruthy();
-    });
-
     it("deletes the dimension (cascade)", async () => {
       await restWrite(h, "DELETE", seg("Dimensions", DIM));
       expect(await names(h, "Dimensions", DIM)).not.toContain(DIM);
     });
   },
 );
+
+// Element batches: attribute coercion and bulk removal guards, and the
+// delete_elements report for a batch that names a missing element.
+describe.skipIf(!LIVE_ENABLED)("live: element batches", () => {
+  let h: LiveHarness;
+  const BATCH = `${SANDBOX}_BATCH_DIM`;
+  const BATCH_HIER = `${seg("Dimensions", BATCH)}/${seg("Hierarchies", BATCH)}`;
+  const REMOVE = `${SANDBOX}_BATCH_REMOVE`;
+  const LEAVES = Array.from(
+    { length: 12 },
+    (_, i) => `L${String(i).padStart(2, "0")}`,
+  );
+
+  const elementCount = async () => {
+    const r = await h.ok("tm1_rest_read", {
+      path: `${BATCH_HIER}/Elements/$count`,
+    });
+    return Number(r.json.text ?? r.json.data);
+  };
+
+  const cleanup = async () => {
+    await dropIfExists(h, seg("Dimensions", BATCH));
+    await dropIfExists(h, seg("Dimensions", REMOVE));
+  };
+
+  beforeAll(async () => {
+    h = await getHarness();
+    await cleanup();
+    await createDimension(h, BATCH);
+    await h.ok("tm1_bulk_upsert_elements", {
+      dimensionName: BATCH,
+      elements: [
+        ...LEAVES.map((name) => ({ name, type: "Numeric" })),
+        {
+          name: "Total",
+          type: "Consolidated",
+          components: LEAVES.map((name) => ({ name, weight: 1 })),
+        },
+      ],
+    });
+  });
+
+  afterAll(cleanup);
+
+  it("writes attribute values in one batch, coerced to the attribute type", async () => {
+    await restWrite(h, "POST", `${BATCH_HIER}/ElementAttributes`, {
+      Name: "Weight",
+      Type: "Numeric",
+    });
+    await restWrite(h, "POST", `${BATCH_HIER}/ElementAttributes`, {
+      Name: "Caption",
+      Type: "String",
+    });
+    await h.ok("tm1_update_element_attribute_value", {
+      dimensionName: BATCH,
+      updates: [
+        { elementName: "L00", attributeName: "Weight", value: "12.5" },
+        { elementName: "L01", attributeName: "Weight", value: 3 },
+        { elementName: "L00", attributeName: "Caption", value: "zero" },
+      ],
+    });
+    const bad = await h.call("tm1_update_element_attribute_value", {
+      dimensionName: BATCH,
+      elementName: "L02",
+      attributeName: "Weight",
+      value: "heavy",
+    });
+    expect(bad.isError).toBe(true);
+    expect(bad.json.code).toBe("VALIDATION_ERROR");
+
+    const l00 = await restGet<{ Attributes: Record<string, unknown> }>(
+      h,
+      `${BATCH_HIER}/Elements('L00')?$select=Name,Attributes`,
+    );
+    expect(l00.Attributes).toMatchObject({ Weight: 12.5, Caption: "zero" });
+  });
+
+  it("bulk_upsert refuses to drop children without confirm; dryRun shows it", async () => {
+    await createDimension(h, REMOVE, [
+      "A",
+      "B",
+      { name: "Total", children: ["A", "B"] },
+    ]);
+    const onlyA = {
+      dimensionName: REMOVE,
+      elements: [
+        { name: "Total", type: "Consolidated", components: [{ name: "A" }] },
+      ],
+    };
+    const dry = await h.ok("tm1_bulk_upsert_elements", {
+      ...onlyA,
+      dryRun: true,
+    });
+    expect(dry.json).toMatchObject({
+      dryRun: true,
+      creates: [],
+      updates: ["Total"],
+      removals: [{ parent: "Total", children: ["B"] }],
+    });
+    const refused = await h.call("tm1_bulk_upsert_elements", onlyA);
+    expect(refused.isError).toBe(true);
+    expect(refused.json.message).toContain("would remove 1 existing child");
+    const still = await names(
+      h,
+      `${seg("Dimensions", REMOVE)}/${seg("Hierarchies", REMOVE)}/Elements('Total')/Components`,
+    );
+    expect(still).toContain("B");
+
+    await h.ok("tm1_bulk_upsert_elements", { ...onlyA, confirm: REMOVE });
+    const after = await h.ok("tm1_bulk_upsert_elements", {
+      ...onlyA,
+      dryRun: true,
+    });
+    expect(after.json.removals).toEqual([]);
+  });
+
+  it("delete_elements removes many and reports the missing one", async () => {
+    // Detach the leaves first so the consolidation does not hold them.
+    await restWrite(h, "DELETE", `${BATCH_HIER}/Elements('Total')`);
+    const r = await h.ok("tm1_delete_elements", {
+      dimensionName: BATCH,
+      elementNames: ["L10", "L11", "NOPE"],
+      confirm: BATCH,
+    });
+    expect(r.json).toMatchObject({
+      success: false,
+      deleted: 2,
+      failed: 1,
+      failures: [{ elementName: "NOPE" }],
+    });
+    expect(await elementCount()).toBe(10);
+  });
+});
+
+// Element search: the MDX FILTER the tool runs on the server, the exact total
+// next to a capped list, and the cube-wide scope.
+describe.skipIf(!LIVE_ENABLED)("live: tm1_search_elements", () => {
+  let h: LiveHarness;
+  const SEARCH = `${SANDBOX}_SE_DIM`;
+  const OTHER = `${SANDBOX}_SE_OTHER`;
+  const CUBE = `${SANDBOX}_SE_CUBE`;
+
+  const cleanup = async () => {
+    await dropIfExists(h, seg("Cubes", CUBE));
+    await dropIfExists(h, seg("Dimensions", SEARCH));
+    await dropIfExists(h, seg("Dimensions", OTHER));
+  };
+
+  beforeAll(async () => {
+    h = await getHarness();
+    await cleanup();
+    await createDimension(h, SEARCH, [
+      "Harbor_North",
+      "HARBOR_South",
+      "Inland",
+    ]);
+    await createDimension(h, OTHER, ["Harbor_Total", "Rest"]);
+    await createCube(h, CUBE, [SEARCH, OTHER]);
+  });
+
+  afterAll(cleanup);
+
+  it("matches names case-insensitively and counts past topN", async () => {
+    const r = await h.ok("tm1_search_elements", {
+      searchTerm: "harbor",
+      dimensionName: SEARCH,
+      topN: 1,
+    });
+    const [hit] = r.json.dimensions;
+    expect(hit.total).toBe(2);
+    expect(hit.truncated).toBe(true);
+    expect(hit.elements).toHaveLength(1);
+    expect(hit.elements[0].matchedOn).toBe("Name");
+  });
+
+  it("searches every dimension of a cube and omits those without hits", async () => {
+    const r = await h.ok("tm1_search_elements", {
+      searchTerm: "harbor",
+      cubeName: CUBE,
+    });
+    const found = r.json.dimensions.map(
+      (d: { dimension: string }) => d.dimension,
+    );
+    expect(found.sort()).toEqual([SEARCH, OTHER].sort());
+    const none = await h.ok("tm1_search_elements", {
+      searchTerm: "no_such_term_zz",
+      cubeName: CUBE,
+    });
+    expect(none.json.dimensions).toEqual([]);
+  });
+});

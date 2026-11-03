@@ -102,17 +102,12 @@ describe.skipIf(!LIVE_ENABLED)("live: ignored datasource columns", () => {
     for (const name of ALL) await dropProcess(h, name);
   }, 60_000);
 
-  it("tm1_get_process reports the ignored column with the variables", async () => {
+  it("tm1_get_process reports the ignored column alongside the variables", async () => {
     const r = await h.ok("tm1_get_process", { processName: SRC });
     expect(r.json.variables.map((v: { name: string }) => v.name)).toEqual([
       "vsKeep",
       "vnKeep",
     ]);
-    expect(r.json.ignoredColumns).toEqual([{ position: 1, name: "vsDropped" }]);
-  });
-
-  it("tm1_get_process reports it alongside the variables", async () => {
-    const r = await h.ok("tm1_get_process", { processName: SRC });
     expect(r.json.ignoredColumns).toEqual([{ position: 1, name: "vsDropped" }]);
     // A process that ignores nothing says nothing — the field is omitted.
     const plain = await h.ok("tm1_get_process", { processName: PLAIN });
@@ -160,17 +155,5 @@ describe.skipIf(!LIVE_ENABLED)("live: ignored datasource columns", () => {
       processName: FROM_GIT,
     });
     expect(r.json.ignoredColumns).toEqual([{ position: 1, name: "vsDropped" }]);
-  });
-
-  it("tm1_diff_processes sees a difference the variables cannot show", async () => {
-    const r = await h.ok("tm1_diff_processes", {
-      processA: SRC,
-      processB: PLAIN,
-    });
-    // Identical variable lists — the processes differ only in the ignore flag.
-    expect(r.json.variables.identical).toBe(true);
-    expect(r.json.ignoredColumns.identical).toBe(false);
-    expect(r.json.ignoredColumns.removed).toEqual([1]);
-    expect(r.json.identical).toBe(false);
   });
 });

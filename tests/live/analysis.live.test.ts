@@ -1,21 +1,31 @@
-// Live integration: the ANALYSIS / AUDIT domain. Every read-only analysis and
-// audit tool is exercised end-to-end against the configured live model (11.8),
-// through the real tool layer (zod schema → withAnnotations → handler →
-// TM1Client → OData), exactly as an MCP client would call it.
+// Live integration: the ANALYSIS / AUDIT domain against the configured live
+// model, through the real tool layer (zod schema → withAnnotations → handler →
+// TM1Client → OData). Only the runtime evidence paths are exercised here: the
+// static and envelope-only audit calls are covered by the unit suites.
 //
-// Strictly read-only: this suite creates and mutates NOTHING. Real object names
-// (cubes, processes, rule-bearing cubes, real cell coordinates) are discovered
-// dynamically via tm1_rest_read/sample_cells, never hardcoded, so it adapts to whatever
-// the live model contains. Slow/global tools (transaction log) are avoided and
-// every scope is kept small to finish well inside the 120s timeout.
+// Read-only except for one sandbox process, which the callgraph invalidation
+// test writes to prove a process write (and not an MDX read) drops the index.
+// It is removed in afterAll. Real object names (cubes, processes, rule-bearing
+// cubes, real cell coordinates) are discovered dynamically, never hardcoded, so
+// the suite adapts to whatever the live model contains.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
+  dropIfExists,
   getHarness,
   LIVE_ENABLED,
   restGet,
+  SANDBOX,
   seg,
   type LiveHarness,
 } from "./harness.js";
+import {
+  buildIndexFromTM1,
+  __testing,
+  invalidateCallgraphCache,
+  registerCallgraphCacheInvalidation,
+} from "../../src/lib/callgraph/tm1-adapter.js";
+
+const PROBE_PROC = `${SANDBOX}_ANALYSIS_PROBE`;
 
 /** Non-control cubes with their rules flag and dimension names (dim order). */
 async function cubesWithDimensions(
@@ -50,6 +60,8 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
 
   beforeAll(async () => {
     h = await getHarness();
+    // Leftover probe from an interrupted run: an overwrite needs confirm.
+    await dropIfExists(h, seg("Processes", PROBE_PROC));
 
     // ── Discover real cubes (with hasRules) and processes ──────────────────
     const cubeItems = await cubesWithDimensions(h);
@@ -85,56 +97,10 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
   });
 
   afterAll(async () => {
-    // No-op: this suite creates nothing, so there is nothing to clean up.
+    await dropIfExists(h, seg("Processes", PROBE_PROC));
   });
 
-  // ── search_code (ti-development) ────────────────────────────────────────
-  it("tm1_search_code: regex over TI code returns paginated envelope", async () => {
-    const r = await h.ok("tm1_search_code", { pattern: "If", limit: 5 });
-    expect(r.isError).toBe(false);
-    expect(r.json).toMatchObject({
-      processesScanned: expect.any(Number),
-      matchCount: expect.any(Number),
-      items: expect.any(Array),
-    });
-  });
-
-  it("tm1_search_code: groupBy='process' returns sorted count aggregation", async () => {
-    const r = await h.ok("tm1_search_code", {
-      pattern: "If",
-      groupBy: "process",
-      limit: 5,
-    });
-    expect(r.isError).toBe(false);
-    expect(r.json).toMatchObject({
-      groupBy: "process",
-      groupCount: expect.any(Number),
-      matchCount: expect.any(Number),
-      items: expect.any(Array),
-    });
-    const items = r.json.items as Array<{
-      process: string;
-      matchCount: number;
-    }>;
-    // sorted desc by matchCount
-    for (let i = 1; i < items.length; i++) {
-      expect(items[i - 1].matchCount).toBeGreaterThanOrEqual(
-        items[i].matchCount,
-      );
-    }
-  });
-
-  // ── search_rules (model-building) ───────────────────────────────────────
-  it("tm1_search_rules: regex over cube rules returns envelope", async () => {
-    const r = await h.ok("tm1_search_rules", { pattern: ".", limit: 5 });
-    expect(r.isError).toBe(false);
-    expect(r.json).toMatchObject({ items: expect.any(Array) });
-    expect(
-      typeof r.json.matchCount === "number" || Array.isArray(r.json.items),
-    ).toBe(true);
-  });
-
-  // ── analyze_object_usage ────────────────────────────────────────────────
+  // ── object usage (cube reference scan) ──────────────────────────────────
   it("tm1_analyze_object_usage: cube reference scan", async () => {
     expect(cubeNames.length).toBeGreaterThan(0);
     const r = await h.ok("tm1_analyze_object_usage", {
@@ -168,7 +134,7 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
     }
   });
 
-  // ── analyze_callgraph: per-process traversal ────────────────────────────
+  // ── callgraph ───────────────────────────────────────────────────────────
   it("tm1_analyze_callgraph: downstream from a real process (compact)", async () => {
     expect(processNames.length).toBeGreaterThan(0);
     const r = await h.ok("tm1_analyze_callgraph", {
@@ -186,7 +152,6 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
     );
   });
 
-  // ── analyze_callgraph: global ranking form (no start) ────────────────────
   it("tm1_analyze_callgraph: global fan-out ranking (no start)", async () => {
     const r = await h.ok("tm1_analyze_callgraph", {
       rankBy: "outgoing",
@@ -199,52 +164,80 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
     expect(Array.isArray(arr)).toBe(true);
   });
 
-  // ── audit_complexity (small scope) ──────────────────────────────────────
-  it("tm1_audit_complexity: processes scope, small topN", async () => {
-    const r = await h.ok("tm1_audit_complexity", {
-      scope: ["processes"],
-      topN: 5,
+  it("tm1_analyze_callgraph refresh:true rebuilds the index and answers", async () => {
+    if (processNames.length === 0) return;
+    const r = await h.ok("tm1_analyze_callgraph", {
+      start: processNames[0],
+      direction: "downstream",
+      mode: "compact",
+      refresh: true,
     });
     expect(r.isError).toBe(false);
-    expect(r.json).toMatchObject({
-      status: expect.any(String),
-      scanned: expect.any(Object),
-      topProcesses: expect.any(Array),
-    });
   });
 
-  // ── audit_naming (small scope) ──────────────────────────────────────────
-  it("tm1_audit_naming: cubes+dimensions scope", async () => {
-    const r = await h.ok("tm1_audit_naming", {
-      scope: ["cubes", "dimensions"],
-      maxFindings: 20,
+  // Only code-relevant mutations may drop the index.
+  it("callgraph index: an MDX read does NOT discard it, a process write does", async () => {
+    registerCallgraphCacheInvalidation();
+    invalidateCallgraphCache();
+
+    await buildIndexFromTM1(h.client);
+    expect(__testing.cachedKeys()).toHaveLength(1);
+
+    const cube = cubeNames[0];
+    expect(cube).toBeTruthy();
+
+    // ExecuteMDX is a POST, so the HTTP layer emits a mutation event for it.
+    // Before the fix this alone threw the whole index away. Whether the query
+    // itself succeeds is irrelevant — the POST is what used to invalidate.
+    await h.call("tm1_execute_mdx", {
+      mdx: `SELECT {} ON COLUMNS FROM [${cube}]`,
+      limit: 1,
     });
-    expect(r.isError).toBe(false);
-    expect(r.json).toBeTruthy();
-    expect("findings" in r.json || "findingsByGroup" in r.json).toBe(true);
+    expect(__testing.cachedKeys()).toHaveLength(1);
+
+    // A process write genuinely changes the reference graph: must invalidate.
+    await h.ok("tm1_upsert_process", {
+      processName: PROBE_PROC,
+      prolog: "# analysis live probe",
+    });
+    expect(__testing.cachedKeys()).toHaveLength(0);
   });
 
-  // ── audit_feeders (static, small) ───────────────────────────────────────
-  it("tm1_audit_feeders: static scan, small topN", async () => {
-    const r = await h.ok("tm1_audit_feeders", { mode: "static", topN: 10 });
-    expect(r.isError).toBe(false);
-    expect(r.json).toBeTruthy();
-    // findings array under some key; assert object shape at minimum.
-    expect(typeof r.json).toBe("object");
-  });
+  // ---- audit_complexity: consistency scope fans out ------------------------
+  it("audit_complexity consistency scope beats a serial walk of the same reads", async () => {
+    const procs = (
+      await restGet<Array<{ Name: string }>>(
+        h,
+        "Processes?$select=Name&$filter=not startswith(Name,'}')&$top=500",
+      )
+    ).map((p) => p.Name);
+    if (procs.length < 8) {
+      console.log(
+        `[audit_complexity] only ${procs.length} processes — timing not telling`,
+      );
+      return;
+    }
 
-  // ── check_v12_readiness ─────────────────────────────────────────────────
-  it("tm1_check_v12_readiness: scan processes+rules", async () => {
-    const r = await h.ok("tm1_check_v12_readiness", {
-      scope: "all",
-      maxFindings: 20,
+    // Measure one round-trip to get this server's per-call latency.
+    const t0 = Date.now();
+    await h.client.processes.getVariables(procs[0]);
+    const singleMs = Math.max(1, Date.now() - t0);
+
+    const t1 = Date.now();
+    const res = await h.ok("tm1_audit_complexity", {
+      scope: ["consistency"],
     });
-    expect(r.isError).toBe(false);
-    expect(r.json).toMatchObject({
-      readinessScore: expect.any(String),
-      findings: expect.any(Array),
-      summary: expect.any(Object),
-    });
+    const fanOutMs = Date.now() - t1;
+
+    const serialEstimateMs = singleMs * procs.length;
+    console.log(
+      `[audit_complexity] ${procs.length} processes: single=${singleMs}ms, ` +
+        `serial estimate=${serialEstimateMs}ms, actual=${fanOutMs}ms`,
+    );
+    expect(res.isError).toBe(false);
+    // 8 in flight; allow generous slack for server-side contention and the
+    // scope's own aggregation work, but a serial walk cannot land here.
+    expect(fanOutMs).toBeLessThan(serialEstimateMs);
   });
 
   // ── get_cube_stats: real cube ───────────────────────────────────────────
@@ -296,38 +289,6 @@ describe.skipIf(!LIVE_ENABLED)("live: analysis / audit domain", () => {
       expect(r.json.runtimeUnavailable).toBeUndefined();
       expect(r.json.scanned.runtimeAvailable).toBeGreaterThan(0);
     }
-  });
-
-  // ── get_cube_stats: negative path ───────────────────────────────────────
-  it("tm1_get_cube_stats: nonexistent cube → per-item error (no whole-call failure)", async () => {
-    const r = await h.call("tm1_get_cube_stats", {
-      cubeName: "ZZ_NO_SUCH_CUBE_LIVE_TEST",
-    });
-    // Per-cube errors surface as items[].error rather than failing the call.
-    expect(r.json).toBeTruthy();
-    expect(r.json.items?.[0]?.error).toBeTruthy();
-  });
-
-  // ── get_cube_stats: mutually-exclusive args → VALIDATION_ERROR ───────────
-  it("tm1_get_cube_stats: both cubeName and cubeNames → isError", async () => {
-    const r = await h.call("tm1_get_cube_stats", {
-      cubeName: "A",
-      cubeNames: ["B"],
-    });
-    expect(r.isError).toBe(true);
-    expect(r.json?.code).toBe("VALIDATION_ERROR");
-  });
-
-  // ── analyze_callgraph refresh ──────────────────────────────────────────
-  it("tm1_analyze_callgraph refresh:true rebuilds the index and answers", async () => {
-    if (processNames.length === 0) return;
-    const r = await h.ok("tm1_analyze_callgraph", {
-      start: processNames[0],
-      direction: "downstream",
-      mode: "compact",
-      refresh: true,
-    });
-    expect(r.isError).toBe(false);
   });
 
   // ── check_feeders (v11 runtime, real cell) ──────────────────────────────

@@ -95,7 +95,7 @@ console.log(
 );
 
 const target = readOnly
-  ? ["tests/live/read-broad.live.test.ts", "tests/live/read-smoke.live.test.ts"]
+  ? ["tests/live/read-broad.live.test.ts"]
   : [];
 
 const modeEnv = {

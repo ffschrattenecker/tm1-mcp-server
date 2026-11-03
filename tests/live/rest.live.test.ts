@@ -161,6 +161,13 @@ describe.skipIf(!LIVE_ENABLED)("live: REST tools", () => {
       check(await restGet(h, path(h.client.version)));
     });
 
+    it("refuses a raw $batch path with an error envelope and a hint", async () => {
+      const r = await h.call("tm1_rest_read", { path: "$batch" });
+      expect(r.isError).toBe(true);
+      expect(r.json?.code).toBeTruthy();
+      expect(r.json.hint).toBeTruthy();
+    });
+
     // v12 deprecated the log collections in 12.0.0: they still answer 200,
     // always empty. An empty result there means "no data", not "nothing
     // happened".
@@ -302,6 +309,17 @@ describe.skipIf(!LIVE_ENABLED)("live: REST tools", () => {
       expect(r.isError).toBe(true);
       expect(r.json.hint).toContain("DELETE Dimensions(");
       expect(await names(h, `${dim}/Hierarchies`)).toContain(SCRATCH);
+    });
+
+    it("cancelling a non-existent thread returns a result without throwing", async (ctx) => {
+      if (h.client.version === 12) ctx.skip("v12 has Jobs, not Threads");
+      // Never targets a real thread; 999999999 is effectively unassignable.
+      const r = await h.call("tm1_rest_write", {
+        method: "POST",
+        path: "Threads(999999999)/tm1.CancelOperation",
+        confirm: "999999999",
+      });
+      expect(typeof r.isError).toBe("boolean");
     });
   });
 });

@@ -70,30 +70,26 @@ Helpers and infrastructure:
 
 Suites:
 
-- `read-smoke.live.test.ts` — non-mutating read battery and error envelopes
 - `read-broad.live.test.ts` — broad read-only sweep over a real model
-- `analysis.live.test.ts` — read-only audit and analysis tools
-- `compare.live.test.ts` — cross-connection comparison, run against itself
-- `dimension.live.test.ts` — dimensions, hierarchies, elements, attributes
-- `element-refs.live.test.ts` — element-literal reference check for process validation
-- `cube.live.test.ts` — cubes, cells, rules, MDX
-- `rules-preflight.live.test.ts` — `tm1_set_cube_rules` preflight
+- `analysis.live.test.ts` — callgraph, object usage, feeder and cell-trace evidence, audit_complexity fan-out
+- `compare.live.test.ts` — hierarchy structure paging, read against the live model
+- `dimension.live.test.ts` — dimensions, hierarchies, elements, attributes, element batches, element search
+- `element-refs.live.test.ts` — element-literal reference check: the TM1 behaviour it guards against
+- `cube.live.test.ts` — cubes, cells, sample truncation, MDX, cube stats
+- `rules-preflight.live.test.ts` — `tm1_set_cube_rules` preflight, rule outline and patch
 - `view.live.test.ts` — native and MDX views, subsets
 - `write-cells-address.live.test.ts` — `tm1_write_cells` address resolution
-- `process.live.test.ts` — TurboIntegrator tools: upsert, compile, execute, diff
-- `ti-extra.live.test.ts` — remaining TI tools: `.pro` round trip, bulk dump, readiness scan
+- `process.live.test.ts` — TurboIntegrator tools: upsert and deploy safety, compile, execute, diff, `.pro` files, git round trip
 - `async-exec.live.test.ts` — TI runs as async operations: timeout, cancel, rollback
 - `process-exit-status.live.test.ts` — process exit status mapping (`ProcessOutcome`)
 - `process-backup.live.test.ts` — the automatic pre-overwrite backup restores cleanly
 - `ignored-columns.live.test.ts` — datasource columns set to "Ignore"
 - `chore.live.test.ts` — chore lifecycle
 - `chore-exit-status.live.test.ts` — chore step exit status mapping
-- `ops.live.test.ts` — server, security and file tools
-- `rest.live.test.ts` — `tm1_rest_read` / `tm1_rest_write` paths and guard refusals
-- `perf-fixes.live.test.ts` — performance fixes and the `$batch` fallback probe
-- `audit-fixes.live.test.ts` — validation of the 2026-08-05 audit fixes
+- `ops.live.test.ts` — server state, error log content, security reads, files
+- `rest.live.test.ts` — `tm1_rest_read` / `tm1_rest_write` paths, guard refusals, monitoring reads
+- `batch.live.test.ts` — `$batch` fallback probe and chunked bulk upserts; run on its own
 - `v12-connection.live.test.ts` — v12 (Planning Analytics Engine) login and services
-- `release-4-1.live.test.ts`, `release-5-0.live.test.ts`, `release-6-1.live.test.ts` — checks for specific releases
 
 ## Writing a new live test
 

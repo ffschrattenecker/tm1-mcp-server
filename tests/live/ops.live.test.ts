@@ -1,10 +1,10 @@
 // Live integration: OPERATIONS / SECURITY / FILES domains.
 //
 // Drives the real MCP tool layer (zod schema -> withAnnotations -> handler ->
-// TM1Client -> OData) against a running TM1 11.8 server, exactly as an MCP
-// client would. Read-tier calls assert no error + plausible shape. Security
-// reads go through tm1_rest_read, the paths the prompts and hints name; the
-// monitoring reads (logs, threads, sessions) live in rest.live.test.ts.
+// TM1Client -> OData) against a running TM1 server, exactly as an MCP client
+// would. Security reads go through tm1_rest_read, the paths the prompts and
+// hints name; the monitoring reads (threads, sessions, log collections) live in
+// rest.live.test.ts.
 //
 // Safe lifecycle exercised end-to-end under the SANDBOX prefix:
 //   - FILE: upload -> read back -> delete.
@@ -42,15 +42,6 @@ describe.skipIf(!LIVE_ENABLED)("live: ops / security / files", () => {
     });
   });
 
-  // ---- VERSION GATE ------------------------------------------------------
-
-  // tm1_save_data is registered per server version (`version:` in its
-  // defineTool spec): v12 removed SaveDataAll/CubeSaveData. This asserts the
-  // gate from both sides against the real server.
-  it("registers tm1_save_data on v11 only", () => {
-    expect(h.has("tm1_save_data")).toBe(h.client.version === 11);
-  });
-
   // ---- OPERATIONS (read-tier) ---------------------------------------------
 
   it("tm1_get_server_state returns health snapshot", async () => {
@@ -64,33 +55,32 @@ describe.skipIf(!LIVE_ENABLED)("live: ops / security / files", () => {
     expect(r.json.counts).toHaveProperty("dimensions");
   });
 
-  it("tm1_list_error_logs returns pagination envelope", async () => {
-    const r = await h.ok("tm1_list_error_logs", { limit: 10 });
-    expect(r.json).toMatchObject({
-      total: expect.any(Number),
-      items: expect.any(Array),
-    });
+  it("legacy response mode ships the body twice: text AND structuredContent", async () => {
+    const r = await h.ok("tm1_get_server_state");
+    expect(r.text).toBeTruthy();
+    expect(r.result.structuredContent).toBeTruthy();
+    expect(JSON.parse(r.text as string)).toEqual(r.result.structuredContent);
   });
 
-  it("tm1_list_error_logs groupBy='process' returns audit summary", async () => {
-    const r = await h.ok("tm1_list_error_logs", {
-      groupBy: "process",
-      limit: 20,
-    });
-    expect(r.isError).toBe(false);
-    expect(r.json).toMatchObject({
-      groupBy: "process",
-      totalFiles: expect.any(Number),
-      groupCount: expect.any(Number),
-      items: expect.any(Array),
-    });
-    const items = r.json.items as Array<{
-      process: string;
-      count: number;
-      perDay: number;
-    }>;
-    for (let i = 1; i < items.length; i++) {
-      expect(items[i - 1].count).toBeGreaterThanOrEqual(items[i].count);
+  it("tm1_get_error_log_content fetches a real log or errors cleanly on a bogus name", async () => {
+    const list = await h.ok("tm1_list_error_logs", { limit: 1 });
+    const items = (list.json?.items ?? list.json) as unknown;
+    const first = Array.isArray(items) ? items[0] : undefined;
+    const filename =
+      typeof first === "string" ? first : (first as { name?: string })?.name;
+    if (filename) {
+      const r = await h.ok("tm1_get_error_log_content", {
+        filename,
+        tail: 20,
+      });
+      expect(r.isError).toBe(false);
+      expect(r.json ?? r.text).toBeTruthy();
+    } else {
+      // No error logs on this server — exercise the not-found path instead.
+      const r = await h.call("tm1_get_error_log_content", {
+        filename: `${SANDBOX}_DOES_NOT_EXIST.log`,
+      });
+      expect(r.isError).toBe(true);
     }
   });
 

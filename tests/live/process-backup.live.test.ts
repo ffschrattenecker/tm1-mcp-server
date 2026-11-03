@@ -89,22 +89,19 @@ describe.skipIf(!LIVE_ENABLED)("live: process backup before overwrite", () => {
     process.env.TM1_PROCESS_BACKUP_DIR = "off";
   });
 
-  it("restoring the backup undoes an overwrite (process with a parameter)", async () => {
+  it("restoring the backup undoes an overwrite, with and without parameters", async () => {
     await h.ok("tm1_upsert_process", {
       processName: WITH_PARAM,
       prolog: "nOriginal = 1;",
       parameters: [{ name: "pOld", type: "Numeric", defaultValue: 1 }],
     });
-    const { before, after } = await overwriteThenRestore(WITH_PARAM);
-    expect(after).toEqual(before);
-  });
-
-  it("restoring the backup undoes an overwrite (process without parameters)", async () => {
     await h.ok("tm1_upsert_process", {
       processName: BARE,
       prolog: "nOriginal = 1;",
     });
-    const { before, after } = await overwriteThenRestore(BARE);
-    expect(after).toEqual(before);
+    for (const name of [WITH_PARAM, BARE]) {
+      const { before, after } = await overwriteThenRestore(name);
+      expect(after, name).toEqual(before);
+    }
   });
 });

@@ -221,3 +221,116 @@ describe.skipIf(!LIVE_ENABLED)("live: set_cube_rules preflight", () => {
     expect(mine.errors[0].message).toMatch(/Element not found/);
   });
 });
+
+// Outline, line slices and patches on a 60-line rule text: the path an editor
+// takes on a large rule set. The server stores CRLF; the tools serve LF.
+describe.skipIf(!LIVE_ENABLED)(
+  "live: rules outline, slices and patches",
+  () => {
+    let h: LiveHarness;
+    const OUT_DIM = `${SANDBOX}_RP_OUT_DIM`;
+    const OUT_MEAS = `${SANDBOX}_RP_OUT_MEAS`;
+    const OUT_CUBE = `${SANDBOX}_RP_OUT_CUBE`;
+    const LEAVES = Array.from(
+      { length: 12 },
+      (_, i) => `L${String(i).padStart(2, "0")}`,
+    );
+
+    // 60+ lines with comment-block headers, so outline/lineRange have something
+    // to navigate.
+    const RULES = [
+      "# Outline sandbox rules",
+      "SKIPCHECK;",
+      "",
+      "# 1) Doubles",
+      ...LEAVES.map(
+        (l) =>
+          `['${OUT_MEAS}':'Double','${OUT_DIM}':'${l}'] = N: ['${OUT_MEAS}':'Base'] * 2;`,
+      ),
+      "",
+      "# 2) Triples",
+      ...LEAVES.map(
+        (l) =>
+          `['${OUT_MEAS}':'Triple','${OUT_DIM}':'${l}'] = N: ['${OUT_MEAS}':'Base'] * 3;`,
+      ),
+      "",
+      "FEEDERS;",
+      "# feed both",
+      `['${OUT_MEAS}':'Base'] => ['${OUT_MEAS}':'Double'];`,
+      `['${OUT_MEAS}':'Base'] => ['${OUT_MEAS}':'Triple'];`,
+    ].join("\r\n");
+
+    const cleanup = async () => {
+      await dropIfExists(h, seg("Cubes", OUT_CUBE));
+      await dropIfExists(h, seg("Dimensions", OUT_DIM));
+      await dropIfExists(h, seg("Dimensions", OUT_MEAS));
+    };
+
+    beforeAll(async () => {
+      h = await getHarness();
+      await cleanup();
+      await createDimension(h, OUT_DIM, LEAVES);
+      await createDimension(h, OUT_MEAS, ["Base", "Double", "Triple"]);
+      await createCube(h, OUT_CUBE, [OUT_DIM, OUT_MEAS]);
+    });
+
+    afterAll(cleanup);
+
+    it("sets, outlines, slices and patches rules", async () => {
+      await h.ok("tm1_set_cube_rules", {
+        cubeName: OUT_CUBE,
+        rules: RULES,
+        confirm: OUT_CUBE,
+      });
+      const outline = await h.ok("tm1_get_cube_rules", {
+        cubeName: OUT_CUBE,
+        outline: true,
+      });
+      expect(outline.json.rulesText).toBeUndefined();
+      const marks = outline.json.outline.map((o: { text: string }) => o.text);
+      expect(marks).toEqual([
+        "# Outline sandbox rules",
+        "SKIPCHECK;",
+        "# 1) Doubles",
+        "# 2) Triples",
+        "FEEDERS;",
+        "# feed both",
+      ]);
+      const triples = outline.json.outline.find(
+        (o: { text: string }) => o.text === "# 2) Triples",
+      ).line as number;
+      const slice = await h.ok("tm1_get_cube_rules", {
+        cubeName: OUT_CUBE,
+        lineRange: [triples, triples + 1],
+      });
+      expect(slice.json.rulesText).toBe(
+        `# 2) Triples\n['${OUT_MEAS}':'Triple','${OUT_DIM}':'L00'] = N: ['${OUT_MEAS}':'Base'] * 3;`,
+      );
+
+      // Patch the slice back in, quoted as served (LF against CRLF storage).
+      await h.ok("tm1_set_cube_rules", {
+        cubeName: OUT_CUBE,
+        confirm: OUT_CUBE,
+        edits: [
+          {
+            find: slice.json.rulesText,
+            replace: `# 2) Triples\n['${OUT_MEAS}':'Triple','${OUT_DIM}':'L00'] = N: ['${OUT_MEAS}':'Base'] * 30;`,
+          },
+        ],
+      });
+      const after = await h.ok("tm1_get_cube_rules", {
+        cubeName: OUT_CUBE,
+        lineRange: [triples + 1, triples + 1],
+      });
+      expect(after.json.rulesText).toContain("* 30;");
+
+      const ambiguous = await h.call("tm1_set_cube_rules", {
+        cubeName: OUT_CUBE,
+        confirm: OUT_CUBE,
+        edits: [{ find: "* 3;", replace: "* 4;" }],
+      });
+      expect(ambiguous.isError).toBe(true);
+      expect(ambiguous.json.message).toMatch(/matches 11 times/);
+    });
+  },
+);

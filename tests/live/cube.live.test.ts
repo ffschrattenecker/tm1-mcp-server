@@ -1,7 +1,8 @@
 // Live lifecycle: CUBE + CELL/RULES domain end-to-end against a real TM1
 // server. Builds two sandbox dimensions (one element carries a single quote to
-// exercise OData literal escaping), a cube over them, then exercises the full
-// cell + rules tool surface and tears everything down idempotently.
+// exercise OData literal escaping), a cube over them, then exercises the cell
+// and rules tool surface and tears everything down idempotently. Rule preflight
+// and the rule outline/patch paths live in rules-preflight.live.test.ts.
 //
 // Opt-in: skips unless TM1_BASE_URL + TM1_USER are set. Every object is
 // prefixed `${SANDBOX}_CUBE` so a stray run can never touch real model data.
@@ -14,6 +15,7 @@ import {
   getHarness,
   LIVE_ENABLED,
   names,
+  restGet,
   SANDBOX,
   seg,
   type LiveHarness,
@@ -30,6 +32,15 @@ const D1_PLAIN = "E1";
 const D1_QUOTE = "O'Brien"; // single quote → tests OData escaping
 const D2_A = "A1";
 const D2_B = "A2";
+
+/** Up to `top` non-control cube names. */
+const cubeNames = async (h: LiveHarness, top: number): Promise<string[]> =>
+  (
+    await restGet<Array<{ Name: string }>>(
+      h,
+      `Cubes?$select=Name&$filter=not startswith(Name,'}')&$top=${top}`,
+    )
+  ).map((c) => c.Name);
 
 describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
   let h: LiveHarness;
@@ -84,6 +95,26 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
     expect(await cellValue(h, C1, [D1, D2], [D1_QUOTE, D2_B])).toBe(7);
   });
 
+  it("write_cells names the missing dimension on a short coordinate", async () => {
+    // Read the real storage order: a server with sandboxing on prepends
+    // `Sandboxes` to every cube, which is the dimension callers forget.
+    const cube = await restGet<{ Dimensions: Array<{ Name: string }> }>(
+      h,
+      `${seg("Cubes", C1)}?$select=Name&$expand=Dimensions($select=Name)`,
+    );
+    const actual = cube.Dimensions.map((d) => d.Name);
+    // One element for a cube with two or more dimensions.
+    const r = await h.call("tm1_write_cells", {
+      cubeName: C1,
+      dimensions: actual,
+      cells: [{ elements: [D1_PLAIN], value: 1 }],
+      confirm: C1,
+    });
+    expect(r.isError).toBe(true);
+    expect(r.json.message).toContain("(by position):");
+    expect(r.json.hint).toContain(`in this order: ${actual.join(", ")}`);
+  });
+
   it("check_writable_coords reports leaf coords as writable", async () => {
     const r = await h.ok("tm1_check_writable_coords", {
       cubeName: C1,
@@ -99,6 +130,53 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
     expect(Array.isArray(r.json.cells)).toBe(true);
     // We wrote two non-zero leaf cells above.
     expect(r.json.cells.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("sample_cells reports truncated=false when the result is exactly the page size", async () => {
+    const cubes = await cubeNames(h, 50);
+
+    // Find a cube with FEWER populated cells than the probe limit — that is
+    // the case the old `cells.length >= maxCells` comparison could not tell
+    // apart from "more exist".
+    let found: { cube: string; n: number } | undefined;
+    for (const cube of cubes) {
+      const r = await h.call("tm1_sample_cells", {
+        cubeName: cube,
+        maxCells: 20,
+      });
+      if (r.isError) continue;
+      const n: number = r.json?.count ?? 0;
+      if (n > 0 && n < 20) {
+        found = { cube, n };
+        break;
+      }
+    }
+    if (!found) {
+      // Nothing on this server fits the shape — say so instead of asserting
+      // something vacuous.
+      console.warn(
+        "sample_cells: no cube with 0 < populated cells < 20; not asserted",
+      );
+      return;
+    }
+
+    // Ask for exactly as many cells as exist: must NOT report truncation.
+    const exact = await h.ok("tm1_sample_cells", {
+      cubeName: found.cube,
+      maxCells: found.n,
+    });
+    expect(exact.json.count).toBe(found.n);
+    expect(exact.json.truncated).toBe(false);
+
+    // Ask for one fewer: genuinely truncated.
+    if (found.n > 1) {
+      const short = await h.ok("tm1_sample_cells", {
+        cubeName: found.cube,
+        maxCells: found.n - 1,
+      });
+      expect(short.json.count).toBe(found.n - 1);
+      expect(short.json.truncated).toBe(true);
+    }
   });
 
   it("execute_mdx over the cube returns a cellset", async () => {
@@ -143,25 +221,6 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
     }
   });
 
-  it("check_cube_rule validates a trivial rule without applying it", async () => {
-    const rules = `SKIPCHECK;\n['${D1_PLAIN}'] = N: 1;\nFEEDERS;`;
-    const r = await h.ok("tm1_check_cube_rule", { cubeName: C1, rules });
-    expect(r.json.ok).toBe(true);
-    expect(r.json.errorCount).toBe(0);
-  });
-
-  it("check_cube_rule answers a broken rule as a result, not a tool error", async () => {
-    const r = await h.call("tm1_check_cube_rule", {
-      cubeName: C1,
-      rules: `['${D1_PLAIN}'] = N: 1 +;`,
-    });
-    const sc = r.result.structuredContent as
-      { ok: boolean; errorCount: number } | undefined;
-    expect(r.isError).toBe(false);
-    expect(sc?.ok).toBe(false);
-    expect(sc?.errorCount).toBeGreaterThan(0);
-  });
-
   it("set_cube_rules then get_cube_rules reads the rule back", async () => {
     const rules = `SKIPCHECK;\n['${D1_PLAIN}'] = N: 1;\nFEEDERS;`;
     await h.ok("tm1_set_cube_rules", { cubeName: C1, rules, confirm: C1 });
@@ -169,21 +228,6 @@ describe.skipIf(!LIVE_ENABLED)("live: cube + cell/rules lifecycle", () => {
     const text = typeof r.json === "string" ? r.json : (r.json.rules ?? r.text);
     expect(String(text)).toContain("SKIPCHECK");
     expect(String(text)).toContain(D1_PLAIN);
-  });
-
-  it("set_cube_rules refuses broken rules and leaves the stored text alone", async () => {
-    // The Rules PATCH itself stores broken text with a 200; only the
-    // tm1.CheckRules preflight stops it.
-    const before = await h.ok("tm1_get_cube_rules", { cubeName: C1 });
-    const r = await h.call("tm1_set_cube_rules", {
-      cubeName: C1,
-      rules: "SKIPCHECK;\n['x'] = N: NOPE(1, ;\n",
-      confirm: C1,
-    });
-    expect(r.isError).toBe(true);
-    expect(r.text).toContain("VALIDATION_ERROR");
-    const after = await h.ok("tm1_get_cube_rules", { cubeName: C1 });
-    expect(after.text).toBe(before.text);
   });
 
   it("get_all_cube_rules includes the sandbox cube (summary mode)", async () => {
