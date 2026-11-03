@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ⚠️ Behavior change
 
 - MCP resources (`tm1://` URIs and subscriptions) and MCP prompts are removed. Use the tools, and the tm1-mcp plugin skills, instead.
+- `tm1_diff_process_with_file` returns the same tab diff as `tm1_diff_processes`: `linesA`/`linesB` (installed/file) and line `hunks` replace `installedLines`/`fileLines`, with a `contextLines` input.
+- JSON tool results are no longer pretty-printed.
 
 ## [10.3.0] - 2026-11-02
 

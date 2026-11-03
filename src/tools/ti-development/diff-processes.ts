@@ -16,101 +16,98 @@ import { defineTool } from "../define-tool.js";
 import { tabCodeDiff } from "../../lib/line-diff.js";
 import { jsonResult } from "../format.js";
 
-// ── param / var / datasource diff ────────────────────────────────────────────
+// ── param / var / ignored-column / datasource diff ───────────────────────────
 
-export function diffParams(a: ProcessParameter[], b: ProcessParameter[]) {
-  const ma = new Map(a.map((p) => [p.name, p]));
-  const mb = new Map(b.map((p) => [p.name, p]));
-  const added: string[] = [];
-  const removed: string[] = [];
-  const changed: Array<{
-    name: string;
-    a: ProcessParameter;
-    b: ProcessParameter;
-  }> = [];
-  for (const [name, pb] of mb) {
-    const pa = ma.get(name);
-    if (!pa) {
-      added.push(name);
-      continue;
-    }
-    if (
-      pa.type !== pb.type ||
-      String(pa.defaultValue ?? "") !== String(pb.defaultValue ?? "") ||
-      (pa.prompt ?? "") !== (pb.prompt ?? "")
-    ) {
-      changed.push({ name, a: pa, b: pb });
-    }
+/**
+ * Diffs two lists by key: keys only in `b` are added, keys only in `a` are
+ * removed, and keys in both whose items `isChanged` reports are changed.
+ */
+export function diffByKey<T, K>(
+  a: T[],
+  b: T[],
+  key: (item: T) => K,
+  isChanged: (x: T, y: T) => boolean,
+) {
+  const ma = new Map(a.map((x) => [key(x), x]));
+  const mb = new Map(b.map((y) => [key(y), y]));
+  const added: K[] = [];
+  const removed: K[] = [];
+  const changed: Array<{ key: K; a: T; b: T }> = [];
+  for (const [k, y] of mb) {
+    const x = ma.get(k);
+    if (x === undefined) added.push(k);
+    else if (isChanged(x, y)) changed.push({ key: k, a: x, b: y });
   }
-  for (const name of ma.keys()) if (!mb.has(name)) removed.push(name);
+  for (const k of ma.keys()) if (!mb.has(k)) removed.push(k);
   return {
     identical:
       added.length === 0 && removed.length === 0 && changed.length === 0,
     added,
     removed,
     changed,
+  };
+}
+
+export function diffParams(a: ProcessParameter[], b: ProcessParameter[]) {
+  const d = diffByKey(
+    a,
+    b,
+    (p) => p.name,
+    (pa, pb) =>
+      pa.type !== pb.type ||
+      String(pa.defaultValue ?? "") !== String(pb.defaultValue ?? "") ||
+      (pa.prompt ?? "") !== (pb.prompt ?? ""),
+  );
+  return {
+    identical: d.identical,
+    added: d.added,
+    removed: d.removed,
+    changed: d.changed.map(({ key, a: pa, b: pb }) => ({
+      name: key,
+      a: pa,
+      b: pb,
+    })),
   };
 }
 
 export function diffVars(a: ProcessVariable[], b: ProcessVariable[]) {
-  const ma = new Map(a.map((v) => [v.name, v]));
-  const mb = new Map(b.map((v) => [v.name, v]));
-  const added: string[] = [];
-  const removed: string[] = [];
-  const changed: Array<{
-    name: string;
-    a: ProcessVariable;
-    b: ProcessVariable;
-  }> = [];
-  for (const [name, vb] of mb) {
-    const va = ma.get(name);
-    if (!va) {
-      added.push(name);
-      continue;
-    }
-    if (va.type !== vb.type || va.position !== vb.position)
-      changed.push({ name, a: va, b: vb });
-  }
-  for (const name of ma.keys()) if (!mb.has(name)) removed.push(name);
+  const d = diffByKey(
+    a,
+    b,
+    (v) => v.name,
+    (va, vb) => va.type !== vb.type || va.position !== vb.position,
+  );
   return {
-    identical:
-      added.length === 0 && removed.length === 0 && changed.length === 0,
-    added,
-    removed,
-    changed,
+    identical: d.identical,
+    added: d.added,
+    removed: d.removed,
+    changed: d.changed.map(({ key, a: va, b: vb }) => ({
+      name: key,
+      a: va,
+      b: vb,
+    })),
   };
 }
 
-// Columns set to "Ignore" carry no variable, so diffVars above cannot see
-// them: two processes differing only in which columns they skip would otherwise
-// come back identical.
-function diffIgnoredColumns(a: IgnoredColumn[], b: IgnoredColumn[]) {
-  const ma = new Map(a.map((c) => [c.position, c]));
-  const mb = new Map(b.map((c) => [c.position, c]));
-  const added: number[] = [];
-  const removed: number[] = [];
-  const renamed: Array<{ position: number; a?: string; b?: string }> = [];
-  for (const [position, cb] of mb) {
-    const ca = ma.get(position);
-    if (!ca) {
-      added.push(position);
-      continue;
-    }
-    if (ca.name !== cb.name)
-      renamed.push({
-        position,
-        ...(ca.name !== undefined ? { a: ca.name } : {}),
-        ...(cb.name !== undefined ? { b: cb.name } : {}),
-      });
-  }
-  for (const position of ma.keys())
-    if (!mb.has(position)) removed.push(position);
+// Columns set to "Ignore" carry no variable, so diffVars cannot see them: two
+// processes differing only in which columns they skip would otherwise come
+// back identical.
+export function diffIgnoredColumns(a: IgnoredColumn[], b: IgnoredColumn[]) {
+  const d = diffByKey(
+    a,
+    b,
+    (c) => c.position,
+    (ca, cb) => ca.name !== cb.name,
+  );
   return {
-    identical:
-      added.length === 0 && removed.length === 0 && renamed.length === 0,
-    added,
-    removed,
-    renamed,
+    identical: d.identical,
+    added: d.added,
+    removed: d.removed,
+    renamed: d.changed.map(({ key, a: ca, b: cb }) => ({
+      position: key,
+      ...(ca.name !== undefined ? { a: ca.name } : {}),
+      ...(cb.name !== undefined ? { b: cb.name } : {}),
+    })),
   };
 }
 

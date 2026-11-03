@@ -1,137 +1,39 @@
 import { promises as fs } from "node:fs";
 import { resolveLocalPath } from "../local-file.js";
 import { z } from "zod";
-import type {
-  IgnoredColumn,
-  ProcessParameter,
-  ProcessVariable,
-} from "../../types.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { parseProFile } from "../../lib/pro-parser.js";
 import { ignoredColumnsOf } from "../../lib/variables-ui-data.js";
-import { normalizeText } from "../../lib/line-diff.js";
+import { tabCodeDiff } from "../../lib/line-diff.js";
 import {
   MASK_SECRETS_DESCRIPTION,
   maskCode,
   resolveMaskSecrets,
 } from "../../lib/mask-secrets.js";
-import { diffDs } from "./diff-processes.js";
+import {
+  diffDs,
+  diffIgnoredColumns,
+  diffParams,
+  diffVars,
+} from "./diff-processes.js";
 import { DiffProcessResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { jsonResult } from "../format.js";
 
-interface TabDiff {
-  tab: "prolog" | "metadata" | "data" | "epilog";
-  installedLines: number;
-  fileLines: number;
-  identical: boolean;
-}
-
-function tabDiff(
-  name: TabDiff["tab"],
-  installed: string,
-  file: string,
-): TabDiff {
-  return {
-    tab: name,
-    installedLines: normalizeText(installed).split("\n").length,
-    fileLines: normalizeText(file).split("\n").length,
-    identical: normalizeText(installed) === normalizeText(file),
-  };
-}
-
-function diffParams(installed: ProcessParameter[], file: ProcessParameter[]) {
-  const map = (arr: ProcessParameter[]) => new Map(arr.map((p) => [p.name, p]));
-  const a = map(installed);
-  const b = map(file);
-  const added: string[] = [];
-  const removed: string[] = [];
-  const changed: Array<{
-    name: string;
-    installed: ProcessParameter;
-    file: ProcessParameter;
-  }> = [];
-  for (const [name, fp] of b) {
-    const ip = a.get(name);
-    if (!ip) {
-      added.push(name);
-    } else if (
-      ip.type !== fp.type ||
-      String(ip.defaultValue ?? "") !== String(fp.defaultValue ?? "") ||
-      (ip.prompt ?? "") !== (fp.prompt ?? "")
-    ) {
-      changed.push({ name, installed: ip, file: fp });
-    }
-  }
-  for (const name of a.keys()) {
-    if (!b.has(name)) removed.push(name);
-  }
-  return { added, removed, changed };
-}
-
-function diffVars(installed: ProcessVariable[], file: ProcessVariable[]) {
-  const map = (arr: ProcessVariable[]) => new Map(arr.map((v) => [v.name, v]));
-  const a = map(installed);
-  const b = map(file);
-  const added: string[] = [];
-  const removed: string[] = [];
-  const changed: Array<{
-    name: string;
-    installed: ProcessVariable;
-    file: ProcessVariable;
-  }> = [];
-  for (const [name, fv] of b) {
-    const iv = a.get(name);
-    if (!iv) added.push(name);
-    else if (iv.type !== fv.type || iv.position !== fv.position) {
-      changed.push({ name, installed: iv, file: fv });
-    }
-  }
-  for (const name of a.keys()) if (!b.has(name)) removed.push(name);
-  return { added, removed, changed };
-}
-
-// A column set to "Ignore" has no variable, so diffVars cannot see it: without
-// this the .pro and the installed process look identical even when they skip
-// different columns.
-function diffIgnoredColumns(installed: IgnoredColumn[], file: IgnoredColumn[]) {
-  const a = new Map(installed.map((c) => [c.position, c]));
-  const b = new Map(file.map((c) => [c.position, c]));
-  const added: number[] = [];
-  const removed: number[] = [];
-  const renamed: Array<{
-    position: number;
-    installed?: string;
-    file?: string;
-  }> = [];
-  for (const [position, fc] of b) {
-    const ic = a.get(position);
-    if (!ic) {
-      added.push(position);
-      continue;
-    }
-    if (ic.name !== fc.name)
-      renamed.push({
-        position,
-        ...(ic.name !== undefined ? { installed: ic.name } : {}),
-        ...(fc.name !== undefined ? { file: fc.name } : {}),
-      });
-  }
-  for (const position of a.keys()) if (!b.has(position)) removed.push(position);
-  return {
-    identical:
-      added.length === 0 && removed.length === 0 && renamed.length === 0,
-    added,
-    removed,
-    renamed,
-  };
+// The shared diffs label their two sides a/b; this tool reports installed/file.
+function installedFile<C extends { a?: unknown; b?: unknown }>({
+  a,
+  b,
+  ...rest
+}: C) {
+  return { ...rest, installed: a, file: b };
 }
 
 export const registerDiffProcessWithFile = defineTool({
   name: "tm1_diff_process_with_file",
   description:
-    "Compare an installed TI process on the server against a local .pro file. Returns per-tab identical flags + line counts, parameter diff (added/removed/changed), variable diff, and datasource diff. Use before tm1_import_pro_file to preview what will change.",
+    "Compare an installed TI process on the server against a local .pro file. Returns per-tab identical flags, line counts and unified diff hunks, parameter diff (added/removed/changed), variable diff, and datasource diff. Use before tm1_import_pro_file to preview what will change.",
   annotations: READ_ONLY,
   output: DiffProcessResultSchema,
   input: {
@@ -146,6 +48,16 @@ export const registerDiffProcessWithFile = defineTool({
       .string()
       .optional()
       .describe("Override process name. Default: from .pro 602 line."),
+    contextLines: z
+      .number()
+      .int()
+      .min(0)
+      .max(10)
+      .optional()
+      .default(3)
+      .describe(
+        "Lines of context around each changed hunk (default 3, max 10)",
+      ),
     maskSecrets: z
       .boolean()
       .optional()
@@ -155,7 +67,7 @@ export const registerDiffProcessWithFile = defineTool({
       ),
   },
   handler: async (
-    { filePath, content, processName, maskSecrets },
+    { filePath, content, processName, contextLines, maskSecrets },
     tm1Client,
   ) => {
     if (!filePath && !content) {
@@ -187,13 +99,17 @@ export const registerDiffProcessWithFile = defineTool({
       ]);
 
     const mask = resolveMaskSecrets(maskSecrets) ? maskCode : (s: string) => s;
-    const tabs = [
-      tabDiff("prolog", mask(installedCode.prolog), mask(parsed.prolog)),
-      tabDiff("metadata", mask(installedCode.metadata), mask(parsed.metadata)),
-      tabDiff("data", mask(installedCode.data), mask(parsed.data)),
-      tabDiff("epilog", mask(installedCode.epilog), mask(parsed.epilog)),
-    ];
-    const params = diffParams(installedParams, parsed.parameters);
+    const tabs = (["prolog", "metadata", "data", "epilog"] as const).map(
+      (tab) => ({
+        tab,
+        ...tabCodeDiff(
+          mask(installedCode[tab]),
+          mask(parsed[tab]),
+          contextLines,
+        ),
+      }),
+    );
+    const parameters = diffParams(installedParams, parsed.parameters);
     const variables = diffVars(installedLayout.variables, parsed.variables);
     const ignoredColumns = diffIgnoredColumns(
       installedLayout.ignoredColumns,
@@ -201,24 +117,29 @@ export const registerDiffProcessWithFile = defineTool({
     );
     const dataSource = diffDs(installedDs, parsed.dataSource);
 
-    const allIdentical =
+    const identical =
       tabs.every((t) => t.identical) &&
-      params.added.length === 0 &&
-      params.removed.length === 0 &&
-      params.changed.length === 0 &&
-      variables.added.length === 0 &&
-      variables.removed.length === 0 &&
-      variables.changed.length === 0 &&
+      parameters.identical &&
+      variables.identical &&
       ignoredColumns.identical &&
       dataSource.identical;
 
     return jsonResult({
       processName: name,
-      identical: allIdentical,
+      identical,
       tabs,
-      parameters: params,
-      variables,
-      ignoredColumns,
+      parameters: {
+        ...parameters,
+        changed: parameters.changed.map(installedFile),
+      },
+      variables: {
+        ...variables,
+        changed: variables.changed.map(installedFile),
+      },
+      ignoredColumns: {
+        ...ignoredColumns,
+        renamed: ignoredColumns.renamed.map(installedFile),
+      },
       dataSource,
     });
   },
