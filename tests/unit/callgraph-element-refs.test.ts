@@ -17,6 +17,32 @@ function indexOf(prolog: string) {
   });
 }
 
+describe("rules dimension references", () => {
+  const rulesIndex = (rulesText: string) =>
+    buildReferenceIndex({
+      fetchProcesses: async () => [],
+      fetchCubesWithRules: async () => [{ cubeName: "Sales", rulesText }],
+      fetchChores: async () => [],
+    });
+
+  it("finds the qualified dimension in a mixed qualified and positional bracket", async () => {
+    const index = await rulesIndex("['Year':'2026','Sales'] = N: 1;");
+    expect(index.byDim.get("year")?.map((r) => r.sourceName)).toEqual([
+      "Sales",
+    ]);
+  });
+
+  it("reads '' escapes in dimension names", async () => {
+    const index = await rulesIndex("['It''s':'A''B'] = N: 1;");
+    expect(index.byDim.has("it's")).toBe(true);
+  });
+
+  it("ignores a bracket inside a trailing comment", async () => {
+    const index = await rulesIndex("['A'] = N: 1; # see ['Hidden':'x']");
+    expect(index.byDim.has("hidden")).toBe(false);
+  });
+});
+
 describe("byElement reverse index", () => {
   it("indexes a literal SubsetElementInsert element under (dim, element)", async () => {
     const index = await indexOf(

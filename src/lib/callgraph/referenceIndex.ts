@@ -1,11 +1,7 @@
 import { TI_ARG_IDX } from "./tiArgIndex.js";
-import {
-  extractDbCalls,
-  extractBracketRefs,
-  parseBracketDimRefs,
-  validateBracketRefSyntax,
-  neutralizeLine,
-} from "./rulesLinter.js";
+import { neutralizeLine } from "./rulesLinter.js";
+import { extractBracketLists } from "../feeders/brackets.js";
+import { findDbCalls } from "../rules-db-check.js";
 import { joinContinuationLines } from "./tiParser.js";
 import {
   buildProcessEnv,
@@ -168,7 +164,7 @@ export interface ReferenceIndex {
   choreTasks: Map<string, ChoreTaskRef[]>;
 }
 
-// ─── Helpers (subset of rulesLinter/tiServerLinter internals) ────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Composite key for the byElement index: dimension + element, both lowercased. */
 export function elementKey(dimension: string, element: string): string {
@@ -468,6 +464,14 @@ const FEEDERS_MARKER_RE = /^\s*FEEDERS\s*;/i;
 function extractRulesReferences(text: string): RawRuleRef[] {
   const refs: RawRuleRef[] = [];
   const lines = text.split("\n");
+  // DB(...) calls keyed by the 0-based line of their `DB(` token.
+  const dbByLine = new Map<number, string[]>();
+  for (const call of findDbCalls(text)) {
+    if (call.cube === null) continue;
+    const at = dbByLine.get(call.line - 1) ?? [];
+    at.push(call.cube);
+    dbByLine.set(call.line - 1, at);
+  }
   let section: "rules" | "feeders" = "rules";
 
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
@@ -483,34 +487,28 @@ function extractRulesReferences(text: string): RawRuleRef[] {
 
     const snippet = truncateSnippet(line, 200);
 
-    // DB(...) → cube reference
-    for (const call of extractDbCalls(line)) {
-      if (call.cubeName !== null) {
-        refs.push({
-          line: lineIdx,
-          section,
-          funcName: "DB",
-          targetKind: "cube",
-          targetName: call.cubeName,
-          snippet,
-        });
-      }
+    for (const cube of dbByLine.get(lineIdx) ?? []) {
+      refs.push({
+        line: lineIdx,
+        section,
+        funcName: "DB",
+        targetKind: "cube",
+        targetName: cube,
+        snippet,
+      });
     }
 
-    // [...] → dimension references (only valid syntactic refs)
-    for (const bracket of extractBracketRefs(line)) {
-      if (validateBracketRefSyntax(bracket) !== null) {
-        continue;
-      }
-      if (!bracket.includes("'")) {
-        continue;
-      }
-      for (const { dim } of parseBracketDimRefs(bracket)) {
+    // [...] → dimension references: every entry that names its dimension.
+    // The trailing comment is cut first, so `# ['B':'c']` is not a reference.
+    const code = line.slice(0, neutralizeLine(line).length);
+    for (const list of extractBracketLists(code)) {
+      for (const entry of list.entries) {
+        if (entry.dim === undefined) continue;
         refs.push({
           line: lineIdx,
           section,
           targetKind: "dimension",
-          targetName: dim,
+          targetName: entry.dim,
           snippet,
         });
       }

@@ -1,12 +1,12 @@
 /**
  * Per-cube rules complexity metrics (regex/line-based MVP).
  *
- * Reuses parseRules (line classification + section tracking) and extractDbCalls
+ * Reuses parseRules (line classification + section tracking) and findDbCalls
  * (string/comment-aware DB() extraction). A future AST upgrade can replace the
  * rule-line heuristic without changing this file's contract.
  */
 import { parseRules } from "../callgraph/rulesParser.js";
-import { extractDbCalls } from "../callgraph/rulesLinter.js";
+import { findDbCalls } from "../rules-db-check.js";
 import { isCommentedOutCode } from "./comment-classifier.js";
 
 export interface RulesMetrics {
@@ -90,10 +90,13 @@ export function computeRulesMetrics(
       feedersLoc++;
       if (RULE_LINE_RE.test(line.trimmed)) feederCount++;
     }
-    for (const call of extractDbCalls(line.trimmed)) {
-      dbCallCount++;
-      if (call.cubeName) coupled.add(call.cubeName);
-    }
+  }
+
+  // Whole text, so a call that runs over several lines counts once; comment
+  // lines carry no calls (the comment is cut before the search).
+  for (const call of findDbCalls(rulesText)) {
+    dbCallCount++;
+    if (call.cube !== null) coupled.add(call.cube);
   }
 
   const denom = rulesLoc + feedersLoc + commentLines + deadCodeLines;

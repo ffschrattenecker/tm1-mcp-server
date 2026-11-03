@@ -40,7 +40,7 @@ export function parseRules(text: string): RulesAst {
     const trimmed = raw.replace(/\r$/, "").trim();
     const isComment = trimmed.startsWith("#");
     const isBlank = trimmed === "";
-    const isSkipcheck = /^skipcheck\s*;?\s*$/i.test(trimmed);
+    const isSkipcheck = /^skipcheck\s*;?\s*(?:#.*)?$/i.test(trimmed);
     const isFeedstrings = /^feedstrings\s*;?\s*$/i.test(trimmed);
     const isFeedersMarker = /^feeders\s*;?\s*$/i.test(trimmed);
     const neutralized = isComment || isBlank ? "" : neutralizeLine(trimmed);

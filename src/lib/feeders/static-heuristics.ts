@@ -14,7 +14,7 @@
  */
 import type { BracketEntry, BracketList } from "./brackets.js";
 import type { ElementTypeCache } from "./element-type-cache.js";
-import { extractDbCalls } from "../callgraph/rulesLinter.js";
+import { findDbCalls } from "../rules-db-check.js";
 
 /**
  * Pull every concrete element name out of a bracket list into a flat set.
@@ -199,11 +199,11 @@ export function detectDbFeederWithoutSkipcheck(
   line: string,
   hasSkipcheck: (cubeName: string) => boolean | null,
 ): string | null {
-  const calls = extractDbCalls(line);
+  const calls = findDbCalls(line);
   for (const call of calls) {
-    if (call.cubeName === null) continue;
-    const verdict = hasSkipcheck(call.cubeName);
-    if (verdict === false) return call.cubeName;
+    if (call.cube === null) continue;
+    const verdict = hasSkipcheck(call.cube);
+    if (verdict === false) return call.cube;
   }
   return null;
 }

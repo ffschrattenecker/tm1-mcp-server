@@ -4,6 +4,7 @@ import { CubeRulesSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { jsonResult } from "../format.js";
+import { computeRulesMetrics } from "../../lib/complexity/rules-metrics.js";
 
 // Default cap for full-rules responses. Whole-model rule dumps flood the
 // context window; 50 cubes is plenty for a first look, and the response
@@ -18,41 +19,16 @@ interface CubeRuleSummary {
   referencedCubes: string[];
 }
 
-// Best-effort summary parser. TM1 rule grammar is loose; the goal is a useful
-// approximation, not perfect parse. Strips block (/* */) and line (#) comments
-// before counting, splits on the FEEDERS; section boundary, and extracts cube
-// references from DB('Cube', ...) calls.
-function summarize(rulesText: string): CubeRuleSummary {
-  const lines = rulesText.split(/\r?\n/);
-  let commentLineCount = 0;
-  let feederBoundary = -1;
-  for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i]!.trim();
-    if (trimmed.startsWith("#")) commentLineCount++;
-    if (feederBoundary < 0 && /^FEEDERS\s*;/i.test(trimmed)) feederBoundary = i;
-  }
-  const stripBlock = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "");
-  const stripLine = (s: string) => s.replace(/^[ \t]*#.*$/gm, "");
-  const rulesPart =
-    feederBoundary >= 0 ? lines.slice(0, feederBoundary).join("\n") : rulesText;
-  const feedersPart =
-    feederBoundary >= 0 ? lines.slice(feederBoundary + 1).join("\n") : "";
-  const cleanRules = stripLine(stripBlock(rulesPart));
-  const cleanFeeders = stripLine(stripBlock(feedersPart));
-  const ruleCount = (cleanRules.match(/;/g) ?? []).length;
-  const feederCount = (cleanFeeders.match(/=>/g) ?? []).length;
-  const cubeRefs = new Set<string>();
-  for (const m of stripBlock(rulesText).matchAll(
-    /\bDB\s*\(\s*['"]([^'"]+)['"]/gi,
-  )) {
-    cubeRefs.add(m[1]!);
-  }
+// The counts come from computeRulesMetrics, so they match tm1_audit_complexity.
+function summarize(c: CubeRules): CubeRuleSummary {
+  const m = computeRulesMetrics(c.cubeName, c.rulesText);
   return {
-    lineCount: lines.length,
-    ruleCount,
-    feederCount,
-    commentLineCount,
-    referencedCubes: [...cubeRefs].sort(),
+    lineCount: c.rulesText.split(/\r?\n/).length,
+    ruleCount: m.ruleCount,
+    feederCount: m.feederCount,
+    // Every `#` line, real comment or disabled code.
+    commentLineCount: m.commentLines + m.deadCodeLines,
+    referencedCubes: m.coupledCubes,
   };
 }
 
@@ -155,7 +131,7 @@ export const registerGetAllCubeRules = defineTool({
       ? sliced.map((c) => ({
           cubeName: c.cubeName,
           skipCheck: c.skipCheck,
-          ...summarize(c.rulesText),
+          ...summarize(c),
         }))
       : sliced;
     return jsonResult({

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { parseRules } from "../../lib/callgraph/rulesParser.js";
 import { extractBracketLists } from "../../lib/feeders/brackets.js";
+import { neutralizeLine } from "../../lib/callgraph/rulesLinter.js";
+import { findDbCalls } from "../../lib/rules-db-check.js";
 import {
   detectBroaderThanMatchedRule,
   detectBroaderThanRule,
@@ -528,5 +530,10 @@ export const registerAuditFeeders = defineTool({
  * covers their DB-feeder risk profile, so S1 skips them.
  */
 function isCrossCubeDbFeeder(lineText: string): boolean {
-  return /=>\s*DB\s*\(/i.test(lineText);
+  const code = neutralizeLine(lineText);
+  const arrow = code.indexOf("=>");
+  if (arrow === -1) return false;
+  return findDbCalls(lineText).some(
+    (c) => c.index >= arrow + 2 && code.slice(arrow + 2, c.index).trim() === "",
+  );
 }

@@ -12,7 +12,7 @@ import { parseTiCode } from "../../src/lib/callgraph/tiParser.js";
 import { extractTiReferences } from "../../src/lib/callgraph/referenceIndex.js";
 import { extractSubsetUsage } from "../../src/lib/callgraph/subsetUsage.js";
 import { buildProcessEnv } from "../../src/lib/callgraph/variableEnv.js";
-import { extractDbCalls } from "../../src/lib/callgraph/rulesLinter.js";
+import { findDbCalls } from "../../src/lib/rules-db-check.js";
 
 describe("splitTopLevel", () => {
   it("splits on the separator at depth 0 and trims the pieces", () => {
@@ -257,7 +257,7 @@ describe("intended behaviour changes", () => {
   });
 
   it("DB(): '' inside the cube name is an escaped quote", () => {
-    const calls = extractDbCalls("x = DB('a''b', 'E');");
-    expect(calls.map((c) => c.cubeName)).toEqual(["a'b"]);
+    const calls = findDbCalls("x = DB('a''b', 'E');");
+    expect(calls.map((c) => c.cube)).toEqual(["a'b"]);
   });
 });

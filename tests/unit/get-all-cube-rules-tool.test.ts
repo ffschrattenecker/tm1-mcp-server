@@ -139,3 +139,16 @@ describe("tm1_get_all_cube_rules default cap", () => {
     ]);
   });
 });
+
+describe("tm1_get_all_cube_rules summary", () => {
+  it("lists only live DB() calls in referencedCubes", async () => {
+    const client = bulkRulesClient([
+      cube(
+        "Sales",
+        "SKIPCHECK;\n# x = DB('Hidden', 'a')\n['A'] = N: DB('Rates', 'EUR');",
+      ),
+    ]);
+    const parsed = await run(client, { summary: true });
+    expect(parsed.cubes[0]!.referencedCubes).toEqual(["Rates"]);
+  });
+});

@@ -26,13 +26,24 @@ export interface DbCheckLookups {
   };
 }
 
-interface DbCall {
-  cube: string;
-  elements: Array<string | null>; // null = not a string literal
+/** One DB( call in rules or feeder text. */
+export interface DbCall {
+  /** The cube name when the first argument is a string literal, else null. */
+  cube: string | null;
+  /** Arguments after the cube: literal values, null for a non-literal argument. */
+  elements: Array<string | null>;
+  /** 1-based line of the `DB(` token. */
   line: number;
+  /** Offset of the `DB(` token in the text. */
+  index: number;
 }
 
-function findDbCalls(rulesText: string): DbCall[] {
+/**
+ * Every DB( call in `rulesText`, including ones whose arguments run over
+ * several lines. DB( inside string literals and comments is not a call.
+ * Calls whose argument list is unterminated are skipped.
+ */
+export function findDbCalls(rulesText: string): DbCall[] {
   const lines = rulesText.replace(/\r\n/g, "\n").split("\n");
   // Strings blanked and comments cut, offsets unchanged: DB( is searched here.
   const neutral = lines.map(neutralizeLine);
@@ -41,16 +52,21 @@ function findDbCalls(rulesText: string): DbCall[] {
   const searched = neutral.join("\n");
   const calls: DbCall[] = [];
   const re = /\bDB\s*\(/gi;
+  let line = 1;
+  let counted = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(searched)) !== null) {
     const args = callArgs(code, m.index + m[0].length - 1);
-    if (args === null || args.length === 0) continue;
-    const cube = quotedLiteral(args[0]!);
-    if (!cube) continue;
+    if (args === null) continue;
+    for (let i = counted; i < m.index; i++) {
+      if (searched[i] === "\n") line++;
+    }
+    counted = m.index;
     calls.push({
-      cube,
+      cube: quotedLiteral(args[0] ?? "") || null,
       elements: args.slice(1).map((a) => quotedLiteral(a)),
-      line: searched.slice(0, m.index).split("\n").length,
+      line,
+      index: m.index,
     });
   }
   return calls;
@@ -60,7 +76,10 @@ export async function checkDbReferences(
   lookups: DbCheckLookups,
   rulesText: string,
 ): Promise<DbCheckIssue[]> {
-  const calls = findDbCalls(rulesText);
+  const calls = findDbCalls(rulesText).filter(
+    (c): c is DbCall & { cube: string } => c.cube !== null,
+  );
+  type NamedCall = (typeof calls)[number];
 
   // Dimensions of each named cube, Sandboxes dropped; null = no such cube.
   const dimsOf = new Map<string, string[] | null>();
@@ -79,7 +98,7 @@ export async function checkDbReferences(
   // Distinct (dimension, element) pairs, every call that names them kept.
   const pending = new Map<
     string,
-    { dim: string; el: string; calls: DbCall[] }
+    { dim: string; el: string; calls: NamedCall[] }
   >();
   for (const c of calls) {
     const dims = dimsOf.get(c.cube);

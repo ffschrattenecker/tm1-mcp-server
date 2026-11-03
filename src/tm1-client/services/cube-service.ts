@@ -7,6 +7,7 @@ import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { odataKey } from "./odata-page.js";
 import { classifyExecution } from "./process-status.js";
 import { DimensionOrderCache } from "./dimension-order.js";
+import { parseRules } from "../../lib/callgraph/rulesParser.js";
 
 export interface AllRulesOpts {
   /** Include control cubes (`}`-prefixed). Default false. */
@@ -140,7 +141,7 @@ export class CubeService {
       return {
         cubeName,
         rulesText,
-        skipCheck: rulesText.toUpperCase().includes("SKIPCHECK"),
+        skipCheck: parseRules(rulesText).hasSkipcheck,
       };
     } catch (err) {
       if (
@@ -206,7 +207,7 @@ export class CubeService {
       return {
         cubeName: c.Name,
         rulesText,
-        skipCheck: rulesText.toUpperCase().includes("SKIPCHECK"),
+        skipCheck: parseRules(rulesText).hasSkipcheck,
         ...(c.Dimensions
           ? { dimensions: c.Dimensions.map((d) => d.Name) }
           : {}),

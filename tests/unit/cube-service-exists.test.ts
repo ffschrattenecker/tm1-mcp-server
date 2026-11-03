@@ -65,3 +65,30 @@ describe("CubeService.exists", () => {
     await expect(cubes.exists("Sales")).rejects.toBe(boom);
   });
 });
+
+describe("skipCheck: the directive, not a comment that names it", () => {
+  const rules = "# no SKIPCHECK here\n['A'] = N: 1;";
+
+  it("getRules reads '# no SKIPCHECK' as no directive", async () => {
+    const cubes = new CubeService(makeHttp(async () => ({ value: rules })));
+    expect((await cubes.getRules("Sales")).skipCheck).toBe(false);
+  });
+
+  it("getAllRules reads '# no SKIPCHECK' as no directive", async () => {
+    const cubes = new CubeService(
+      makeHttp(async () => ({ value: [{ Name: "Sales", Rules: rules }] })),
+    );
+    const [c] = await cubes.getAllRules(false);
+    expect(c!.skipCheck).toBe(false);
+  });
+
+  it("getAllRules reads a SKIPCHECK; line as the directive", async () => {
+    const cubes = new CubeService(
+      makeHttp(async () => ({
+        value: [{ Name: "Sales", Rules: "SKIPCHECK;\n['A'] = N: 1;" }],
+      })),
+    );
+    const [c] = await cubes.getAllRules(false);
+    expect(c!.skipCheck).toBe(true);
+  });
+});

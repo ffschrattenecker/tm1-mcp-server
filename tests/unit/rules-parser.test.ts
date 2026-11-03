@@ -86,3 +86,15 @@ describe("parseRules — hasIfGuard flag", () => {
     );
   });
 });
+
+describe("parseRules — hasSkipcheck", () => {
+  it("accepts the directive with a trailing comment", () => {
+    expect(parseRules("SKIPCHECK; # reason").hasSkipcheck).toBe(true);
+  });
+
+  it("ignores SKIPCHECK inside a comment line or a rule", () => {
+    expect(parseRules("# no SKIPCHECK\n['A'] = N: 1;").hasSkipcheck).toBe(
+      false,
+    );
+  });
+});

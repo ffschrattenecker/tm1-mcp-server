@@ -6,10 +6,8 @@
  *  - **Positional** (most common in feeders): `['Elem1','Elem2','Elem3']`
  *  - **Mixed**:  `['Year':'2026', 'Sales']`
  *
- * Why a new parser instead of `parseBracketDimRefs` in rulesLinter.ts:
- * the existing one only matches the `'Dim':'Elem'` regex form and silently
- * skips bare positional element lists, which dominate real feeder code
- * (probe on 2026-05-18 found 92 / 125 feeder lines miss the existing parser).
+ * This is the only bracket parser: rules references and feeder audits both
+ * read through `extractBracketLists`.
  *
  * String escaping follows TM1 SQL-style: a literal single quote is written
  * as two consecutive single quotes (`'It''s'` → `It's`).
