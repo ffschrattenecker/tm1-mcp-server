@@ -179,7 +179,10 @@ export async function startHttpTransport(
         // internal signature mismatch without changing behaviour. Cast to the
         // parameter's own type rather than `any`, so only this mismatch is
         // waived and the argument stays checked against the real signature.
+        // typescript-eslint 8.72+ flags this cast as unnecessary, but tsc (with
+        // exactOptionalPropertyTypes) rejects the uncast value, so the cast stays.
         await server.connect(
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
           transport as unknown as Parameters<typeof server.connect>[0],
         );
         await transport.handleRequest(req, res, body);
