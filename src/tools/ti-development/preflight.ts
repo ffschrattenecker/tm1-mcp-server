@@ -18,6 +18,7 @@ import type {
 } from "../../types.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { checkProcessRefs, type RefIssue } from "../../lib/process-refs.js";
+import { lintReport } from "../../lib/complexity/antipatterns.js";
 import { withToolHint } from "../error-format.js";
 
 export interface PreflightPayload {
@@ -120,8 +121,53 @@ export async function runPreflight(
   return undefined;
 }
 
+export interface LintChecks {
+  findings: Array<{
+    tab: string;
+    line: number;
+    rule: string;
+    severity: "error" | "warn" | "info";
+    snippet: string;
+    hint: string;
+  }>;
+  unparsedTabs: string[];
+}
+
+/**
+ * Offline lint of code that is about to compile. Advisory: it never changes
+ * `ok`. On a fragment (`partial`), dead-assignment is dropped because the
+ * read may sit in a tab that was not passed.
+ */
+export function lintCode(
+  name: string,
+  tabs: Partial<Record<TiTab, string | undefined>>,
+  partial = false,
+): LintChecks {
+  const r = lintReport(name, {
+    prolog: tabs.prolog ?? "",
+    metadata: tabs.metadata ?? "",
+    data: tabs.data ?? "",
+    epilog: tabs.epilog ?? "",
+  });
+  return {
+    findings: r.findings
+      .filter((f) => !(partial && f.rule === "dead-assignment"))
+      .map((f) => ({
+        tab: f.tab,
+        line: f.line,
+        rule: f.rule,
+        severity: f.severity,
+        snippet: f.snippet,
+        hint: f.hint,
+      })),
+    unparsedTabs: r.unparsedTabs,
+  };
+}
+
 export interface PreflightChecks {
   ok: boolean;
+  /** Advisory: not part of `ok`. */
+  lint: LintChecks;
   syntax: {
     ok: boolean;
     errors: Array<{
@@ -163,6 +209,7 @@ export async function runChecks(
     ok: check.success && references.ok,
     syntax: { ok: check.success, errors: check.errors },
     references,
+    lint: lintCode(p.name, p),
   };
 }
 

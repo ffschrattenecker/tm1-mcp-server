@@ -60,6 +60,21 @@ export const ProcessCodeBundleSchema = z.object({
   commentLines: z.number().int().optional(),
 });
 
+// Advisory findings on code that compiles; never part of `ok`.
+export const LintResultSchema = z.object({
+  findings: z.array(
+    z.object({
+      tab: z.string(),
+      line: z.number().int(),
+      rule: z.string(),
+      severity: z.enum(["error", "warn", "info"]),
+      snippet: z.string(),
+      hint: z.string(),
+    }),
+  ),
+  unparsedTabs: z.array(z.string()),
+});
+
 export const ValidateProcessRefsResultSchema = z.object({
   processName: z.string().nullable(),
   cubeRefsScanned: z.number().int(),

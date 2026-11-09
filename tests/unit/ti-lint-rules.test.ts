@@ -98,6 +98,14 @@ describe("datasource-after-prolog", () => {
     expect(f?.severity).toBe("warn");
   });
 
+  it("masks a credential in the snippet", () => {
+    const [f] = hits(
+      { data: `DatasourcePassword = 'hunter2';` },
+      "datasource-after-prolog",
+    );
+    expect(f?.snippet).not.toContain("hunter2");
+  });
+
   it("accepts it in the Prolog", () => {
     expect(
       hits(
@@ -108,11 +116,11 @@ describe("datasource-after-prolog", () => {
   });
 });
 
-describe("hardcoded-secret", () => {
+describe("hardcoded-credential", () => {
   it("flags a literal ODBC password and masks it in the snippet", () => {
     const [f] = hits(
       { prolog: `ODBCOpen('DSN', 'sa', 'hunter2');` },
-      "hardcoded-secret",
+      "hardcoded-credential",
     );
     expect(f).toBeDefined();
     expect(f?.snippet).not.toContain("hunter2");
@@ -120,18 +128,18 @@ describe("hardcoded-secret", () => {
 
   it("accepts a password from a parameter", () => {
     expect(
-      hits({ prolog: `ODBCOpen('DSN', 'sa', pPassword);` }, "hardcoded-secret"),
+      hits({ prolog: `ODBCOpen('DSN', 'sa', pPassword);` }, "hardcoded-credential"),
     ).toEqual([]);
   });
 
   it("flags a secret-named variable set from a literal, not from a call", () => {
     expect(
-      hits({ prolog: `sPassword = 'hunter2';` }, "hardcoded-secret"),
+      hits({ prolog: `sPassword = 'hunter2';` }, "hardcoded-credential"),
     ).toHaveLength(1);
     expect(
       hits(
         { prolog: `sPassword = CellGetS('Cfg', 'pwd', 'Value');` },
-        "hardcoded-secret",
+        "hardcoded-credential",
       ),
     ).toEqual([]);
   });
@@ -156,5 +164,18 @@ describe("trailing-comment", () => {
   it("still reports on a tab the parser rejects", () => {
     const r = lintReport("p", code({ prolog: `IF(x = 1; # broken` }));
     expect(r.findings.map((f) => f.rule)).toContain("trailing-comment");
+  });
+});
+
+describe("lintCode (tm1_check_process_code)", () => {
+  it("drops dead-assignment on a fragment: the read may be in an omitted tab", async () => {
+    const { lintCode } = await import(
+      "../../src/tools/ti-development/preflight.js"
+    );
+    const tabs = { metadata: `nUnused = 1;` };
+    const rules = (partial: boolean) =>
+      lintCode("p", tabs, partial).findings.map((f) => f.rule);
+    expect(rules(false)).toContain("dead-assignment");
+    expect(rules(true)).not.toContain("dead-assignment");
   });
 });

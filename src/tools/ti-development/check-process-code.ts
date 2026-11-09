@@ -6,7 +6,8 @@ import {
   ProcessParameterSchema,
   ProcessVariableSchema,
 } from "../../schemas/processes.js";
-import { CompileErrorSchema } from "../schemas/items.js";
+import { CompileErrorSchema, LintResultSchema } from "../schemas/items.js";
+import { lintCode } from "./preflight.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { jsonResult } from "../format.js";
@@ -18,6 +19,7 @@ export const registerCheckProcessCode = defineTool({
     "Pre-flight check before tm1_upsert_process to avoid create-with-rollback patterns.",
     "Returns 'valid' or a list of syntax errors with procedure (Prolog/Metadata/Data/Epilog) and line number.",
     "Omitted tabs are validated as EMPTY: the result covers only tabsChecked, and partial=true says the check did not see a whole process — validate every tab you will install.",
+    "lint lists code that compiles but runs wrong (function in the wrong tab, unreachable code, datasource set after the Prolog, literal secrets) plus a clearer cause for a trailing # comment. It is advisory and never changes ok; fix error findings, report the rest.",
   ],
   annotations: READ_ONLY,
   output: {
@@ -27,6 +29,7 @@ export const registerCheckProcessCode = defineTool({
     errors: z.array(CompileErrorSchema),
     tabsChecked: z.array(z.string()),
     partial: z.boolean(),
+    lint: LintResultSchema,
   },
   input: {
     processName: z
@@ -102,13 +105,16 @@ export const registerCheckProcessCode = defineTool({
     const tabsChecked = (
       Object.keys(provided) as Array<keyof typeof provided>
     ).filter((t) => provided[t] !== undefined);
+    const name = processName ?? "_compile_check";
+    const partial = tabsChecked.length < 4;
     const payload = {
       ok: result.success,
-      processName: processName ?? "_compile_check",
+      processName: name,
       errorCount: result.errors.length,
       errors: result.errors,
       tabsChecked,
-      partial: tabsChecked.length < 4,
+      partial,
+      lint: lintCode(name, provided, partial),
       ...(result.success
         ? {}
         : {
