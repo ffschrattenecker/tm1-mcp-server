@@ -116,7 +116,7 @@ function datasourceAfterProlog(ast: TiStatement[], ctx: Ctx): void {
   }
 }
 
-// ---- hardcoded-secret ----
+// ---- hardcoded-credential ----
 
 /** Function → index of its password argument. Lowercased. */
 const PASSWORD_ARG = new Map([
@@ -124,6 +124,8 @@ const PASSWORD_ARG = new Map([
   ["odbcopenex", 2],
 ]);
 
+// Narrower than mask-secrets' isSecretName (no `auth`, `key`): a wrong mask
+// costs nothing, a wrong warning teaches the reader to skip the list.
 const SECRET_NAME = /pass(word|wd)?|pwd|secret|token|api_?key|credential/i;
 
 function hardcodedSecret(ast: TiStatement[], ctx: Ctx): void {
@@ -134,10 +136,10 @@ function hardcodedSecret(ast: TiStatement[], ctx: Ctx): void {
       if (arg !== undefined && quotedLiteral(arg)) {
         push(ctx, {
           line: ctx.line(s.line),
-          rule: "hardcoded-secret",
+          rule: "hardcoded-credential",
           severity: "warn",
           snippet: `${s.name}(…, '***')`,
-          hint: `${s.name} gets its password as a literal, so it sits in the process code and in every export of it. Read it from a parameter or a secured cube instead.`,
+          hint: `${s.name} gets its password as a literal, so the credential is stored in the process code and in every export. Read it from a parameter or a secured cube instead.`,
         });
       }
     } else if (
@@ -147,10 +149,10 @@ function hardcodedSecret(ast: TiStatement[], ctx: Ctx): void {
     ) {
       push(ctx, {
         line: ctx.line(s.line),
-        rule: "hardcoded-secret",
+        rule: "hardcoded-credential",
         severity: "warn",
         snippet: `${s.variable} = '***'`,
-        hint: `'${s.variable}' is set from a literal, so the secret sits in the process code and in every export of it. Read it from a parameter or a secured cube instead.`,
+        hint: `'${s.variable}' is set from a literal, so the credential is stored in the process code and in every export. Read it from a parameter or a secured cube instead.`,
       });
     }
   }

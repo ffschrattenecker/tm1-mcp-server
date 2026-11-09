@@ -55,7 +55,9 @@ export const registerAuditComplexity = defineTool({
         "Sections to scan: 'processes' (TI metrics), 'rules' (cube rules), " +
           "'consistency' (cross-process naming/type/cohort checks), " +
           "'antipatterns' (TI lint findings: destructive-unguarded, " +
-          "exec-in-loop, cellget-perf, hardcoded-path). " +
+          "exec-in-loop, cellget-perf, hardcoded-path, section-placement, " +
+          "unreachable-code, datasource-after-prolog, hardcoded-credential, " +
+          "trailing-comment). " +
           "Default: processes+rules+consistency. 'antipatterns' is opt-in.",
       ),
     includeControl: z

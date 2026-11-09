@@ -16,6 +16,7 @@ import { walkStatements } from "./walk.js";
 import { TI_VAR } from "../ti-identifier.js";
 import { quotedLiteral } from "../ti-lex.js";
 import { semanticFindings, trailingComments } from "../ti-lint/rules.js";
+import { maskCodeLine } from "../mask-secrets.js";
 
 type Severity = "error" | "warn" | "info";
 
@@ -357,5 +358,7 @@ export function lintReport(
     }
   }
 
+  // Snippets quote code, and code can hold a credential literal.
+  for (const f of findings) f.snippet = maskCodeLine(f.snippet);
   return { findings, unparsedTabs };
 }
