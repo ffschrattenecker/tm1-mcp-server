@@ -105,6 +105,7 @@ function makeAuditFeedersClientStub(args: FakeArgs) {
 async function audit(
   tm1: ReturnType<typeof makeAuditFeedersClientStub>,
   args: Record<string, unknown> = {},
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   const call = captureParsedTool(registerAuditFeeders, tm1);
   const raw = (await call(args)) as { content: Array<{ text: string }> };
@@ -363,6 +364,7 @@ describe("tm1_audit_feeders tool", () => {
       label: "severityThreshold=none reports pass even with findings",
       args: { severityThreshold: "none" },
       rules: WILD_RULES,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       check: (out: any) => {
         expect(out.status).toBe("pass");
         expect(out.invalidCount).toBeGreaterThan(0);
@@ -372,6 +374,7 @@ describe("tm1_audit_feeders tool", () => {
       label: "severityThreshold=evidence passes when only hints are present",
       args: { severityThreshold: "evidence" },
       rules: WILD_RULES,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       check: (out: any) => {
         expect(out.summary.bySeverity.hint).toBeGreaterThan(0);
         expect(out.summary.bySeverity.evidence).toBe(0);
@@ -384,6 +387,7 @@ describe("tm1_audit_feeders tool", () => {
       args: { mode: "both", severityThreshold: "evidence" },
       rules: SPARSE_RULES,
       cubeStats: SPARSE_STATS,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       check: (out: any) => {
         expect(out.summary.bySeverity.evidence).toBeGreaterThan(0);
         expect(out.status).toBe("fail");

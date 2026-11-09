@@ -28,7 +28,7 @@ export const IgnoredColumnSchema = z.object({
 });
 export type IgnoredColumn = z.infer<typeof IgnoredColumnSchema>;
 
-const ProcessSchema = z.object({
+export const ProcessSchema = z.object({
   name: z.string(),
   parameters: z.array(ProcessParameterSchema),
 });

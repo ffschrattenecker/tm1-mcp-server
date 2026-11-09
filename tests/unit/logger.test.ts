@@ -25,6 +25,8 @@ function logOne(fields: object): Record<string, unknown> {
 }
 
 describe("sensitive field masking", () => {
+  // Logger entries are arbitrary objects; the accessor reads nested keys.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   it.each<[string, object, (e: Record<string, any>) => unknown, string]>([
     [
       "password",

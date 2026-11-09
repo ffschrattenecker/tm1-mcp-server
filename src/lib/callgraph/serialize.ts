@@ -1,5 +1,4 @@
 import type { CallGraphNode, EffectiveValue } from "./callGraph.js";
-import type { CallParam } from "./referenceIndex.js";
 import { isSecretName, MASK, maskCodeLine } from "../mask-secrets.js";
 
 // Redacts a secret-named entry: its raw text, and its `field` (a call param's

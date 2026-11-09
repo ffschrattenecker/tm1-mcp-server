@@ -67,6 +67,7 @@ function makeAuditComplexityClientStub(args: FakeArgs) {
 async function audit(
   tm1: Parameters<typeof registerAuditComplexity>[1],
   args: Record<string, unknown> = {},
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   const call = captureParsedTool(registerAuditComplexity, tm1);
   const raw = (await call(args)) as { content: Array<{ text: string }> };

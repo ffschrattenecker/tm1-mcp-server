@@ -22,7 +22,6 @@ import { RECORDING } from "./contract-mode.js";
 import { recordingClient } from "./service-recorder.js";
 import { registerAllTools } from "../../src/tools/index.js";
 import type { McpToolResult } from "../../src/tools/error-format.js";
-import type { TestContext } from "vitest";
 import { shapeOf } from "../helpers/client-harness.js";
 
 /** True only when the environment is configured to reach a live TM1 server. */
@@ -39,6 +38,8 @@ export interface CallResult {
   /** Raw MCP tool result (content[], isError, structuredContent, …). */
   result: McpToolResult;
   /** Parsed JSON from the first text block, if it was JSON. */
+  // Untyped wire JSON: each test indexes into its own tool's output shape.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   json: any;
   /** Raw first text block. */
   text: string | undefined;
@@ -213,6 +214,8 @@ export const seg = (coll: string, name: string): string =>
   `${coll}('${encodeURIComponent(key(name))}')`;
 
 /** GET through tm1_rest_read; returns `data` (collections: the value[] array). */
+// Callers name T for the collection/entity they read; the default stays loose.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function restGet<T = any>(
   h: LiveHarness,
   path: string,
