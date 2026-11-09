@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `tm1_check_process_code` and the `tm1_upsert_process` dry run return an advisory `lint` block, because code that compiles can still run wrong. It reports a function in a tab IBM restricts it from, code after ProcessQuit/ItemSkip, datasource settings after the Prolog, and literal credentials. It also names the cause of the compiler's unhelpful error on a trailing `# comment`. `lint` never changes `ok`. The same rules run in `tm1_audit_complexity scope='antipatterns'`. Rule ideas come from deutschebahn/linti.
+
 ## [10.4.0] - 2026-11-03
 
 ### ⚠️ Behavior change
