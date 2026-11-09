@@ -37,7 +37,11 @@ import { SessionManager } from "./session-manager.js";
 import { TM1Client } from "./tm1-client.js";
 import { TM1Error, TM1ErrorCode } from "./types.js";
 
-/** Settings that belong to the server process, not to one TM1 connection. */
+/**
+ * Settings that belong to the server process, not to one TM1 connection. Read
+ * from the server's own environment only; discovery warns when a connection
+ * `.env` sets one, instead of ignoring it silently.
+ */
 const SERVER_LEVEL_KEYS = new Set([
   "TM1_LOG_LEVEL",
   "TM1_LOG_FILE",
@@ -45,10 +49,19 @@ const SERVER_LEVEL_KEYS = new Set([
   "TM1_MAX_RESPONSE_CHARS",
   "TM1_CONNECTIONS_DIR",
   "TM1_CONNECTIONS",
+  "TM1_LOCAL_FILE_ROOT",
+  "TM1_PROCESS_BACKUP_DIR",
+  "TM1_ALLOW_UNMASKED_SECRETS",
 ]);
 
 function isServerLevelKey(key: string): boolean {
   return SERVER_LEVEL_KEYS.has(key) || key.startsWith("TM1_MCP_");
+}
+
+/** Server-level keys a connection folder's `.env` sets — all of them ignored. */
+export function serverLevelKeysIn(folder: string): string[] {
+  const fileEnv = parseDotenv(readFileSync(join(folder, ".env")));
+  return Object.keys(fileEnv).filter(isServerLevelKey).sort();
 }
 
 /** Folder holding one `<name>/.env` per connection. */
@@ -270,6 +283,15 @@ export class ConnectionRegistry {
   ): boolean {
     const envMtime = mtimeOf(join(folder, ".env"));
     try {
+      const ignored = serverLevelKeysIn(folder);
+      if (ignored.length > 0) {
+        this.logger.warn(
+          { connection: name, keys: ignored },
+          "server-wide setting in a connection .env is ignored — set it in " +
+            "the server environment (MCP env: block or a user environment " +
+            "variable) and restart the client",
+        );
+      }
       const connEnv = connectionEnv(folder, env);
       this.addEnv(name, connEnv, folder);
       const entry = this.entries.get(name)!;

@@ -3,7 +3,11 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pino from "pino";
-import { ConnectionRegistry, connectionEnv } from "../../src/connections.js";
+import {
+  ConnectionRegistry,
+  connectionEnv,
+  serverLevelKeysIn,
+} from "../../src/connections.js";
 
 const logger = pino({ level: "silent" });
 
@@ -289,5 +293,69 @@ describe("ConnectionRegistry — rejected login", () => {
     const warned = lines.filter((l) => l.includes("not verified"));
     expect(warned).toHaveLength(1);
     expect(warned[0]).toContain('"connection":"tls"');
+  });
+});
+
+// Server-wide settings are read from the process environment only. A
+// connection .env that sets one must say so at startup, not be ignored silently.
+describe("server-level keys in a connection .env", () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "tm1-serverkeys-"));
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("lists the server-level keys a folder sets", () => {
+    writeConn(root, "dev", [
+      "TM1_BASE_URL=http://d:1",
+      ...CREDS,
+      "TM1_LOCAL_FILE_ROOT=/srv/git",
+      "TM1_PROCESS_BACKUP_DIR=off",
+      "TM1_MCP_TRANSPORT=http",
+    ]);
+
+    expect(serverLevelKeysIn(join(root, "dev"))).toEqual([
+      "TM1_LOCAL_FILE_ROOT",
+      "TM1_MCP_TRANSPORT",
+      "TM1_PROCESS_BACKUP_DIR",
+    ]);
+    expect(
+      connectionEnv(join(root, "dev"), {}).TM1_LOCAL_FILE_ROOT,
+    ).toBeUndefined();
+  });
+
+  it("warns at discovery and still loads the connection", () => {
+    writeConn(root, "dev", [
+      "TM1_BASE_URL=http://d:1",
+      ...CREDS,
+      "TM1_LOCAL_FILE_ROOT=/srv/git",
+    ]);
+    writeConn(root, "clean", ["TM1_BASE_URL=http://c:1", ...CREDS]);
+    const lines: string[] = [];
+    const capture = pino(
+      { level: "warn" },
+      { write: (s: string) => lines.push(s) },
+    );
+
+    const reg = ConnectionRegistry.fromEnvironment(
+      { TM1_CONNECTIONS_DIR: root },
+      capture,
+    );
+
+    expect(reg.usableNames).toEqual(["clean", "dev"]);
+    const warnings = lines
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+      .filter((w) => String(w.msg).includes("is ignored"));
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        connection: "dev",
+        keys: ["TM1_LOCAL_FILE_ROOT"],
+        msg: expect.stringMatching(/ignored.*server environment/),
+      }),
+    ]);
   });
 });
