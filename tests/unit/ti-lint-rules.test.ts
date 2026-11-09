@@ -109,7 +109,9 @@ describe("datasource-after-prolog", () => {
   it("accepts the ASCII format variables later: they also shape TextOutput", () => {
     expect(
       hits(
-        { epilog: `DatasourceAsciiQuoteCharacter = '';\nTextOutput(sFile, sRow);` },
+        {
+          epilog: `DatasourceAsciiQuoteCharacter = '';\nTextOutput(sFile, sRow);`,
+        },
         "datasource-after-prolog",
       ),
     ).toEqual([]);
@@ -137,7 +139,10 @@ describe("hardcoded-credential", () => {
 
   it("accepts a password from a parameter", () => {
     expect(
-      hits({ prolog: `ODBCOpen('DSN', 'sa', pPassword);` }, "hardcoded-credential"),
+      hits(
+        { prolog: `ODBCOpen('DSN', 'sa', pPassword);` },
+        "hardcoded-credential",
+      ),
     ).toEqual([]);
   });
 
@@ -178,9 +183,8 @@ describe("trailing-comment", () => {
 
 describe("lintCode (tm1_check_process_code)", () => {
   it("drops dead-assignment on a fragment: the read may be in an omitted tab", async () => {
-    const { lintCode } = await import(
-      "../../src/tools/ti-development/preflight.js"
-    );
+    const { lintCode } =
+      await import("../../src/tools/ti-development/preflight.js");
     const tabs = { metadata: `nUnused = 1;` };
     const rules = (partial: boolean) =>
       lintCode("p", tabs, partial).findings.map((f) => f.rule);
