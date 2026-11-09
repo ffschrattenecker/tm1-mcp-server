@@ -85,15 +85,13 @@ function unreachable(stmts: TiStatement[], ctx: Ctx): void {
 
 // ---- datasource-after-prolog ----
 
+// The ASCII delimiter/quote/separator variables are absent on purpose: they
+// also format ASCIIOutput/TextOutput, so setting them later is an idiom.
 const DATASOURCE_VARS = new Set([
   "datasourcetype",
   "datasourcenameforserver",
   "datasourcenameforclient",
-  "datasourceasciidelimiter",
-  "datasourceasciidecimalseparator",
   "datasourceasciiheaderrecords",
-  "datasourceasciiquotecharacter",
-  "datasourceasciithousandseparator",
   "datasourcecubeview",
   "datasourcedimensionsubset",
   "datasourcequery",

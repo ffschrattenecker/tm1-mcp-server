@@ -106,6 +106,15 @@ describe("datasource-after-prolog", () => {
     expect(f?.snippet).not.toContain("hunter2");
   });
 
+  it("accepts the ASCII format variables later: they also shape TextOutput", () => {
+    expect(
+      hits(
+        { epilog: `DatasourceAsciiQuoteCharacter = '';\nTextOutput(sFile, sRow);` },
+        "datasource-after-prolog",
+      ),
+    ).toEqual([]);
+  });
+
   it("accepts it in the Prolog", () => {
     expect(
       hits(
