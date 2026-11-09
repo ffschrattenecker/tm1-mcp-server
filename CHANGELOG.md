@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [10.5.1] - 2026-11-09
+
+First published release of the 10.5.0 changes: the 10.5.0 publish failed CI on test formatting and never reached npm.
+
 ## [10.5.0] - 2026-11-09
 
 ### Added
