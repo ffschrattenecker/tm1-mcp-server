@@ -15,6 +15,7 @@ import {
 import { walkStatements } from "./walk.js";
 import { TI_VAR } from "../ti-identifier.js";
 import { quotedLiteral } from "../ti-lex.js";
+import { semanticFindings, trailingComments } from "../ti-lint/rules.js";
 
 type Severity = "error" | "warn" | "info";
 
@@ -275,6 +276,20 @@ export function lintProcess(
   code: ProcessCodeInput,
   opts?: LintOptions,
 ): Finding[] {
+  return lintReport(process, code, opts).findings;
+}
+
+export interface LintReport {
+  findings: Finding[];
+  /** Non-empty tabs the parser rejected: only the raw-text rules saw them. */
+  unparsedTabs: TiTab[];
+}
+
+export function lintReport(
+  process: string,
+  code: ProcessCodeInput,
+  opts?: LintOptions,
+): LintReport {
   const cellGetDimThreshold =
     opts?.cellGetDimThreshold ?? DEFAULT_CELLGET_DIM_THRESHOLD;
   const clearProc = isClearProc(process);
@@ -282,11 +297,14 @@ export function lintProcess(
 
   // Parse all tabs once; reuse for both walk and dead-assignment passes.
   const parsedTabs = new Map<TiTab, NonNullable<ReturnType<typeof parseTab>>>();
+  const unparsedTabs: TiTab[] = [];
   for (const tab of TABS) {
     const src = code[tab] ?? "";
     if (src.trim() === "") continue;
+    findings.push(...trailingComments(process, tab, src));
     const parsed = parseTab(src);
     if (parsed) parsedTabs.set(tab, parsed);
+    else unparsedTabs.push(tab);
   }
 
   // Existing per-tab rules
@@ -299,6 +317,13 @@ export function lintProcess(
       lineOrigin,
       findings,
     });
+    findings.push(
+      ...semanticFindings(ast, {
+        process,
+        tab,
+        line: (n) => sourceLine(lineOrigin, n),
+      }),
+    );
   }
 
   // dead-assignment: two-pass over all parsed tabs
@@ -332,5 +357,5 @@ export function lintProcess(
     }
   }
 
-  return findings;
+  return { findings, unparsedTabs };
 }
