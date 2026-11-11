@@ -1,0 +1,12 @@
+#!/bin/sh
+# Pre-push gate: runs the same steps CI runs (.github/workflows/ci.yml), so a
+# push that would fail CI or the publish gate is stopped here. Installed by
+# `npm install` (prepare → scripts/install-hooks.mjs); skip once with --no-verify.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-push: npm run verify"
+npm run verify
+
+echo "pre-push: npm run smoke:tarball"
+npm run smoke:tarball

@@ -33,7 +33,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "prepare": "npm run build",
+    "prepare": "npm run build && node scripts/install-hooks.mjs",
+    "hooks:install": "node scripts/install-hooks.mjs",
     "prepack": "rm -rf dist && npm run build",
     "prepublishOnly": "npm run verify",
     "start": "node dist/index.js",
