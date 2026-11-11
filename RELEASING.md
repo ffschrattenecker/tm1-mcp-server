@@ -15,6 +15,10 @@ accumulated `[Unreleased]` changes.
   be omitted.
 - `main` stays releasable at all times. Unpushed/unreleased commits on `main`
   are normal — they are not a release until you cut one.
+- Run `npm install` once per clone. Its `prepare` step points git at
+  `.githooks/`, so every `git push` first runs `npm run verify` and the tarball
+  smoke test: the same steps CI runs. A push that would fail CI is stopped on
+  your machine. Bypass only deliberately with `git push --no-verify`.
 - **Never** create the version tag or bump `package.json` mid-stream. That is
   what forces `git tag -f` later.
 
@@ -56,12 +60,27 @@ tag publishes.
 8. **Confirm it published:** a run for the tag must appear under Actions, and
    `npm view @ffschrattenecker/tm1-mcp-server dist-tags` must show the new
    version. If the tag push never triggered a run, start the workflow manually
-   (Actions → Publish to npm → Run workflow, **ref = the tag**) — never move or
-   re-push the tag. A manual `npm publish` from a machine is the last resort:
-   it has no provenance and needs an interactive 2FA login.
+   (Actions → Publish to npm → Run workflow, **ref = the tag**). A manual
+   `npm publish` from a machine is the last resort: it has no provenance and
+   needs an interactive 2FA login. Never move the tag (see below).
 9. **Optional:** a GitHub release for the `vX.Y.Z` tag, with the changelog section as the body.
 
+## Never move a pushed tag
+
+- A `vX.Y.Z` tag that has been pushed is immutable. Do not `git tag -f`, delete
+  and re-push it, or `git push --force` a tag. Other clones and the GitHub
+  record may already hold it.
+- **When a publish fails, the next step is always a new patch version**, never
+  a moved tag. Fix the problem on `main`, run `npm version patch`, and push the
+  new tag. The failed tag stays where it is. Note the skipped version in the
+  next changelog entry, as 10.5.1 did for 10.5.0.
+- If the tag exists but the publish never started, re-run the workflow
+  manually on that tag (step 8). That does not move anything.
+
 ## Guardrails already wired
+
+- `.githooks/pre-push` — runs `npm run verify` and `smoke:tarball` before any
+  push leaves the machine (see _During development_).
 
 - `prepack` (`rm -rf dist && npm run build`) — clean tarball, no stale `dist/`
   cruft. Runs on `npm pack` and `npm publish`.
