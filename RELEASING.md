@@ -60,9 +60,7 @@ tag publishes.
 8. **Confirm it published:** a run for the tag must appear under Actions, and
    `npm view @ffschrattenecker/tm1-mcp-server dist-tags` must show the new
    version. If the tag push never triggered a run, start the workflow manually
-   (Actions → Publish to npm → Run workflow, **ref = the tag**). A manual
-   `npm publish` from a machine is the last resort: it has no provenance and
-   needs an interactive 2FA login. Never move the tag (see below).
+   (Actions → Publish to npm → Run workflow, **ref = the tag**).
 9. **Optional:** a GitHub release for the `vX.Y.Z` tag, with the changelog section as the body.
 
 ## Never move a pushed tag
