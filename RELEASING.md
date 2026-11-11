@@ -15,10 +15,9 @@ accumulated `[Unreleased]` changes.
   be omitted.
 - `main` stays releasable at all times. Unpushed/unreleased commits on `main`
   are normal — they are not a release until you cut one.
-- Run `npm install` once per clone. Its `prepare` step points git at
-  `.githooks/`, so every `git push` first runs `npm run verify` and the tarball
-  smoke test: the same steps CI runs. A push that would fail CI is stopped on
-  your machine. Bypass only deliberately with `git push --no-verify`.
+- Once per clone, run `git config core.hooksPath .githooks`. Every `git push`
+  then runs `npm run verify` and the tarball smoke test, the steps CI runs.
+  Bypass only deliberately with `git push --no-verify`.
 - **Never** create the version tag or bump `package.json` mid-stream. That is
   what forces `git tag -f` later.
 
