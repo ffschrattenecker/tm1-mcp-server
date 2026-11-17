@@ -24,12 +24,12 @@ import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-// Current total is ~38.0KB (58 schemas, 38,895 bytes after the 9.0 tool
-// consolidation), measured AFTER slimJsonSchema() — i.e. these are the bytes
+// Current total is ~43.9KB (67 schemas, 43,904 bytes after the six sandbox
+// tools), measured AFTER slimJsonSchema() — i.e. these are the bytes
 // that actually reach the wire. Budget = round number ~10% above that, so
 // ordinary additions pass but a runaway new schema (or a sloppy .describe()
 // spree) trips the gate. Re-baseline deliberately when a real feature needs it.
-const BUDGET_BYTES = 43_000;
+const BUDGET_BYTES = 48_000;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
