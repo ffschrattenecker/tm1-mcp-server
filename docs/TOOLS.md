@@ -41,7 +41,7 @@ datasource (562-589).
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (61)
+## Tools (67)
 
 ### analysis (11)
 
@@ -110,6 +110,15 @@ datasource (562-589).
 
 - `tm1_rest_read` — GET any TM1 REST path (relative to /api/v1/), plus POST Processes('P')/tm1.Compile and the function Cubes('C')/tm1.DimensionsStorageOrder()
 - `tm1_rest_write` — POST/PATCH/PUT/DELETE a TM1 REST path (relative to /api/v1/), e.g
+
+### sandboxes (6)
+
+- `tm1_compare_sandbox` — Answer 'what has this sandbox changed?': run the same MDX on base data and in the sandbox and list the cells that differ (base, sandbox, change)
+- `tm1_create_sandbox` — Create a sandbox: a private copy-on-write layer over base data for what-if writes
+- `tm1_delete_sandbox` — Delete a sandbox and every change in it
+- `tm1_discard_sandbox` — Throw away every change in a sandbox but keep the sandbox itself
+- `tm1_list_sandboxes` — List the signed-in user's sandboxes with their state (active, loaded, queued)
+- `tm1_publish_sandbox` — Publish a sandbox: merge its changes into base data
 
 ### scheduling (2)
 

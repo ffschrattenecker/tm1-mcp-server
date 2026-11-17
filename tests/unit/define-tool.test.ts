@@ -355,6 +355,66 @@ describe("defineTool with several connections", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it("answers a call with the reason when its unavailable gate names one", async () => {
+    const { wrapped, tools } = capture();
+    const handler = vi.fn(ok);
+    const off = {
+      version: 11,
+      sandboxingDisabled: true,
+    } as unknown as TM1Client;
+    const onConn = ConnectionRegistry.of([{ name: "dev", client: off }]);
+    const unavailable = vi.fn((c: TM1Client) =>
+      (c as unknown as { sandboxingDisabled?: boolean }).sandboxingDisabled
+        ? "DisableSandboxing=T"
+        : undefined,
+    );
+    defineTool({
+      name: "tm1_spec_gated",
+      description: "fixture",
+      annotations: READ_ONLY,
+      input: { cubeName: z.string() },
+      unavailable,
+      handler,
+    })(wrapped, onConn);
+
+    // Still listed while unavailable: the gate runs per call, not at registration.
+    expect(tools.has("tm1_spec_gated")).toBe(true);
+
+    const result = await tools
+      .get("tm1_spec_gated")!
+      .cb({ cubeName: "C", connection: "dev" });
+    const payload = JSON.parse(errorText(result)) as {
+      code: string;
+      message: string;
+      hint: string;
+    };
+    expect(payload.code).toBe("UNSUPPORTED_OPERATION");
+    expect(payload.message).toBe(
+      'tm1_spec_gated is unavailable on connection "dev": DisableSandboxing=T',
+    );
+    expect(payload.hint).toContain("Retrying cannot succeed");
+    expect(unavailable).toHaveBeenCalledWith(off);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("runs the handler when the unavailable gate names no reason", async () => {
+    const { wrapped, tools } = capture();
+    const handler = vi.fn(ok);
+    defineTool({
+      name: "tm1_spec_gate_clear",
+      description: "fixture",
+      annotations: READ_ONLY,
+      input: { cubeName: z.string() },
+      unavailable: () => undefined,
+      handler,
+    })(wrapped, registry);
+
+    await tools
+      .get("tm1_spec_gate_clear")!
+      .cb({ cubeName: "C", connection: "dev" });
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
   it("registers a version-gated tool when any connection matches, refusing the others", async () => {
     const { wrapped, tools } = capture();
     const handler = vi.fn(ok);

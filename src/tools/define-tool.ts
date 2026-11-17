@@ -75,6 +75,14 @@ interface ToolSpecBase<I extends ZodRawShape> {
    * refused, and lets the server list it in sandbox mode.
    */
   sandboxScoped?: boolean;
+  /**
+   * Runtime gate, asked on every call against the connection it targets: the
+   * reason the tool cannot be used there now, or undefined. It may read what
+   * TM1 reports after login (`tm1Client.sandboxingDisabled`), which is unknown
+   * when the tools are registered. The tool stays listed: a call answers with
+   * the reason, because clients are lazy and there are several connections.
+   */
+  unavailable?: (tm1Client: TM1Client) => string | undefined;
 }
 
 /** A tool that acts on one TM1 connection — every tool but a handful. */
@@ -323,8 +331,16 @@ export function defineTool<I extends ZodRawShape>(
       extra: Parameters<ToolCallback<I>>[1],
     ) => {
       const { connection, ...rest } = args;
-      gate(connection);
+      const info = gate(connection);
       const tm1Client = await registry.get(connection);
+      const reason = spec.unavailable?.(tm1Client);
+      if (reason !== undefined) {
+        throw new TM1Error({
+          code: TM1ErrorCode.UNSUPPORTED_OPERATION,
+          message: `${spec.name} is unavailable on connection "${info.name}": ${reason}`,
+          hint: "Retrying cannot succeed until the cause named in the message is fixed.",
+        });
+      }
       return handler(rest, tm1Client, extra);
     }) as unknown as ToolCallback<I>;
     server.tool(spec.name, description, input, cb);

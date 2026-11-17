@@ -190,13 +190,30 @@ describe("spec completeness", () => {
 });
 
 describe("sandbox mode", () => {
-  // Sandbox mode is read-only plus the sandboxScoped writes. tm1_write_cells is
-  // the only one so far; it refuses base data and foreign sandboxes itself.
-  it("registers the read-only tools plus tm1_write_cells", () => {
+  // Sandbox mode is read-only plus the sandboxScoped writes. Each of them
+  // refuses base data and foreign sandboxes itself. tm1_list_sandboxes and
+  // tm1_compare_sandbox are read-only, so they are in the read-only set.
+  const SANDBOX_SCOPED_WRITES = [
+    "tm1_write_cells",
+    "tm1_create_sandbox",
+    "tm1_discard_sandbox",
+    "tm1_delete_sandbox",
+  ];
+
+  it("registers the read-only tools plus the sandboxScoped writes", () => {
     const sandbox = collectRegisteredNames("sandbox");
     const readonly = collectRegisteredNames("readonly");
     expect([...sandbox].sort()).toEqual(
-      [...readonly, "tm1_write_cells"].sort(),
+      [...readonly, ...SANDBOX_SCOPED_WRITES].sort(),
+    );
+  });
+
+  it("leaves tm1_publish_sandbox to readwrite", () => {
+    expect(collectRegisteredNames("sandbox").has("tm1_publish_sandbox")).toBe(
+      false,
+    );
+    expect(collectRegisteredNames("readwrite").has("tm1_publish_sandbox")).toBe(
+      true,
     );
   });
 });

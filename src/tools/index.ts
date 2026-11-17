@@ -82,6 +82,14 @@ import { registerAuditNaming } from "./analysis/audit-naming.js";
 import { registerAuditComplexity } from "./analysis/audit-complexity.js";
 import { registerAuditFeeders } from "./analysis/audit-feeders.js";
 
+// Sandbox tools
+import { registerListSandboxes } from "./sandboxes/list-sandboxes.js";
+import { registerCreateSandbox } from "./sandboxes/create-sandbox.js";
+import { registerCompareSandbox } from "./sandboxes/compare-sandbox.js";
+import { registerDiscardSandbox } from "./sandboxes/discard-sandbox.js";
+import { registerDeleteSandbox } from "./sandboxes/delete-sandbox.js";
+import { registerPublishSandbox } from "./sandboxes/publish-sandbox.js";
+
 // Single registry of every tool registrar, grouped by category. Adding a tool
 // = add its import above and one entry here (adjacent edit, one PR hunk). The
 // previous design kept a second hand-ordered call block that drifted from the
@@ -169,6 +177,15 @@ const REGISTRARS: ToolRegistrar[] = [
   registerAuditNaming,
   registerAuditComplexity,
   registerAuditFeeders,
+
+  // Sandboxes — create/discard/delete are sandboxScoped (registered in
+  // TM1_MODE=sandbox); publish writes base data and stays readwrite-only.
+  registerListSandboxes,
+  registerCreateSandbox,
+  registerCompareSandbox,
+  registerDiscardSandbox,
+  registerDeleteSandbox,
+  registerPublishSandbox,
 ];
 
 export function registerAllTools(

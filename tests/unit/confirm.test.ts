@@ -99,6 +99,11 @@ const CONFIRM_REQUIRED = [
   "tm1_install_pro_bundle",
   // …and bulk_upsert_elements when components would drop existing children.
   "tm1_bulk_upsert_elements",
+  // Sandboxes: discard and delete throw away a sandbox's changes; publish
+  // merges them into base data.
+  "tm1_discard_sandbox",
+  "tm1_delete_sandbox",
+  "tm1_publish_sandbox",
 ];
 
 describe("confirmation-guard coverage", () => {

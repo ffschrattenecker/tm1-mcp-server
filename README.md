@@ -32,7 +32,7 @@ Everything below describes this fork's state. For the real project, read the
 
 ## Features
 
-61 tools across 10 categories — every one listed in
+67 tools across 11 categories — every one listed in
 [docs/TOOLS.md](docs/TOOLS.md). Past plain CRUD over the REST API:
 
 - **Bulk reads instead of N round-trips.** Pull every process's source or every
@@ -195,7 +195,7 @@ HTTP; setup and security notes are in
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (61)
+## Tools (67)
 
 Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 
@@ -209,9 +209,10 @@ Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 | model-building | 7 |
 | operations | 7 |
 | rest | 2 |
+| sandboxes | 6 |
 | scheduling | 2 |
 | ti-development | 15 |
-| **Total** | **61** |
+| **Total** | **67** |
 
 <!-- TOOLS-AUTOGEN:END -->
 
