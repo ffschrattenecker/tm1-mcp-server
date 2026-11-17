@@ -146,7 +146,18 @@ export class TM1Client {
 
   /** Read DisableSandboxing after a login. Never throws; unknown stays undefined. */
   private async readSandboxing(): Promise<void> {
+    const previous = this.sandboxingDisabled;
     this.sandboxingDisabled = await this.server.isSandboxingDisabled();
+    // Warn on the transition to true only, not on every re-login.
+    if (
+      this.sandboxingDisabled === true &&
+      previous !== true &&
+      this.config.mode === "sandbox"
+    ) {
+      this.logger.warn(
+        "TM1 runs with DisableSandboxing=T, so TM1_MODE=sandbox cannot write anything on this connection. Set DisableSandboxing=F in tm1s.cfg and reconnect this MCP server.",
+      );
+    }
   }
 
   /**

@@ -196,6 +196,13 @@ describe("TM1Client post-login read of DisableSandboxing", () => {
     } as unknown as Response;
   }
 
+  // How many times the server has been asked for /api/v1/Configuration.
+  function configurationReads(): number {
+    return fetchSpy.mock.calls.filter(([url]) =>
+      String(url).endsWith("/api/v1/Configuration"),
+    ).length;
+  }
+
   beforeEach(() => {
     vi.mocked(mockLogger.warn).mockClear();
     configuration = () => jsonResponse({ DisableSandboxing: true });
@@ -217,8 +224,8 @@ describe("TM1Client post-login read of DisableSandboxing", () => {
     vi.unstubAllGlobals();
   });
 
-  function setup() {
-    const config = makeTestConfig({ requestTimeoutMs: 5000 });
+  function setup(mode: "readonly" | "sandbox" = "readonly") {
+    const config = makeTestConfig({ requestTimeoutMs: 5000, mode });
     const sm = new SessionManager(config, mockLogger);
     vi.spyOn(sm, "startKeepAlive").mockImplementation(() => {});
     vi.spyOn(sm, "stopKeepAlive").mockImplementation(() => {});
@@ -262,6 +269,33 @@ describe("TM1Client post-login read of DisableSandboxing", () => {
     // Let the fire-and-forget read settle before asserting on its outcome.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(client.sandboxingDisabled).toBeUndefined();
+  });
+
+  it("warns once when a sandbox-mode connection reads DisableSandboxing=T", async () => {
+    const { client, sm } = setup("sandbox");
+
+    await client.connect();
+
+    await vi.waitFor(() => expect(client.sandboxingDisabled).toBe(true));
+    expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("TM1_MODE=sandbox cannot write anything"),
+    );
+
+    // A re-login reads the same value again: no second warning.
+    await sm.authenticate();
+    await vi.waitFor(() => expect(configurationReads()).toBe(2));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not warn for a readonly connection that reads DisableSandboxing=T", async () => {
+    const { client } = setup("readonly");
+
+    await client.connect();
+
+    await vi.waitFor(() => expect(client.sandboxingDisabled).toBe(true));
+    expect(mockLogger.warn).not.toHaveBeenCalled();
   });
 
   it("a throwing onLogin hook is logged and does not fail the login", async () => {
