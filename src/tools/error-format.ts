@@ -161,4 +161,23 @@ export async function withToolHint<T>(
   }
 }
 
+// True when TM1 never said whether it ran the call: no answer at all (timeout,
+// lost or refused connection) or a 5xx. Deliberately narrow — an error raised
+// before anything was sent (validation, confirm) has neither mark.
+export function isOutcomeUnknown(err: unknown): err is TM1Error {
+  if (!(err instanceof TM1Error)) return false;
+  if (err.httpStatus !== undefined) return err.httpStatus >= 500;
+  return (
+    err.code === TM1ErrorCode.LOCK_TIMEOUT ||
+    err.code === TM1ErrorCode.CONNECTION_FAILED
+  );
+}
+
+// Recovery hint for a run whose outcome is unknown. v11 exposes server
+// threads, v12 jobs; both are read with tm1_rest_read.
+export function unknownOutcomeHint(version: 11 | 12, what: string): string {
+  const monitor = version === 12 ? "Jobs" : "Threads";
+  return `The ${what} was NOT confirmed failed: TM1 gave no final answer, so it may or may not have started and may still be executing. Check ${monitor} with tm1_rest_read before running it again, and inspect its results; a re-run risks a duplicate execution.`;
+}
+
 export type { McpToolResult };

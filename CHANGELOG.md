@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`tm1_write_cells` no longer replays a chunk whose outcome is unknown.** A timeout, a lost
+  connection or a 5xx on the bulk write started the cell-by-cell fallback, which re-sent up to 500
+  cells that might already be committed, and then reported success. The fallback now runs only when
+  TM1 refused the chunk (4xx). Otherwise the call fails with the original error code and `details`
+  holding `written`, the `unknown` index range and `notAttempted`.
+- **`tm1_write_cells` reports committed chunks when a later chunk cannot be sent.** A failing
+  ExecuteMDX for chunk 2 (e.g. a wrong element name in cell 501) returned the bare server error,
+  although chunk 1 was already written. The error now carries the usual `written` / `failed` /
+  `notAttempted` split.
+- **`tm1_execute_chore` says the chore may be running after a timeout, lost connection or 5xx.** The
+  hint now says the outcome is unknown and points at Threads (v11) or Jobs (v12) before any re-run.
 - **Logout now ends the TM1 session.** It sent `DELETE /api/v1/ActiveSession`, which TM1 11.8 and
   12.5 answer with `400 DELETE not supported on this resource!`. The session stayed open until its
   idle timeout, so every server start left one behind. Logout now calls

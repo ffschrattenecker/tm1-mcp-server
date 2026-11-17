@@ -5,6 +5,7 @@ import { ChoreResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { jsonResult } from "../format.js";
 import { startHeartbeat } from "../heartbeat.js";
+import { isOutcomeUnknown, unknownOutcomeHint } from "../error-format.js";
 
 export const registerExecuteChore = defineTool({
   name: "tm1_execute_chore",
@@ -42,6 +43,14 @@ export const registerExecuteChore = defineTool({
         signal: extra?.signal,
         ...(timeoutMs ? { timeoutMs } : {}),
       });
+    } catch (err) {
+      // The generic hint for a timeout says "retry after the lock clears", and
+      // the lost-connection hint says nothing of the chore. Both leave open
+      // that the run already started, so say so and point at the monitor.
+      if (isOutcomeUnknown(err)) {
+        err.hintOverride = unknownOutcomeHint(tm1Client.version, "chore");
+      }
+      throw err;
     } finally {
       stopHeartbeat();
     }

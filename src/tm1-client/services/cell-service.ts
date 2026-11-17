@@ -274,11 +274,38 @@ export class CellService {
       const mdx = `SELECT {${chunk.map(tupleOf).join(",")}} ON COLUMNS FROM [${cube}]`;
 
       let bulkFailed = false;
-      const cellset = await this.http.request<{ ID: string }>(
-        "POST",
-        "/api/v1/ExecuteMDX",
-        { MDX: mdx },
-      );
+      let cellset: { ID: string };
+      try {
+        cellset = await this.http.request<{ ID: string }>(
+          "POST",
+          "/api/v1/ExecuteMDX",
+          { MDX: mdx },
+        );
+      } catch (err) {
+        // Nothing of THIS chunk was sent: the cellset is built before any
+        // PATCH. Earlier chunks are committed, though, and the bare error would
+        // not say so. With nothing written yet the server's own error is the
+        // whole truth.
+        if (written === 0) throw err;
+        const notAttempted = cells.length - i;
+        const reason = err instanceof Error ? err.message : String(err);
+        throw new TM1Error({
+          code: err instanceof TM1Error ? err.code : TM1ErrorCode.TM1_ERROR,
+          message:
+            `write_cells partially applied to '${cubeName}': ${written} written, ` +
+            `0 failed, ${notAttempted} not attempted — the next chunk could not be sent: ${reason}. ` +
+            `Earlier writes are committed and will NOT be rolled back.`,
+          details: JSON.stringify({
+            written,
+            failed: [],
+            notAttempted,
+            chunkError: reason,
+          }),
+          hint:
+            `The first ${written} cells are committed. Fix the cause named in the error, ` +
+            `then re-send ONLY the cells from index ${i} on. Validate targets first with tm1_check_writable_coords.`,
+        });
+      }
       try {
         await this.http.request<void>(
           "PATCH",
@@ -286,7 +313,34 @@ export class CellService {
           chunk.map((c, ordinal) => ({ Ordinal: ordinal, Value: c.value })),
         );
         written += chunk.length;
-      } catch {
+      } catch (err) {
+        // Only a 4xx is TM1 refusing the chunk, and a refusal is WHOLE: nothing
+        // of it landed. A timeout, a lost connection or a 5xx leaves the chunk
+        // possibly committed or still running, so walking it cell by cell would
+        // replay up to 500 writes. That outcome is reported instead.
+        const refused =
+          err instanceof TM1Error &&
+          err.httpStatus !== undefined &&
+          err.httpStatus >= 400 &&
+          err.httpStatus < 500;
+        if (!refused) {
+          const notAttempted = cells.length - (i + chunk.length);
+          const reason = err instanceof Error ? err.message : String(err);
+          throw new TM1Error({
+            code: err instanceof TM1Error ? err.code : TM1ErrorCode.TM1_ERROR,
+            message:
+              `write_cells outcome unknown for ${chunk.length} cells of '${cubeName}': ${reason}. ` +
+              `${written} written before, ${notAttempted} not attempted.`,
+            details: JSON.stringify({
+              written,
+              unknown: { fromIndex: i, toIndex: i + chunk.length - 1 },
+              notAttempted,
+            }),
+            hint:
+              "The outcome of this chunk is unknown: these cells may or may not be written. " +
+              "Read them back (tm1_execute_mdx) before re-sending anything; do NOT blindly retry.",
+          });
+        }
         // A chunk holding one non-writable cell is refused WHOLE — nothing
         // lands, not even the writable cells (measured:
         // CubeCellWriteStatusElementIsConsolidated). The error names the
