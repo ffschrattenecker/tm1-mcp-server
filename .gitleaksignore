@@ -6,6 +6,5 @@
 8c200885f7bfd9b5d47518832a9321a3872f789b:tests/unit/export-credentials.test.ts:generic-api-key:134
 3ad81822e7b469f2686d9adfab6f4538d985e641:tests/unit/export-credentials.test.ts:generic-api-key:94
 d74f3eeaaf0f1ee87c55b2e822f813ae7b726cd4:tests/unit/load-env.test.ts:generic-api-key:13
-tests/unit/load-env.test.ts:generic-api-key:12
 tests/unit/export-credentials.test.ts:generic-api-key:138
 tests/unit/export-credentials.test.ts:generic-api-key:203
