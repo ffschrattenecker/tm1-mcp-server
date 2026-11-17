@@ -122,9 +122,11 @@ async function build(): Promise<LiveHarness> {
     //                        out of `registry` and never issues tools/list, so
     //                        a no-op suffices; it only has to exist, or
     //                        withAnnotations throws on `.bind`.
+    //   assertCanSetRequestHandler — the guard that tools/list is still free.
     server: {
       sendLoggingMessage: async () => undefined,
       setRequestHandler: () => undefined,
+      assertCanSetRequestHandler: () => undefined,
     },
   } as unknown as McpServer;
 
