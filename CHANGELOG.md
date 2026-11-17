@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `POST /api/v1/ActiveSession/tm1.Close`, and a refused logout is logged as a warning instead of
   as "Logged out".
 - Schema slimming in `tools/list` still applies with `@modelcontextprotocol/sdk` 1.32.2. That SDK installs its own `tools/list` handler when the server declares the `tools` capability, so the server no longer declares it; the SDK advertises it on the first tool registration. Wrapping a server whose `tools/list` handler already exists now throws instead of shipping unslimmed schemas.
+- **The keep-alive runs after a failed first login.** The timer started only after the login succeeded, so a first login that failed left no keep-alive: later tool calls logged in lazily, but nothing kept the session alive, and `tm1_get_server_state` reported `connected: false`. The timer now starts before the login, and `connected` follows the held session. While TM1 stays unreachable the timer retries the login each interval; a rejected login (401/403) still stops all attempts.
 
 ## [10.5.1] - 2026-11-09
 

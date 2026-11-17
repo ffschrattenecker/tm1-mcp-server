@@ -80,7 +80,32 @@ describe("TM1Client", () => {
 
       expect(sessionManager.authenticate).toHaveBeenCalledOnce();
       expect(sessionManager.startKeepAlive).toHaveBeenCalledOnce();
-      expect(lifecycleClient.isConnected()).toBe(true);
+    });
+
+    it("keeps the keep-alive running when the first login fails", async () => {
+      vi.mocked(sessionManager.authenticate).mockRejectedValue(
+        new Error("connect ECONNREFUSED"),
+      );
+
+      await expect(lifecycleClient.connect()).rejects.toThrow("ECONNREFUSED");
+
+      expect(sessionManager.startKeepAlive).toHaveBeenCalledOnce();
+      expect(sessionManager.stopKeepAlive).not.toHaveBeenCalled();
+    });
+
+    it("starts keep-alive before the login round-trip", async () => {
+      const order: string[] = [];
+      vi.mocked(sessionManager.startKeepAlive).mockImplementation(() => {
+        order.push("startKeepAlive");
+      });
+      vi.mocked(sessionManager.authenticate).mockImplementation(async () => {
+        order.push("authenticate");
+        return "newSession456";
+      });
+
+      await lifecycleClient.connect();
+
+      expect(order).toEqual(["startKeepAlive", "authenticate"]);
     });
   });
 
@@ -99,8 +124,22 @@ describe("TM1Client", () => {
       expect(lifecycleClient.isConnected()).toBe(false);
     });
 
-    it("should return true after connect", async () => {
-      await lifecycleClient.connect();
+    it("follows the session, however it was obtained", () => {
+      const active = vi.spyOn(sessionManager, "isSessionActive");
+      active.mockReturnValue(true);
+      expect(lifecycleClient.isConnected()).toBe(true);
+      active.mockReturnValue(false);
+      expect(lifecycleClient.isConnected()).toBe(false);
+    });
+
+    it("is false after a failed first login and true once a later call logs in", async () => {
+      vi.mocked(sessionManager.authenticate).mockRejectedValueOnce(
+        new Error("connect ECONNREFUSED"),
+      );
+      await expect(lifecycleClient.connect()).rejects.toThrow("ECONNREFUSED");
+      expect(lifecycleClient.isConnected()).toBe(false);
+
+      vi.spyOn(sessionManager, "isSessionActive").mockReturnValue(true);
       expect(lifecycleClient.isConnected()).toBe(true);
     });
   });
