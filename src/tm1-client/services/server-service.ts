@@ -72,6 +72,27 @@ export class ServerService {
   }
 
   /**
+   * True when tm1s.cfg sets DisableSandboxing=T, false when it is set to F.
+   * Read from /Configuration because every user may read it; /ActiveConfiguration
+   * answers a non-admin with ObjectSecurityNoAdminRights. v12 has no such field
+   * and yields undefined, which the client reads as "not disabled".
+   * Never throws: a failed request or a non-boolean value yields undefined.
+   * GET /api/v1/Configuration
+   */
+  async isSandboxingDisabled(): Promise<boolean | undefined> {
+    try {
+      const cfg = await this.http.request<{ DisableSandboxing?: unknown }>(
+        "GET",
+        "/api/v1/Configuration",
+      );
+      const value = cfg.DisableSandboxing;
+      return typeof value === "boolean" ? value : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * List TI process error log files.
    *
    * The entity set exposes only `Filename`. Sorting is filename-descending —

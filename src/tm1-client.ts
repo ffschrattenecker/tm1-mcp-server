@@ -21,6 +21,7 @@ import { SecurityService } from "./tm1-client/services/security-service.js";
 import { ServerService } from "./tm1-client/services/server-service.js";
 import { FileService } from "./tm1-client/services/file-service.js";
 import { RestService } from "./tm1-client/services/rest-service.js";
+import { SandboxService } from "./tm1-client/services/sandbox-service.js";
 import { registerCallgraphCacheInvalidation } from "./lib/callgraph/tm1-adapter.js";
 
 export class TM1Client {
@@ -50,6 +51,7 @@ export class TM1Client {
   readonly security: SecurityService;
   readonly server: ServerService;
   readonly files: FileService;
+  readonly sandboxes: SandboxService;
   // Guarded generic passthrough for tm1_rest_read / tm1_rest_write only.
   readonly rest: RestService;
 
@@ -97,6 +99,9 @@ export class TM1Client {
     this.server = new ServerService(this.http);
     this.files = new FileService(this.http);
     this.rest = new RestService(this.http);
+    this.sandboxes = new SandboxService(this.http);
+    // Re-read after every login, first or re-auth. See SessionManager.onLogin.
+    sessionManager.onLogin = () => this.readSandboxing();
   }
 
   /** The configured TM1 major version (11 or 12). Fixed for this connection. */
@@ -120,6 +125,18 @@ export class TM1Client {
   /** A TM1 session is currently open. */
   get sessionActive(): boolean {
     return this.sessionManager.isSessionActive();
+  }
+
+  /**
+   * Whether TM1 has DisableSandboxing=T, as read after the last login.
+   * `undefined` until a login has been read, and when the setting cannot be
+   * read (TM1 12 has no such field).
+   */
+  sandboxingDisabled: boolean | undefined;
+
+  /** Read DisableSandboxing after a login. Never throws; unknown stays undefined. */
+  private async readSandboxing(): Promise<void> {
+    this.sandboxingDisabled = await this.server.isSandboxingDisabled();
   }
 
   /**

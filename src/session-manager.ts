@@ -48,6 +48,12 @@ async function drained(response: Response): Promise<Response> {
 
 export class SessionManager {
   private sessionCookie: string | null = null;
+  /**
+   * Called after every successful login, first or re-auth. It is not awaited:
+   * it runs inside the shared in-flight login and may read TM1 through the same
+   * transport. Its errors are logged and never fail the login.
+   */
+  onLogin: (() => Promise<void> | void) | undefined;
   // A PAW gateway (…/api/v0/tm1/<db>) names the session TM1SessionId_<db>
   // and authenticates later requests by its own paSession cookie. Then the
   // session token is the whole "name=value; …" list the login set, sent back
@@ -195,7 +201,22 @@ export class SessionManager {
 
     this.sessionCookie = cookie;
     this.logger.info("Authentication successful, session established");
+    this.runOnLogin();
     return cookie;
+  }
+
+  /**
+   * Run the onLogin hook without awaiting it. Promise.resolve().then() also
+   * turns a synchronous throw into a rejection, so one path logs both.
+   */
+  private runOnLogin(): void {
+    const hook = this.onLogin;
+    if (!hook) return;
+    Promise.resolve()
+      .then(hook)
+      .catch((err: unknown) => {
+        this.logger.warn({ err }, "Post-login hook failed; the login stands");
+      });
   }
 
   /**
