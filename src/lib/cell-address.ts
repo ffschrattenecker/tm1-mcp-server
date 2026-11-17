@@ -18,7 +18,7 @@
 // a regular dimension that happens to be named Sandboxes but has no `Base`
 // fails loudly with TM1's "member not found", never silently.
 import { TM1Error, TM1ErrorCode } from "../types.js";
-import { SANDBOX_DIMENSION, tm1NameEquals } from "./tm1-name.js";
+import { SANDBOX_DIMENSION, tm1NameEquals, tm1NameKey } from "./tm1-name.js";
 
 export const BASE_SANDBOX = "Base";
 
@@ -59,13 +59,13 @@ export function resolveCellAddress(
   given: readonly string[],
   outcome = "Nothing was written.",
 ): ResolvedAddress {
-  const byLower = new Map(cubeDimensions.map((d, i) => [d.toLowerCase(), i]));
+  const byKey = new Map(cubeDimensions.map((d, i) => [tm1NameKey(d), i]));
   const positions: number[] = [];
   const unknown: string[] = [];
   const duplicate: string[] = [];
   const seen = new Set<number>();
   for (const name of given) {
-    const pos = byLower.get(name.toLowerCase());
+    const pos = byKey.get(tm1NameKey(name));
     if (pos === undefined) unknown.push(name);
     else if (seen.has(pos)) duplicate.push(name);
     else seen.add(pos);

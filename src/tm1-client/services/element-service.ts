@@ -20,6 +20,7 @@ import type { CellService } from "./cell-service.js";
 import { rethrowIfSystemic } from "./fallback.js";
 import { escapeOdataLiteral, odataKey } from "./odata-page.js";
 import { escapeMdxName } from "../../lib/mdx.js";
+import { tm1NameKey } from "../../lib/tm1-name.js";
 
 // Max in-flight REST calls when requests go one at a time (no $batch). Bounds
 // pressure on TM1's worker pool (mirrors the cap the feeder-audit fan-out uses)
@@ -831,11 +832,10 @@ export class ElementService {
   ): Promise<void> {
     if (updates.length === 0) return;
     const attrs = await this.listAttributes(dimensionName, hierarchyName);
-    const key = (n: string) => n.replace(/\s/g, "").toLowerCase();
-    const types = new Map(attrs.map((a) => [key(a.name), a.type]));
+    const types = new Map(attrs.map((a) => [tm1NameKey(a.name), a.type]));
     const esc = (s: string): string => s.replace(/]/g, "]]");
     const cells = updates.map((u) => {
-      const type = types.get(key(u.attributeName));
+      const type = types.get(tm1NameKey(u.attributeName));
       if (type === undefined) {
         throw new TM1Error({
           code: TM1ErrorCode.NOT_FOUND,

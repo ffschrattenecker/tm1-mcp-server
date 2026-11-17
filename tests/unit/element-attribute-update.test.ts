@@ -68,6 +68,34 @@ describe("ElementService.updateAttributeValues", () => {
     ]);
   });
 
+  it("matches an attribute name written without its spaces", async () => {
+    const written: Written[] = [];
+    const http = {
+      request: async () => ({
+        value: [{ Name: "Unit Price", Type: "Numeric" }],
+      }),
+    };
+    const cells = {
+      writeCells: async (
+        cube: string,
+        dims: string[],
+        c: Written["cells"],
+      ): Promise<void> => {
+        written.push({ cube, dims, cells: c });
+      },
+    };
+    const service = new ElementService(
+      http as unknown as ConstructorParameters<typeof ElementService>[0],
+      cells as unknown as ConstructorParameters<typeof ElementService>[1],
+    );
+    await service.updateAttributeValues("Region", [
+      { elementName: "AT", attributeName: "unitprice", value: 3 },
+    ]);
+    expect(written[0].cells).toEqual([
+      { elements: ["[Region].[Region].[AT]", "unitprice"], value: 3 },
+    ]);
+  });
+
   it("rejects a non-numeric value for a Numeric attribute before writing", async () => {
     const written: Written[] = [];
     const err = await makeService(written)

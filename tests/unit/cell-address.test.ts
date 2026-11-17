@@ -60,6 +60,16 @@ describe("resolveCellAddress", () => {
     expect(a.toCubeOrder(["A", "R", "M"])).toEqual(["A", "R", "M"]);
   });
 
+  it("matches dimension names without their spaces, as TM1 does", () => {
+    const spaced = ["Cost Center", "Measure"];
+    const a = resolveCellAddress("C", spaced, ["measure", "costcenter"]);
+    expect(a.dimensions).toEqual(spaced);
+    expect(a.toCubeOrder(["Amount", "CC100"])).toEqual(["CC100", "Amount"]);
+    expect(() =>
+      resolveCellAddress("C", spaced, ["Cost Center", "cost center"]),
+    ).toThrow(/listed twice: cost center/);
+  });
+
   it("refuses a missing regular dimension and names it", () => {
     expect(() => resolveCellAddress("C", PLAIN, ["Version", "Row"])).toThrow(
       /missing: Measure/,
