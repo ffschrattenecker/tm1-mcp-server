@@ -32,12 +32,14 @@ export const registerSearchElements = defineTool({
       .describe("Text to look for, case-insensitive substring."),
     cubeName: z
       .string()
+      .min(1)
       .optional()
       .describe(
         "Search all dimensions of this cube. Give cubeName or dimensionName.",
       ),
     dimensionName: z
       .string()
+      .min(1)
       .optional()
       .describe("Search only this dimension. Give cubeName or dimensionName."),
     hierarchyName: z
@@ -74,24 +76,28 @@ export const registerSearchElements = defineTool({
     },
     tm1Client,
   ) => {
-    if ((cubeName === undefined) === (dimensionName === undefined)) {
+    // Branch on the value each input is given, not its truthiness, so an empty
+    // name can never fall through into the other branch.
+    let targets: ReadonlyArray<readonly [string, string]>;
+    if (cubeName !== undefined && dimensionName === undefined) {
+      // The Sandboxes dimension is no business dimension and TM1 answers an
+      // MDX over its elements with an error, which would fail the whole search.
+      targets = withoutSandboxes(
+        await tm1Client.cubes.getDimensionNames(cubeName),
+      ).map((d) => [d, d] as const);
+    } else if (dimensionName !== undefined && cubeName === undefined) {
+      targets = [
+        [
+          dimensionName,
+          resolveHierarchy(dimensionName, hierarchyName),
+        ] as const,
+      ];
+    } else {
       throw new TM1Error({
         code: TM1ErrorCode.VALIDATION_ERROR,
         message: "Provide exactly one of cubeName or dimensionName",
       });
     }
-    // The Sandboxes dimension is no business dimension and TM1 answers an
-    // MDX over its elements with an error, which would fail the whole search.
-    const targets = cubeName
-      ? withoutSandboxes(await tm1Client.cubes.getDimensionNames(cubeName)).map(
-          (d) => [d, d] as const,
-        )
-      : [
-          [
-            dimensionName!,
-            resolveHierarchy(dimensionName!, hierarchyName),
-          ] as const,
-        ];
     const settled = await mapSettledWithConcurrency(targets, 4, ([dim, hier]) =>
       tm1Client.elements.searchElements(
         dim,
@@ -115,7 +121,10 @@ export const registerSearchElements = defineTool({
     // Cube-wide, a dimension without hits only costs tokens.
     const result = {
       searchTerm,
-      dimensions: cubeName ? dimensions.filter((d) => d.total > 0) : dimensions,
+      dimensions:
+        cubeName !== undefined
+          ? dimensions.filter((d) => d.total > 0)
+          : dimensions,
     };
     type Row = {
       dimension: string;
