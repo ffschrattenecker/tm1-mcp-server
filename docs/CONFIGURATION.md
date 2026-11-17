@@ -127,10 +127,12 @@ the launching shell cannot arm a folder that does not set it. Server-level keys
 from the process environment and cannot be overridden by a folder.
 
 **Mode is enforced per call.** Write tools are listed when at least one
-connection is readwrite; calling one against a readonly connection returns
-`PERMISSION_DENIED` without touching TM1. Version-specific tools (v11 threads,
-v12 jobs) are listed when any connection runs that version and refused against
-the others.
+connection is readwrite, and the sandbox tools when one is in sandbox mode.
+Each call is checked against its own connection's mode: a write tool on a
+readonly connection, or a write outside a sandbox on a sandbox connection,
+returns `PERMISSION_DENIED` without touching TM1. Version-specific tools (v11
+threads, v12 jobs) are listed when any connection runs that version and refused
+against the others.
 
 **The folder is rescanned on demand.** A connection folder created, removed or
 edited after startup is picked up by `tm1_list_connections` and by a call that
@@ -146,6 +148,68 @@ Legacy single-connection mode (`TM1_BASE_URL`) still needs a restart.
 **Nothing logs in at startup.** Each connection authenticates on its first
 tool call. A folder whose `.env` is invalid is listed with its error and
 skipped; the other connections keep working.
+
+## Sandbox mode — `TM1_MODE=sandbox`
+
+`readonly` lets an agent look; `readwrite` lets it change anything the TM1
+account can. `sandbox` sits between them: the agent may write data, but only
+into a TM1 sandbox, so a proposed change can be reviewed before it reaches base
+data. The mode is set in each connection's own `.env`:
+
+```env
+TM1_MODE=sandbox
+# TM1_SANDBOX_PREFIX=mcp-   # default
+```
+
+What is registered: every read-only tool, plus `tm1_write_cells`,
+`tm1_create_sandbox`, `tm1_discard_sandbox` and `tm1_delete_sandbox`. Every
+other writing tool is left out, `tm1_publish_sandbox` included: publishing
+writes base data and needs `readwrite`.
+
+What is enforced, before any request is sent:
+
+- `tm1_write_cells` must name a `sandbox`; a write without one would reach base
+  data, and it is refused.
+- The sandbox must start with `TM1_SANDBOX_PREFIX` (case-insensitive). TM1
+  keeps sandboxes per user, not per application, so a planning app or a person
+  using the same account may have sandboxes of their own; the prefix keeps the
+  server off them. Create, discard and delete obey the same rule.
+- Control cubes (names starting with `}`: `}CubeSecurity`, `}ElementAttributes_…`
+  and the like) are refused, even into a sandbox. TM1 accepts such a write into a
+  sandbox, and publishing the sandbox then carries it into the model: measured on
+  TM1 12, `}CubeSecurity` set to `WRITE` in a sandbox became `WRITE` in base on
+  publish, while a compare over the data cube showed no difference.
+- On a cube with the `Sandboxes` dimension (`EnableSandboxDimension=true`), a
+  left-out `Sandboxes` coordinate is bound to the target sandbox, and a cell
+  naming a different one (`Base` included) is refused.
+- The written cells are read back from the sandbox (up to 20). `verified`
+  lists any that differ, for example where a rule overrides the value.
+
+`TM1_ENVIRONMENT=prod` forces sandbox down to readonly, as it does readwrite,
+unless `TM1_ALLOW_PROD_WRITES=true` is set.
+
+The typical round trip: `tm1_create_sandbox` → `tm1_write_cells` with
+`sandbox` → `tm1_compare_sandbox` (lists the cells that differ from base, with
+the change) → a person decides, and either publishes with a `readwrite` server
+(`tm1_publish_sandbox`) or throws it away (`tm1_discard_sandbox`,
+`tm1_delete_sandbox`).
+
+Reads can look inside a sandbox in every mode: `tm1_execute_mdx` takes an
+optional `sandbox`.
+
+The prefix is a naming convention, not ownership. Someone who creates
+`mcp-something` by hand hands it to the server. That is the price of staying
+stateless; there is no registry to keep in step between processes.
+
+**`DisableSandboxing=T`:** a TM1 server with this line in `tm1s.cfg` has no
+sandboxes. The server reads the setting after each login. The six sandbox tools
+stay listed, but a call to one answers `UNSUPPORTED_OPERATION` and names
+`DisableSandboxing=T` as the reason. With `TM1_MODE=sandbox` the log warns once
+that nothing can be written on that connection. Any TM1 user can read the
+setting, admin or not. It is a dynamic parameter: TM1 applies a change while it
+runs, but this server sees it at its next login, so reconnect the MCP server
+after changing the line; TM1 itself need not restart. TM1 12 has no such field,
+and a setting that cannot be read counts as "not disabled".
 
 ## Response size — `TM1_MAX_RESPONSE_CHARS`
 

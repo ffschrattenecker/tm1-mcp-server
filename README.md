@@ -101,7 +101,8 @@ TM1_PASSWORD=your-password
 TM1_SSL_REJECT_UNAUTHORIZED=false
 # TM1_PROXY=socks5://proxy:1080   # optional; reach TM1 through a SOCKS5 proxy
 TM1_VERSION=11.8
-TM1_MODE=readonly                   # readonly (default) | readwrite
+TM1_MODE=readonly                   # readonly (default) | sandbox | readwrite
+# TM1_SANDBOX_PREFIX=mcp-           # sandbox mode: the only sandboxes the server writes
 # TM1_ENVIRONMENT=prod              # dev | test | prod; prod forces readonly
 # TM1_RESPONSE_MODE=structured      # legacy (default) | structured
 # TM1_MAX_RESPONSE_CHARS=80000      # larger results fail with RESPONSE_TOO_LARGE
@@ -122,6 +123,14 @@ Analytics Engine) connection and its auth modes, host-disk file access.
 > server at production without reviewing the write path first. Label production
 > with `TM1_ENVIRONMENT=prod`: it then stays readonly even under
 > `TM1_MODE=readwrite`, unless `TM1_ALLOW_PROD_WRITES=true` is set as well.
+>
+> **In between: `TM1_MODE=sandbox`.** The read tools plus `tm1_write_cells`,
+> `tm1_create_sandbox`, `tm1_discard_sandbox` and `tm1_delete_sandbox`, with every
+> write confined to a TM1 sandbox whose name starts with `TM1_SANDBOX_PREFIX`
+> (default `mcp-`). The agent can try a change and show it with
+> `tm1_compare_sandbox`; base data stays untouched, and publishing the sandbox is
+> left to a person or a `readwrite` server.
+> [Details](docs/CONFIGURATION.md#sandbox-mode--tm1_modesandbox).
 
 ### Several TM1 servers — one process
 

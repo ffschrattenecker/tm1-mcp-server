@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **`tm1_read_server_file`** (v11): reads a text file the server wrote, such as an `ASCIIOutput` export, which v11 `Blobs` does not list. It runs an unbound TI process that copies the file into the logging directory, reads the copy and deletes it. The tool runs TI and can open any file the TM1 service account can, so it is not READ_ONLY and readonly connections refuse it.
+- **`TM1_MODE=sandbox`** (set per connection in its `.env`): a mode between `readonly` and `readwrite`. It registers the read tools plus `tm1_write_cells`, `tm1_create_sandbox`, `tm1_discard_sandbox` and `tm1_delete_sandbox`, and every write must go into a sandbox whose name starts with `TM1_SANDBOX_PREFIX` (default `mcp-`). Base data, and sandboxes other applications keep under the same account, cannot be written. Control cubes (`}…`) are refused even into a sandbox. New tools: `tm1_list_sandboxes` and `tm1_compare_sandbox` (read-only), `tm1_publish_sandbox` (readwrite only). `tm1_execute_mdx` and `tm1_write_cells` take a `sandbox` argument. On a TM1 server with `DisableSandboxing=T` the sandbox tools answer `UNSUPPORTED_OPERATION` with that reason, and sandbox mode warns once that nothing can be written.
 
 ### Security
 

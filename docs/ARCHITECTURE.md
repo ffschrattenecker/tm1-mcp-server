@@ -83,10 +83,13 @@ tools, and connects it to a transport:
 
 Tool registration is gated by `config.mode` (env `TM1_MODE`); with several
 connections, write tools are registered when any connection is readwrite and
-refused per call against a readonly one (see Connections below):
+refused per call against a readonly or sandbox one (see Connections below):
 
 - **`readonly` (default)** — write and destructive tools are never registered,
   so the server cannot mutate or delete anything.
+- **`sandbox`** — the `sandboxScoped` writes (`tm1_write_cells`, and the create,
+  discard and delete sandbox tools) are registered. `src/lib/sandbox-policy.ts`
+  confines them to sandboxes named with `TM1_SANDBOX_PREFIX`.
 - **`readwrite`** — the full lifecycle (cell writes, cube/dimension/process
   deletion, TI execution) is registered. Opt in explicitly.
 
