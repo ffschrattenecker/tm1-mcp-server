@@ -6,12 +6,16 @@ import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { cleanSandboxName, sandboxingOff } from "../../lib/sandbox-policy.js";
+import { SANDBOX_DIMENSION, tm1NameEquals } from "../../lib/tm1-name.js";
 
 type Cell = { coordinates: string[]; value: CellValue };
 
 // Decode every cell's coordinate from its ordinal (axis 0 varies fastest) and
 // key it by that coordinate. Keying by coordinate rather than by ordinal keeps
 // the comparison right when NON EMPTY gives the two sides different axes.
+// The Sandboxes member is left out of the key: TM1 returns the slicer axis,
+// which names Base on one side and the sandbox on the other, so keeping it
+// would split every cell into two "differences" (measured on 11.8).
 export function cellsByCoordinate(result: MdxResult): Map<string, Cell> {
   const axes: MdxAxis[] = result.axes;
   const radices = axes.map((a) => a.tuples.length);
@@ -21,8 +25,10 @@ export function cellsByCoordinate(result: MdxResult): Map<string, Cell> {
     const coordinates = radices.flatMap((n, k) => {
       const idx = ord % n;
       ord = Math.floor(ord / n);
-      return axes[k]!.tuples[idx]!.members.map(
-        (m) => `${m.hierarchyName}:${m.name}`,
+      return axes[k]!.tuples[idx]!.members.flatMap((m) =>
+        tm1NameEquals(m.hierarchyName, SANDBOX_DIMENSION)
+          ? []
+          : [`${m.hierarchyName}:${m.name}`],
       );
     });
     out.set(JSON.stringify(coordinates), { coordinates, value: cell.value });

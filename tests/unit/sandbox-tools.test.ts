@@ -377,6 +377,26 @@ describe("compare matches cells by coordinate", () => {
     ]);
   });
 
+  it("ignores the Sandboxes slicer member, which differs by side", () => {
+    // TM1 returns the slicer axis: Sandboxes:Base on the base read, the
+    // sandbox's name on the sandbox read. Keyed with it, one unchanged cell
+    // became two differences.
+    const withSlicer = (sandbox: string, value: number): MdxResult => {
+      const r = cellset(["Berlin"], [value]);
+      r.axes.push({
+        tuples: [{ members: [{ name: sandbox, hierarchyName: "Sandboxes" }] }],
+      });
+      return r;
+    };
+    const base = cellsByCoordinate(withSlicer("Base", 10));
+    const same = cellsByCoordinate(withSlicer("mcp-1", 10));
+    const changed = cellsByCoordinate(withSlicer("mcp-1", 25));
+    expect(diffCells(base, same)).toEqual([]);
+    expect(diffCells(base, changed)).toEqual([
+      { coordinates: ["Region:Berlin"], base: 10, sandbox: 25, change: 15 },
+    ]);
+  });
+
   it("treats empty, zero and null as the same", () => {
     const base = cellsByCoordinate(cellset(["Berlin"], [null]));
     const sand = cellsByCoordinate(cellset(["Berlin"], [0]));
