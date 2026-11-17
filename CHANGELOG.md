@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [10.6.0] - 2026-11-17
+
 ### Added
 
 - **`tm1_read_server_file`** (v11): reads a text file the server wrote, such as an `ASCIIOutput` export, which v11 `Blobs` does not list. It runs an unbound TI process that copies the file into the logging directory, reads the copy and deletes it. The tool runs TI and can open any file the TM1 service account can, so it is not READ_ONLY and readonly connections refuse it.
@@ -495,7 +497,10 @@ response-size guard, the per-connection caches) are unchanged.
 Older history (before 8.0.0): see the git tags and the upstream repository,
 https://github.com/flameY3T1/tm1-mcp-server.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.4.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.6.0...HEAD
+[10.6.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.5.1...v10.6.0
+[10.5.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.5.0...v10.5.1
+[10.5.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.4.0...v10.5.0
 [10.4.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.3.0...v10.4.0
 [10.3.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.2.0...v10.3.0
 [10.2.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.1.0...v10.2.0
