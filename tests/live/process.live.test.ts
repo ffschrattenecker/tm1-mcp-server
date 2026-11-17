@@ -7,7 +7,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import {
   dropIfExists,
   getHarness,
@@ -437,11 +437,19 @@ describe.skipIf(!LIVE_ENABLED)("live: process .pro files", () => {
       proContent,
       "utf8",
     );
-    const r = await h.ok("tm1_install_pro_bundle", {
-      directory: bundleDir,
-      dryRun: true,
-      preflight: true,
-    });
+    // A TM1_LOCAL_FILE_ROOT from the shell would confine the tool to a
+    // directory that does not contain os.tmpdir().
+    vi.stubEnv("TM1_LOCAL_FILE_ROOT", "");
+    let r;
+    try {
+      r = await h.ok("tm1_install_pro_bundle", {
+        directory: bundleDir,
+        dryRun: true,
+        preflight: true,
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
     // dryRun parses + preflights and reports the *projected* per-file status
     // (e.g. "updated") without issuing create/update calls. Assert it found
     // the file, ran in dryRun mode, and hit no errors.
