@@ -25,6 +25,7 @@ function makeV12Config(): TM1Config {
     httpPort: 0,
     httpAllowedOrigins: [],
     mode: "readonly",
+    sandboxPrefix: "mcp-",
     responseMode: "structured",
     maxResponseChars: 80_000,
     version: 12,

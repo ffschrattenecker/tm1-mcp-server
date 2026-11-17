@@ -91,6 +91,27 @@ describe("ConnectionRegistry.fromEnvironment", () => {
     expect(reg.info("test")?.modeReason).toBeUndefined();
   });
 
+  it("carries each folder's sandbox mode and prefix into its info", () => {
+    writeConn(root, "agent", [
+      "TM1_BASE_URL=http://a:1",
+      ...CREDS,
+      "TM1_MODE=sandbox",
+      "TM1_SANDBOX_PREFIX=agent_",
+    ]);
+    writeConn(root, "plain", ["TM1_BASE_URL=http://p:1", ...CREDS]);
+
+    const reg = ConnectionRegistry.fromEnvironment(
+      { TM1_CONNECTIONS_DIR: root },
+      logger,
+    );
+
+    expect(reg.info("agent")?.mode).toBe("sandbox");
+    expect(reg.info("agent")?.sandboxPrefix).toBe("agent_");
+    expect(reg.info("plain")?.mode).toBe("readonly");
+    expect(reg.info("plain")?.sandboxPrefix).toBe("mcp-");
+    expect(reg.anyReadwrite).toBe(false);
+  });
+
   it("narrows discovery with TM1_CONNECTIONS", () => {
     writeConn(root, "a", ["TM1_BASE_URL=http://a:1", ...CREDS]);
     writeConn(root, "b", ["TM1_BASE_URL=http://b:1", ...CREDS]);

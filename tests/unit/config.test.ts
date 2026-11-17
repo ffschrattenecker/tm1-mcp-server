@@ -190,6 +190,57 @@ describe("loadConfig", () => {
     });
   });
 
+  describe("TM1_MODE=sandbox and TM1_SANDBOX_PREFIX", () => {
+    it("accepts sandbox case-insensitively, with the default prefix", () => {
+      const c = loadConfig({ ...REQUIRED, TM1_MODE: "Sandbox" });
+      expect(c.mode).toBe("sandbox");
+      expect(c.sandboxPrefix).toBe("mcp-");
+      expect(c.modeReason).toBeUndefined();
+    });
+
+    it("takes TM1_SANDBOX_PREFIX", () => {
+      const c = loadConfig({
+        ...REQUIRED,
+        TM1_MODE: "sandbox",
+        TM1_SANDBOX_PREFIX: "agent_",
+      });
+      expect(c.sandboxPrefix).toBe("agent_");
+    });
+
+    it("names sandbox among the valid modes", () => {
+      expect(() => loadConfig({ ...REQUIRED, TM1_MODE: "sandboxed" })).toThrow(
+        /"readwrite", "sandbox" or "readonly"/,
+      );
+    });
+
+    it.each(["", "   ", "a b", "x'y"])("refuses the prefix %j", (prefix) => {
+      expect(() =>
+        loadConfig({ ...REQUIRED, TM1_SANDBOX_PREFIX: prefix }),
+      ).toThrow(/Invalid TM1_SANDBOX_PREFIX/);
+    });
+
+    it("forces prod sandbox to readonly and says why", () => {
+      const c = loadConfig({
+        ...REQUIRED,
+        TM1_MODE: "sandbox",
+        TM1_ENVIRONMENT: "prod",
+      });
+      expect(c.mode).toBe("readonly");
+      expect(c.modeReason).toContain("TM1_ALLOW_PROD_WRITES");
+    });
+
+    it("keeps prod sandbox with TM1_ALLOW_PROD_WRITES=true", () => {
+      const c = loadConfig({
+        ...REQUIRED,
+        TM1_MODE: "sandbox",
+        TM1_ENVIRONMENT: "prod",
+        TM1_ALLOW_PROD_WRITES: "true",
+      });
+      expect(c.mode).toBe("sandbox");
+      expect(c.modeReason).toBeUndefined();
+    });
+  });
+
   describe("non-loopback HTTP bind requires TM1_MCP_HTTP_TOKEN", () => {
     const http = { ...REQUIRED, TM1_MCP_TRANSPORT: "http" };
 

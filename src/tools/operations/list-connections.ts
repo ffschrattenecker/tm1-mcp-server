@@ -6,7 +6,7 @@ import { jsonResult } from "../format.js";
 
 const ConnectionSchema = z.object({
   name: z.string(),
-  mode: z.enum(["readwrite", "readonly"]).optional(),
+  mode: z.enum(["readwrite", "sandbox", "readonly"]).optional(),
   environment: z.enum(["dev", "test", "prod"]).optional(),
   modeReason: z.string().optional(),
   tm1Version: z.string().optional(),
@@ -17,7 +17,7 @@ const ConnectionSchema = z.object({
 export const registerListConnections = defineTool({
   name: "tm1_list_connections",
   description:
-    "List the TM1 connections this server can reach (rescans the connections folder first, so new or changed ones show up without a restart): name (the `connection` argument of every other tool), readonly/readwrite mode, TM1_ENVIRONMENT label (and why mode was forced), TM1 version, and whether a session is open; plus this MCP server's own name and version. Makes no TM1 call.",
+    "List the TM1 connections this server can reach (rescans the connections folder first, so new or changed ones show up without a restart): name (the `connection` argument of every other tool), mode (readonly, sandbox — writes only into sandboxes named with the connection's sandbox prefix — or readwrite), TM1_ENVIRONMENT label (and why mode was forced), TM1 version, and whether a session is open; plus this MCP server's own name and version. Makes no TM1 call.",
   annotations: READ_ONLY,
   output: z.object({
     server: z.object({ name: z.string(), version: z.string() }),

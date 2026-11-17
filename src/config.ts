@@ -1,3 +1,5 @@
+import { SANDBOX_PREFIX_PATTERN } from "./lib/sandbox-policy.js";
+
 export interface TM1Config {
   baseUrl: string;
   user: string;
@@ -39,7 +41,15 @@ export interface TM1Config {
   // listing. Default: "readonly" — write/destructive tools are opt-in via
   // TM1_MODE=readwrite, so an unconfigured server cannot mutate or delete TM1
   // objects by accident.
-  mode: "readwrite" | "readonly";
+  //
+  // "sandbox" sits between the two: the read tools plus the tools whose spec
+  // is `sandboxScoped`, and those write only into a sandbox whose name starts
+  // with `sandboxPrefix` — never into base data, never into a sandbox another
+  // application of the same account owns. Publishing stays readwrite-only.
+  mode: "readwrite" | "sandbox" | "readonly";
+  // Name prefix of the sandboxes the server may create, write, discard and
+  // delete in sandbox mode (TM1_SANDBOX_PREFIX, default "mcp-").
+  sandboxPrefix: string;
   // TM1_ENVIRONMENT: what this connection points at, as the operator labelled
   // it. Undefined when unset. "prod" forces mode to readonly unless
   // TM1_ALLOW_PROD_WRITES=true — a readwrite .env copied from a dev instance
@@ -83,7 +93,7 @@ export interface TM1Config {
 
 const VALID_LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
 const VALID_TRANSPORTS = ["stdio", "http"] as const;
-const VALID_MODES = ["readwrite", "readonly"] as const;
+const VALID_MODES = ["readwrite", "sandbox", "readonly"] as const;
 const VALID_ENVIRONMENTS = ["dev", "test", "prod"] as const;
 const VALID_RESPONSE_MODES = ["legacy", "structured"] as const;
 const VALID_AUTH_MODES = [
@@ -378,7 +388,15 @@ export function loadConfig(
   const modeRaw = (env.TM1_MODE ?? "readonly").trim().toLowerCase();
   if (!VALID_MODES.includes(modeRaw as (typeof VALID_MODES)[number])) {
     throw new Error(
-      `Invalid TM1_MODE: "${env.TM1_MODE}". Expected "readwrite" or "readonly".`,
+      `Invalid TM1_MODE: "${env.TM1_MODE}". Expected "readwrite", "sandbox" or "readonly".`,
+    );
+  }
+  // The prefix is what keeps sandbox mode off sandboxes it did not create, so
+  // it may not be empty, and it must itself be a legal sandbox name.
+  const sandboxPrefix = (env.TM1_SANDBOX_PREFIX ?? "mcp-").trim();
+  if (sandboxPrefix === "" || !SANDBOX_PREFIX_PATTERN.test(sandboxPrefix)) {
+    throw new Error(
+      `Invalid TM1_SANDBOX_PREFIX: "${env.TM1_SANDBOX_PREFIX}". Use letters, digits, "-", "_" or "." (not empty).`,
     );
   }
   const envRaw = env.TM1_ENVIRONMENT?.trim().toLowerCase() || undefined;
@@ -395,7 +413,8 @@ export function loadConfig(
     env.TM1_ALLOW_PROD_WRITES?.trim().toLowerCase() === "true";
   let mode = modeRaw as TM1Config["mode"];
   let modeReason: string | undefined;
-  if (environment === "prod" && mode === "readwrite" && !allowProdWrites) {
+  // Sandbox mode writes too (into sandboxes), so prod downgrades it as well.
+  if (environment === "prod" && mode !== "readonly" && !allowProdWrites) {
     mode = "readonly";
     modeReason =
       "TM1_ENVIRONMENT=prod forces readonly; set TM1_ALLOW_PROD_WRITES=true to allow writes.";
@@ -495,6 +514,7 @@ export function loadConfig(
     requestTimeoutMs,
     tm1Version: effectiveTm1Version,
     mode,
+    sandboxPrefix,
     ...(environment !== undefined ? { environment } : {}),
     ...(modeReason !== undefined ? { modeReason } : {}),
     version,

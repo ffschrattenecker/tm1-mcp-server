@@ -246,10 +246,13 @@ export function defineTool<I extends ZodRawShape>(
         };
     const gate = (connection: string | undefined) => {
       const info = registry.resolveInfo(connection);
-      if (!spec.annotations.readOnlyHint && info.mode === "readonly") {
+      if (
+        !spec.annotations.readOnlyHint &&
+        (info.mode === "readonly" || info.mode === "sandbox")
+      ) {
         throw new TM1Error({
           code: TM1ErrorCode.PERMISSION_DENIED,
-          message: `${spec.name} changes TM1, but connection "${info.name}" is readonly.`,
+          message: `${spec.name} changes TM1, but connection "${info.name}" is ${info.mode}.`,
           hint:
             info.modeReason ??
             "Set TM1_MODE=readwrite in that connection's .env to allow writes.",

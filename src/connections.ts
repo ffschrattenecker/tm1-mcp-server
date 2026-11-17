@@ -116,6 +116,8 @@ export interface ConnectionInfo {
   /** Folder the `.env` came from; undefined for the legacy single connection. */
   dir?: string | undefined;
   mode?: TM1Config["mode"] | undefined;
+  /** Name prefix of the sandboxes sandbox mode may write into. */
+  sandboxPrefix?: string | undefined;
   environment?: TM1Config["environment"];
   /** Why mode differs from TM1_MODE (prod forces readonly). */
   modeReason?: string | undefined;
@@ -247,6 +249,7 @@ export class ConnectionRegistry {
         name,
         dir,
         mode: config.mode,
+        sandboxPrefix: config.sandboxPrefix,
         environment: config.environment,
         modeReason: config.modeReason,
         version: config.version,
