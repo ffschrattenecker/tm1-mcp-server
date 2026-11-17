@@ -213,6 +213,17 @@ function installToolsListSlimming(server: McpServer): void {
       handler: (...args: unknown[]) => unknown,
     ) => void;
   };
+  // The SDK installs tools/list in the McpServer constructor when the options
+  // declare `capabilities.tools`, so the handler would exist before the wrap
+  // below and ship unslimmed. Refuse that case up front rather than let it pass.
+  try {
+    server.server.assertCanSetRequestHandler("tools/list");
+  } catch {
+    throw new Error(
+      "tools/list was installed before withAnnotations() ran, so schema slimming would be off. " +
+        "Do not declare `capabilities.tools` on the McpServer — the SDK adds it on the first registration.",
+    );
+  }
   const originalSetRequestHandler = lowLevel.setRequestHandler.bind(lowLevel);
   lowLevel.setRequestHandler = (schema, handler) => {
     if (schema !== ListToolsRequestSchema) {

@@ -8,6 +8,10 @@ import {
   stripDefaultPhrase,
 } from "../../src/lib/slim-json-schema.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
+import { buildMcpServer } from "../../src/build-mcp-server.js";
+import { loadServerSettings } from "../../src/config.js";
+import { ConnectionRegistry } from "../../src/connections.js";
+import type { TM1Client } from "../../src/tm1-client.js";
 import "../../src/tools/fileops/files-read.js";
 import { mockLogger } from "../helpers/client-harness.js";
 
@@ -211,6 +215,49 @@ describe("tools/list advertises slimmed schemas", () => {
     expect(
       (tool?.outputSchema as Record<string, unknown>).additionalProperties,
     ).toBe(false);
+  });
+
+  it("refuses a server whose tools/list was installed before the wrap", () => {
+    // Declaring the capability makes the SDK install tools/list in the
+    // constructor; the wrap would then never see it.
+    const server = new McpServer(
+      { name: "test", version: "0.0.0" },
+      { capabilities: { tools: { listChanged: true } } },
+    );
+    expect(() => withAnnotations(server, mockLogger, "readwrite")).toThrow(
+      /capabilities\.tools/,
+    );
+  });
+
+  it("slims the list the real buildMcpServer path serves", async () => {
+    // Declaring `capabilities.tools` on McpServer makes the SDK install
+    // tools/list before withAnnotations() can wrap it. Build the server the
+    // way the process does, so a regression there fails here.
+    const registry = ConnectionRegistry.of(
+      [{ name: "default", client: { version: 11 } as TM1Client }],
+      mockLogger,
+    );
+    const server = buildMcpServer(registry, loadServerSettings({}), mockLogger);
+    const [clientTransport, serverTransport] =
+      InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "test-client", version: "0.0.0" });
+    await Promise.all([
+      client.connect(clientTransport),
+      server.connect(serverTransport),
+    ]);
+    const { tools } = await client.listTools();
+    // The SDK adds the tools capability on the first registration.
+    expect(client.getServerCapabilities()?.tools).toEqual({
+      listChanged: true,
+    });
+    expect(tools.length).toBeGreaterThan(0);
+
+    const wire = JSON.stringify(tools);
+    expect(wire).not.toContain("$schema");
+    expect(wire).not.toContain(String(SAFE_INT_MAX));
+    expect(wire).not.toContain(String(SAFE_INT_MIN));
+    await client.close();
+    await server.close();
   });
 });
 

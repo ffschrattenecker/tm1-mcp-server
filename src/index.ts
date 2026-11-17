@@ -1,16 +1,13 @@
 #!/usr/bin/env node
 import "./load-env.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type pino from "pino";
-import { loadServerSettings, type ServerSettings } from "./config.js";
+import { loadServerSettings } from "./config.js";
 import { ConnectionRegistry } from "./connections.js";
-import { serverInstructions } from "./server-instructions.js";
+import { buildMcpServer } from "./build-mcp-server.js";
 import { createLogger } from "./logger.js";
-import { registerAllTools } from "./tools/index.js";
-import { withAnnotations } from "./tools/with-annotations.js";
 import { startHttpTransport } from "./http-transport.js";
-import { NAME, VERSION } from "./version.js";
 
 // stdio transport: existing Claude-Code/Desktop entry path.
 async function startStdioTransport(
@@ -23,62 +20,6 @@ async function startStdioTransport(
   return async () => {
     await transport.close();
   };
-}
-
-// Build a fully-registered MCP server (tools). Called once for stdio, and once
-// per request for the stateless HTTP transport — so the per-build logging is at
-// debug to avoid per-request spam. Registration is pure in-memory wiring (no
-// I/O); the connection registry is shared, not rebuilt.
-//
-// Capabilities are declared explicitly per MCP spec recommendation:
-//   tools — auto-registered by the SDK when the first tool is registered;
-//     declared here for self-documentation and to allow listChanged toggling later.
-//   logging — NOT auto-registered by the SDK; declaring it unlocks
-//     server.sendLoggingMessage() (delivered on stdio; HTTP stateless has no
-//     standing stream, so notifications are not pushed there).
-function buildMcpServer(
-  registry: ConnectionRegistry,
-  settings: ServerSettings,
-  logger: pino.Logger,
-): McpServer {
-  const server = new McpServer(
-    {
-      name: NAME,
-      version: VERSION,
-    },
-    {
-      capabilities: {
-        tools: { listChanged: true },
-        logging: {},
-      },
-      instructions: serverInstructions(registry),
-    },
-  );
-
-  // Register all tools — wrap the server so each registration takes its
-  // annotations from its defineTool spec without editing call sites. In readonly
-  // mode the proxy silently drops write/destructive tools so they never appear
-  // in the tool listing — no autoApprove lists needed. With several
-  // connections, write tools are listed when ANY connection is readwrite and
-  // refused per call against a readonly one (see defineTool).
-  // An empty registry lists everything; each call is checked against its connection.
-  const mode =
-    registry.anyReadwrite || registry.usableNames.length === 0
-      ? "readwrite"
-      : "readonly";
-  registerAllTools(
-    withAnnotations(
-      server,
-      logger,
-      mode,
-      settings.responseMode,
-      settings.maxResponseChars,
-    ),
-    registry,
-  );
-  logger.debug(`All MCP tools registered (mode: ${mode})`);
-
-  return server;
 }
 
 async function main(): Promise<void> {

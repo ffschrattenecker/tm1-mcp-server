@@ -174,17 +174,7 @@ export async function startHttpTransport(
           void transport.close();
           void server.close();
         });
-        // Cast: StreamableHTTPServerTransport.onclose is `(() => void) | undefined`
-        // while Transport expects `() => void`; the cast papers over that library-
-        // internal signature mismatch without changing behaviour. Cast to the
-        // parameter's own type rather than `any`, so only this mismatch is
-        // waived and the argument stays checked against the real signature.
-        // typescript-eslint 8.72+ flags this cast as unnecessary, but tsc (with
-        // exactOptionalPropertyTypes) rejects the uncast value, so the cast stays.
-        await server.connect(
-          // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-          transport as unknown as Parameters<typeof server.connect>[0],
-        );
+        await server.connect(transport);
         await transport.handleRequest(req, res, body);
       } catch (err) {
         logger.error({ err }, "Transport handleRequest threw");
