@@ -41,7 +41,7 @@ datasource (562-589).
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (60)
+## Tools (61)
 
 ### analysis (11)
 
@@ -74,10 +74,11 @@ datasource (562-589).
 - `tm1_delete_elements` — Delete many elements from one TM1 dimension hierarchy in a single call ($batch where the server supports it)
 - `tm1_update_element_attribute_value` — Set attribute values on elements by writing to the }ElementAttributes_{Dim} control cube
 
-### fileops (2)
+### fileops (3)
 
 - `tm1_files_read` — Read the TM1 server's file storage
 - `tm1_files_write` — Change the TM1 server's file storage
+- `tm1_read_server_file` — Read a text file from the TM1 server's file system as TI sees it, such as an export a TI process wrote with ASCIIOutput
 
 ### metadata (3)
 

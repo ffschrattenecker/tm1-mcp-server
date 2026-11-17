@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`tm1_read_server_file`** (v11): reads a text file the server wrote, such as an `ASCIIOutput` export, which v11 `Blobs` does not list. It runs an unbound TI process that copies the file into the logging directory, reads the copy and deletes it. The tool runs TI and can open any file the TM1 service account can, so it is not READ_ONLY and readonly connections refuse it.
+
 ### Security
 
 - `undici` raised to 8.12.3. Among the fixed advisories is GHSA-2m5v-pch6-74hx, a TLS certificate validation bypass through dropped `tls` options in `Agent`; the TM1 dispatcher builds exactly such an `Agent`.

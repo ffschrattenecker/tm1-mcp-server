@@ -63,6 +63,7 @@ import { registerSaveData } from "./operations/save-data.js";
 // File operations tools
 import { registerFilesRead } from "./fileops/files-read.js";
 import { registerFilesWrite } from "./fileops/files-write.js";
+import { registerReadServerFile } from "./fileops/read-server-file.js";
 
 // Generic REST tools
 import { registerRestRead } from "./rest/rest-read.js";
@@ -150,6 +151,7 @@ const REGISTRARS: ToolRegistrar[] = [
   // File operations
   registerFilesRead,
   registerFilesWrite,
+  registerReadServerFile,
 
   // Generic REST
   registerRestRead,
