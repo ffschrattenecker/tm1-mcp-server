@@ -74,6 +74,91 @@ function linkAbortSignals(
   return () => external.removeEventListener("abort", onAbort);
 }
 
+// Read a response body under a silence deadline. sendOnce's timer ends when
+// fetch() resolves with the headers, so the body had no deadline of its own:
+// a server that sent headers and then stalled hung the call forever. The timer
+// here restarts on every chunk, so it bounds silence, not the whole download —
+// a large result that keeps streaming is never cut off. A stall past `ms`
+// cancels the body and fails with the TimeoutError a request timeout raises;
+// the caller's signal cancels it too. `consume` reads the body (text(),
+// arrayBuffer()) from the response it is handed.
+function readBodyWithin<T>(
+  response: Response,
+  ms: number,
+  signal: AbortSignal | undefined,
+  consume: (r: Response) => Promise<T>,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let source: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let finished = false;
+    const finish = (): void => {
+      finished = true;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const fail = (reason: Error): void => {
+      if (finished) return;
+      finish();
+      source?.cancel(reason).catch(() => undefined);
+      reject(reason);
+    };
+    const onAbort = (): void => fail(abortReason(signal));
+    const arm = (): void => {
+      clearTimeout(timer);
+      timer = setTimeout(
+        () => fail(new DOMException("Request timed out", "TimeoutError")),
+        ms,
+      );
+    };
+    if (signal?.aborted) return onAbort();
+    signal?.addEventListener("abort", onAbort, { once: true });
+    arm();
+
+    // A null body (204, HEAD, empty) cannot stall, so it is read as it is.
+    let watched = response;
+    if (response.body) {
+      const reader: ReadableStreamDefaultReader<Uint8Array> =
+        response.body.getReader();
+      source = reader;
+      watched = new Response(
+        new ReadableStream<Uint8Array>({
+          async pull(controller) {
+            const chunk = await reader.read();
+            if (chunk.done) {
+              controller.close();
+              return;
+            }
+            arm();
+            controller.enqueue(chunk.value);
+          },
+          cancel: (reason) => reader.cancel(reason),
+        }),
+        {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        },
+      );
+    }
+    consume(watched).then(
+      (value) => {
+        if (finished) return;
+        finish();
+        resolve(value);
+      },
+      (err: Error) => fail(err),
+    );
+  });
+}
+
+// The reason an aborted signal carries, as an Error; a bare abort() has none.
+function abortReason(signal: AbortSignal | undefined): Error {
+  return signal?.reason instanceof Error
+    ? signal.reason
+    : new DOMException("This operation was aborted", "AbortError");
+}
+
 export class TM1HttpClient {
   // config is private: it carries credentials (TM1Config.password), so it must
   // not be reachable as `client.config` from the service layer. Services get
@@ -158,7 +243,12 @@ export class TM1HttpClient {
               opts?.signal,
             )
           : response;
-      const result = await this.handleResponse<T>(final, path);
+      const result = await this.handleResponse<T>(
+        final,
+        path,
+        budgetMs,
+        opts?.signal,
+      );
       this.emitMutation(method, path);
       return result;
     };
@@ -276,7 +366,7 @@ export class TM1HttpClient {
     path: string,
     opts?: RequestOptions,
   ): Promise<string> {
-    return (await this.fetchRaw(method, path, opts)).text();
+    return this.fetchRaw(method, path, opts, (r) => r.text());
   }
 
   /**
@@ -289,15 +379,21 @@ export class TM1HttpClient {
    */
   /** @internal — for Service-layer use; not part of the public consumer API. */
   public async requestRawBytes(method: string, path: string): Promise<Buffer> {
-    const res = await this.fetchRaw(method, path);
-    return Buffer.from(await res.arrayBuffer());
+    return this.fetchRaw(method, path, undefined, async (r) =>
+      Buffer.from(await r.arrayBuffer()),
+    );
   }
 
-  private async fetchRaw(
+  /**
+   * `consume` reads the successful body inside the deadline (see
+   * readBodyWithin); the caller never gets a body it has to read unbounded.
+   */
+  private async fetchRaw<T>(
     method: string,
     path: string,
-    opts?: RequestOptions,
-  ): Promise<Response> {
+    opts: RequestOptions | undefined,
+    consume: (r: Response) => Promise<T>,
+  ): Promise<T> {
     const url = `${this.config.baseUrl}${this.profile.resolveApiPath(path)}`;
     const effectiveTimeout = opts?.timeoutMs ?? this.config.requestTimeoutMs;
     const cookie = await this.sessionManager.ensureSession();
@@ -333,14 +429,29 @@ export class TM1HttpClient {
     if (!response.ok) {
       let body = "";
       try {
-        body = await response.text();
+        body = await readBodyWithin(
+          response,
+          effectiveTimeout,
+          opts?.signal,
+          (r) => r.text(),
+        );
       } catch {
         /* ignore */
       }
       throw this.classifyHttpError(response.status, path, body || undefined);
     }
     this.emitMutation(method, path);
-    return response;
+    try {
+      return await readBodyWithin(
+        response,
+        effectiveTimeout,
+        opts?.signal,
+        consume,
+      );
+    } catch (err) {
+      if (isTimeoutError(err)) throw lockTimeoutError(path, effectiveTimeout);
+      throw err;
+    }
   }
 
   /**
@@ -384,7 +495,12 @@ export class TM1HttpClient {
     if (!response.ok) {
       let errBody = "";
       try {
-        errBody = await response.text();
+        errBody = await readBodyWithin(
+          response,
+          effectiveTimeout,
+          undefined,
+          (r) => r.text(),
+        );
       } catch {
         /* ignore */
       }
@@ -563,7 +679,9 @@ export class TM1HttpClient {
           continue;
         }
         failures = 0;
-        if (res.status === 200) return await asyncResult(res);
+        if (res.status === 200) {
+          return await asyncResult(res, budgetMs, signal);
+        }
         if (res.status !== 202) {
           throw lostTrack(path, `polling answered HTTP ${res.status}`);
         }
@@ -644,9 +762,13 @@ export class TM1HttpClient {
   private async handleResponse<T>(
     response: Response,
     endpoint: string,
+    timeoutMs: number,
+    signal?: AbortSignal,
   ): Promise<T> {
     if (response.ok) {
-      const text = await response.text();
+      const text = await readBodyWithin(response, timeoutMs, signal, (r) =>
+        r.text(),
+      );
       if (response.status === 204 || !text) {
         return undefined as T;
       }
@@ -671,7 +793,9 @@ export class TM1HttpClient {
     let details: string | undefined;
     let errorBody: string;
     try {
-      errorBody = await response.text();
+      errorBody = await readBodyWithin(response, timeoutMs, signal, (r) =>
+        r.text(),
+      );
       if (errorBody) {
         const parsed: unknown = JSON.parse(errorBody);
         details = odataErrorText(parsed) ?? errorBody;
@@ -911,6 +1035,15 @@ function isTimeoutError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "TimeoutError";
 }
 
+/** The request's own deadline ran out, while its headers or its body were awaited. */
+function lockTimeoutError(path: string, ms: number): TM1Error {
+  return new TM1Error({
+    code: TM1ErrorCode.LOCK_TIMEOUT,
+    message: `Request to ${path} timed out after ${ms}ms`,
+    endpoint: path,
+  });
+}
+
 /** The polling lost the run: its outcome is unknown, never "not found". */
 function lostTrack(path: string, why: string): TM1Error {
   return new TM1Error({
@@ -926,10 +1059,14 @@ function lostTrack(path: string, why: string): TM1Error {
  * would have given: status from the `asyncresult` header, body as sent. With
  * no header the poll's own status stands.
  */
-async function asyncResult(res: Response): Promise<Response> {
+async function asyncResult(
+  res: Response,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<Response> {
   const status = Number.parseInt(res.headers.get("asyncresult") ?? "", 10);
   if (!Number.isInteger(status) || status === res.status) return res;
-  const text = await res.text();
+  const text = await readBodyWithin(res, timeoutMs, signal, (r) => r.text());
   return new Response(status === 204 || !text ? null : text, { status });
 }
 

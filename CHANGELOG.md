@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A TM1 response whose body stalls is bounded by the request timeout.** The timeout ended when the response headers arrived, so a server that sent headers and then stopped hung the tool call forever. The body is now read under the same deadline on every request path, including the raw and binary readers, login, keep-alive and logout. The deadline restarts at every body chunk, so a large result that keeps streaming is not cut off.
+- **Cellsets are released after a cancelled or timed-out read.** The cleanup `DELETE` inherited the caller's signal, which was already aborted, so it was never sent and the cellset stayed on the server. It now runs with its own 10 s budget.
 - **`tm1_write_cells` no longer replays a chunk whose outcome is unknown.** A timeout, a lost
   connection or a 5xx on the bulk write started the cell-by-cell fallback, which re-sent up to 500
   cells that might already be committed, and then reported success. The fallback now runs only when
