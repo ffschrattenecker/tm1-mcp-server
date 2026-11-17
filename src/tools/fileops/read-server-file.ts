@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ServerFileReadResultSchema } from "../schemas/items.js";
-import { DESTRUCTIVE, withVersion } from "../annotations.js";
+import { IDEMPOTENT_WRITE, withVersion } from "../annotations.js";
 import { jsonResult } from "../format.js";
 import { defineTool } from "../define-tool.js";
 
@@ -15,9 +15,9 @@ export const registerReadServerFile = defineTool({
     "Lines come back verbatim (quotes and delimiters untouched); empty lines are skipped, so this is not a byte-for-byte comparison. Runs one unbound TI process that copies the lines into the logging directory; the copy is deleted after the read.",
   ],
   // Not READ_ONLY: it executes TI and can open any file the TM1 service account
-  // can, so it must stay out of the readonly tool set. DESTRUCTIVE like
-  // tm1_execute_process, the other tool that runs TI.
-  annotations: withVersion(DESTRUCTIVE, "v11"),
+  // can, so it must stay out of the readonly tool set. Not DESTRUCTIVE: it
+  // changes no model object and deletes its own temp copy, like tm1_save_data.
+  annotations: withVersion(IDEMPOTENT_WRITE, "v11"),
   version: 11,
   output: ServerFileReadResultSchema,
   input: {

@@ -194,7 +194,7 @@ describe("tm1_read_server_file tool", () => {
   it("is not READ_ONLY, so readonly connections refuse it: it runs TI", () => {
     const annot = specFor("tm1_read_server_file")?.annotations;
     expect(annot?.readOnlyHint).toBeFalsy();
-    expect(annot?.destructiveHint).toBe(true);
+    expect(annot?.destructiveHint).toBe(false);
     expect(annot?.requiresVersion).toBe("v11");
   });
 
