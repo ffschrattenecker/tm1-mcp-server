@@ -241,14 +241,15 @@ function installToolsListSlimming(server: McpServer): void {
 //   2) wraps the callback so thrown errors become uniform JSON results
 //      and existing isError results get reshaped to include `hint`
 //   3) when the tool declares an outputSchema, attaches it
-//   4) when mode="readonly", silently skips tools without readOnlyHint
+//   4) when mode="readonly", silently skips tools without readOnlyHint; when
+//      mode="sandbox", also skips write tools that are not sandboxScoped
 // Also installs the tools/list schema slimmer (see installToolsListSlimming) —
 // it has to be in place before the first registration triggers the SDK's lazy
 // handler setup.
 export function withAnnotations(
   server: McpServer,
   logger: pino.Logger,
-  mode: "readwrite" | "readonly",
+  mode: "readwrite" | "sandbox" | "readonly",
   // Matches the shipped default (config.responseMode, see config.ts), so direct
   // callers — the live harness and the unit tests, which read content[0].text —
   // exercise the same wire shape real clients get.
@@ -431,6 +432,9 @@ export function withAnnotations(
         const spec = specFor(name) as ResolvedSpec;
         const annot = spec.annotations;
         if (mode === "readonly" && !annot.readOnlyHint) {
+          return;
+        }
+        if (mode === "sandbox" && !annot.readOnlyHint && !spec.sandboxScoped) {
           return;
         }
         const outputSchema = spec.outputSchema;

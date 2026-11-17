@@ -28,7 +28,9 @@ function makeServer(): McpServer {
 
 // Version-gated tools (tm1_save_data, v11 only) register under one version at
 // a time — union both so "registered" reflects full coverage.
-function collectRegisteredNames(mode: "readwrite" | "readonly"): Set<string> {
+function collectRegisteredNames(
+  mode: "readwrite" | "sandbox" | "readonly",
+): Set<string> {
   const names = new Set<string>();
   for (const version of [11, 12] as const) {
     const server = makeServer();
@@ -184,6 +186,16 @@ describe("spec completeness", () => {
     const registered = collectRegisteredNames("readwrite");
     const orphans = [...ANNOTATIONS.keys()].filter((n) => !registered.has(n));
     expect(orphans).toEqual([]);
+  });
+});
+
+describe("sandbox mode", () => {
+  // No tool is sandboxScoped yet, so sandbox lists exactly what readonly lists.
+  // Once a write tool is scoped, this equality must change to include it.
+  it("registers the same tools as readonly while no tool is sandboxScoped", () => {
+    const sandbox = collectRegisteredNames("sandbox");
+    const readonly = collectRegisteredNames("readonly");
+    expect([...sandbox].sort()).toEqual([...readonly].sort());
   });
 });
 

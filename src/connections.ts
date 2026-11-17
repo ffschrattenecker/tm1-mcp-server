@@ -425,6 +425,10 @@ export class ConnectionRegistry {
     return [...this.entries.values()].some((e) => e.info.mode === "readwrite");
   }
 
+  get anySandbox(): boolean {
+    return [...this.entries.values()].some((e) => e.info.mode === "sandbox");
+  }
+
   hasVersion(version: 11 | 12): boolean {
     return [...this.entries.values()].some((e) => e.info.version === version);
   }

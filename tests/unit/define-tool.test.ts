@@ -153,6 +153,44 @@ describe("defineTool", () => {
 
     expect(registered).toEqual(["tm1_spec_readonly_kept"]);
   });
+
+  it("in sandbox mode keeps reads and sandboxScoped writes, drops other writes", () => {
+    const server = new McpServer({ name: "t", version: "0.0.0" });
+    const registered: string[] = [];
+    server.registerTool = ((...args: unknown[]) => {
+      registered.push(args[0] as string);
+      return {} as ReturnType<typeof server.registerTool>;
+    }) as typeof server.registerTool;
+    const wrapped = withAnnotations(server, mockLogger, "sandbox");
+
+    defineTool({
+      name: "tm1_spec_sandbox_read_kept",
+      description: "fixture",
+      annotations: READ_ONLY,
+      input: { cubeName: z.string() },
+      handler: ok,
+    })(wrapped, fakeClient);
+    defineTool({
+      name: "tm1_spec_sandbox_scoped_kept",
+      description: "fixture",
+      annotations: DESTRUCTIVE,
+      sandboxScoped: true,
+      input: { cubeName: z.string() },
+      handler: ok,
+    })(wrapped, fakeClient);
+    defineTool({
+      name: "tm1_spec_sandbox_write_dropped",
+      description: "fixture",
+      annotations: DESTRUCTIVE,
+      input: { cubeName: z.string() },
+      handler: ok,
+    })(wrapped, fakeClient);
+
+    expect(registered).toEqual([
+      "tm1_spec_sandbox_read_kept",
+      "tm1_spec_sandbox_scoped_kept",
+    ]);
+  });
 });
 
 describe("defineTool with several connections", () => {
@@ -231,6 +269,90 @@ describe("defineTool with several connections", () => {
       .get("tm1_spec_multi_write")!
       .cb({ cubeName: "C", connection: "dev" });
     expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("refuses a write tool that is not sandboxScoped on a sandbox connection", async () => {
+    const { wrapped, tools } = capture();
+    const handler = vi.fn(ok);
+    const sandboxes = ConnectionRegistry.of([
+      { name: "sbx", client: v12, mode: "sandbox" },
+      { name: "dev", client: v11, mode: "readwrite" },
+    ]);
+    defineTool({
+      name: "tm1_spec_sandbox_unscoped_write",
+      description: "fixture",
+      annotations: DESTRUCTIVE,
+      input: { cubeName: z.string() },
+      handler,
+    })(wrapped, sandboxes);
+
+    const result = await tools
+      .get("tm1_spec_sandbox_unscoped_write")!
+      .cb({ cubeName: "C", connection: "sbx" });
+    expect(errorText(result)).toMatch(/PERMISSION_DENIED/);
+    expect(errorText(result)).toMatch(
+      /changes TM1 outside a sandbox, but connection .{0,2}sbx.{0,2} is in sandbox mode/,
+    );
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("lets a sandboxScoped write and a read tool through a sandbox connection", async () => {
+    const { wrapped, tools } = capture();
+    const sandboxes = ConnectionRegistry.of([
+      { name: "sbx", client: v12, mode: "sandbox" },
+      { name: "dev", client: v11, mode: "readwrite" },
+    ]);
+    const scoped = vi.fn(ok);
+    const read = vi.fn(ok);
+    defineTool({
+      name: "tm1_spec_sandbox_scoped_write",
+      description: "fixture",
+      annotations: DESTRUCTIVE,
+      sandboxScoped: true,
+      input: { cubeName: z.string() },
+      handler: scoped,
+    })(wrapped, sandboxes);
+    defineTool({
+      name: "tm1_spec_sandbox_plain_read",
+      description: "fixture",
+      annotations: READ_ONLY,
+      input: { cubeName: z.string() },
+      handler: read,
+    })(wrapped, sandboxes);
+
+    await tools
+      .get("tm1_spec_sandbox_scoped_write")!
+      .cb({ cubeName: "C", connection: "sbx" });
+    expect(scoped).toHaveBeenCalledOnce();
+
+    await tools
+      .get("tm1_spec_sandbox_plain_read")!
+      .cb({ cubeName: "C", connection: "sbx" });
+    expect(read).toHaveBeenCalledOnce();
+  });
+
+  it("still refuses a sandboxScoped write on a readonly connection", async () => {
+    const { wrapped, tools } = capture();
+    const handler = vi.fn(ok);
+    const mixed = ConnectionRegistry.of([
+      { name: "sbx", client: v12, mode: "sandbox" },
+      { name: "prod", client: v11, mode: "readonly" },
+    ]);
+    defineTool({
+      name: "tm1_spec_sandbox_scoped_refused",
+      description: "fixture",
+      annotations: DESTRUCTIVE,
+      sandboxScoped: true,
+      input: { cubeName: z.string() },
+      handler,
+    })(wrapped, mixed);
+
+    const result = await tools
+      .get("tm1_spec_sandbox_scoped_refused")!
+      .cb({ cubeName: "C", connection: "prod" });
+    expect(errorText(result)).toMatch(/PERMISSION_DENIED/);
+    expect(errorText(result)).toMatch(/prod.{0,2} is readonly/);
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it("registers a version-gated tool when any connection matches, refusing the others", async () => {

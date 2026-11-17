@@ -41,14 +41,17 @@ export function buildMcpServer(
   // Register all tools — wrap the server so each registration takes its
   // annotations from its defineTool spec without editing call sites. In readonly
   // mode the proxy silently drops write/destructive tools so they never appear
-  // in the tool listing — no autoApprove lists needed. With several
-  // connections, write tools are listed when ANY connection is readwrite and
-  // refused per call against a readonly one (see defineTool).
+  // in the tool listing — no autoApprove lists needed. In sandbox mode the proxy
+  // keeps only the sandboxScoped writes. With several connections, write tools
+  // are listed when ANY connection is readwrite and refused per call against a
+  // readonly or sandbox one (see defineTool).
   // An empty registry lists everything; each call is checked against its connection.
   const mode =
     registry.anyReadwrite || registry.usableNames.length === 0
       ? "readwrite"
-      : "readonly";
+      : registry.anySandbox
+        ? "sandbox"
+        : "readonly";
   registerAllTools(
     withAnnotations(
       server,

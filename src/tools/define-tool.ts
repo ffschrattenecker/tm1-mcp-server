@@ -69,6 +69,12 @@ interface ToolSpecBase<I extends ZodRawShape> {
    * carried by tools that stay registered on both generations.
    */
   version?: 11 | 12;
+  /**
+   * Writes only into a sandbox under TM1_MODE=sandbox; the tool itself enforces
+   * the prefix. Lets a sandbox connection call a write tool that is otherwise
+   * refused, and lets the server list it in sandbox mode.
+   */
+  sandboxScoped?: boolean;
 }
 
 /** A tool that acts on one TM1 connection — every tool but a handful. */
@@ -135,6 +141,8 @@ export interface ResolvedSpec {
   annotations: Tm1ToolAnnotations;
   /** Already widened — hand straight to the SDK. */
   outputSchema?: ZodRawShape | ZodTypeAny;
+  /** See ToolSpecBase.sandboxScoped. */
+  sandboxScoped: boolean;
 }
 
 // Populated at module-load time, when a tool file's top-level defineTool()
@@ -192,6 +200,7 @@ export function defineTool<I extends ZodRawShape>(
   SPECS.set(spec.name, {
     name: spec.name,
     annotations: spec.annotations,
+    sandboxScoped: spec.sandboxScoped === true,
     // Built conditionally: exactOptionalPropertyTypes rejects an explicit
     // `outputSchema: undefined` for an optional property.
     ...(outputSchema === undefined ? {} : { outputSchema }),
@@ -246,16 +255,26 @@ export function defineTool<I extends ZodRawShape>(
         };
     const gate = (connection: string | undefined) => {
       const info = registry.resolveInfo(connection);
-      if (
-        !spec.annotations.readOnlyHint &&
-        (info.mode === "readonly" || info.mode === "sandbox")
-      ) {
+      if (!spec.annotations.readOnlyHint && info.mode === "readonly") {
         throw new TM1Error({
           code: TM1ErrorCode.PERMISSION_DENIED,
-          message: `${spec.name} changes TM1, but connection "${info.name}" is ${info.mode}.`,
+          message: `${spec.name} changes TM1, but connection "${info.name}" is readonly.`,
           hint:
             info.modeReason ??
             "Set TM1_MODE=readwrite in that connection's .env to allow writes.",
+        });
+      }
+      if (
+        !spec.annotations.readOnlyHint &&
+        info.mode === "sandbox" &&
+        !spec.sandboxScoped
+      ) {
+        throw new TM1Error({
+          code: TM1ErrorCode.PERMISSION_DENIED,
+          message: `${spec.name} changes TM1 outside a sandbox, but connection "${info.name}" is in sandbox mode.`,
+          hint:
+            info.modeReason ??
+            "Set TM1_MODE=readwrite in that connection's .env to allow writes outside sandboxes.",
         });
       }
       if (spec.version !== undefined && info.version !== spec.version) {
