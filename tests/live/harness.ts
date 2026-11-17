@@ -67,7 +67,16 @@ export interface LiveHarness {
   has: (name: string) => boolean;
 }
 
-let harnessPromise: Promise<LiveHarness> | null = null;
+/** Connection overrides for a second harness, e.g. a sandbox-mode connection. */
+export interface HarnessOptions {
+  /** Tool surface and policy of the connection. Default: readwrite. */
+  mode?: "readwrite" | "sandbox";
+  /** TM1_SANDBOX_PREFIX for this connection. Default: from the environment. */
+  sandboxPrefix?: string;
+}
+
+// One memoized harness per option set; "" is the default connection.
+const harnessPromises = new Map<string, Promise<LiveHarness>>();
 
 // Minimal RequestHandlerExtra stand-in. Tool handlers destructure only their
 // args object and ignore `extra`, so a stub satisfies the call signature.
@@ -81,17 +90,29 @@ const mockExtra = {
 /**
  * Connect once, register every tool in readwrite mode (so destructive tools
  * are available for lifecycle teardown), and return a shared harness. Safe to
- * call from multiple beforeAll hooks — the connection is memoized.
+ * call from multiple beforeAll hooks — the connection is memoized per options.
+ * `getHarness({ mode: "sandbox", sandboxPrefix })` is a second connection with
+ * the sandbox-mode policy; it is memoized apart from the default one.
  */
-export function getHarness(): Promise<LiveHarness> {
-  harnessPromise ??= build();
-  return harnessPromise;
+export function getHarness(options?: HarnessOptions): Promise<LiveHarness> {
+  const key = options ? JSON.stringify(options) : "";
+  let promise = harnessPromises.get(key);
+  if (!promise) {
+    promise = build(options);
+    harnessPromises.set(key, promise);
+  }
+  return promise;
 }
 
-async function build(): Promise<LiveHarness> {
+async function build(options: HarnessOptions = {}): Promise<LiveHarness> {
   const baseConfig = loadConfig();
-  // Force readwrite: lifecycle suites must create AND delete sandbox objects.
-  const config: TM1Config = { ...baseConfig, mode: "readwrite" };
+  // Readwrite by default: lifecycle suites must create AND delete sandbox
+  // objects. The mode also decides which tools get registered, as in the server.
+  const config: TM1Config = {
+    ...baseConfig,
+    mode: options.mode ?? "readwrite",
+    sandboxPrefix: options.sandboxPrefix ?? baseConfig.sandboxPrefix,
+  };
   const logger = createLogger({ logLevel: "error" });
   const sessionManager = new SessionManager(config, logger);
   const realClient = new TM1Client(config, sessionManager, logger);
@@ -130,7 +151,7 @@ async function build(): Promise<LiveHarness> {
     },
   } as unknown as McpServer;
 
-  registerAllTools(withAnnotations(fakeServer, logger, "readwrite"), client);
+  registerAllTools(withAnnotations(fakeServer, logger, config.mode), client);
 
   const call = async (
     name: string,

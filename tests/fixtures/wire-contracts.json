@@ -1,6 +1,6 @@
 {
   "recordedAgainst": ["11.8.02900.8", "11.8.03500.4"],
-  "recordedAt": "2026-10-17",
+  "recordedAt": "2026-11-17",
   "endpoints": {
     "DELETE /api/v1/Chores('*') !404": {
       "error": {
@@ -891,6 +891,16 @@
     "GET /api/v1/Processes('*')/Variables": {
       "@odata.context": "string",
       "value[]": "unknown"
+    },
+    "GET /api/v1/Sandboxes": {
+      "@odata.context": "string",
+      "value[]": {
+        "IncludeInSandboxDimension": "boolean",
+        "IsActive": "boolean",
+        "IsLoaded": "boolean",
+        "IsQueued": "boolean",
+        "Name": "string"
+      }
     },
     "GET /api/v1/Sessions": {
       "@odata.context": "string",
