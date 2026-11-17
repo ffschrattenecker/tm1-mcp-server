@@ -109,6 +109,16 @@ export class TM1Client {
     return this.config.version;
   }
 
+  /** TM1_MODE. Tools that write consult it through ./lib/sandbox-policy.ts. */
+  get mode(): TM1Config["mode"] {
+    return this.config.mode;
+  }
+
+  /** TM1_SANDBOX_PREFIX: the sandboxes this server manages in sandbox mode. */
+  get sandboxPrefix(): string {
+    return this.config.sandboxPrefix;
+  }
+
   /**
    * Stable label for this connection, used to keep per-connection files (the
    * process backups) apart: host and port, plus the v12 instance/database.

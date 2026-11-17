@@ -190,12 +190,14 @@ describe("spec completeness", () => {
 });
 
 describe("sandbox mode", () => {
-  // No tool is sandboxScoped yet, so sandbox lists exactly what readonly lists.
-  // Once a write tool is scoped, this equality must change to include it.
-  it("registers the same tools as readonly while no tool is sandboxScoped", () => {
+  // Sandbox mode is read-only plus the sandboxScoped writes. tm1_write_cells is
+  // the only one so far; it refuses base data and foreign sandboxes itself.
+  it("registers the read-only tools plus tm1_write_cells", () => {
     const sandbox = collectRegisteredNames("sandbox");
     const readonly = collectRegisteredNames("readonly");
-    expect([...sandbox].sort()).toEqual([...readonly].sort());
+    expect([...sandbox].sort()).toEqual(
+      [...readonly, "tm1_write_cells"].sort(),
+    );
   });
 });
 

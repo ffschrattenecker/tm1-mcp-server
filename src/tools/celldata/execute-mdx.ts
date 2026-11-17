@@ -7,6 +7,7 @@ import { clipAxesToWindow } from "../../tm1-client/services/cellset-transform.js
 import { MdxResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { cleanSandboxName } from "../../lib/sandbox-policy.js";
 
 export interface MdxEnvelope {
   axes: MdxAxis[];
@@ -120,9 +121,13 @@ export const registerExecuteMdx = defineTool({
       .describe(
         "Override the default 30s request timeout for this call (ms, 1000–3600000). Use for heavy MDX over wide views.",
       ),
+    sandbox: z
+      .string()
+      .optional()
+      .describe("Evaluate the MDX in this sandbox instead of base data"),
   },
   handler: async (
-    { mdx, limit, offset, format, timeoutMs },
+    { mdx, limit, offset, format, timeoutMs, sandbox },
     tm1Client,
     extra,
   ) => {
@@ -133,10 +138,16 @@ export const registerExecuteMdx = defineTool({
     const top = all ? UNBOUNDED_MAX_ITEMS : limit;
     const skip = all ? 0 : offset;
     const result = await withToolHint(
-      tm1Client.cells.executeMdx(mdx, top, skip, {
-        signal: extra?.signal,
-        ...(timeoutMs ? { timeoutMs } : {}),
-      }),
+      tm1Client.cells.executeMdx(
+        mdx,
+        top,
+        skip,
+        {
+          signal: extra?.signal,
+          ...(timeoutMs ? { timeoutMs } : {}),
+        },
+        cleanSandboxName(sandbox),
+      ),
       "MDX execution failed. Common causes: missing brackets around member names ([Dim].[Hier].[Member]), unbalanced FROM/SELECT, unknown cube. Inspect details; cross-check member names with tm1_rest_read (Cubes('C')/Dimensions, Dimensions('D')/Hierarchies('D')/Elements).",
     );
 

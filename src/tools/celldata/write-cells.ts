@@ -7,7 +7,11 @@ import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
 import { memberRef } from "./member-ref.js";
 import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
-import { resolveCellAddress } from "../../lib/cell-address.js";
+import { resolveCellAddress, sandboxPosition } from "../../lib/cell-address.js";
+import {
+  requireModelCube,
+  resolveWriteSandbox,
+} from "../../lib/sandbox-policy.js";
 
 const READ_BACK_LIMIT = 20;
 
@@ -22,12 +26,14 @@ export const registerWriteCells = defineTool({
     "Write one or more cell values directly to a TM1 cube via REST.",
     "IMPORTANT: TI processes are the standard path for data loads — use this tool only for ad-hoc writes or when explicitly requested.",
     "Leaf (N-level) coordinates only: a consolidated one aborts the whole call before anything is sent, whatever the account's rights.",
-    "A dimension left out would land on its default member, so the call is refused; Sandboxes left out bind to Base (reported as sandboxDefaulted). A named sandbox is addressable only once its IncludeInSandboxDimension is true.",
+    "A dimension left out would land on its default member, so the call is refused; Sandboxes left out bind to Base, or to `sandbox` when one is given (reported as sandboxDefaulted). A named sandbox is addressable only once its IncludeInSandboxDimension is true.",
+    "With `sandbox` the write lands in that sandbox and base data is untouched. In TM1_MODE=sandbox a sandbox named with TM1_SANDBOX_PREFIX is required, and control cubes (}…) are refused.",
     "Before: tm1_check_writable_coords to validate that target coordinates are leaf-level and addressable.",
     "The written cells are read back (up to 20; verified.mismatches lists any that differ, e.g. a rule or spread overriding the value).",
     "Related: tm1_clear_cube for bulk wipe.",
   ],
   annotations: DESTRUCTIVE,
+  sandboxScoped: true,
   output: MutationResultSchema,
   input: {
     cubeName: z.string().describe("Name of the TM1 cube"),
@@ -54,16 +60,27 @@ export const registerWriteCells = defineTool({
       )
       .min(1)
       .describe("Cells to write"),
+    sandbox: z
+      .string()
+      .optional()
+      .describe(
+        "Write into this sandbox instead of base data (required with TM1_MODE=sandbox)",
+      ),
     ...CONFIRM_SCHEMA,
   },
   handler: async (
-    { cubeName, dimensions: given, cells: givenCells, confirm },
+    { cubeName, dimensions: given, cells: givenCells, sandbox, confirm },
     tm1Client,
   ) => {
     // Overwrites prior cell values with no undo. Guards against an
     // auto-approve client firing this without intent — NOT a security
     // control: anything that can call the tool can also supply `confirm`.
     requireConfirm(confirm, cubeName, "cube");
+    // Where the write lands. In sandbox mode this refuses base data and any
+    // sandbox outside the prefix, and a control cube, before a single request
+    // goes out.
+    const target = resolveWriteSandbox(tm1Client, sandbox);
+    requireModelCube(tm1Client, cubeName);
     for (const c of givenCells) {
       if (c.elements.length !== given.length) {
         throw dimensionCountMismatch(cubeName, given, c.elements);
@@ -81,6 +98,25 @@ export const registerWriteCells = defineTool({
       ...c,
       elements: address.toCubeOrder(c.elements),
     }));
+
+    // A cube with the Sandboxes dimension (EnableSandboxDimension=true) carries
+    // the sandbox in the coordinate itself. Bind a left-out Sandboxes to the
+    // target, and refuse a coordinate that names a different one — otherwise a
+    // sandbox-mode write could reach Base, or another sandbox, through it.
+    const sbPos = sandboxPosition(dimensions);
+    if (target !== undefined && sbPos >= 0) {
+      for (const c of cells) {
+        if (address.sandboxDefaulted) {
+          c.elements[sbPos] = target;
+        } else if (c.elements[sbPos]!.toLowerCase() !== target.toLowerCase()) {
+          throw new TM1Error({
+            code: "VALIDATION_ERROR",
+            message: `A cell names Sandboxes:${c.elements[sbPos]} but the write targets sandbox "${target}". Nothing was sent.`,
+            hint: "Leave the Sandboxes dimension out (it is then bound to `sandbox`), or name the same sandbox in both places.",
+          });
+        }
+      }
+    }
 
     // One probe per distinct hierarchy, not per cell: a write typically
     // reuses the same handful of elements across many coordinates.
@@ -138,14 +174,16 @@ export const registerWriteCells = defineTool({
     // (written / failed / notAttempted) + a targeted hint, so we let it
     // propagate to the Proxy unwrapped — wrapping it here would clobber that
     // hint with a generic one.
-    await tm1Client.cells.writeCells(cubeName, dimensions, cells);
+    await tm1Client.cells.writeCells(cubeName, dimensions, cells, target);
     // Read back a bounded sample: each read is its own MDX round trip. The
     // write has landed by now, so a failed read-back is reported, not thrown.
     const sample = cells.slice(0, READ_BACK_LIMIT);
     let verified: Record<string, unknown>;
     try {
       const readBack = await Promise.all(
-        sample.map((c) => tm1Client.cells.getValue(cubeName, c.elements)),
+        sample.map((c) =>
+          tm1Client.cells.getValue(cubeName, c.elements, target),
+        ),
       );
       verified = {
         checked: sample.length,
@@ -167,8 +205,9 @@ export const registerWriteCells = defineTool({
       success: true,
       cellsWritten: cells.length,
       verified,
+      ...(target !== undefined ? { sandbox: target } : {}),
       ...(address.sandboxDefaulted
-        ? { sandboxDefaulted: address.sandboxDefaulted }
+        ? { sandboxDefaulted: target ?? address.sandboxDefaulted }
         : {}),
     });
   },

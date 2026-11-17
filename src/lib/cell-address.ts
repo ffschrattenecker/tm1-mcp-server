@@ -13,8 +13,9 @@
 // as part of the cube. It is bound to `Base` explicitly rather than left to
 // TM1's default member, because the default is only known to be `Base` while
 // `Base` is the dimension's sole member — a sandbox with
-// IncludeInSandboxDimension=true adds another. This server never sends
-// `!sandbox=`, so `Base` is also what every read through it sees. A cube with
+// IncludeInSandboxDimension=true adds another. A read given no sandbox is sent
+// without `!sandbox=`, so it sees `Base` too; a write or read given a sandbox
+// binds it to that sandbox instead (`fill`). A cube with
 // a regular dimension that happens to be named Sandboxes but has no `Base`
 // fails loudly with TM1's "member not found", never silently.
 import { TM1Error, TM1ErrorCode } from "../types.js";
@@ -31,17 +32,19 @@ export function sandboxPosition(cubeDimensions: readonly string[]): number {
  * Positional counterpart of resolveCellAddress, for tools that take one
  * element per cube dimension (get_cell_value, check_writable_coords without
  * `dimensions`). A coordinate exactly one short on a cube with `Sandboxes`
- * is read as "Sandboxes left out" and gets `Base` at its position; anything
- * else returns undefined and the caller's count check refuses it as before.
+ * is read as "Sandboxes left out" and gets `Base` at its position — or
+ * `fill`, when the caller addresses a named sandbox; anything else returns
+ * undefined and the caller's count check refuses it as before.
  */
 export function bindLeftOutSandbox(
   cubeDimensions: readonly string[],
   elements: readonly string[],
+  fill: string = BASE_SANDBOX,
 ): string[] | undefined {
   if (elements.length !== cubeDimensions.length - 1) return undefined;
   const pos = sandboxPosition(cubeDimensions);
   if (pos < 0) return undefined;
-  return [...elements.slice(0, pos), BASE_SANDBOX, ...elements.slice(pos)];
+  return [...elements.slice(0, pos), fill, ...elements.slice(pos)];
 }
 
 export interface ResolvedAddress {

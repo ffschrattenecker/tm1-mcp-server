@@ -3,6 +3,7 @@
 // on the other.
 import type { CellValue, MdxAxis, MdxResult } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
+import { withSandboxParam } from "../../lib/sandbox-policy.js";
 
 // TM1 escaping: `]` inside a bracketed identifier is doubled. Cellset IDs are
 // server-generated GUIDs so this is defensive, but keeps the pattern uniform.
@@ -24,12 +25,14 @@ const FREE_CELLSET_TIMEOUT_MS = 10000;
 export async function freeCellset(
   http: TM1HttpClient,
   id: string | undefined,
+  sandbox?: string,
 ): Promise<void> {
   if (!id) return;
   try {
+    // A cellset opened in a sandbox is freed in it too, as TM1py does.
     await http.request<void>(
       "DELETE",
-      `/api/v1/Cellsets('${encId(id)}')`,
+      withSandboxParam(`/api/v1/Cellsets('${encId(id)}')`, sandbox),
       undefined,
       { timeoutMs: FREE_CELLSET_TIMEOUT_MS },
     );

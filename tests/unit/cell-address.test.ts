@@ -34,6 +34,14 @@ describe("bindLeftOutSandbox", () => {
     ]);
   });
 
+  it("binds a named sandbox instead of Base when asked to", () => {
+    expect(bindLeftOutSandbox(SANDBOXED, ["R1", "Amount"], "mcp-a")).toEqual([
+      "mcp-a",
+      "R1",
+      "Amount",
+    ]);
+  });
+
   it("leaves every other length to the caller's count check", () => {
     expect(bindLeftOutSandbox(SANDBOXED, ["Base", "R1", "Amount"])).toBe(
       undefined,
