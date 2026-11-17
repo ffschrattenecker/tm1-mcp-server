@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- `undici` raised to 8.12.3. Among the fixed advisories is GHSA-2m5v-pch6-74hx, a TLS certificate validation bypass through dropped `tls` options in `Agent`; the TM1 dispatcher builds exactly such an `Agent`.
+- `undici` raised to 8.12.4. Among the fixed advisories is GHSA-2m5v-pch6-74hx, a TLS certificate validation bypass through dropped `tls` options in `Agent`; the TM1 dispatcher builds exactly such an `Agent`.
 - `@modelcontextprotocol/sdk` raised to 1.32.2. Transitive lockfile entries raised as well: `hono` 4.13.19, `@hono/node-server` 2.1.9, `qs` 6.17.1 and `ip-address` 10.7.6, which clear the open advisories `npm audit` reported for the HTTP transport. `npm audit --omit=dev` reports no vulnerabilities.
 
 ### Fixed
