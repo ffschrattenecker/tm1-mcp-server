@@ -90,7 +90,7 @@ describe("SessionManager", () => {
         .mockResolvedValueOnce(
           mockFetchResponse({ ok: true, setCookie: "TM1SessionId=c1; Path=/" }),
         )
-        .mockResolvedValueOnce(mockFetchResponse({ ok: true })) // logout DELETE of c1
+        .mockResolvedValueOnce(mockFetchResponse({ ok: true })) // logout tm1.Close of c1
         .mockResolvedValueOnce(
           mockFetchResponse({ ok: true, setCookie: "TM1SessionId=c2; Path=/" }),
         );
@@ -379,12 +379,12 @@ describe("SessionManager", () => {
   });
 
   describe("re-auth and logout ordering (regression)", () => {
-    it("re-auth with an existing cookie sends one DELETE then logs in (no self-await deadlock)", async () => {
+    it("re-auth with an existing cookie sends one tm1.Close then logs in (no self-await deadlock)", async () => {
       fetchSpy
         .mockResolvedValueOnce(
           mockFetchResponse({ ok: true, setCookie: "TM1SessionId=c1; Path=/" }),
         )
-        .mockResolvedValueOnce(mockFetchResponse({ ok: true })) // DELETE of c1
+        .mockResolvedValueOnce(mockFetchResponse({ ok: true })) // tm1.Close of c1
         .mockResolvedValueOnce(
           mockFetchResponse({ ok: true, setCookie: "TM1SessionId=c2; Path=/" }),
         );
@@ -395,13 +395,17 @@ describe("SessionManager", () => {
 
       expect(second).toBe("c2");
       expect(fetchSpy).toHaveBeenCalledTimes(3);
-      const [deleteUrl, deleteOpts] = fetchSpy.mock.calls[1] as [
+      const [closeUrl, closeOpts] = fetchSpy.mock.calls[1] as [
         string,
-        { method: string; headers: Record<string, string> },
+        { method: string; body: string; headers: Record<string, string> },
       ];
-      expect(deleteUrl).toBe("https://tm1server:8010/api/v1/ActiveSession");
-      expect(deleteOpts.method).toBe("DELETE");
-      expect(deleteOpts.headers.Cookie).toBe("TM1SessionId=c1");
+      expect(closeUrl).toBe(
+        "https://tm1server:8010/api/v1/ActiveSession/tm1.Close",
+      );
+      expect(closeOpts.method).toBe("POST");
+      expect(closeOpts.body).toBe("{}");
+      expect(closeOpts.headers["Content-Type"]).toBe("application/json");
+      expect(closeOpts.headers.Cookie).toBe("TM1SessionId=c1");
     });
 
     it("logout() during an in-flight login waits for it and deletes the new session", async () => {
@@ -411,7 +415,7 @@ describe("SessionManager", () => {
       });
       fetchSpy
         .mockImplementationOnce(() => heldLogin)
-        .mockResolvedValueOnce(mockFetchResponse({ ok: true })); // DELETE
+        .mockResolvedValueOnce(mockFetchResponse({ ok: true })); // tm1.Close
 
       const sm = new SessionManager(makeTestConfig(), mockLogger);
       const authPromise = sm.authenticate();
@@ -423,13 +427,75 @@ describe("SessionManager", () => {
       await Promise.all([authPromise, logoutPromise]);
 
       expect(fetchSpy).toHaveBeenCalledTimes(2);
-      const [deleteUrl, deleteOpts] = fetchSpy.mock.calls[1] as [
+      const [closeUrl, closeOpts] = fetchSpy.mock.calls[1] as [
         string,
         { method: string; headers: Record<string, string> },
       ];
-      expect(deleteUrl).toBe("https://tm1server:8010/api/v1/ActiveSession");
-      expect(deleteOpts.method).toBe("DELETE");
-      expect(deleteOpts.headers.Cookie).toBe("TM1SessionId=late");
+      // DELETE /ActiveSession is refused by TM1 and leaves the session open.
+      expect(closeUrl).toBe(
+        "https://tm1server:8010/api/v1/ActiveSession/tm1.Close",
+      );
+      expect(closeOpts.method).toBe("POST");
+      expect(closeOpts.headers.Cookie).toBe("TM1SessionId=late");
+      expect(sm.isSessionActive()).toBe(false);
+    });
+  });
+
+  describe("logout() outcome", () => {
+    it("logs a warning and still clears the session when TM1 refuses tm1.Close", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(
+          mockFetchResponse({
+            ok: true,
+            setCookie: "TM1SessionId=tok; Path=/",
+          }),
+        )
+        .mockResolvedValueOnce(
+          mockFetchResponse({
+            ok: false,
+            status: 400,
+            statusText: "Bad Request",
+          }),
+        );
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
+      await sm.authenticate();
+      vi.mocked(mockLogger.warn).mockClear();
+      vi.mocked(mockLogger.info).mockClear();
+
+      await expect(sm.logout()).resolves.toBeUndefined();
+
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        { status: 400 },
+        expect.stringContaining("refused the logout"),
+      );
+      expect(mockLogger.info).not.toHaveBeenCalledWith("Logged out from TM1");
+      expect(sm.isSessionActive()).toBe(false);
+    });
+
+    it("stays silent when the session is already gone (401)", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(
+          mockFetchResponse({
+            ok: true,
+            setCookie: "TM1SessionId=tok; Path=/",
+          }),
+        )
+        .mockResolvedValueOnce(
+          mockFetchResponse({
+            ok: false,
+            status: 401,
+            statusText: "Unauthorized",
+          }),
+        );
+      const sm = new SessionManager(makeTestConfig(), mockLogger);
+      await sm.authenticate();
+      vi.mocked(mockLogger.warn).mockClear();
+      vi.mocked(mockLogger.info).mockClear();
+
+      await sm.logout();
+
+      expect(mockLogger.warn).not.toHaveBeenCalled();
+      expect(mockLogger.info).toHaveBeenCalledWith("Logged out from TM1");
       expect(sm.isSessionActive()).toBe(false);
     });
   });
@@ -506,12 +572,12 @@ describe("SessionManager", () => {
         }),
       );
       // Re-auth flow: doAuthenticate logs out the (now-dead) "old" session
-      // first — a best-effort DELETE — then performs the fresh login. The
+      // first — a best-effort tm1.Close — then performs the fresh login. The
       // keep-alive path no longer nulls the cookie before re-auth so that a
       // concurrent rotation isn't clobbered (staggered-401 churn fix), which is
       // why the logout round-trip is now observable here.
       fetchSpy.mockResolvedValueOnce(
-        mockFetchResponse({ ok: true }), // logout DELETE
+        mockFetchResponse({ ok: true }), // logout tm1.Close
       );
       fetchSpy.mockResolvedValueOnce(
         mockFetchResponse({

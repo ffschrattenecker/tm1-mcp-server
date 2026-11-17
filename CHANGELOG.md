@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Logout now ends the TM1 session.** It sent `DELETE /api/v1/ActiveSession`, which TM1 11.8 and
+  12.5 answer with `400 DELETE not supported on this resource!`. The session stayed open until its
+  idle timeout, so every server start left one behind. Logout now calls
+  `POST /api/v1/ActiveSession/tm1.Close`, and a refused logout is logged as a warning instead of
+  as "Logged out".
 - Schema slimming in `tools/list` still applies with `@modelcontextprotocol/sdk` 1.32.2. That SDK installs its own `tools/list` handler when the server declares the `tools` capability, so the server no longer declares it; the SDK advertises it on the first tool registration. Wrapping a server whose `tools/list` handler already exists now throws instead of shipping unslimmed schemas.
 
 ## [10.5.1] - 2026-11-09

@@ -332,37 +332,44 @@ export class SessionManager {
   }
 
   /**
-   * Logout from TM1 by deleting the active session.
-   * DELETE /api/v1/ActiveSession
+   * Logout from TM1 by ending the active session.
+   * POST /api/v1/ActiveSession/tm1.Close
    */
   async logout(): Promise<void> {
     // Shutdown can land while the startup login is still in flight; wait for it
-    // so the session it creates gets deleted too.
+    // so the session it creates gets closed too.
     if (this.authInFlight) await this.authInFlight.catch(() => {});
     await this.endSession();
   }
 
-  /** Delete the held session (no-op without one). Used by logout() and re-auth. */
+  /**
+   * End the held session (no-op without one). Used by logout() and re-auth.
+   * POST /api/v1/ActiveSession/tm1.Close is the call that ends a session;
+   * `DELETE /api/v1/ActiveSession` answers 400 "DELETE not supported on this
+   * resource!" on 11.8 and 12.5 and leaves the session open.
+   */
   private async endSession(): Promise<void> {
     const cookie = this.sessionCookie;
     if (!cookie) {
       return;
     }
 
-    const url = `${this.config.baseUrl}${this.profile.resolveApiPath("/api/v1/ActiveSession")}`;
+    const url = `${this.config.baseUrl}${this.profile.resolveApiPath("/api/v1/ActiveSession/tm1.Close")}`;
     this.logger.info("Logging out from TM1");
 
     try {
       // Bound the logout request — authenticate() calls endSession() first, so a
-      // hung DELETE (slow/unreachable server) would otherwise block re-auth
+      // hung request (slow/unreachable server) would otherwise block re-auth
       // indefinitely. On timeout we still clear the cookie below.
       const response = await withTimeout(
         this.config.requestTimeoutMs,
         "Logout",
         (signal) =>
           tm1Fetch(url, {
-            method: "DELETE",
+            method: "POST",
+            body: "{}",
             headers: {
+              "Content-Type": "application/json",
               Cookie: this.cookieHeader(cookie),
               "User-Agent": USER_AGENT,
               "TM1-SessionContext": USER_AGENT,
@@ -377,7 +384,15 @@ export class SessionManager {
       await response.text();
 
       this.sessionCookie = null;
-      this.logger.info("Logged out from TM1");
+      // A 401 means the session was already gone, which is the goal.
+      if (response.ok || response.status === 401) {
+        this.logger.info("Logged out from TM1");
+      } else {
+        this.logger.warn(
+          { status: response.status },
+          "TM1 refused the logout; the session stays open until it times out",
+        );
+      }
     } catch (error) {
       this.logger.error({ err: error }, "Error during logout");
       this.sessionCookie = null;
