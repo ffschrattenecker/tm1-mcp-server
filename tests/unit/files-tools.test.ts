@@ -2,7 +2,17 @@
 // The base64 cases use bytes that are NOT valid UTF-8 on purpose: a UTF-8
 // decode replaces every invalid byte with U+FFFD, and that loss is silent — a
 // fixture like Buffer.from("payload") would pass either way.
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { createHash } from "node:crypto";
+import {
+  mkdtempSync,
+  promises as fsPromises,
+  rmSync,
+  truncateSync,
+  writeFileSync,
+} from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { z, type ZodObject, type ZodRawShape } from "zod";
 import { registerFilesRead } from "../../src/tools/fileops/files-read.js";
 import { registerFilesWrite } from "../../src/tools/fileops/files-write.js";
@@ -296,6 +306,9 @@ describe("tm1_files_write op=upload", () => {
       success: true,
       fileName: "imports/a.csv",
       bytesUploaded: 3,
+      sha256: createHash("sha256").update("x,y").digest("hex"),
+      // The fake reads back other bytes.
+      verified: false,
       created: true,
       updated: false,
       container: "Files",
@@ -357,7 +370,7 @@ describe("tm1_files_write op=upload", () => {
       call({ op: "upload", fileName: "a.csv", confirm: "a.csv" }),
     ).rejects.toMatchObject({
       code: "VALIDATION_ERROR",
-      message: expect.stringMatching(/needs content/),
+      message: expect.stringMatching(/exactly one of content or sourcePath/),
     });
     expect(files.upload).not.toHaveBeenCalled();
   });
@@ -445,5 +458,118 @@ describe("tm1_files_write op=create_folder", () => {
       call({ op: "create_folder", fileName: "a", confirm: "b" }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
     expect(files.createFolder).not.toHaveBeenCalled();
+  });
+});
+
+describe("tm1_files_write op=upload, sourcePath and read-back", () => {
+  const SHA = createHash("sha256").update(BINARY).digest("hex");
+  let dir: string;
+  let prev: string | undefined;
+  beforeEach(() => {
+    prev = process.env.TM1_LOCAL_FILE_ROOT;
+    dir = mkdtempSync(path.join(os.tmpdir(), "tm1-upload-"));
+    process.env.TM1_LOCAL_FILE_ROOT = dir;
+  });
+  afterEach(() => {
+    if (prev === undefined) delete process.env.TM1_LOCAL_FILE_ROOT;
+    else process.env.TM1_LOCAL_FILE_ROOT = prev;
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("sends the file's bytes unchanged and verifies them by hash", async () => {
+    const src = path.join(dir, "book.xlsm");
+    writeFileSync(src, BINARY);
+    const { call, files } = setup(registerFilesWrite);
+    const res = await call({
+      op: "upload",
+      fileName: "Reports/book.xlsm",
+      sourcePath: src,
+      container: "applications",
+      confirm: "Reports/book.xlsm",
+    });
+    expect(files.upload).toHaveBeenCalledWith(
+      "Reports/book.xlsm",
+      BINARY,
+      "applications",
+      false,
+    );
+    expect(res.structuredContent).toMatchObject({
+      success: true,
+      bytesUploaded: BINARY.byteLength,
+      sha256: SHA,
+      verified: true,
+    });
+  });
+
+  it("keeps the upload and reports verified=false when the read-back fails", async () => {
+    const files = fakeFiles();
+    files.getContentBytes.mockRejectedValueOnce(new Error("timeout"));
+    const { call } = setup(registerFilesWrite, files);
+    const res = await call({
+      op: "upload",
+      fileName: "a.csv",
+      content: "x",
+      confirm: "a.csv",
+    });
+    expect(res.structuredContent).toMatchObject({
+      success: true,
+      verified: false,
+    });
+  });
+
+  it("refuses content together with sourcePath, and sourcePath on delete", async () => {
+    const { call, files } = setup(registerFilesWrite);
+    await expect(
+      call({
+        op: "upload",
+        fileName: "a.csv",
+        content: "x",
+        sourcePath: path.join(dir, "a.csv"),
+        confirm: "a.csv",
+      }),
+    ).rejects.toThrow(/exactly one of content or sourcePath/);
+    await expect(
+      call({
+        op: "delete",
+        fileName: "a.csv",
+        sourcePath: path.join(dir, "a.csv"),
+        confirm: "a.csv",
+      }),
+    ).rejects.toThrow(/sourcePath does not apply/);
+    expect(files.upload).not.toHaveBeenCalled();
+    expect(files.delete).not.toHaveBeenCalled();
+  });
+
+  it("refuses an oversized sourcePath by its size, without loading it", async () => {
+    // Sparse: 33 MB on paper, nothing on disk.
+    const src = path.join(dir, "big.bin");
+    writeFileSync(src, "");
+    truncateSync(src, 33 * 1024 * 1024);
+    const read = vi.spyOn(fsPromises, "readFile");
+    const { call, files } = setup(registerFilesWrite);
+    const res = await call({
+      op: "upload",
+      fileName: "big.bin",
+      sourcePath: src,
+      confirm: "big.bin",
+    });
+    expect(res.isError).toBe(true);
+    expect(json(res)).toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(read).not.toHaveBeenCalled();
+    expect(files.upload).not.toHaveBeenCalled();
+    read.mockRestore();
+  });
+
+  it("refuses a sourcePath outside the root", async () => {
+    const { call, files } = setup(registerFilesWrite);
+    await expect(
+      call({
+        op: "upload",
+        fileName: "a.csv",
+        sourcePath: path.join(path.dirname(dir), "outside.csv"),
+        confirm: "a.csv",
+      }),
+    ).rejects.toThrow(/escapes/);
+    expect(files.upload).not.toHaveBeenCalled();
   });
 });
