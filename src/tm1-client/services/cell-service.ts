@@ -254,6 +254,15 @@ export class CellService {
     // Ordinals are positional, and TM1 does not collapse a repeated tuple in a
     // set (verified), so cells[i] stays ordinal i even when a caller sends the
     // same coordinate twice.
+    // Only a 4xx is TM1 saying no. A timeout, a lost connection or a 5xx
+    // leaves a PATCH possibly committed or still running.
+    const refusedByTm1 = (err: unknown): boolean =>
+      err instanceof TM1Error &&
+      err.httpStatus !== undefined &&
+      err.httpStatus >= 400 &&
+      err.httpStatus < 500;
+    // Cells whose per-cell PATCH went out and was never answered.
+    const unanswered = new Set<object>();
     const writeOne = async (c: {
       elements: string[];
       value: number | string;
@@ -274,6 +283,9 @@ export class CellService {
           ),
           { Value: c.value },
         );
+      } catch (err) {
+        if (!refusedByTm1(err)) unanswered.add(c);
+        throw err;
       } finally {
         try {
           await this.http.request<void>(
@@ -344,12 +356,7 @@ export class CellService {
         // of it landed. A timeout, a lost connection or a 5xx leaves the chunk
         // possibly committed or still running, so walking it cell by cell would
         // replay up to 500 writes. That outcome is reported instead.
-        const refused =
-          err instanceof TM1Error &&
-          err.httpStatus !== undefined &&
-          err.httpStatus >= 400 &&
-          err.httpStatus < 500;
-        if (!refused) {
+        if (!refusedByTm1(err)) {
           const notAttempted = cells.length - (i + chunk.length);
           const reason = err instanceof Error ? err.message : String(err);
           throw new TM1Error({
@@ -398,11 +405,12 @@ export class CellService {
         (c) => writeOne(c),
       );
       const failed: Array<{ elements: string[]; error: string }> = [];
+      const unknown: Array<{ elements: string[]; error: string }> = [];
       results.forEach((r, j) => {
         if (r.status === "fulfilled") {
           written++;
         } else {
-          failed.push({
+          (unanswered.has(chunk[j]!) ? unknown : failed).push({
             elements: chunk[j]!.elements,
             error:
               r.reason instanceof Error ? r.reason.message : String(r.reason),
@@ -410,19 +418,30 @@ export class CellService {
         }
       });
 
-      if (failed.length > 0) {
+      if (failed.length > 0 || unknown.length > 0) {
         const notAttempted = cells.length - (i + chunk.length);
         throw new TM1Error({
           code: TM1ErrorCode.TM1_ERROR,
           message:
             `write_cells partially applied to '${cubeName}': ${written} written, ` +
-            `${failed.length} failed, ${notAttempted} not attempted. ` +
+            `${failed.length} failed, ` +
+            (unknown.length > 0 ? `${unknown.length} outcome unknown, ` : "") +
+            `${notAttempted} not attempted. ` +
             `Earlier writes are committed and will NOT be rolled back.`,
-          details: JSON.stringify({ written, failed, notAttempted }),
+          details: JSON.stringify({
+            written,
+            failed,
+            ...(unknown.length > 0 ? { unknown } : {}),
+            notAttempted,
+          }),
           hint:
-            "Inspect `details` for the failed coordinates. Successful cells are already committed — " +
-            "retry ONLY the failed + notAttempted coords (re-sending written cells is harmless but wasteful). " +
-            "Validate targets first with tm1_check_writable_coords.",
+            unknown.length > 0
+              ? "TM1 did not answer for the `unknown` coordinates in `details`, so they may or may not be written. " +
+                "Read them back (tm1_execute_mdx) before re-sending anything; do NOT blindly retry. " +
+                "The failed + notAttempted coords were not written."
+              : "Inspect `details` for the failed coordinates. Successful cells are already committed — " +
+                "retry ONLY the failed + notAttempted coords (re-sending written cells is harmless but wasteful). " +
+                "Validate targets first with tm1_check_writable_coords.",
         });
       }
     }
