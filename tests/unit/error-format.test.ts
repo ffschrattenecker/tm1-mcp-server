@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   formatTm1ErrorResult,
   normalizeErrorResult,
+  withToolHint,
 } from "../../src/tools/error-format.js";
-import { TM1Error, TM1ErrorCode } from "../../src/types.js";
+import { TM1Error, TM1ErrorCode, hintForCode } from "../../src/types.js";
 
 function parsePayload(result: { content: Array<{ text: string }> }) {
   return JSON.parse(result.content[0].text);
@@ -123,5 +124,89 @@ describe("normalizeErrorResult", () => {
   it("returns the result untouched when content is missing or non-text", () => {
     const empty = { isError: true, content: [] };
     expect(normalizeErrorResult(empty)).toEqual(empty);
+  });
+});
+
+describe("withToolHint", () => {
+  const TOOL_HINT = "Tool-level advice.";
+
+  async function caught(p: Promise<unknown>): Promise<TM1Error> {
+    try {
+      await p;
+    } catch (e) {
+      return e as TM1Error;
+    }
+    throw new Error("expected a rejection");
+  }
+
+  it("keeps an error's own hint instead of replacing it", async () => {
+    const own = "Delete the entries first; an empty folder is deleted.";
+    const err = await caught(
+      withToolHint(
+        Promise.reject(
+          new TM1Error({
+            code: TM1ErrorCode.UNSUPPORTED_OPERATION,
+            message: "folder",
+            hint: own,
+          }),
+        ),
+        TOOL_HINT,
+      ),
+    );
+    expect(err).toBeInstanceOf(TM1Error);
+    expect(err.hint).toBe(own);
+  });
+
+  it("gives an error without a hint the tool's hint", async () => {
+    const err = await caught(
+      withToolHint(
+        Promise.reject(
+          new TM1Error({ code: TM1ErrorCode.NOT_FOUND, message: "missing" }),
+        ),
+        TOOL_HINT,
+      ),
+    );
+    expect(err.hint).toBe(TOOL_HINT);
+  });
+
+  it("leaves a keep code's hint untouched when it has none", async () => {
+    const err = await caught(
+      withToolHint(
+        Promise.reject(
+          new TM1Error({ code: TM1ErrorCode.LOCK_TIMEOUT, message: "timeout" }),
+        ),
+        TOOL_HINT,
+        [TM1ErrorCode.LOCK_TIMEOUT],
+      ),
+    );
+    expect(err.hintOverride).toBeUndefined();
+    expect(err.hint).toBe(hintForCode(TM1ErrorCode.LOCK_TIMEOUT));
+  });
+
+  it("leaves a keep code's own hint alone", async () => {
+    const own = "Still running; do not re-run.";
+    const err = await caught(
+      withToolHint(
+        Promise.reject(
+          new TM1Error({
+            code: TM1ErrorCode.CONNECTION_FAILED,
+            message: "lost",
+            hint: own,
+          }),
+        ),
+        TOOL_HINT,
+        [TM1ErrorCode.CONNECTION_FAILED],
+      ),
+    );
+    expect(err.hint).toBe(own);
+  });
+
+  it("wraps a non-TM1 failure with the tool's hint", async () => {
+    const err = await caught(
+      withToolHint(Promise.reject(new Error("boom")), TOOL_HINT),
+    );
+    expect(err).toBeInstanceOf(TM1Error);
+    expect(err.message).toBe("boom");
+    expect(err.hint).toBe(TOOL_HINT);
   });
 });

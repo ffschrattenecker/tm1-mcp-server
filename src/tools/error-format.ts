@@ -150,7 +150,11 @@ export async function withToolHint<T>(
     return await p;
   } catch (err) {
     if (err instanceof TM1Error) {
-      if (!keep.includes(err.code)) err.hintOverride = hint;
+      // A hint the error already carries was written where the failure was
+      // understood (a folder that still holds entries, a timeout that reports
+      // its cancel outcome); the tool's generic one would hide it. The tool's
+      // hint only fills in where the error brings none.
+      if (!keep.includes(err.code)) err.hintOverride ??= hint;
       throw err;
     }
     throw new TM1Error({
