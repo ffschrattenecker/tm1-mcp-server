@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [11.0.0] - 2026-11-18
+
 ### Added
 
 - **`tm1_files_write` op='create_folder'** creates one folder level per call; an existing folder answers `created=false`. `container='applications'` works on v11 and v12; `files` nests on v12 only, and v11 answers `UNSUPPORTED_OPERATION`.
@@ -522,7 +524,8 @@ response-size guard, the per-connection caches) are unchanged.
 Older history (before 8.0.0): see the git tags and the upstream repository,
 https://github.com/flameY3T1/tm1-mcp-server.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.6.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.0.0...HEAD
+[11.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.6.0...v11.0.0
 [10.6.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.5.1...v10.6.0
 [10.5.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.5.0...v10.5.1
 [10.5.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.4.0...v10.5.0
