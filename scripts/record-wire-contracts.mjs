@@ -136,6 +136,10 @@ if (res.error) {
   );
   process.exit(1);
 }
+// Verifying records nothing, so the suite's exit code is the whole result.
+if (flags.has("--verify")) {
+  process.exit(res.status ?? 1);
+}
 // The live suite has known per-version failures; a failing assertion still
 // produced real responses, so a non-zero exit does not invalidate the
 // recording. Surface the code without treating it as fatal.
