@@ -8,6 +8,7 @@ import { defineTool } from "../define-tool.js";
 import { memberRef } from "./member-ref.js";
 import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
 import { resolveCellAddress, sandboxPosition } from "../../lib/cell-address.js";
+import { tm1NameEquals } from "../../lib/tm1-name.js";
 import {
   requireModelCube,
   resolveWriteSandbox,
@@ -108,7 +109,18 @@ export const registerWriteCells = defineTool({
       for (const c of cells) {
         if (address.sandboxDefaulted) {
           c.elements[sbPos] = target;
-        } else if (c.elements[sbPos]!.toLowerCase() !== target.toLowerCase()) {
+        } else {
+          // Read the reference as the writer does: `[Sandboxes].[x]` names the
+          // same member as `x`, while a foreign dimension or hierarchy does not.
+          const own = dimensions[sbPos]!;
+          const ref = memberRef(own, c.elements[sbPos]!);
+          if (
+            tm1NameEquals(ref.dimension, own) &&
+            tm1NameEquals(ref.hierarchy, own) &&
+            tm1NameEquals(ref.element, target)
+          ) {
+            continue;
+          }
           throw new TM1Error({
             code: "VALIDATION_ERROR",
             message: `A cell names Sandboxes:${c.elements[sbPos]} but the write targets sandbox "${target}". Nothing was sent.`,

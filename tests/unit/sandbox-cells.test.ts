@@ -165,6 +165,39 @@ describe("tm1_write_cells under TM1_MODE=sandbox", () => {
       expect(spies.writeCells).not.toHaveBeenCalled();
     },
   );
+
+  it.each([
+    "[mcp-whatif]",
+    "[Sandboxes].[mcp-whatif]",
+    "[Sandboxes].[Sandboxes].[MCP-WhatIf]",
+  ])("accepts the target sandbox written as %s", async (ref) => {
+    const { call, spies } = writeTool(SANDBOX, WITH_SANDBOXES);
+    await call({
+      ...ARGS,
+      dimensions: WITH_SANDBOXES,
+      cells: [{ elements: ["Berlin", "Jan", ref], value: 42 }],
+      sandbox: "mcp-whatif",
+    });
+    expect(spies.writeCells).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    "[Sandboxes].[Sandboxes].[Base]",
+    "[Sandboxes].[Proposal-1]",
+    "[Region].[Region].[mcp-whatif]",
+    "[Sandboxes].[Other].[mcp-whatif]",
+  ])("refuses the qualified reference %s", async (ref) => {
+    const { call, spies } = writeTool(SANDBOX, WITH_SANDBOXES);
+    await expect(
+      call({
+        ...ARGS,
+        dimensions: WITH_SANDBOXES,
+        cells: [{ elements: ["Berlin", "Jan", ref], value: 42 }],
+        sandbox: "mcp-whatif",
+      }),
+    ).rejects.toThrow(/targets sandbox "mcp-whatif"/);
+    expect(spies.writeCells).not.toHaveBeenCalled();
+  });
 });
 
 describe("tm1_write_cells under TM1_MODE=readwrite", () => {
