@@ -159,6 +159,15 @@ function abortReason(signal: AbortSignal | undefined): Error {
     : new DOMException("This operation was aborted", "AbortError");
 }
 
+// Cancels a body nobody reads (a 401 before the re-login, the answer to an
+// upload). Left open, it keeps its connection. Not awaited: a hanging body must
+// not delay the next step.
+function releaseBody(response: Response): void {
+  if (!response.bodyUsed) {
+    void response.body?.cancel().catch(() => undefined);
+  }
+}
+
 export class TM1HttpClient {
   // config is private: it carries credentials (TM1Config.password), so it must
   // not be reachable as `client.config` from the service layer. Services get
@@ -281,6 +290,7 @@ export class TM1HttpClient {
             { endpoint: path },
             "Received 401, re-authenticating",
           );
+          releaseBody(response);
           // Pass the cookie that got the 401 so a concurrent request that
           // already rotated the session short-circuits to the fresh cookie
           // instead of forcing another logout+login (staggered-401 churn).
@@ -506,6 +516,8 @@ export class TM1HttpClient {
       }
       throw this.classifyHttpError(response.status, path, errBody || undefined);
     }
+    // The upload's answer carries nothing the caller needs.
+    releaseBody(response);
     this.emitMutation(method, path);
   }
 
@@ -568,6 +580,7 @@ export class TM1HttpClient {
       throw err;
     }
     if (response.status === 401) {
+      releaseBody(response);
       const newCookie = await this.sessionManager.authenticate(initialCookie);
       try {
         response = await send(newCookie);
@@ -715,6 +728,7 @@ export class TM1HttpClient {
       signal,
     );
     if (res.status !== 401) return res;
+    releaseBody(res);
     const newCookie = await this.sessionManager.authenticate(cookie);
     return this.executeRequest(
       url,

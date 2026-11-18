@@ -225,3 +225,56 @@ describe("freeCellset after a cancelled read", () => {
     expect(seen).toEqual(["DELETE /api/v1/Cellsets('abc')"]);
   });
 });
+
+// Measured against undici: a 1 MB or unfinished body that nobody reads keeps
+// its connection; a cancel releases it.
+describe("a body the reader leaves alone is released", () => {
+  let client: TM1HttpClient;
+
+  // A body that stays open, as a gateway's login page on a 401 can.
+  function openBody(status: number, cancelled: () => void) {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("x"));
+      },
+      cancel: cancelled,
+    });
+    return new Response(body, { status });
+  }
+
+  beforeEach(() => {
+    const config = makeTestConfig({ baseUrl: "http://127.0.0.1:1" });
+    const sm = new SessionManager(config, mockLogger);
+    vi.spyOn(sm, "ensureSession").mockResolvedValue("c");
+    vi.spyOn(sm, "authenticate").mockResolvedValue("c2");
+    client = new TM1HttpClient(config, sm, mockLogger);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ["request", () => client.request("GET", "/api/v1/x")],
+    ["requestRaw", () => client.requestRaw("GET", "/api/v1/x")],
+  ])("cancels the 401 body before the re-auth (%s)", async (_name, call) => {
+    const cancelled = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(openBody(401, cancelled))
+        .mockResolvedValueOnce(new Response('{"a":1}', { status: 200 })),
+    );
+    await within(call());
+    await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce());
+  });
+
+  it("cancels the answer to an upload, which nobody reads", async () => {
+    const cancelled = vi.fn();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(openBody(200, cancelled)));
+    await within(client.requestBinary("PUT", "/api/v1/x", new Uint8Array([1])));
+    await vi.waitFor(() => expect(cancelled).toHaveBeenCalledOnce());
+  });
+});
