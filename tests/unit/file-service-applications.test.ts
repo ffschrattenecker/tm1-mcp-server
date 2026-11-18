@@ -184,6 +184,39 @@ describe("FileService, applications container", () => {
       path: `${ROOT}/Contents('Reports')/Contents('new.csv.blob')`,
     });
   });
+  it("creates a folder under the resolved parent, once", async () => {
+    const { svc, calls } = makeService();
+    expect(await svc.createFolder("Reports/2026", "applications")).toEqual({
+      created: true,
+    });
+    expect(calls.find((c) => c.method === "POST")).toEqual({
+      method: "POST",
+      path: `${ROOT}/Contents('Reports')/Contents`,
+      body: { "@odata.type": "#ibm.tm1.api.v1.Folder", Name: "2026" },
+    });
+
+    // An existing folder is not posted again, whatever its case.
+    calls.length = 0;
+    expect(await svc.createFolder("reports", "applications")).toEqual({
+      created: false,
+    });
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+  });
+
+  it("refuses a folder where a document holds the name or is the parent", async () => {
+    const { svc, calls } = makeService();
+    await expect(
+      svc.createFolder("Reports/sheet.xlsx", "applications"),
+    ).rejects.toThrow(/already exists as a DocumentReference/);
+    await expect(
+      svc.createFolder("Reports/sheet.xlsx/sub", "applications"),
+    ).rejects.toThrow(/is a DocumentReference, not a folder/);
+    await expect(
+      svc.createFolder("Absent/sub", "applications"),
+    ).rejects.toThrow(/'Absent' not found in the Applications tree/);
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+  });
+
   describe("folders in the 'files' container", () => {
     const FILES = "/api/v1/Contents('Files')";
     const item = (kind: string, name: string) => ({
@@ -193,6 +226,10 @@ describe("FileService, applications container", () => {
     function filesService(version: 11 | 12) {
       const calls: string[] = [];
       const answers: Record<string, unknown> = {
+        [`GET ${FILES}?$select=Name`]: item("Folder", "Files"),
+        [`GET ${FILES}/Contents?$select=ID,Name`]: {
+          value: [item("Folder", "imports"), item("Document", "a.csv")],
+        },
         [`GET ${FILES}/Contents('imports')?$select=Name`]: item(
           "Folder",
           "imports",
@@ -216,8 +253,10 @@ describe("FileService, applications container", () => {
         version,
         request: vi.fn(async (method: string, path: string) => {
           calls.push(`${method} ${path}`);
-          if (method !== "GET") return undefined;
-          const hit = answers[`${method} ${path}`];
+          // v11 has no `Files` root: everything under it is a 404.
+          const noFiles = version === 11 && path.startsWith(FILES);
+          if (method !== "GET" && !noFiles) return undefined;
+          const hit = noFiles ? undefined : answers[`${method} ${path}`];
           if (hit !== undefined) return hit;
           throw Object.assign(new Error(`no stub for ${path}`), {
             code: "NOT_FOUND",
@@ -226,6 +265,37 @@ describe("FileService, applications container", () => {
       } as unknown as TM1HttpClient;
       return { svc: new FileService(http), calls };
     }
+
+    it("creates a folder on v12 and leaves an existing one alone", async () => {
+      const { svc, calls } = filesService(12);
+      expect(await svc.createFolder("exports")).toEqual({ created: true });
+      expect(calls.at(-1)).toBe(`POST ${FILES}/Contents`);
+      // v12 answers a second POST of the same name with success, so only the
+      // listing can tell.
+      calls.length = 0;
+      expect(await svc.createFolder("Imports")).toEqual({ created: false });
+      expect(calls.some((c) => c.startsWith("POST"))).toBe(false);
+      await expect(svc.createFolder("a.csv")).rejects.toThrow(
+        /already exists as a Document/,
+      );
+    });
+
+    it("keeps NOT_FOUND for a missing parent on v12", async () => {
+      const { svc, calls } = filesService(12);
+      await expect(svc.createFolder("absent/sub")).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
+      expect(calls.some((c) => c.startsWith("POST"))).toBe(false);
+    });
+
+    it("names the flat container on v11 without posting a folder", async () => {
+      const { svc, calls } = filesService(11);
+      await expect(svc.createFolder("exports")).rejects.toMatchObject({
+        code: "UNSUPPORTED_OPERATION",
+        message: expect.stringMatching(/flat/),
+      });
+      expect(calls.some((c) => c.startsWith("POST"))).toBe(false);
+    });
 
     it("refuses to delete a v12 folder that holds entries, before the DELETE", async () => {
       const { svc, calls } = filesService(12);

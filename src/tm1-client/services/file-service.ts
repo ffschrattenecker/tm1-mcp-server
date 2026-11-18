@@ -256,7 +256,7 @@ export class FileService {
    * Tries 'Files' (v12) first, falls back to 'Blobs' (v11).
    *
    * Subfolders only supported on TM1 v12. Caller must ensure parent folders
-   * exist (folder-create not yet exposed).
+   * exist (createFolder).
    */
   async upload(
     fileName: string,
@@ -315,6 +315,91 @@ export class FileService {
       if (code !== "NOT_FOUND") throw e;
       return await tryRoot("Blobs");
     }
+  }
+
+  /**
+   * Create a folder. The parent must exist.
+   *
+   * A folder that is already there answers created=false. That is decided by
+   * listing the parent, not by the POST: in the Applications tree v11 reports
+   * "already exists" as a plain 400, and v12 `Files` answers a second POST of
+   * the same name with success (measured upstream, 2026-11-18).
+   *
+   * The 'files' container nests on v12 only. v11 has no `Files` root, and its
+   * `Blobs` refuses a Folder POST with an empty 400, so a missing `Files` root
+   * is named here instead of being sent.
+   */
+  async createFolder(
+    path: string,
+    container: FileContainer = "files",
+  ): Promise<{ created: boolean }> {
+    const parts = splitPath(path);
+    const leaf = parts.pop();
+    if (leaf === undefined) {
+      throw new TM1Error({
+        code: TM1ErrorCode.VALIDATION_ERROR,
+        message: "Empty folder path",
+        endpoint: path,
+      });
+    }
+    let parentUrl: string;
+    let siblings: AppsEntry[];
+    if (container === "applications") {
+      const { url, entry: parent } = await this.appsResolve(parts);
+      if (parent !== undefined && parent.kind !== "Folder") {
+        throw new TM1Error({
+          code: TM1ErrorCode.UNSUPPORTED_OPERATION,
+          message: `'${parent.name}' is a ${parent.kind}, not a folder`,
+          endpoint: url,
+        });
+      }
+      parentUrl = url;
+      siblings = await this.childrenOf(url);
+    } else {
+      parentUrl =
+        "/api/v1/Contents('Files')" +
+        parts.map((s) => `/Contents('${odataKey(s)}')`).join("");
+      try {
+        siblings = await this.childrenOf(parentUrl);
+      } catch (e) {
+        if ((e as { code?: string }).code !== "NOT_FOUND") throw e;
+        // A missing parent and a missing `Files` root both answer 404; only
+        // the second means v11.
+        const hasFiles = await this.http
+          .request("GET", "/api/v1/Contents('Files')?$select=Name")
+          .then(
+            () => true,
+            (e2: unknown) => {
+              if ((e2 as { code?: string }).code === "NOT_FOUND") return false;
+              throw e2;
+            },
+          );
+        if (hasFiles) throw e;
+        throw new TM1Error({
+          code: TM1ErrorCode.UNSUPPORTED_OPERATION,
+          message:
+            "This server keeps the 'files' container flat (v11 Blobs): it has no folders",
+          hint: "Use a flat file name there, or container='applications' for the tree users see in Architect and PAW.",
+          endpoint: path,
+        });
+      }
+    }
+    const existing = siblings.find(
+      (e) => e.name.toLowerCase() === leaf.toLowerCase(),
+    );
+    if (existing !== undefined) {
+      if (existing.kind === "Folder") return { created: false };
+      throw new TM1Error({
+        code: TM1ErrorCode.CONFLICT,
+        message: `'${leaf}' already exists as a ${existing.kind}`,
+        endpoint: parentUrl,
+      });
+    }
+    await this.http.request("POST", `${parentUrl}/Contents`, {
+      "@odata.type": "#ibm.tm1.api.v1.Folder",
+      Name: leaf,
+    });
+    return { created: true };
   }
 
   /** Refusal for a folder that still holds entries; DELETE would take them along. */

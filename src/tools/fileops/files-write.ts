@@ -10,7 +10,7 @@ import { validationError } from "./files-read.js";
 
 const HARD_MAX_BYTES = 32 * 1024 * 1024;
 
-// Upload and delete share one tool so the readonly gate in defineTool covers
+// Upload, delete and create_folder share one tool so the readonly gate in defineTool covers
 // both with a single non-READ_ONLY annotation; DESTRUCTIVE because either op
 // can lose a server file (upload silently replaces one of the same name).
 export const registerFilesWrite = defineTool({
@@ -20,18 +20,19 @@ export const registerFilesWrite = defineTool({
     "op='upload' creates or replaces fileName.",
     `Hard max ${HARD_MAX_BYTES} bytes (32 MB).`,
     "op='delete': remove fileName, or a folder only when it is empty (one holding entries is refused). Irreversible; NOT_FOUND if missing in both containers.",
-    "container='applications': the parent folder must already exist.",
-    "Both ops need confirm (upload replaces a same-named file).",
+    "op='create_folder': create the folder fileName, one level per call; an existing folder answers created=false. 'files' nests on v12 only (v11: UNSUPPORTED_OPERATION); 'applications' on both.",
+    "The parent folder must already exist; container='applications' takes no document directly under its root.",
+    "Every op needs confirm (upload replaces a same-named file).",
   ],
   annotations: DESTRUCTIVE,
   output: MutationResultSchema,
   input: {
-    op: z.enum(["upload", "delete"]),
+    op: z.enum(["upload", "delete", "create_folder"]),
     fileName: z
       .string()
       .min(1)
       .describe(
-        "File name or path (e.g. 'data.csv' or 'imports/sales_2024.csv'). v11 = flat only.",
+        "File or folder name or path (e.g. 'data.csv' or 'imports/sales_2024.csv'). v11 'files' = flat only.",
       ),
     content: z
       .string()
@@ -51,13 +52,26 @@ export const registerFilesWrite = defineTool({
     { op, fileName, content, encoding, container, confirm },
     tm1Client,
   ) => {
+    if (op !== "upload" && content !== undefined) {
+      throw validationError(
+        `content does not apply to op="${op}". Nothing was changed.`,
+        'Drop content, or use op="upload" to write a file.',
+      );
+    }
+    if (op === "create_folder") {
+      requireConfirm(confirm, fileName, "folder");
+      const { created } = await withToolHint(
+        tm1Client.files.createFolder(fileName, container),
+        'One level per call: the parent folder must exist, and the name must not be taken by a file. List a level with tm1_files_read op="list" and the same container.',
+      );
+      return actionResponse({
+        success: true,
+        fileName,
+        container,
+        created,
+      });
+    }
     if (op === "delete") {
-      if (content !== undefined) {
-        throw validationError(
-          'content does not apply to op="delete". Nothing was deleted.',
-          'Drop content to delete the file, or use op="upload" to replace it.',
-        );
-      }
       requireConfirm(confirm, fileName, "file");
       await withToolHint(
         tm1Client.files.delete(fileName, container),
@@ -91,7 +105,7 @@ export const registerFilesWrite = defineTool({
 
     const result = await withToolHint(
       tm1Client.files.upload(fileName, bytes, container),
-      "The parent folder must already exist; nothing here creates it. v11 'files' is flat, so a subfolder needs v12. container='applications' refuses a document directly under its root: name a folder in fileName.",
+      "The parent folder must already exist; create it with op='create_folder'. v11 'files' is flat, so a subfolder needs v12. container='applications' refuses a document directly under its root: name a folder in fileName.",
     );
 
     return actionResponse({

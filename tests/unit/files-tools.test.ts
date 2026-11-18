@@ -27,6 +27,7 @@ function fakeFiles(bytes: Buffer = BINARY) {
     getContentBytes: vi.fn(async () => bytes),
     upload: vi.fn(async () => ({ created: true, root: "Files" as const })),
     delete: vi.fn(async () => undefined),
+    createFolder: vi.fn(async () => ({ created: true })),
   };
 }
 
@@ -386,5 +387,38 @@ describe("tm1_files_write op=delete", () => {
       message: expect.stringMatching(/content does not apply/),
     });
     expect(files.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("tm1_files_write op=create_folder", () => {
+  it("creates the folder in the given container", async () => {
+    const { call, files } = setup(registerFilesWrite);
+    const res = await call({
+      op: "create_folder",
+      fileName: "Reports/2026",
+      container: "applications",
+      confirm: "Reports/2026",
+    });
+    expect(files.createFolder).toHaveBeenCalledWith(
+      "Reports/2026",
+      "applications",
+    );
+    expect(res.structuredContent).toEqual({
+      success: true,
+      fileName: "Reports/2026",
+      container: "applications",
+      created: true,
+    });
+  });
+
+  it("refuses content and a confirm mismatch", async () => {
+    const { call, files } = setup(registerFilesWrite);
+    await expect(
+      call({ op: "create_folder", fileName: "a", content: "x", confirm: "a" }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(
+      call({ op: "create_folder", fileName: "a", confirm: "b" }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(files.createFolder).not.toHaveBeenCalled();
   });
 });
