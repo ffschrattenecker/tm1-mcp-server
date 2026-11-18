@@ -57,14 +57,14 @@ export class FileService {
   constructor(private readonly http: TM1HttpClient) {}
 
   /**
-   * Entries directly under an Applications URL.
+   * Entries directly under a Contents URL, in either container.
    *
    * Follows `@odata.nextLink` if the server sends one. Whether these builds
    * page this endpoint at all was not observed; a missed page here would not
    * just shorten a listing, it would make name resolution answer NOT_FOUND for
    * an entry that exists, so the loop runs either way.
    */
-  private async appsChildren(url: string): Promise<AppsEntry[]> {
+  private async childrenOf(url: string): Promise<AppsEntry[]> {
     const entries: AppsEntry[] = [];
     // v12 leaves `ID` out of this listing unless it is selected (v11 always
     // sends it); without it every entry resolved to Contents('undefined').
@@ -106,7 +106,7 @@ export class FileService {
     let url = APPS_ROOT;
     let entry: AppsEntry | undefined;
     for (const seg of segments) {
-      const children = await this.appsChildren(url);
+      const children = await this.childrenOf(url);
       const lower = seg.toLowerCase();
       const hit =
         children.find((c) => c.name.toLowerCase() === lower) ??
@@ -162,7 +162,7 @@ export class FileService {
     const segments = path ? splitPath(path) : [];
     if (container === "applications") {
       const { url } = await this.appsResolve(segments);
-      return (await this.appsChildren(url)).map((e) => e.name);
+      return (await this.childrenOf(url)).map((e) => e.name);
     }
     const buildUrl = (root: string): string => {
       let url = `/api/v1/Contents('${odataKey(root)}')`;
@@ -317,8 +317,20 @@ export class FileService {
     }
   }
 
+  /** Refusal for a folder that still holds entries; DELETE would take them along. */
+  private filledFolder(name: string, count: number, url: string): TM1Error {
+    return new TM1Error({
+      code: TM1ErrorCode.UNSUPPORTED_OPERATION,
+      message: `'${name}' is a folder holding ${count} ${count === 1 ? "entry" : "entries"} — refusing to delete it, because TM1 would delete them with it`,
+      hint: "Delete the entries first; an empty folder is deleted.",
+      endpoint: url,
+    });
+  }
+
   /**
-   * Delete a file from blob/file storage. Tries 'Files' first, then 'Blobs'.
+   * Delete a file or an empty folder from blob/file storage. Tries 'Files'
+   * first, then 'Blobs'. A folder that still holds entries is refused: DELETE
+   * on a folder removes its contents too, so the check runs before the DELETE.
    */
   async delete(
     fileName: string,
@@ -334,17 +346,16 @@ export class FileService {
     if (container === "applications") {
       const { url, entry } = await this.appsResolve(parts);
       // DELETE on a folder takes everything under it with it (see the header
-      // note). This is the single-file contract, so anything that is not a
-      // document is refused here rather than at the server, where it would
-      // already be gone.
-      if (entry !== undefined && entry.kind !== "DocumentReference") {
+      // note), so a folder goes only when it is empty; decided here rather
+      // than at the server, where the content would already be gone.
+      if (entry?.kind === "Folder") {
+        const count = (await this.childrenOf(url)).length;
+        if (count > 0) throw this.filledFolder(entry.name, count, url);
+      } else if (entry !== undefined && entry.kind !== "DocumentReference") {
         throw new TM1Error({
           code: TM1ErrorCode.UNSUPPORTED_OPERATION,
           message: `'${entry.name}' is a ${entry.kind}, not a file — refusing to delete it`,
-          hint:
-            entry.kind === "Folder"
-              ? "Deleting a folder would delete everything inside it, which this tool does not do. Delete the entries individually, or remove the folder in Architect/PAW."
-              : "Only documents can be deleted here. A ViewReference points at a cube view; remove it with tm1_rest_write DELETE Cubes('C')/Views('V').",
+          hint: "Only documents and empty folders can be deleted here. A ViewReference points at a cube view; remove it with tm1_rest_write DELETE Cubes('C')/Views('V').",
           endpoint: url,
         });
       }
@@ -356,7 +367,21 @@ export class FileService {
       return `/api/v1/Contents('${odataKey(root)}')${segs}`;
     };
     try {
-      await this.http.request("DELETE", buildUrl("Files"));
+      // v12 `Files` nests, and DELETE on a folder there removes its content
+      // too. The read first tells a folder apart by @odata.type; on v11 it is
+      // the 404 that sends the call on to `Blobs`, which has no folders.
+      const url = buildUrl("Files");
+      const target = await this.http.request<{ "@odata.type"?: string }>(
+        "GET",
+        `${url}?$select=Name`,
+      );
+      if (target?.["@odata.type"]?.endsWith(".Folder")) {
+        const count = (await this.childrenOf(url)).length;
+        if (count > 0) {
+          throw this.filledFolder(parts[parts.length - 1]!, count, url);
+        }
+      }
+      await this.http.request("DELETE", url);
     } catch (e) {
       const code = (e as { code?: string }).code;
       if (code !== "NOT_FOUND") throw e;
@@ -571,7 +596,7 @@ export class FileService {
     const parentParts = parts.slice(0, -1);
     const { url: parentUrl } = await this.appsResolve(parentParts);
 
-    const existing = (await this.appsChildren(parentUrl)).find(
+    const existing = (await this.childrenOf(parentUrl)).find(
       (e) => e.name.toLowerCase() === leaf.toLowerCase(),
     );
     if (existing !== undefined && existing.kind !== "DocumentReference") {

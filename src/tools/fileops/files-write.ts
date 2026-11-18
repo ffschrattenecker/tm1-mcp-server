@@ -19,7 +19,7 @@ export const registerFilesWrite = defineTool({
     "Change the TM1 server's file storage.",
     "op='upload' creates or replaces fileName.",
     `Hard max ${HARD_MAX_BYTES} bytes (32 MB).`,
-    "op='delete': remove fileName; irreversible, NOT_FOUND if missing in both containers.",
+    "op='delete': remove fileName, or a folder only when it is empty (one holding entries is refused). Irreversible; NOT_FOUND if missing in both containers.",
     "container='applications': the parent folder must already exist.",
     "Both ops need confirm (upload replaces a same-named file).",
   ],
@@ -61,7 +61,7 @@ export const registerFilesWrite = defineTool({
       requireConfirm(confirm, fileName, "file");
       await withToolHint(
         tm1Client.files.delete(fileName, container),
-        'Verify the exact name with tm1_files_read op="list" or op="search". Names are case-sensitive.',
+        'Verify the name with tm1_files_read op="list" or op="search". Case does not matter; the path does.',
       );
       return actionResponse({ success: true, fileName, deleted: true });
     }
@@ -91,7 +91,7 @@ export const registerFilesWrite = defineTool({
 
     const result = await withToolHint(
       tm1Client.files.upload(fileName, bytes, container),
-      "If parent folder is missing, create it on TM1 v12 before retrying. v11 supports root only.",
+      "The parent folder must already exist; nothing here creates it. v11 'files' is flat, so a subfolder needs v12. container='applications' refuses a document directly under its root: name a folder in fileName.",
     );
 
     return actionResponse({
