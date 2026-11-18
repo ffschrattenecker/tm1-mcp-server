@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`tm1_files_write` op='create_folder'** creates one folder level per call; an existing folder answers `created=false`. `container='applications'` works on v11 and v12; `files` nests on v12 only, and v11 answers `UNSUPPORTED_OPERATION`.
+- **Binary files move by host path.** `tm1_files_write` upload takes `sourcePath` and sends that file byte-for-byte; `tm1_files_read` get takes `writeToFile` and saves the whole file untruncated, answering with path, size and SHA-256. Both follow `TM1_LOCAL_FILE_ROOT`. A spreadsheet as base64 was too long for a model to copy reliably.
+- **Every upload is read back and compared by SHA-256** (`sha256`, `verified`). A failed read-back leaves the upload standing and reports `verified=false`.
+
 ### Changed
+
+- **BREAKING: an upload to `container='applications'` refuses a document that already exists** (`CONFLICT`) unless `overwrite=true` is passed. The `files` container replaces as before.
 
 - **A timed-out MDX or view read is cancelled on the server.** TM1 finishes a request it has received whatever the client does, so a query that ran into the client timeout kept its thread busy (observed: 30 minutes). Cellset reads and view executions now run as an async operation (`Prefer: respond-async`) and are `DELETE`d when they time out or the client aborts; the `LOCK_TIMEOUT` error carries `cancelled: true|false`. 11.8 stops the work within milliseconds; v12 accepts the cancel but may still finish a scan, and the hint says so. Single-cell reads are unchanged.
 - **`tm1_sample_cells` with `includeStrings` uses `NONEMPTY` instead of a per-tuple `FILTER`.** The `FILTER` tested every tuple of the unpinned dimensions (51 s for 16 million on 11.8) and was not shortened by `maxCells`. A rule-calculated string without a feeder no longer shows up on v11; the empty-result hint points at `tm1_check_feeders`.

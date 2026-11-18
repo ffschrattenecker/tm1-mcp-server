@@ -271,8 +271,9 @@ its report, just redacted.
 
 Tools that read or write files on the host running the server —
 `tm1_import_pro_file`, `tm1_install_pro_bundle`, `tm1_diff_process_with_file`,
-`tm1_validate_process_refs`, the git export/import pair and `tm1_set_cube_rules`
-— take absolute host paths. On stdio any absolute path is allowed; over HTTP
+`tm1_validate_process_refs`, the git export/import pair, `tm1_set_cube_rules`
+and the file tools (`sourcePath` on `tm1_files_write` upload, `writeToFile` on
+`tm1_files_read` get) — take absolute host paths. On stdio any absolute path is allowed; over HTTP
 they are **disabled** until `TM1_LOCAL_FILE_ROOT` is set. When it is set, on
 either transport, every path must resolve inside that root (`..` and escaping
 symlinks are rejected).
