@@ -1,4 +1,8 @@
+import { createHash } from "node:crypto";
+import { promises as fs } from "node:fs";
+import nodePath from "node:path";
 import { z } from "zod";
+import { resolveLocalPath } from "../local-file.js";
 import { PAGINATION_SCHEMA, paginate } from "../pagination.js";
 import {
   FORMAT_SCHEMA,
@@ -47,6 +51,14 @@ const FilesReadResultSchema = z.object({
   truncationReason: z.string().optional(),
   encoding: z.enum(["text", "base64"]).optional(),
   content: z.string().optional(),
+  writtenTo: z
+    .string()
+    .optional()
+    .describe("get with writeToFile: host path the whole file was saved to"),
+  sha256: z
+    .string()
+    .optional()
+    .describe("get with writeToFile: SHA-256 of the saved bytes"),
 });
 
 // Fields that belong to one op only and carry no schema default, so their
@@ -58,6 +70,7 @@ const OWNED_BY: Record<string, readonly Op[]> = {
   fileName: ["get"],
   maxBytes: ["get"],
   headLines: ["get"],
+  writeToFile: ["get"],
 };
 
 export function validationError(message: string, hint: string): TM1Error {
@@ -70,6 +83,7 @@ export const registerFilesRead = defineTool({
     "Read the TM1 server's file storage.",
     "op='list': names in a folder (path). op='search': case-insensitive name match by startswith and/or contains (joined by operator). Both paginated (default 50/page).",
     "op='get': file content (fileName), truncated to maxBytes (default 64 KB, 48 KB for base64). encoding='base64' returns the bytes untouched — use it for spreadsheets and other binaries, which a text read would corrupt.",
+    "writeToFile saves the whole file to the MCP host instead, untruncated, and answers with its path, size and SHA-256 — the way to fetch a spreadsheet without its bytes passing through the conversation.",
     "container='applications' addresses the Applications tree instead; there a folder or a view reference carries no content and get refuses it by name.",
   ],
   annotations: READ_ONLY,
@@ -124,6 +138,12 @@ export const registerFilesRead = defineTool({
       .max(10000)
       .optional()
       .describe("get: only the first N lines (overrides maxBytes)."),
+    writeToFile: z
+      .string()
+      .optional()
+      .describe(
+        "get: absolute host path to save the file to, byte-for-byte and never truncated (an existing file is replaced; maxBytes/headLines do not apply). Must lie inside TM1_LOCAL_FILE_ROOT when that is set; required over HTTP.",
+      ),
     ...CONTAINER_SCHEMA,
     ...PAGINATION_SCHEMA,
     ...FORMAT_SCHEMA,
@@ -134,7 +154,7 @@ export const registerFilesRead = defineTool({
       if (args[field as keyof typeof args] !== undefined && !ops.includes(op)) {
         throw validationError(
           `${field} does not apply to op="${op}" (only ${ops.map((o) => `op="${o}"`).join(" / ")}). Nothing was read.`,
-          "Drop the field or switch op: list takes path; search takes startswith/contains/operator/path; get takes fileName/maxBytes/encoding/headLines.",
+          "Drop the field or switch op: list takes path; search takes startswith/contains/operator/path; get takes fileName/maxBytes/encoding/headLines/writeToFile.",
         );
       }
     }
@@ -185,6 +205,7 @@ export const registerFilesRead = defineTool({
       maxBytes: requestedMaxBytes,
       headLines,
       encoding,
+      writeToFile,
       format,
     } = args;
     if (fileName === undefined || fileName === "") {
@@ -200,6 +221,25 @@ export const registerFilesRead = defineTool({
         'format="markdown" applies to op="list" / op="search" only. Nothing was read.',
         'Drop format for op="get".',
       );
+    }
+    if (writeToFile !== undefined) {
+      if (requestedMaxBytes !== undefined || headLines !== undefined) {
+        throw validationError(
+          "maxBytes and headLines do not apply with writeToFile, which saves the whole file. Nothing was read.",
+          "Drop them, or drop writeToFile to get a truncated preview.",
+        );
+      }
+      // Confined before the download, so a refused path costs no request.
+      const target = resolveLocalPath(writeToFile, "writeToFile");
+      const bytes = await tm1Client.files.getContentBytes(fileName, container);
+      await fs.mkdir(nodePath.dirname(target), { recursive: true });
+      await fs.writeFile(target, bytes);
+      return jsonResult({
+        fileName,
+        totalBytes: bytes.byteLength,
+        writtenTo: target,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+      });
     }
     const maxBytes =
       requestedMaxBytes ??

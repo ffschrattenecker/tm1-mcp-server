@@ -573,3 +573,59 @@ describe("tm1_files_write op=upload, sourcePath and read-back", () => {
     expect(files.upload).not.toHaveBeenCalled();
   });
 });
+
+describe("tm1_files_read op=get, writeToFile", () => {
+  let dir: string;
+  let prev: string | undefined;
+  beforeEach(() => {
+    prev = process.env.TM1_LOCAL_FILE_ROOT;
+    dir = mkdtempSync(path.join(os.tmpdir(), "tm1-download-"));
+    process.env.TM1_LOCAL_FILE_ROOT = dir;
+  });
+  afterEach(() => {
+    if (prev === undefined) delete process.env.TM1_LOCAL_FILE_ROOT;
+    else process.env.TM1_LOCAL_FILE_ROOT = prev;
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("saves the whole file untruncated and answers without content", async () => {
+    const big = Buffer.concat([BINARY, Buffer.alloc(100 * 1024, 0x80)]);
+    const { call } = setup(registerFilesRead, fakeFiles(big));
+    const target = path.join(dir, "sub", "book.xlsx");
+    const payload = json(
+      await call({ op: "get", fileName: "book.xlsx", writeToFile: target }),
+    );
+    expect(payload).toEqual({
+      fileName: "book.xlsx",
+      totalBytes: big.byteLength,
+      writtenTo: target,
+      sha256: createHash("sha256").update(big).digest("hex"),
+    });
+    expectConforms(payload);
+    expect(await fsPromises.readFile(target)).toEqual(big);
+  });
+
+  it("refuses a path outside the root before downloading", async () => {
+    const { call, files } = setup(registerFilesRead);
+    await expect(
+      call({
+        op: "get",
+        fileName: "a.csv",
+        writeToFile: path.join(path.dirname(dir), "outside.csv"),
+      }),
+    ).rejects.toThrow(/escapes/);
+    expect(files.getContentBytes).not.toHaveBeenCalled();
+  });
+
+  it("refuses headLines with writeToFile, and writeToFile on list", async () => {
+    const { call, files } = setup(registerFilesRead);
+    const target = path.join(dir, "a.csv");
+    await expect(
+      call({ op: "get", fileName: "a.csv", headLines: 5, writeToFile: target }),
+    ).rejects.toThrow(/do not apply with writeToFile/);
+    await expect(call({ op: "list", writeToFile: target })).rejects.toThrow(
+      /writeToFile does not apply/,
+    );
+    expect(files.getContentBytes).not.toHaveBeenCalled();
+  });
+});
