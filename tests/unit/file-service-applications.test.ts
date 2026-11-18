@@ -169,6 +169,25 @@ describe("FileService, applications container", () => {
     ).rejects.toThrow(/is a ViewReference, not a file/);
     expect(calls.some((c) => c.method === "DELETE")).toBe(false);
   });
+  it("refuses an existing document unless overwrite is set", async () => {
+    const { svc, calls } = makeService();
+    await expect(
+      svc.upload("Reports/SHEET.xlsx", Buffer.from("x"), "applications", false),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      hint: expect.stringMatching(/overwrite=true/),
+    });
+    expect(calls.some((c) => c.method !== "GET")).toBe(false);
+
+    const res = await svc.upload(
+      "Reports/sheet.xlsx",
+      Buffer.from("x"),
+      "applications",
+      true,
+    );
+    expect(res).toEqual({ created: false, root: "Applications" });
+  });
+
   it("removes an entry it created when the content PUT fails", async () => {
     // Create and write are two requests; a half-written upload must not leave
     // the name occupied by an empty document.

@@ -290,6 +290,7 @@ describe("tm1_files_write op=upload", () => {
       "imports/a.csv",
       Buffer.from("x,y", "utf8"),
       "files",
+      false,
     );
     expect(res.structuredContent).toEqual({
       success: true,
@@ -315,7 +316,31 @@ describe("tm1_files_write op=upload", () => {
       "book.xlsx",
       BINARY,
       "applications",
+      false,
     );
+  });
+
+  it("passes overwrite through and refuses it on other ops", async () => {
+    const { call, files } = setup(registerFilesWrite);
+    await call({
+      op: "upload",
+      fileName: "Reports/a.xlsx",
+      content: "x",
+      container: "applications",
+      overwrite: true,
+      confirm: "Reports/a.xlsx",
+    });
+    expect(files.upload).toHaveBeenCalledWith(
+      "Reports/a.xlsx",
+      Buffer.from("x"),
+      "applications",
+      true,
+    );
+    await expect(
+      call({ op: "delete", fileName: "a", overwrite: true, confirm: "a" }),
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/overwrite does not apply/),
+    });
   });
 
   it("refuses without a matching confirm and writes nothing", async () => {

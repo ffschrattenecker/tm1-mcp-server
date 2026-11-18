@@ -17,7 +17,7 @@ export const registerFilesWrite = defineTool({
   name: "tm1_files_write",
   description: [
     "Change the TM1 server's file storage.",
-    "op='upload' creates or replaces fileName.",
+    "op='upload' creates or replaces fileName; in container='applications' an existing document is only replaced with overwrite=true (CONFLICT otherwise).",
     `Hard max ${HARD_MAX_BYTES} bytes (32 MB).`,
     "op='delete': remove fileName, or a folder only when it is empty (one holding entries is refused). Irreversible; NOT_FOUND if missing in both containers.",
     "op='create_folder': create the folder fileName, one level per call; an existing folder answers created=false. 'files' nests on v12 only (v11: UNSUPPORTED_OPERATION); 'applications' on both.",
@@ -46,17 +46,25 @@ export const registerFilesWrite = defineTool({
       .default("text")
       .describe("upload: encoding of content; 'base64' for binary."),
     ...CONTAINER_SCHEMA,
+    overwrite: z
+      .boolean()
+      .optional()
+      .describe(
+        "upload, container='applications' only: replace a document that already exists (default false refuses it). The 'files' container always replaces.",
+      ),
     ...CONFIRM_SCHEMA,
   },
   handler: async (
-    { op, fileName, content, encoding, container, confirm },
+    { op, fileName, content, encoding, container, overwrite, confirm },
     tm1Client,
   ) => {
-    if (op !== "upload" && content !== undefined) {
-      throw validationError(
-        `content does not apply to op="${op}". Nothing was changed.`,
-        'Drop content, or use op="upload" to write a file.',
-      );
+    for (const [field, value] of Object.entries({ content, overwrite })) {
+      if (op !== "upload" && value !== undefined) {
+        throw validationError(
+          `${field} does not apply to op="${op}". Nothing was changed.`,
+          `Drop ${field}, or use op="upload" to write a file.`,
+        );
+      }
     }
     if (op === "create_folder") {
       requireConfirm(confirm, fileName, "folder");
@@ -104,7 +112,7 @@ export const registerFilesWrite = defineTool({
     }
 
     const result = await withToolHint(
-      tm1Client.files.upload(fileName, bytes, container),
+      tm1Client.files.upload(fileName, bytes, container, overwrite ?? false),
       "The parent folder must already exist; create it with op='create_folder'. v11 'files' is flat, so a subfolder needs v12. container='applications' refuses a document directly under its root: name a folder in fileName.",
     );
 
