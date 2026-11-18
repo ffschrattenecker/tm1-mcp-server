@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { lstatSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { TM1Error, TM1ErrorCode } from "../types.js";
 
@@ -19,6 +19,14 @@ function realpathNearestExisting(p: string): string {
       const real = realpathSync(current);
       return tail.length === 0 ? real : path.join(real, ...tail);
     } catch {
+      // A link whose target does not exist yet is not a missing file: a write
+      // follows it and creates the target, wherever that is.
+      if (isSymlink(current)) {
+        throw new TM1Error({
+          code: TM1ErrorCode.VALIDATION_ERROR,
+          message: `Path goes through a symbolic link that cannot be resolved: ${current}`,
+        });
+      }
       const parent = path.dirname(current);
       if (parent === current) {
         // Nothing on the path exists (not even "/", practically unreachable);
@@ -28,6 +36,15 @@ function realpathNearestExisting(p: string): string {
       tail.unshift(path.basename(current));
       current = parent;
     }
+  }
+}
+
+function isSymlink(p: string): boolean {
+  try {
+    return lstatSync(p).isSymbolicLink();
+  } catch {
+    // Missing, or below a regular file (ENOTDIR): no link either way.
+    return false;
   }
 }
 
