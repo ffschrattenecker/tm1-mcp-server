@@ -1,6 +1,6 @@
 {
   "recordedAgainst": ["11.8.02900.8", "11.8.03500.4"],
-  "recordedAt": "2026-11-17",
+  "recordedAt": "2026-11-18",
   "methods": {
     "batch.execute": {
       "[]": {
@@ -202,6 +202,9 @@
         "type": "string"
       },
       "total": "number"
+    },
+    "files.createFolder": {
+      "created": "boolean"
     },
     "files.getContentBytes": {
       "*": "number"

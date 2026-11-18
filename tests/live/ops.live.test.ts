@@ -8,14 +8,20 @@
 //
 // Safe lifecycle exercised end-to-end under the SANDBOX prefix:
 //   - FILE: upload -> read back -> delete.
+//   - FOLDER and APPLICATIONS document: create, host-path round trip, delete.
 // Nothing touches clients or groups: security writes on a shared server are
 // out of scope for the live suite.
 //
 // Deliberately AVOIDED: tm1_save_data (global flush).
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { createHash } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
   getHarness,
   LIVE_ENABLED,
+  rawRequest,
   restGet,
   SANDBOX,
   seg,
@@ -25,6 +31,11 @@ import {
 const PREFIX = `${SANDBOX}_OPS`;
 const FILE_NAME = `${PREFIX}_FILE.txt`;
 const FILE_BODY = `${PREFIX} synthetic live-test blob\nline2\nline3\n`;
+// 11.8 refuses a document directly under the Applications root, so the
+// document goes into a folder of its own.
+const DOC_DIR = `${PREFIX}_DIR`;
+const DOC_NAME = `${DOC_DIR}/${PREFIX}_DOC.xlsm`;
+const APPS = "/api/v1/Contents('Applications')/Contents";
 
 describe.skipIf(!LIVE_ENABLED)("live: ops / security / files", () => {
   let h: LiveHarness;
@@ -40,6 +51,11 @@ describe.skipIf(!LIVE_ENABLED)("live: ops / security / files", () => {
       fileName: FILE_NAME,
       confirm: FILE_NAME,
     });
+    // Removes the test folder whatever is left in it, which no tool does, so
+    // it reaches past the service layer for that one request.
+    await rawRequest(h, "DELETE", `${APPS}('${DOC_DIR}')`).catch(
+      () => undefined,
+    );
   });
 
   // ---- OPERATIONS (read-tier) ---------------------------------------------
@@ -169,6 +185,138 @@ describe.skipIf(!LIVE_ENABLED)("live: ops / security / files", () => {
       fileName: FILE_NAME,
     });
     expect(after.isError).toBe(true);
+  });
+
+  it("FILES folder: v12 nests and keeps a filled folder, v11 names the flat container", async () => {
+    const dir = `${PREFIX}_FDIR`;
+    const sub = `${dir}/sub`;
+    const mk = (p: string) => ({
+      op: "create_folder",
+      fileName: p,
+      confirm: p,
+    });
+    const rm = (p: string) => ({ op: "delete", fileName: p, confirm: p });
+    const made = await h.call("tm1_files_write", mk(dir));
+    if (h.client.version === 11) {
+      expect(made.isError).toBe(true);
+      expect(made.json.code).toBe("UNSUPPORTED_OPERATION");
+      return;
+    }
+    try {
+      expect(made.json).toMatchObject({ created: true, container: "files" });
+      const again = await h.ok("tm1_files_write", mk(dir));
+      expect(again.json).toMatchObject({ created: false });
+      await h.ok("tm1_files_write", mk(sub));
+
+      // DELETE on a v12 folder takes its content along, so this refusal is
+      // the only thing between a folder name and everything below it.
+      const filled = await h.call("tm1_files_write", rm(dir));
+      expect(filled.isError).toBe(true);
+      expect(filled.json.code).toBe("UNSUPPORTED_OPERATION");
+      const kept = await h.ok("tm1_files_read", { op: "list", path: dir });
+      expect(kept.json.items).toEqual(["sub"]);
+    } finally {
+      await h.call("tm1_files_write", rm(sub));
+      await h.call("tm1_files_write", rm(dir));
+    }
+    const root = await h.ok("tm1_files_read", { op: "list", limit: 500 });
+    expect(root.json.items).not.toContain(dir);
+  });
+
+  it("APPLICATIONS document: sourcePath up -> writeToFile down, byte-identical", async () => {
+    // Bytes that are not valid UTF-8, so a text decode anywhere on the way
+    // would change the hash.
+    const bytes = Buffer.from(
+      Array.from({ length: 4096 }, (_, i) => (i * 131 + 7) % 256),
+    );
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const dir = mkdtempSync(path.join(os.tmpdir(), "tm1-live-doc-"));
+    const prevRoot = process.env.TM1_LOCAL_FILE_ROOT;
+    process.env.TM1_LOCAL_FILE_ROOT = dir;
+    const apps = { container: "applications" };
+    try {
+      const src = path.join(dir, "up.xlsm");
+      const dst = path.join(dir, "down.xlsm");
+      writeFileSync(src, bytes);
+      const folder = {
+        op: "create_folder",
+        fileName: DOC_DIR,
+        confirm: DOC_DIR,
+        ...apps,
+      };
+      const dir1 = await h.ok("tm1_files_write", folder);
+      expect(dir1.json).toMatchObject({ success: true, created: true });
+      const dir2 = await h.ok("tm1_files_write", folder);
+      expect(dir2.json).toMatchObject({ created: false });
+      const upload = {
+        op: "upload",
+        fileName: DOC_NAME,
+        sourcePath: src,
+        confirm: DOC_NAME,
+        ...apps,
+      };
+
+      const up = await h.ok("tm1_files_write", upload);
+      expect(up.json).toMatchObject({
+        success: true,
+        created: true,
+        bytesUploaded: bytes.byteLength,
+        sha256,
+        verified: true,
+      });
+
+      const get = await h.ok("tm1_files_read", {
+        op: "get",
+        fileName: DOC_NAME,
+        writeToFile: dst,
+        ...apps,
+      });
+      expect(get.json).toEqual({
+        fileName: DOC_NAME,
+        totalBytes: bytes.byteLength,
+        writtenTo: dst,
+        sha256,
+      });
+      expect(readFileSync(dst).equals(bytes)).toBe(true);
+
+      // An existing document is refused by default and replaced on request.
+      const again = await h.call("tm1_files_write", upload);
+      expect(again.isError).toBe(true);
+      expect(again.json.code).toBe("CONFLICT");
+      const replaced = await h.ok("tm1_files_write", {
+        ...upload,
+        overwrite: true,
+      });
+      expect(replaced.json).toMatchObject({ updated: true, verified: true });
+
+      // A folder goes only once it is empty.
+      const rmdir = {
+        op: "delete",
+        fileName: DOC_DIR,
+        confirm: DOC_DIR,
+        ...apps,
+      };
+      const filled = await h.call("tm1_files_write", rmdir);
+      expect(filled.isError).toBe(true);
+      expect(filled.json.code).toBe("UNSUPPORTED_OPERATION");
+      await h.ok("tm1_files_write", {
+        op: "delete",
+        fileName: DOC_NAME,
+        confirm: DOC_NAME,
+        ...apps,
+      });
+      await h.ok("tm1_files_write", rmdir);
+      const root = await h.ok("tm1_files_read", {
+        op: "list",
+        limit: 500,
+        ...apps,
+      });
+      expect(root.json.items).not.toContain(DOC_DIR);
+    } finally {
+      if (prevRoot === undefined) delete process.env.TM1_LOCAL_FILE_ROOT;
+      else process.env.TM1_LOCAL_FILE_ROOT = prevRoot;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   // ---- Negative path ------------------------------------------------------

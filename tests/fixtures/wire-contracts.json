@@ -1,6 +1,6 @@
 {
   "recordedAgainst": ["11.8.02900.8", "11.8.03500.4"],
-  "recordedAt": "2026-11-17",
+  "recordedAt": "2026-11-18",
   "endpoints": {
     "DELETE /api/v1/Chores('*') !404": {
       "error": {
@@ -374,10 +374,17 @@
       "@odata.context": "string",
       "value": "string"
     },
+    "GET /api/v1/Contents('*') !404": {
+      "error": {
+        "code": "string",
+        "message": "string"
+      }
+    },
     "GET /api/v1/Contents('*')/Contents": {
       "@odata.context": "string",
       "value[]": {
         "@odata.type": "string",
+        "ID?": "string",
         "Name": "string"
       }
     },
@@ -397,6 +404,14 @@
       "error": {
         "code": "string",
         "message": "string"
+      }
+    },
+    "GET /api/v1/Contents('*')/Contents('*')/Contents": {
+      "@odata.context": "string",
+      "value[]": {
+        "@odata.type": "string",
+        "ID": "string",
+        "Name": "string"
       }
     },
     "GET /api/v1/Cubes": {
@@ -1111,17 +1126,24 @@
       "@odata.context": "string",
       "@odata.type": "string",
       "Attributes": {},
-      "Content@odata.mediaContentType": "string",
+      "Content@odata.mediaContentType?": "string",
       "ID": "string",
-      "LastUpdated": "string",
+      "LastUpdated?": "string",
       "Name": "string",
-      "Size": "number"
+      "Size?": "number"
     },
     "POST /api/v1/Contents('*')/Contents !404": {
       "error": {
         "code": "string",
         "message": "string"
       }
+    },
+    "POST /api/v1/Contents('*')/Contents('*')/Contents": {
+      "@odata.context": "string",
+      "@odata.type": "string",
+      "Attributes": {},
+      "ID": "string",
+      "Name": "string"
     },
     "POST /api/v1/Cubes": {
       "@odata.context": "string",
