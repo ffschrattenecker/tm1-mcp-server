@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **A timed-out MDX or view read is cancelled on the server.** TM1 finishes a request it has received whatever the client does, so a query that ran into the client timeout kept its thread busy (observed: 30 minutes). Cellset reads and view executions now run as an async operation (`Prefer: respond-async`) and are `DELETE`d when they time out or the client aborts; the `LOCK_TIMEOUT` error carries `cancelled: true|false`. 11.8 stops the work within milliseconds; v12 accepts the cancel but may still finish a scan, and the hint says so. Single-cell reads are unchanged.
+- **`tm1_sample_cells` with `includeStrings` uses `NONEMPTY` instead of a per-tuple `FILTER`.** The `FILTER` tested every tuple of the unpinned dimensions (51 s for 16 million on 11.8) and was not shortened by `maxCells`. A rule-calculated string without a feeder no longer shows up on v11; the empty-result hint points at `tm1_check_feeders`.
+- **`TM1_LOCAL_FILE_ROOT` takes several directories**, separated by `;`. A host path is accepted when it lies inside any one of them.
+
+### Fixed
+
+- **`tm1_files_write` op='delete' no longer removes a v12 folder with everything in it.** In the `files` container a folder path went out as a plain `DELETE`, which v12 executes recursively. A folder holding entries is now refused with `UNSUPPORTED_OPERATION`; an empty one is deleted, in both containers.
+- **A host path through a symbolic link whose target does not exist is refused.** It passed the `TM1_LOCAL_FILE_ROOT` check as a file still to be created, and the write then followed the link outside the root.
+- **Sandbox mode refuses a control cube named with a leading space.** TM1 ignores spaces in names, so `' }CubeSecurity'` reached the control cube.
+- **`tm1_write_cells` accepts the target sandbox as a qualified member** (`[Sandboxes].[Sandboxes].[mcp-x]`) instead of refusing it.
+- **`tm1_write_cells` reports an unanswered per-cell write as `unknown`.** In the cell-by-cell fallback a cell whose `PATCH` timed out was listed as failed and invited a re-send, although it may be committed.
+- **An error's own hint is no longer replaced by the tool's general one**, so advice such as a timeout's next step reaches the caller.
+- **Unread response bodies are released.** A 401 before the re-login and the answer to an upload kept their connection.
+- **`contracts:verify` exits non-zero** when the server no longer matches the recorded contracts.
+
 ## [10.6.0] - 2026-11-17
 
 ### Added
