@@ -281,6 +281,17 @@ symlinks are rejected).
 TM1_LOCAL_FILE_ROOT=/srv/tm1-git    # optional; confines host-disk file params
 ```
 
+Several directories are separated by `;` (on every platform, since `:` is part
+of a Windows drive letter). A path is accepted when it lies inside any one of
+them, and the refusal message names all of them:
+
+```env
+TM1_LOCAL_FILE_ROOT=/srv/tm1-git;/home/me/projects
+```
+
+Empty entries are ignored. A directory whose own name contains `;` cannot be
+used as a root.
+
 It is server-wide: set it in the server environment (MCP `env:` block or a
 user environment variable), not in a connection folder's `.env`, and restart
 the server.

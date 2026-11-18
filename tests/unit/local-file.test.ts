@@ -98,7 +98,40 @@ describe("resolveLocalPath", () => {
       /escapes/,
     );
   });
+
+  it("accepts a path inside any of several ;-separated roots", () => {
+    const second = path.resolve("/srv/projects");
+    // Trailing separator and padding are how a hand-edited .env looks.
+    process.env.TM1_LOCAL_FILE_ROOT = `${ROOT} ; ${second};`;
+    expect(resolveLocalPath(path.join(second, "alpha", "load.pro"))).toBe(
+      path.join(second, "alpha", "load.pro"),
+    );
+    expect(resolveLocalPath(path.join(ROOT, "x.pro"))).toBe(
+      path.join(ROOT, "x.pro"),
+    );
+  });
+
+  it("rejects a path outside every root and names them all", () => {
+    const second = path.resolve("/srv/projects");
+    process.env.TM1_LOCAL_FILE_ROOT = `${ROOT};${second}`;
+    // Escaped: on Windows the roots contain backslashes, which are regex syntax.
+    expect(() => resolveLocalPath("/etc/passwd")).toThrow(
+      new RegExp(`escapes.*${escapeRegex(`${ROOT}; ${second}`)}`),
+    );
+  });
+
+  it("is disabled over HTTP when the roots are only separators", () => {
+    process.env.TM1_LOCAL_FILE_ROOT = " ; ;";
+    process.env.TM1_MCP_TRANSPORT = "http";
+    expect(() => resolveLocalPath("/srv/pro-bundles/x.pro")).toThrow(
+      /disabled/,
+    );
+  });
 });
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 // A symlink placed INSIDE the root that points outside it passes the lexical
 // check — the realpath-based second check must catch it. Uses a real tmpdir
@@ -152,6 +185,15 @@ describe.skipIf(process.platform === "win32")(
       expect(() => resolveLocalPath(path.join(root, "dangling"))).toThrow(
         /symbolic link that cannot be resolved/,
       );
+    });
+
+    it("rejects a symlink from one root into a directory that is no root", () => {
+      const other = path.join(base, "other");
+      mkdirSync(other);
+      process.env.TM1_LOCAL_FILE_ROOT = `${root};${other}`;
+      expect(() =>
+        resolveLocalPath(path.join(root, "link", "evil.pro")),
+      ).toThrow(/escapes/);
     });
 
     it("still resolves a path below a regular file, leaving the error to the read", () => {

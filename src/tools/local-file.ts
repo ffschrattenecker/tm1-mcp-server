@@ -49,8 +49,30 @@ function isSymlink(p: string): boolean {
 }
 
 /**
- * Resolve a caller-supplied host filesystem path, confined to the directory
- * configured via `TM1_LOCAL_FILE_ROOT` when one is set.
+ * Split `TM1_LOCAL_FILE_ROOT` into its roots. `;` separates them on every
+ * platform: `:` is part of a Windows drive letter, so path.delimiter would not
+ * read the same everywhere. Blank entries (trailing or doubled `;`) are ignored.
+ */
+function parseRoots(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(";")
+    .map((r) => r.trim())
+    .filter((r) => r !== "")
+    .map((r) => path.resolve(r));
+}
+
+function isWithin(root: string, target: string): boolean {
+  const rel = path.relative(root, target);
+  return !(
+    rel === ".." ||
+    rel.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(rel)
+  );
+}
+
+/**
+ * Resolve a caller-supplied host filesystem path, confined to the directories
+ * configured via `TM1_LOCAL_FILE_ROOT` when any are set.
  *
  * Without a root, stdio (the default transport) allows any absolute path: the
  * server runs as the same user as its client, so there is nothing to protect.
@@ -58,16 +80,20 @@ function isSymlink(p: string): boolean {
  * root is set — otherwise anyone reaching the endpoint could read the host's
  * files (TM1 credentials, `~/.ssh`) or write anywhere.
  *
- * When the root IS configured, on either transport, the resolved absolute path
- * must stay within it; any `..` traversal, absolute escape or escaping symlink is
- * rejected. Returns the resolved absolute path.
+ * When roots ARE configured, on either transport, the resolved absolute path
+ * must lie inside any one of them; any `..` traversal, absolute escape or
+ * escaping symlink is rejected. The variable may name several roots separated
+ * by `;`. Returns the resolved absolute path.
  */
 export function resolveLocalPath(
   inputPath: string,
   paramName = "filePath",
 ): string {
-  const root = process.env[ROOT_ENV]?.trim();
-  if (!root && process.env.TM1_MCP_TRANSPORT?.trim().toLowerCase() === "http") {
+  const roots = parseRoots(process.env[ROOT_ENV]);
+  if (
+    roots.length === 0 &&
+    process.env.TM1_MCP_TRANSPORT?.trim().toLowerCase() === "http"
+  ) {
     throw new TM1Error({
       code: TM1ErrorCode.VALIDATION_ERROR,
       message:
@@ -82,32 +108,27 @@ export function resolveLocalPath(
       message: `${paramName} must be absolute: ${inputPath}`,
     });
   }
-  if (!root) return path.resolve(inputPath);
-  const resolvedRoot = path.resolve(root);
+  if (roots.length === 0) return path.resolve(inputPath);
   const resolved = path.resolve(inputPath);
-  const rel = path.relative(resolvedRoot, resolved);
-  if (rel === ".." || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+  const allowed = roots.join("; ");
+  if (!roots.some((root) => isWithin(root, resolved))) {
     throw new TM1Error({
       code: TM1ErrorCode.VALIDATION_ERROR,
-      message: `${paramName} escapes the allowed ${ROOT_ENV} directory (${resolvedRoot}): ${inputPath}`,
+      message: `${paramName} escapes the allowed ${ROOT_ENV} directory (${allowed}): ${inputPath}`,
     });
   }
   // Symlink-safe second check: the lexical check above is bypassable by a
-  // symlink placed INSIDE the root that points outside it. Compare real paths
-  // instead — and realpath the root too, since the root itself may
+  // symlink placed INSIDE a root that points outside it. Compare real paths
+  // instead — and realpath every root too, since a root itself may
   // legitimately be a symlink (e.g. /tmp on some systems).
-  const realRoot = realpathNearestExisting(resolvedRoot);
   const realResolved = realpathNearestExisting(resolved);
-  const relReal = path.relative(realRoot, realResolved);
   if (
-    relReal === ".." ||
-    relReal.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relReal)
+    !roots.some((root) => isWithin(realpathNearestExisting(root), realResolved))
   ) {
     throw new TM1Error({
       code: TM1ErrorCode.VALIDATION_ERROR,
       message:
-        `${paramName} escapes the allowed ${ROOT_ENV} directory (${resolvedRoot}) ` +
+        `${paramName} escapes the allowed ${ROOT_ENV} directory (${allowed}) ` +
         `after resolving symlinks: ${inputPath}`,
     });
   }

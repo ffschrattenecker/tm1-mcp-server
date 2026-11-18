@@ -106,7 +106,7 @@ TM1_MODE=readonly                   # readonly (default) | sandbox | readwrite
 # TM1_ENVIRONMENT=prod              # dev | test | prod; prod forces readonly
 # TM1_RESPONSE_MODE=structured      # legacy (default) | structured
 # TM1_MAX_RESPONSE_CHARS=80000      # larger results fail with RESPONSE_TOO_LARGE
-# TM1_LOCAL_FILE_ROOT=/srv/tm1-git  # optional; confines host-disk file params to this dir
+# TM1_LOCAL_FILE_ROOT=/srv/tm1-git  # optional; confines host-disk file params to these dirs (;-separated)
 ```
 
 `TM1_RESPONSE_MODE=structured` halves the wire bytes but hides results from
