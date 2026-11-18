@@ -99,6 +99,23 @@ describe("tm1_write_cells under TM1_MODE=sandbox", () => {
     expect(sent()).toBe(false);
   });
 
+  // Measured on TM1 11 and 12: the server ignores spaces in a name, so
+  // `Cubes(' }ClientGroups')` and `FROM [ }ClientGroups]` reach the control cube.
+  it("refuses a control cube named with a leading space", async () => {
+    const { call, spies, sent } = writeTool(SANDBOX, ["}Cubes", "}Groups"]);
+    await expect(
+      call({
+        cubeName: " }CubeSecurity",
+        dimensions: ["}Cubes", "}Groups"],
+        cells: [{ elements: ["Sales", "Viewers"], value: "WRITE" }],
+        sandbox: "mcp-whatif",
+        confirm: " }CubeSecurity",
+      }),
+    ).rejects.toThrow(/control cube/);
+    expect(sent()).toBe(false);
+    expect(spies.writeCells).not.toHaveBeenCalled();
+  });
+
   it("writes into the named sandbox and reads the value back from it", async () => {
     const { call, spies } = writeTool(SANDBOX, CUBE);
     const res = await call({ ...ARGS, sandbox: "mcp-whatif" });
