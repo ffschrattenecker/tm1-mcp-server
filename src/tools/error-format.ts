@@ -17,6 +17,7 @@ interface UniformErrorPayload {
   httpStatus?: number | undefined;
   endpoint?: string | undefined;
   details?: string | undefined;
+  cancelled?: boolean | undefined;
   hint: string;
 }
 

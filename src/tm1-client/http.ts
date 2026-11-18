@@ -28,6 +28,12 @@ const ASYNC_DEFAULT_BUDGET_MS = 3_600_000;
 // the run is reported as lost track of.
 const ASYNC_MAX_POLL_FAILURES = 3;
 const ASYNC_CANCEL_TIMEOUT_MS = 5000;
+// Cancellable requests (RequestOptions.cancellable) poll from 10 ms, so a
+// fast read costs one or two extra round trips and no visible delay. Each poll
+// gets what is left of the budget, but never less than this floor: a finished
+// result still needs room for the gaps in its body.
+const CANCELLABLE_POLL_START_MS = 10;
+const CANCELLABLE_POLL_FLOOR_MS = 5000;
 
 // Any successful mutating HTTP call invalidates the callgraph
 // reference-index cache. Cheap (Map.clear()) and rebuild is lazy on next
@@ -53,6 +59,14 @@ export interface RequestOptions {
   // measured on 11.8: the TI thread is gone and the result reads
   // "TM1UserException: Cancel".
   async?: boolean;
+  // Run as a TM1 async operation like `async`, but with a budget that defaults
+  // to the normal request timeout and a cancel when it runs out or the caller
+  // aborts: the operation is DELETEd on the server and the error reports
+  // `cancelled` (LOCK_TIMEOUT) or rethrows the abort. Without it a request TM1
+  // has received runs to its end whatever the client does — a timed-out MDX
+  // kept a thread busy for 30 minutes. For reads with real server-side work
+  // only: it costs two extra round trips (poll, free).
+  cancellable?: boolean;
 }
 
 // Link an external AbortSignal (e.g. from RequestHandlerExtra.signal) to a
@@ -230,28 +244,39 @@ export class TM1HttpClient {
     const url = `${this.config.baseUrl}${this.profile.resolveApiPath(path)}`;
     const isSafeMethod = isSafeHttpMethod(method);
     const maxAttempts = isSafeMethod ? MAX_NETWORK_RETRIES : 0;
-    const isAsync = opts?.async === true;
+    const isCancellable = opts?.cancellable === true;
+    const isAsync = opts?.async === true || isCancellable;
     // Async: the POST itself returns at once, and a server that ignores the
     // preference answers synchronously — so the budget covers either.
-    const timeoutMs = isAsync
-      ? (opts?.timeoutMs ?? ASYNC_DEFAULT_BUDGET_MS)
-      : opts?.timeoutMs;
+    // Cancellable: the budget is the normal request timeout, not the hour.
+    const timeoutMs =
+      opts?.async === true
+        ? (opts.timeoutMs ?? ASYNC_DEFAULT_BUDGET_MS)
+        : opts?.timeoutMs;
     const budgetMs = timeoutMs ?? this.config.requestTimeoutMs;
     const deadline = Date.now() + budgetMs;
     const extraHeaders: Record<string, string> | undefined = isAsync
       ? { Prefer: "respond-async" }
       : undefined;
     const settle = async (response: Response): Promise<T> => {
-      const final =
-        isAsync && response.status === 202
-          ? await this.awaitAsync(
+      let final = response;
+      if (isAsync && response.status === 202) {
+        final = isCancellable
+          ? await this.awaitCancellable(
               response,
               path,
               deadline,
               budgetMs,
               opts?.signal,
             )
-          : response;
+          : await this.awaitAsync(
+              response,
+              path,
+              deadline,
+              budgetMs,
+              opts?.signal,
+            );
+      }
       const result = await this.handleResponse<T>(
         final,
         path,
@@ -713,10 +738,122 @@ export class TM1HttpClient {
     }
   }
 
+  /**
+   * Poll an accepted cancellable operation until it finishes. Resolves to its
+   * final Response, or to "budget" when the budget ran out first — between two
+   * polls, or inside a poll that hung past its own deadline. Errors other than
+   * those (abort, lost track, a non-network failure) propagate.
+   */
+  private async pollUntilDone(
+    url: string,
+    path: string,
+    deadline: number,
+    budgetMs: number,
+    signal?: AbortSignal,
+  ): Promise<Response | "budget"> {
+    let delay = CANCELLABLE_POLL_START_MS;
+    let failures = 0;
+    for (;;) {
+      await abortableSleep(delay, signal);
+      delay = Math.min(delay * 2, ASYNC_POLL_MAX_MS);
+      // A poll that hangs must not start the budget over; it gets what is
+      // left, at least the floor.
+      const pollMs = Math.min(
+        budgetMs,
+        Math.max(deadline - Date.now(), CANCELLABLE_POLL_FLOOR_MS),
+      );
+      let res: Response;
+      try {
+        res = await this.pollAsync(url, signal, pollMs);
+      } catch (e) {
+        if (signal?.aborted) throw e;
+        if (isTimeoutError(e)) return "budget";
+        if (!this.isNetworkError(e)) throw e;
+        if (++failures >= ASYNC_MAX_POLL_FAILURES) {
+          throw lostTrack(path, e instanceof Error ? e.message : String(e));
+        }
+        continue;
+      }
+      failures = 0;
+      if (res.status === 200) {
+        try {
+          return await asyncResult(res, pollMs, signal);
+        } catch (e) {
+          // The body of a finished result stalled past the poll's deadline:
+          // the same hang as a poll that never answers.
+          if (!signal?.aborted && isTimeoutError(e)) return "budget";
+          throw e;
+        }
+      }
+      if (res.status !== 202) {
+        throw lostTrack(path, `polling answered HTTP ${res.status}`);
+      }
+      if (Date.now() >= deadline) return "budget";
+    }
+  }
+
+  /**
+   * The cancellable counterpart of awaitAsync. A result is returned as the
+   * Response the synchronous call would have given, and the finished operation
+   * is freed. A budget that runs out cancels the run on the server and throws
+   * LOCK_TIMEOUT with `cancelled` set to whether TM1 confirmed the cancel. A
+   * caller's abort cancels the run and rethrows the abort.
+   */
+  private async awaitCancellable(
+    accepted: Response,
+    path: string,
+    deadline: number,
+    budgetMs: number,
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    const id = /_async\('([^']+)'\)/.exec(
+      accepted.headers.get("location") ?? "",
+    )?.[1];
+    if (id === undefined) {
+      throw lostTrack(
+        path,
+        "TM1 accepted the request (202) but named no _async operation",
+      );
+    }
+    const url = `${this.config.baseUrl}${this.profile.resolveApiPath(`/api/v1/_async('${id}')`)}`;
+
+    let outcome: Response | "budget";
+    try {
+      outcome = await this.pollUntilDone(url, path, deadline, budgetMs, signal);
+    } catch (e) {
+      if (signal?.aborted) {
+        await this.cancelAsync(url, path);
+      } else {
+        this.releaseAsync(url, path);
+      }
+      throw e;
+    }
+    if (outcome !== "budget") {
+      this.releaseAsync(url, path);
+      return outcome;
+    }
+
+    const cancelled = await this.cancelAsync(url, path);
+    const listTool =
+      this.config.version === 12 ? "tm1_list_jobs" : "tm1_list_threads";
+    throw new TM1Error({
+      code: TM1ErrorCode.LOCK_TIMEOUT,
+      message: `Request to ${path} timed out after ${budgetMs}ms`,
+      endpoint: path,
+      cancelled,
+      hint: !cancelled
+        ? `The cancel was not confirmed, so the query may still be running on the server — check ${listTool} and cancel it there before retrying.`
+        : this.config.version === 12
+          ? `TM1 accepted the cancel, but v12 can run a scan to its end before it stops — check ${listTool} before retrying, and narrow the query (filters, fewer members).`
+          : "The query was cancelled on the server. Narrow it (filters, fewer members) before retrying.",
+    });
+  }
+
   /** One poll of an async operation, re-authenticating once on a 401. */
   private async pollAsync(
     url: string,
     signal?: AbortSignal,
+    timeoutMs?: number,
   ): Promise<Response> {
     const cookie = await this.sessionManager.ensureSession();
     const res = await this.executeRequest(
@@ -724,7 +861,7 @@ export class TM1HttpClient {
       "GET",
       cookie,
       undefined,
-      undefined,
+      timeoutMs,
       signal,
     );
     if (res.status !== 401) return res;
@@ -735,42 +872,68 @@ export class TM1HttpClient {
       "GET",
       newCookie,
       undefined,
-      undefined,
+      timeoutMs,
       signal,
     );
   }
 
   /**
+   * DELETE an async operation: cancels it while it runs, frees it once it has
+   * finished. Resolves to the HTTP status. Never emits a mutation — nothing in
+   * the model changes when a handle is released.
+   */
+  private async deleteAsync(url: string): Promise<number> {
+    const cookie = await this.sessionManager.ensureSession();
+    const res = await this.sendOnce(
+      url,
+      "DELETE",
+      {
+        Cookie: this.sessionManager.cookieHeader(cookie),
+        Accept: "application/json",
+        "User-Agent": USER_AGENT,
+        "TM1-SessionContext": USER_AGENT,
+        "TM1-Session-Context": USER_AGENT,
+      },
+      undefined,
+      ASYNC_CANCEL_TIMEOUT_MS,
+    );
+    releaseBody(res);
+    return res.status;
+  }
+
+  /**
    * DELETE an async operation, best-effort: this cancels the run it stands
    * for. Deliberately without the caller's signal — that one is already
-   * aborted, which is why we are here.
+   * aborted, which is why we are here. Resolves to whether TM1 answered 204.
    */
-  private async cancelAsync(url: string, path: string): Promise<void> {
+  private async cancelAsync(url: string, path: string): Promise<boolean> {
     try {
-      const cookie = await this.sessionManager.ensureSession();
-      const res = await this.sendOnce(
-        url,
-        "DELETE",
-        {
-          Cookie: this.sessionManager.cookieHeader(cookie),
-          Accept: "application/json",
-          "User-Agent": USER_AGENT,
-          "TM1-SessionContext": USER_AGENT,
-          "TM1-Session-Context": USER_AGENT,
-        },
-        undefined,
-        ASYNC_CANCEL_TIMEOUT_MS,
-      );
+      const status = await this.deleteAsync(url);
       this.logger.warn(
-        { endpoint: path, status: res.status },
+        { endpoint: path, status },
         "Cancelled async TM1 operation",
       );
+      return status === 204;
     } catch (err) {
       this.logger.error(
         { err, endpoint: path },
         "Could not cancel async TM1 operation",
       );
+      return false;
     }
+  }
+
+  /**
+   * Free a finished cancellable operation, without waiting for it. Not a
+   * cancel: the run already ended, so nothing is logged as cancelled.
+   */
+  private releaseAsync(url: string, path: string): void {
+    this.deleteAsync(url).catch((err: unknown) => {
+      this.logger.warn(
+        { err, endpoint: path },
+        "Could not free a finished async TM1 operation",
+      );
+    });
   }
 
   private async handleResponse<T>(

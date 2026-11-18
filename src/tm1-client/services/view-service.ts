@@ -103,7 +103,7 @@ export class ViewService {
           }>;
         }>;
       }>;
-    }>("POST", path, undefined, opts);
+    }>("POST", path, undefined, { ...opts, cancellable: true });
 
     try {
       const mdxResult = transformCellsetResponse(response);

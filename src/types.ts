@@ -26,6 +26,9 @@ export class TM1Error extends Error {
   // hintForCode(). Tools attach this via attachHint() to provide
   // operation-specific next steps (G4 from MCP best-practices review).
   hintOverride?: string | undefined;
+  // Set on a timeout of a cancellable request: whether TM1 confirmed the
+  // cancel of the server-side operation.
+  readonly cancelled?: boolean | undefined;
 
   constructor(opts: {
     code: TM1ErrorCode;
@@ -34,6 +37,7 @@ export class TM1Error extends Error {
     endpoint?: string | undefined;
     details?: string | undefined;
     hint?: string | undefined;
+    cancelled?: boolean | undefined;
   }) {
     super(opts.message);
     this.name = "TM1Error";
@@ -42,6 +46,7 @@ export class TM1Error extends Error {
     this.endpoint = opts.endpoint;
     this.details = opts.details;
     this.hintOverride = opts.hint;
+    this.cancelled = opts.cancelled;
   }
 
   // Actionable next-step suggestion for an LLM agent. Tool-context override
@@ -56,6 +61,7 @@ export class TM1Error extends Error {
     httpStatus?: number | undefined;
     endpoint?: string | undefined;
     details?: string | undefined;
+    cancelled?: boolean | undefined;
     hint: string;
   } {
     return {
@@ -64,6 +70,7 @@ export class TM1Error extends Error {
       ...(this.httpStatus !== undefined && { httpStatus: this.httpStatus }),
       ...(this.endpoint !== undefined && { endpoint: this.endpoint }),
       ...(this.details !== undefined && { details: this.details }),
+      ...(this.cancelled !== undefined && { cancelled: this.cancelled }),
       hint: this.hint,
     };
   }
