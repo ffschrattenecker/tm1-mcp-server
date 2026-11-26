@@ -1,17 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { InMemoryTransport, McpServer } from "@modelcontextprotocol/server";
+import { Client } from "@modelcontextprotocol/client";
 import { z } from "zod";
 import {
   slimJsonSchema,
   stripDefaultPhrase,
 } from "../../src/lib/slim-json-schema.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
+import { getCompiledToolSurface } from "../../src/tools/compiled-surface.js";
 import { buildMcpServer } from "../../src/build-mcp-server.js";
 import { loadServerSettings } from "../../src/config.js";
 import { ConnectionRegistry } from "../../src/connections.js";
-import type { TM1Client } from "../../src/tm1-client.js";
 import "../../src/tools/fileops/files-read.js";
 import { mockLogger } from "../helpers/client-harness.js";
 
@@ -185,10 +187,9 @@ describe("tools/list advertises slimmed schemas", () => {
   it("strips sentinels and $schema from both input and output schemas", async () => {
     const server = new McpServer({ name: "test", version: "0.0.0" });
     const wrapped = withAnnotations(server, mockLogger, "readwrite");
-    (wrapped.tool as (...a: unknown[]) => unknown)(
+    wrapped.registerTool(
       TOOL,
-      "read files",
-      inputShape,
+      { description: "read files", inputSchema: inputShape },
       handler,
     );
 
@@ -217,47 +218,62 @@ describe("tools/list advertises slimmed schemas", () => {
     ).toBe(false);
   });
 
-  it("refuses a server whose tools/list was installed before the wrap", () => {
-    // Declaring the capability makes the SDK install tools/list in the
-    // constructor; the wrap would then never see it.
-    const server = new McpServer(
-      { name: "test", version: "0.0.0" },
-      { capabilities: { tools: { listChanged: true } } },
-    );
-    expect(() => withAnnotations(server, mockLogger, "readwrite")).toThrow(
-      /capabilities\.tools/,
-    );
-  });
+  it("slims the list the real buildMcpServer path serves (memoized per revision)", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "tm1-surface-cache-"));
+    try {
+      const env = [
+        "TM1_BASE_URL=http://127.0.0.1:8881",
+        "TM1_USER=admin",
+        "TM1_PASSWORD=secret",
+        "TM1_MODE=readwrite",
+      ].join("\n");
+      mkdirSync(join(dir, "one"));
+      writeFileSync(join(dir, "one", ".env"), env);
 
-  it("slims the list the real buildMcpServer path serves", async () => {
-    // Declaring `capabilities.tools` on McpServer makes the SDK install
-    // tools/list before withAnnotations() can wrap it. Build the server the
-    // way the process does, so a regression there fails here.
-    const registry = ConnectionRegistry.of(
-      [{ name: "default", client: { version: 11 } as TM1Client }],
-      mockLogger,
-    );
-    const server = buildMcpServer(registry, loadServerSettings({}), mockLogger);
-    const [clientTransport, serverTransport] =
-      InMemoryTransport.createLinkedPair();
-    const client = new Client({ name: "test-client", version: "0.0.0" });
-    await Promise.all([
-      client.connect(clientTransport),
-      server.connect(serverTransport),
-    ]);
-    const { tools } = await client.listTools();
-    // The SDK adds the tools capability on the first registration.
-    expect(client.getServerCapabilities()?.tools).toEqual({
-      listChanged: true,
-    });
-    expect(tools.length).toBeGreaterThan(0);
+      const registry = ConnectionRegistry.fromEnvironment(
+        { TM1_CONNECTIONS_DIR: dir },
+        mockLogger,
+      );
+      const settings = loadServerSettings({});
 
-    const wire = JSON.stringify(tools);
-    expect(wire).not.toContain("$schema");
-    expect(wire).not.toContain(String(SAFE_INT_MAX));
-    expect(wire).not.toContain(String(SAFE_INT_MIN));
-    await client.close();
-    await server.close();
+      // Same registry + revision hits the cached CompiledToolSurface.
+      const s1 = getCompiledToolSurface(registry, settings, mockLogger);
+      const s2 = getCompiledToolSurface(registry, settings, mockLogger);
+      expect(s2).toBe(s1);
+
+      const server = buildMcpServer(registry, settings, mockLogger);
+      const [clientTransport, serverTransport] =
+        InMemoryTransport.createLinkedPair();
+      const client = new Client({ name: "test-client", version: "0.0.0" });
+      await Promise.all([
+        client.connect(clientTransport),
+        server.connect(serverTransport),
+      ]);
+      const { tools } = await client.listTools();
+      expect(client.getServerCapabilities()?.tools).toEqual({
+        listChanged: true,
+      });
+      expect(tools.length).toBe(s1.toolsListResult.tools.length);
+      expect(tools.length).toBeGreaterThan(0);
+
+      const wire = JSON.stringify(tools);
+      expect(wire).not.toContain("$schema");
+      expect(wire).not.toContain(String(SAFE_INT_MAX));
+      expect(wire).not.toContain(String(SAFE_INT_MIN));
+
+      // Adding a connection bumps registry.revision and invalidates the cache.
+      mkdirSync(join(dir, "two"));
+      writeFileSync(join(dir, "two", ".env"), env);
+      registry.refresh();
+      const s3 = getCompiledToolSurface(registry, settings, mockLogger);
+      expect(s3).not.toBe(s1);
+      expect(s3.revision).toBeGreaterThan(s1.revision);
+
+      await client.close();
+      await server.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

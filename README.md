@@ -56,8 +56,8 @@ Everything below describes this fork's state. For the real project, read the
 
 > **Token tip:** every registered tool's name + input schema costs context on
 > *each* turn, so exposing every tool is wasteful when a session needs a slice.
-> Narrow the surface with your client's tool filter; `TM1_MODE=readonly` already
-> trims it to read-only tools.
+> Set `TM1_TOOLSETS` (e.g. `core`, `dev`, `audit`, or comma-separated categories)
+> to trim `tools/list`; `TM1_MODE=readonly` already omits write tools.
 
 ## Install
 
@@ -229,6 +229,10 @@ Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 `completed_with_errors`, `rolled_back` or `indeterminate` — and only `succeeded`
 reports `success: true`, since TM1 answers HTTP 200 whatever happened.
 `completed_with_errors` means changes **were** committed: retrying double-posts.
+When the client advertises `io.modelcontextprotocol/tasks`,
+`tm1_execute_process` and `tm1_execute_chore` also run as resumable tasks
+backed by TM1 `/_async('id')` handles over stateless HTTP (`2026-07-28` + `2025`
+fallback).
 
 ## Troubleshooting
 

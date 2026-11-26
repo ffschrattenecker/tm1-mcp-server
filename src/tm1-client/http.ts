@@ -12,10 +12,30 @@ import { PRODUCT, VERSION } from "../version.js";
 import { getTm1Dispatcher, tm1Fetch } from "./dispatcher.js";
 import { tm1Events, type Tm1MutationEvent } from "../lib/tm1-events.js";
 import { maskSecretValues } from "../lib/mask-secrets.js";
+import {
+  currentTraceContext,
+  traceOutboundHeaders,
+} from "../lib/trace-context.js";
 
 const MAX_NETWORK_RETRIES = 3;
 const BACKOFF_BASE_MS = 1000;
 export const USER_AGENT = `${PRODUCT}/${VERSION}`;
+
+/**
+ * Shared TM1 REST API session & tracing headers used by both TM1HttpClient
+ * and SessionManager.
+ */
+export function tm1SessionHeaders(
+  extra?: Record<string, string>,
+): Record<string, string> {
+  return {
+    "User-Agent": USER_AGENT,
+    "TM1-SessionContext": USER_AGENT,
+    "TM1-Session-Context": USER_AGENT,
+    ...traceOutboundHeaders(currentTraceContext()),
+    ...extra,
+  };
+}
 
 // Async operations (RequestOptions.async). Polling backs off from 0.1s to 1s.
 // Without a caller timeoutMs the wait is capped at an hour — the tools'
@@ -49,8 +69,8 @@ function isSafeHttpMethod(method: string): boolean {
 // execute_mdx/process/chore; signal forwards an MCP-side AbortSignal so
 // `notifications/cancelled` from a client terminates the in-flight fetch.
 export interface RequestOptions {
-  timeoutMs?: number;
-  signal?: AbortSignal;
+  timeoutMs?: number | undefined;
+  signal?: AbortSignal | undefined;
   // Run as a TM1 async operation (`Prefer: respond-async`). TM1 answers 202
   // and the result is polled from /_async('id'), so a long TI run never holds
   // one HTTP request open. timeoutMs then caps the whole wait (default: an
@@ -299,47 +319,28 @@ export class TM1HttpClient {
       }
 
       try {
-        const cookie = await this.sessionManager.ensureSession();
-        const response = await this.executeRequest(
-          url,
-          method,
-          cookie,
-          body,
-          timeoutMs,
-          opts?.signal,
-          extraHeaders,
+        const response = await this.sendWithReauth(
+          (cookie) =>
+            this.executeRequest(
+              url,
+              method,
+              cookie,
+              body,
+              timeoutMs,
+              opts?.signal,
+              extraHeaders,
+            ),
+          path,
         );
 
         if (response.status === 401) {
-          this.logger.warn(
-            { endpoint: path },
-            "Received 401, re-authenticating",
-          );
           releaseBody(response);
-          // Pass the cookie that got the 401 so a concurrent request that
-          // already rotated the session short-circuits to the fresh cookie
-          // instead of forcing another logout+login (staggered-401 churn).
-          const newCookie = await this.sessionManager.authenticate(cookie);
-          const retryResponse = await this.executeRequest(
-            url,
-            method,
-            newCookie,
-            body,
-            timeoutMs,
-            opts?.signal,
-            extraHeaders,
-          );
-
-          if (retryResponse.status === 401) {
-            throw new TM1Error({
-              code: TM1ErrorCode.AUTH_FAILED,
-              message: "Authentication failed after re-authentication attempt",
-              httpStatus: 401,
-              endpoint: path,
-            });
-          }
-
-          return await settle(retryResponse);
+          throw new TM1Error({
+            code: TM1ErrorCode.AUTH_FAILED,
+            message: "Authentication failed after re-authentication attempt",
+            httpStatus: 401,
+            endpoint: path,
+          });
         }
 
         return await settle(response);
@@ -413,8 +414,12 @@ export class TM1HttpClient {
    * to present it.
    */
   /** @internal — for Service-layer use; not part of the public consumer API. */
-  public async requestRawBytes(method: string, path: string): Promise<Buffer> {
-    return this.fetchRaw(method, path, undefined, async (r) =>
+  public async requestRawBytes(
+    method: string,
+    path: string,
+    opts?: RequestOptions,
+  ): Promise<Buffer> {
+    return this.fetchRaw(method, path, opts, async (r) =>
       Buffer.from(await r.arrayBuffer()),
     );
   }
@@ -431,32 +436,20 @@ export class TM1HttpClient {
   ): Promise<T> {
     const url = `${this.config.baseUrl}${this.profile.resolveApiPath(path)}`;
     const effectiveTimeout = opts?.timeoutMs ?? this.config.requestTimeoutMs;
-    const cookie = await this.sessionManager.ensureSession();
 
-    const headers: Record<string, string> = {
-      Cookie: this.sessionManager.cookieHeader(cookie),
-      Accept: "*/*",
-      "User-Agent": USER_AGENT,
-      "TM1-SessionContext": USER_AGENT,
-      "TM1-Session-Context": USER_AGENT,
-    };
-
-    const response = await this.withReauth(
-      (c) => {
-        const hdrs = {
-          ...headers,
-          Cookie: this.sessionManager.cookieHeader(c),
-        };
-        return this.sendOnce(
+    const response = await this.sendWithReauthAndTimeout(
+      (c) =>
+        this.sendOnce(
           url,
           method,
-          hdrs,
+          tm1SessionHeaders({
+            Cookie: this.sessionManager.cookieHeader(c),
+            Accept: "*/*",
+          }),
           undefined,
           effectiveTimeout,
           opts?.signal,
-        );
-      },
-      cookie,
+        ),
       path,
       effectiveTimeout,
     );
@@ -501,28 +494,25 @@ export class TM1HttpClient {
     path: string,
     body: Uint8Array,
     contentType: string = "application/octet-stream",
+    opts?: RequestOptions,
   ): Promise<void> {
     const url = `${this.config.baseUrl}${this.profile.resolveApiPath(path)}`;
-    const effectiveTimeout = this.config.requestTimeoutMs;
-    const cookie = await this.sessionManager.ensureSession();
+    const effectiveTimeout = opts?.timeoutMs ?? this.config.requestTimeoutMs;
 
-    const response = await this.withReauth(
+    const response = await this.sendWithReauthAndTimeout(
       (c) =>
         this.sendOnce(
           url,
           method,
-          {
+          tm1SessionHeaders({
             Cookie: this.sessionManager.cookieHeader(c),
             Accept: "application/json,*/*",
             "Content-Type": contentType,
-            "User-Agent": USER_AGENT,
-            "TM1-SessionContext": USER_AGENT,
-            "TM1-Session-Context": USER_AGENT,
-          },
+          }),
           body,
           effectiveTimeout,
+          opts?.signal,
         ),
-      cookie,
       path,
       effectiveTimeout,
     );
@@ -533,7 +523,7 @@ export class TM1HttpClient {
         errBody = await readBodyWithin(
           response,
           effectiveTimeout,
-          undefined,
+          opts?.signal,
           (r) => r.text(),
         );
       } catch {
@@ -580,47 +570,39 @@ export class TM1HttpClient {
   }
 
   /**
-   * Wraps a send function with cookie-refresh-on-401 and timeout→LOCK_TIMEOUT mapping.
-   * Used by requestRaw and requestBinary (which have no network-retry loop).
-   * On 401: calls sessionManager.authenticate() and retries once with the new cookie.
-   * The caller is responsible for obtaining the initial cookie via ensureSession().
+   * Unified 401 re-auth wrapper shared by request(), pollAsync(), fetchRaw(),
+   * and requestBinary(). Ensures a session, sends once, and on 401 passes the
+   * failing cookie to authenticate(cookie) so concurrent requests do not churn.
    */
-  private async withReauth(
+  private async sendWithReauth(
     send: (cookie: string) => Promise<Response>,
-    initialCookie: string,
+    path: string,
+  ): Promise<Response> {
+    const cookie = await this.sessionManager.ensureSession();
+    const response = await send(cookie);
+    if (response.status !== 401) return response;
+    this.logger.warn({ endpoint: path }, "Received 401, re-authenticating");
+    releaseBody(response);
+    const newCookie = await this.sessionManager.authenticate(cookie);
+    return send(newCookie);
+  }
+
+  /**
+   * sendWithReauth with timeout→LOCK_TIMEOUT mapping for fetchRaw/requestBinary.
+   */
+  private async sendWithReauthAndTimeout(
+    send: (cookie: string) => Promise<Response>,
     path: string,
     effectiveTimeout: number,
   ): Promise<Response> {
-    let response: Response;
     try {
-      response = await send(initialCookie);
+      return await this.sendWithReauth(send, path);
     } catch (err) {
       if (isTimeoutError(err)) {
-        throw new TM1Error({
-          code: TM1ErrorCode.LOCK_TIMEOUT,
-          message: `Request to ${path} timed out after ${effectiveTimeout}ms`,
-          endpoint: path,
-        });
+        throw lockTimeoutError(path, effectiveTimeout);
       }
       throw err;
     }
-    if (response.status === 401) {
-      releaseBody(response);
-      const newCookie = await this.sessionManager.authenticate(initialCookie);
-      try {
-        response = await send(newCookie);
-      } catch (err) {
-        if (isTimeoutError(err)) {
-          throw new TM1Error({
-            code: TM1ErrorCode.LOCK_TIMEOUT,
-            message: `Request to ${path} timed out after ${effectiveTimeout}ms`,
-            endpoint: path,
-          });
-        }
-        throw err;
-      }
-    }
-    return response;
   }
 
   private async executeRequest(
@@ -632,15 +614,12 @@ export class TM1HttpClient {
     externalSignal?: AbortSignal,
     extraHeaders?: Record<string, string>,
   ): Promise<Response> {
-    const headers: Record<string, string> = {
+    const headers = tm1SessionHeaders({
       Cookie: this.sessionManager.cookieHeader(cookie),
       Accept: "application/json",
       "Accept-Encoding": "gzip, deflate",
-      "User-Agent": USER_AGENT,
-      "TM1-SessionContext": USER_AGENT,
-      "TM1-Session-Context": USER_AGENT,
       ...extraHeaders,
-    };
+    });
 
     const isWriteMethod =
       method === "POST" || method === "PUT" || method === "PATCH";
@@ -855,26 +834,126 @@ export class TM1HttpClient {
     signal?: AbortSignal,
     timeoutMs?: number,
   ): Promise<Response> {
-    const cookie = await this.sessionManager.ensureSession();
-    const res = await this.executeRequest(
+    return this.sendWithReauth(
+      (c) => this.executeRequest(url, "GET", c, undefined, timeoutMs, signal),
       url,
-      "GET",
-      cookie,
-      undefined,
-      timeoutMs,
-      signal,
     );
-    if (res.status !== 401) return res;
+  }
+
+  /**
+   * Start a TM1 async operation (`Prefer: respond-async`) without waiting for
+   * completion. Returns the `/_async('id')` handle when TM1 replies 202, or
+   * the parsed response immediately when TM1 answers synchronously.
+   */
+  /** @internal — for MCP Tasks integration; not part of the public consumer API. */
+  public async startAsync<T = unknown>(
+    method: string,
+    path: string,
+    body?: unknown,
+    opts?: RequestOptions,
+  ): Promise<
+    { status: "accepted"; asyncId: string } | { status: "completed"; result: T }
+  > {
+    const url = `${this.config.baseUrl}${this.profile.resolveApiPath(path)}`;
+    const timeoutMs = opts?.timeoutMs ?? this.config.requestTimeoutMs;
+    const response = await this.sendWithReauth(
+      (cookie) =>
+        this.executeRequest(
+          url,
+          method,
+          cookie,
+          body,
+          timeoutMs,
+          opts?.signal,
+          {
+            Prefer: "respond-async",
+          },
+        ),
+      path,
+    );
+    if (response.status === 401) {
+      releaseBody(response);
+      throw new TM1Error({
+        code: TM1ErrorCode.AUTH_FAILED,
+        message: "Authentication failed after re-authentication attempt",
+        httpStatus: 401,
+        endpoint: path,
+      });
+    }
+    if (response.status === 202) {
+      const id = /_async\('([^']+)'\)/.exec(
+        response.headers.get("location") ?? "",
+      )?.[1];
+      releaseBody(response);
+      if (id === undefined) {
+        throw lostTrack(
+          path,
+          "TM1 accepted the request (202) but named no _async operation",
+        );
+      }
+      return { status: "accepted", asyncId: id };
+    }
+    const result = await this.handleResponse<T>(
+      response,
+      path,
+      timeoutMs,
+      opts?.signal,
+    );
+    this.emitMutation(method, path);
+    return { status: "completed", result };
+  }
+
+  /**
+   * Perform a single non-blocking poll of an active TM1 `/_async('id')` handle.
+   */
+  /** @internal — for MCP Tasks integration; not part of the public consumer API. */
+  public async pollAsyncOnce<T = unknown>(
+    asyncId: string,
+    path: string,
+    method = "POST",
+    opts?: RequestOptions,
+  ): Promise<{ status: "working" } | { status: "completed"; result: T }> {
+    const url = `${this.config.baseUrl}${this.profile.resolveApiPath(`/api/v1/_async('${asyncId}')`)}`;
+    const timeoutMs = opts?.timeoutMs ?? this.config.requestTimeoutMs;
+    let res: Response;
+    try {
+      res = await this.pollAsync(url, opts?.signal, timeoutMs);
+    } catch (e) {
+      if (opts?.signal?.aborted) throw e;
+      if (isTimeoutError(e) || this.isNetworkError(e)) {
+        throw lostTrack(path, e instanceof Error ? e.message : String(e));
+      }
+      throw e;
+    }
+    if (res.status === 202) {
+      releaseBody(res);
+      return { status: "working" };
+    }
+    if (res.status === 200) {
+      const final = await asyncResult(res, timeoutMs, opts?.signal);
+      const result = await this.handleResponse<T>(
+        final,
+        path,
+        timeoutMs,
+        opts?.signal,
+      );
+      this.emitMutation(method, path);
+      return { status: "completed", result };
+    }
     releaseBody(res);
-    const newCookie = await this.sessionManager.authenticate(cookie);
-    return this.executeRequest(
-      url,
-      "GET",
-      newCookie,
-      undefined,
-      timeoutMs,
-      signal,
-    );
+    throw lostTrack(path, `polling answered HTTP ${res.status}`);
+  }
+
+  /**
+   * Cancel an active TM1 `/_async('id')` operation via DELETE.
+   */
+  /** @internal — for MCP Tasks integration; not part of the public consumer API. */
+  public async cancelAsyncById(
+    asyncId: string,
+    path: string,
+  ): Promise<boolean> {
+    const url = `${this.config.baseUrl}${this.profile.resolveApiPath(`/api/v1/_async('${asyncId}')`)}`;
+    return this.cancelAsync(url, path);
   }
 
   /**
@@ -887,13 +966,10 @@ export class TM1HttpClient {
     const res = await this.sendOnce(
       url,
       "DELETE",
-      {
+      tm1SessionHeaders({
         Cookie: this.sessionManager.cookieHeader(cookie),
         Accept: "application/json",
-        "User-Agent": USER_AGENT,
-        "TM1-SessionContext": USER_AGENT,
-        "TM1-Session-Context": USER_AGENT,
-      },
+      }),
       undefined,
       ASYNC_CANCEL_TIMEOUT_MS,
     );

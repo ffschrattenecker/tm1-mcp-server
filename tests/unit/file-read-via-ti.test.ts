@@ -171,13 +171,12 @@ describe("tm1_read_server_file tool", () => {
     let captured: Handler | null = null;
     let parser: z.ZodObject<ZodRawShape> | null = null;
     const server = {
-      tool: (
+      registerTool: (
         _name: string,
-        _desc: string,
-        schema: ZodRawShape,
+        cfg: { inputSchema: ZodRawShape },
         handler: Handler,
       ) => {
-        parser = z.object(schema);
+        parser = z.object(cfg.inputSchema);
         captured = handler;
       },
     };
@@ -200,7 +199,7 @@ describe("tm1_read_server_file tool", () => {
 
   it("is not registered on a v12-only server", () => {
     const names: string[] = [];
-    const server = { tool: (name: string) => void names.push(name) };
+    const server = { registerTool: (name: string) => void names.push(name) };
     registerReadServerFile(
       server as unknown as Parameters<typeof registerReadServerFile>[0],
       { version: 12, files: {} } as unknown as TM1Client,

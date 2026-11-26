@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseRules } from "../../lib/callgraph/rulesParser.js";
 import { extractBracketLists } from "../../lib/feeders/brackets.js";
-import { neutralizeLine } from "../../lib/callgraph/rulesLinter.js";
+import { neutralizeLine } from "../../lib/ti-lex.js";
 import { findDbCalls } from "../../lib/rules-db-check.js";
 import {
   detectBroaderThanMatchedRule,

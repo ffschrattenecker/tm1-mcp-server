@@ -17,6 +17,7 @@ function baseConfig(overrides: Partial<TM1Config>): TM1Config {
     httpHost: "127.0.0.1",
     httpPort: 3000,
     httpAllowedOrigins: [],
+    httpAllowedHosts: [],
     mode: "readonly",
     version: 11,
     ...overrides,

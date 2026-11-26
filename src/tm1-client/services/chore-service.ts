@@ -18,6 +18,15 @@ import { classifyChoreExecution } from "./chore-status.js";
 import { rethrowIfSystemic } from "./fallback.js";
 import { odataKey } from "./odata-page.js";
 
+function statuslessChoreResult(): ChoreResult {
+  return {
+    success: false,
+    outcome: "indeterminate",
+    choreErrorStatus: CHORE_STATUS_UNAVAILABLE,
+    statusUnavailable: true,
+  };
+}
+
 function frequencyDuration(f: ChoreFrequency): string {
   return `P${f.days}DT${String(f.hours).padStart(2, "0")}H${String(f.minutes).padStart(2, "0")}M${String(f.seconds).padStart(2, "0")}S`;
 }
@@ -148,12 +157,110 @@ export class ChoreService {
     opts?: RequestOptions,
   ): Promise<ChoreResult> {
     await this.http.request<void>("POST", path, {}, { ...opts, async: true });
+    return statuslessChoreResult();
+  }
+
+  /**
+   * Non-blocking start of a chore run for MCP Tasks (`io.modelcontextprotocol/tasks`).
+   */
+  async startExecute(
+    choreName: string,
+    opts?: RequestOptions,
+  ): Promise<
+    | { kind: "async"; asyncId: string; path: string; withReturn: boolean }
+    | { kind: "completed"; result: ChoreResult }
+  > {
+    const plain = `/api/v1/Chores('${odataKey(choreName)}')/tm1.Execute`;
+    if (this.withReturnSupported === false) {
+      const started = await this.http.startAsync<void>("POST", plain, {}, opts);
+      if (started.status === "accepted") {
+        return {
+          kind: "async",
+          asyncId: started.asyncId,
+          path: plain,
+          withReturn: false,
+        };
+      }
+      return { kind: "completed", result: statuslessChoreResult() };
+    }
+
+    const withReturn = `/api/v1/Chores('${odataKey(choreName)}')/tm1.ExecuteWithReturn?$expand=ErrorLogFile`;
+    try {
+      const started = await this.http.startAsync<{
+        ChoreExecuteStatusCode?: string;
+        ErrorLogFile?: { Filename?: string } | null;
+      }>("POST", withReturn, {}, opts);
+      this.withReturnSupported = true;
+      if (started.status === "accepted") {
+        return {
+          kind: "async",
+          asyncId: started.asyncId,
+          path: withReturn,
+          withReturn: true,
+        };
+      }
+      return {
+        kind: "completed",
+        result: classifyChoreExecution(
+          started.result?.ChoreExecuteStatusCode,
+          started.result?.ErrorLogFile?.Filename,
+        ),
+      };
+    } catch (error) {
+      rethrowIfSystemic(error);
+      if (
+        error instanceof TM1Error &&
+        error.code === TM1ErrorCode.NOT_FOUND &&
+        this.withReturnSupported === null
+      ) {
+        const started = await this.http.startAsync<void>(
+          "POST",
+          plain,
+          {},
+          opts,
+        );
+        this.withReturnSupported = false;
+        if (started.status === "accepted") {
+          return {
+            kind: "async",
+            asyncId: started.asyncId,
+            path: plain,
+            withReturn: false,
+          };
+        }
+        return { kind: "completed", result: statuslessChoreResult() };
+      }
+      throw error;
+    }
+  }
+
+  /** Single non-blocking poll of an async chore execution started via `startExecute()`. */
+  async pollExecute(
+    asyncId: string,
+    path: string,
+    withReturn: boolean,
+    opts?: RequestOptions,
+  ): Promise<{ kind: "working" } | { kind: "completed"; result: ChoreResult }> {
+    const polled = await this.http.pollAsyncOnce<{
+      ChoreExecuteStatusCode?: string;
+      ErrorLogFile?: { Filename?: string } | null;
+    }>(asyncId, path, "POST", opts);
+    if (polled.status === "working") return { kind: "working" };
+    if (!withReturn) {
+      return { kind: "completed", result: statuslessChoreResult() };
+    }
     return {
-      success: false,
-      outcome: "indeterminate",
-      choreErrorStatus: CHORE_STATUS_UNAVAILABLE,
-      statusUnavailable: true,
+      kind: "completed",
+      result: classifyChoreExecution(
+        polled.result?.ChoreExecuteStatusCode,
+        polled.result?.ErrorLogFile?.Filename,
+      ),
     };
+  }
+
+  /** Cancel an active async chore execution via `DELETE /_async('id')`. */
+  async cancelExecute(asyncId: string, path: string): Promise<boolean> {
+    return this.http.cancelAsyncById(asyncId, path);
   }
 
   /**

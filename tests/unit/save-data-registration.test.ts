@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { registerSaveData } from "../../src/tools/operations/save-data.js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { TM1Client } from "../../src/tm1-client.js";
 
 function mockServer() {
   const names: string[] = [];
   const server = {
-    tool: (name: string) => void names.push(name),
+    registerTool: (name: string) => void names.push(name),
   } as unknown as McpServer;
   return { server, names };
 }

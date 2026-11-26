@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { connectionIdOf, loadConfig } from "../../src/config.js";
+import {
+  connectionIdOf,
+  loadConfig,
+  loadServerSettings,
+} from "../../src/config.js";
+import { parseToolsets } from "../../src/tools/toolsets.js";
 
 const REQUIRED = {
   TM1_BASE_URL: "https://tm1server:8010",
@@ -326,6 +331,22 @@ describe("loadConfig", () => {
       ["unknown TM1_AUTH_MODE", { ...S2S, TM1_AUTH_MODE: "banana" }, /TM1_AUTH_MODE/],
     ])("rejects %s", (_name, env, message) => {
       expect(() => loadConfig(env)).toThrow(message);
+    });
+  });
+
+  describe("server-level HTTP hosts & toolsets", () => {
+    it("parses TM1_MCP_HTTP_ALLOWED_HOSTS as comma-separated hosts", () => {
+      const s = loadServerSettings({
+        TM1_MCP_HTTP_ALLOWED_HOSTS: " mcp.internal , proxy.corp:8443 , ",
+      });
+      expect(s.httpAllowedHosts).toEqual(["mcp.internal", "proxy.corp:8443"]);
+    });
+
+    it("parses TM1_TOOLSETS and defaults to all when unset", () => {
+      expect(loadServerSettings({}).toolsets).toBeUndefined();
+      expect(loadServerSettings({ TM1_TOOLSETS: "core,ti" }).toolsets).toEqual(
+        parseToolsets("core,ti"),
+      );
     });
   });
 });

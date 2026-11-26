@@ -7,6 +7,7 @@ import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 import { CONTAINER_SCHEMA } from "./container.js";
 import { validationError } from "./files-read.js";
 import { resolveLocalPath } from "../local-file.js";
@@ -76,7 +77,10 @@ export const registerFilesWrite = defineTool({
       confirm,
     },
     tm1Client,
+    extra,
   ) => {
+    const signal = extraSignal(extra);
+    const reqOpts = signal ? { signal } : undefined;
     for (const [field, value] of Object.entries({
       content,
       sourcePath,
@@ -143,7 +147,13 @@ export const registerFilesWrite = defineTool({
     if (bytes.byteLength > HARD_MAX_BYTES) return tooLarge(bytes.byteLength);
 
     const result = await withToolHint(
-      tm1Client.files.upload(fileName, bytes, container, overwrite ?? false),
+      tm1Client.files.upload(
+        fileName,
+        bytes,
+        container,
+        overwrite ?? false,
+        ...(reqOpts ? [reqOpts] : []),
+      ),
       "The parent folder must already exist; create it with op='create_folder'. v11 'files' is flat, so a subfolder needs v12. container='applications' refuses a document directly under its root: name a folder in fileName.",
     );
 
@@ -152,7 +162,7 @@ export const registerFilesWrite = defineTool({
     // leaves the upload standing and reports it as unverified.
     const sha256 = sha256Of(bytes);
     const verified = await tm1Client.files
-      .getContentBytes(fileName, container)
+      .getContentBytes(fileName, container, ...(reqOpts ? [reqOpts] : []))
       .then((back) => sha256Of(back) === sha256)
       .catch(() => false);
 

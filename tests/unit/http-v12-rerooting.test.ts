@@ -24,6 +24,7 @@ function makeV12Config(): TM1Config {
     httpHost: "127.0.0.1",
     httpPort: 0,
     httpAllowedOrigins: [],
+    httpAllowedHosts: [],
     mode: "readonly",
     sandboxPrefix: "mcp-",
     responseMode: "structured",

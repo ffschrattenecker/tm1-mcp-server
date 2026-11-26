@@ -4,50 +4,76 @@ import {
   type ServerResponse,
 } from "node:http";
 import { createHash, timingSafeEqual } from "node:crypto";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import {
+  createMcpHandler,
+  hostHeaderValidationResponse,
+  isLegacyRequest,
+  localhostAllowedHostnames,
+  WebStandardStreamableHTTPServerTransport,
+  type McpServer,
+} from "@modelcontextprotocol/server";
+import { toNodeHandler } from "@modelcontextprotocol/node";
 import type pino from "pino";
 import type { ServerSettings } from "./config.js";
 
 // Streamable HTTP transport (stateless JSON, single /mcp endpoint).
 //
-// Stateless mode (sessionIdGenerator omitted) means each StreamableHTTPServerTransport
-// is single-use: the SDK throws "Stateless transport cannot be reused across requests"
-// on the second handleRequest. So we build a *fresh* McpServer + transport per request
-// and tear both down when the response closes — the SDK-documented stateless pattern.
-// This is cheap: registration is pure in-memory wiring with no I/O, and the shared
-// TM1 client (captured by the buildServer closure) is not rebuilt.
+// Migrated to @modelcontextprotocol/server v2 (2026-07-28 stateless spec) with
+// stateless 2025 fallback via isLegacyRequest(). Both eras share one server
+// factory backed by the memoized tool surface and process-wide Tm1TaskManager.
 //
-// Consequence: there is no standing server->client stream, so logging
-// notifications are not delivered over HTTP. That is acceptable for the intended
-// deployment (one process per TM1 identity; stdio remains the push-capable default).
-//
-// Per MCP best practices: bind 127.0.0.1 by default and enable DNS-rebinding
-// protection. allowedHosts/Origins narrow what the transport accepts.
-
-// Cap on a single /mcp request body. Without one the whole request is buffered
-// and then copied again by Buffer.concat().toString(), so a large enough POST
-// can take the process down before any tool-level limit applies. Sized above
-// the biggest legitimate payload: tm1_files_write accepts 32 MB of bytes, which
-// is ~43 MB base64 plus JSON framing.
-// ponytail: fixed constant, make it configurable if a deployment needs more.
+// Cap on a single /mcp request body. Sized above the biggest legitimate payload:
+// tm1_files_write accepts 32 MB of bytes (~43 MB base64 plus JSON framing).
 const MAX_BODY_BYTES = 64 * 1024 * 1024;
+
+function extractHostname(hostOrHostPort: string): string {
+  try {
+    return new URL(`http://${hostOrHostPort}`).hostname;
+  } catch {
+    return hostOrHostPort;
+  }
+}
+
+function buildAllowedHosts(config: ServerSettings): {
+  allowedHostnames: string[];
+  exactHostPorts: Set<string>;
+} {
+  const hostnames = new Set<string>(localhostAllowedHostnames());
+  const exactHostPorts = new Set<string>();
+  const h = config.httpHost.trim();
+  if (h && h !== "0.0.0.0" && h !== "::" && h !== "[::]") {
+    hostnames.add(extractHostname(h));
+  }
+  for (const entry of config.httpAllowedHosts) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    hostnames.add(extractHostname(trimmed).toLowerCase());
+    if (trimmed.includes(":")) {
+      exactHostPorts.add(trimmed.toLowerCase());
+    }
+  }
+  return {
+    allowedHostnames: [...hostnames],
+    exactHostPorts,
+  };
+}
+
+function isOriginAllowed(
+  originHeader: string | undefined,
+  allowedOrigins: readonly string[],
+): boolean {
+  if (!originHeader) return true;
+  if (allowedOrigins.length === 0) return true;
+  const normalized = originHeader.trim().toLowerCase();
+  return allowedOrigins.some((o) => o.trim().toLowerCase() === normalized);
+}
+
 export async function startHttpTransport(
   buildServer: () => McpServer,
   config: ServerSettings,
   logger: pino.Logger,
 ): Promise<() => Promise<void>> {
-  // The SDK compares the Host header as one string, port included, so every
-  // entry needs the port. Loopback names are safe to always allow: a rebinding
-  // attacker's page sends its own hostname, never one of these.
-  const allowedHosts = [
-    ...new Set([
-      `${config.httpHost}:${config.httpPort}`,
-      `127.0.0.1:${config.httpPort}`,
-      `localhost:${config.httpPort}`,
-      `[::1]:${config.httpPort}`,
-    ]),
-  ];
+  const { allowedHostnames, exactHostPorts } = buildAllowedHosts(config);
 
   if (!config.httpToken) {
     logger.warn(
@@ -56,12 +82,131 @@ export async function startHttpTransport(
     );
   }
 
+  const modernHandler = createMcpHandler(() => buildServer(), {
+    legacy: "reject",
+    responseMode: "auto",
+    maxRequestBodySize: MAX_BODY_BYTES,
+    onerror: (err) => {
+      logger.error({ err }, "MCP HTTP handler error");
+    },
+  });
+
+  const serveLegacyStateless = async (
+    webReq: Request,
+    parsedBody: unknown,
+  ): Promise<Response> => {
+    const server = buildServer();
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      // sessionIdGenerator omitted → stateless mode (single-use per request)
+      enableJsonResponse: true,
+      maxRequestBodySize: MAX_BODY_BYTES,
+    });
+    const teardown = () => {
+      void transport.close().catch(() => undefined);
+      void server.close().catch(() => undefined);
+    };
+    webReq.signal.addEventListener("abort", teardown, { once: true });
+    await server.connect(transport);
+    try {
+      const response = await transport.handleRequest(webReq, { parsedBody });
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("text/event-stream")) {
+        teardown();
+      }
+      return response;
+    } catch (err) {
+      teardown();
+      throw err;
+    }
+  };
+
+  const nodeHandler = toNodeHandler(
+    {
+      fetch: async (webReq: Request): Promise<Response> => {
+        const hostRejected = hostHeaderValidationResponse(
+          webReq,
+          allowedHostnames,
+        );
+        if (hostRejected) {
+          return hostRejected;
+        }
+        const rawHost = webReq.headers.get("host")?.toLowerCase();
+        if (rawHost && exactHostPorts.size > 0) {
+          const hostname = extractHostname(rawHost);
+          const isLoopback = localhostAllowedHostnames().includes(hostname);
+          const isConfiguredBare =
+            hostname === extractHostname(config.httpHost).toLowerCase() ||
+            config.httpAllowedHosts.some(
+              (h) =>
+                !h.includes(":") &&
+                extractHostname(h).toLowerCase() === hostname,
+            );
+          if (
+            !isLoopback &&
+            !isConfiguredBare &&
+            !exactHostPorts.has(rawHost)
+          ) {
+            return new Response(
+              JSON.stringify({ error: `Invalid Host: ${rawHost}` }),
+              {
+                status: 403,
+                headers: { "Content-Type": "application/json" },
+              },
+            );
+          }
+        }
+
+        const originHeader = webReq.headers.get("origin") ?? undefined;
+        if (!isOriginAllowed(originHeader, config.httpAllowedOrigins)) {
+          return new Response(
+            JSON.stringify({ error: `Invalid Origin: ${originHeader}` }),
+            {
+              status: 403,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        const text = await webReq.text();
+        let parsedBody: unknown;
+        if (text) {
+          try {
+            parsedBody = JSON.parse(text);
+          } catch (err) {
+            logger.warn({ err }, "Bad JSON in /mcp body");
+            return new Response(JSON.stringify({ error: "Invalid JSON" }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+        }
+
+        // Reconstruct a fresh Request with the buffered text because
+        // webReq.text() consumed the body stream.
+        const replayReq = new Request(webReq.url, {
+          method: webReq.method,
+          headers: webReq.headers,
+          body: text || null,
+          signal: webReq.signal,
+        });
+
+        if (await isLegacyRequest(replayReq, parsedBody)) {
+          return serveLegacyStateless(replayReq, parsedBody);
+        }
+        return modernHandler.fetch(replayReq, { parsedBody });
+      },
+    },
+    {
+      maxRequestBodySize: MAX_BODY_BYTES,
+      onerror: (err) => {
+        logger.error({ err }, "Transport handleRequest threw");
+      },
+    },
+  );
+
   const httpServer = createServer(
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- async request handler intentional; everything after the body read runs inside one try
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- async request handler intentional; pre-checks run before delegating to toNodeHandler
     async (req: IncomingMessage, res: ServerResponse) => {
-      // Match the exact /mcp endpoint (optionally with a query string) or a real
-      // subpath under /mcp/. A loose startsWith("/mcp") would also accept
-      // /mcpFoo, routing an unrelated path into the MCP transport.
       const path = (req.url ?? "").split(/[?#]/, 1)[0] ?? "";
       if (path !== "/mcp" && !path.startsWith("/mcp/")) {
         res.statusCode = 404;
@@ -69,9 +214,6 @@ export async function startHttpTransport(
         res.end(JSON.stringify({ error: "Not found. Use POST /mcp." }));
         return;
       }
-      // Stateless: no standing SSE stream (GET) and no session to end
-      // (DELETE). The SDK would answer GET with an open stream that pins a
-      // whole McpServer until the client hangs up, so refuse up front.
       if (req.method !== "POST") {
         res.statusCode = 405;
         res.setHeader("Allow", "POST");
@@ -82,9 +224,6 @@ export async function startHttpTransport(
         return;
       }
       if (config.httpToken) {
-        // Constant-time comparison: hashing both sides to fixed-length digests avoids
-        // both the length-mismatch throw and the per-character timing oracle that `!==`
-        // would leak, so the token can't be brute-forced via response-timing analysis.
         const expected = createHash("sha256")
           .update(`Bearer ${config.httpToken}`)
           .digest();
@@ -99,91 +238,27 @@ export async function startHttpTransport(
           return;
         }
       }
-      let body: unknown;
-      if (req.method === "POST") {
-        // Refuse on the declared length before a single byte is read; the
-        // counter below is the backstop for a chunked body that declares none.
-        const declared = Number(req.headers["content-length"]);
-        if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
-          logger.warn(
-            { declared, limit: MAX_BODY_BYTES },
-            "Request body too large",
-          );
-          res.statusCode = 413;
-          res.setHeader("Content-Type", "application/json");
-          // Close the connection: the client is still holding a body this
-          // server will never read, and keep-alive would leave it queued.
-          res.setHeader("Connection", "close");
-          res.end(
-            JSON.stringify({
-              error: `Request body exceeds ${MAX_BODY_BYTES} bytes`,
-            }),
-          );
-          return;
-        }
-        try {
-          const chunks: Buffer[] = [];
-          let size = 0;
-          for await (const chunk of req) {
-            const buf =
-              typeof chunk === "string"
-                ? Buffer.from(chunk)
-                : (chunk as Buffer);
-            size += buf.length;
-            if (size > MAX_BODY_BYTES) {
-              logger.warn({ limit: MAX_BODY_BYTES }, "Request body too large");
-              res.statusCode = 413;
-              res.setHeader("Content-Type", "application/json");
-              res.end(
-                JSON.stringify({
-                  error: `Request body exceeds ${MAX_BODY_BYTES} bytes`,
-                }),
-              );
-              // Answer first, then stop reading: the rest of the upload is
-              // dropped instead of being buffered behind an already-sent reply.
-              req.destroy();
-              return;
-            }
-            chunks.push(buf);
-          }
-          const raw = Buffer.concat(chunks).toString("utf8");
-          body = raw ? JSON.parse(raw) : undefined;
-        } catch (err) {
-          logger.warn({ err }, "Bad JSON in /mcp body");
-          res.statusCode = 400;
-          res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify({ error: "Invalid JSON" }));
-          return;
-        }
+      const declared = Number(req.headers["content-length"]);
+      if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+        logger.warn(
+          { declared, limit: MAX_BODY_BYTES },
+          "Request body too large",
+        );
+        res.statusCode = 413;
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Connection", "close");
+        res.end(
+          JSON.stringify({
+            error: `Request body exceeds ${MAX_BODY_BYTES} bytes`,
+          }),
+        );
+        return;
       }
 
-      try {
-        // Fresh server + transport per request (stateless single-use); tear
-        // both down once the response is fully written so nothing leaks
-        // between requests. Inside the try: a throw here would otherwise
-        // escape the async handler and leave the request without an answer.
-        const server = buildServer();
-        const transport = new StreamableHTTPServerTransport({
-          // sessionIdGenerator omitted → stateless mode (single-use per request)
-          enableJsonResponse: true,
-          enableDnsRebindingProtection: true,
-          allowedHosts,
-          allowedOrigins: config.httpAllowedOrigins,
-        });
-        res.on("close", () => {
-          void transport.close();
-          void server.close();
-        });
-        await server.connect(transport);
-        await transport.handleRequest(req, res, body);
-      } catch (err) {
-        logger.error({ err }, "Transport handleRequest threw");
-        if (!res.headersSent) {
-          res.statusCode = 500;
-          res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify({ error: "Internal transport error" }));
-        }
-      }
+      await nodeHandler(
+        req as unknown as Parameters<typeof nodeHandler>[0],
+        res,
+      );
     },
   );
 
@@ -199,10 +274,11 @@ export async function startHttpTransport(
       host: config.httpHost,
       port: config.httpPort,
       endpoint: "/mcp",
+      allowedHosts: allowedHostnames,
       allowedOrigins: config.httpAllowedOrigins,
       dnsRebindingProtection: true,
     },
-    "MCP server listening on HTTP (Streamable, stateless, per-request)",
+    "MCP server listening on HTTP (Streamable v2, stateless)",
   );
 
   return async () => {

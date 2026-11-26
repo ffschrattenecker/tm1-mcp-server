@@ -23,8 +23,12 @@ function call(register: Reg, c: unknown, args: Record<string, unknown>) {
   let parser: z.ZodObject<ZodRawShape> | null = null;
   register(
     {
-      tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-        parser = z.object(s);
+      registerTool: (
+        _n: string,
+        cfg: { inputSchema: ZodRawShape },
+        cb: typeof h,
+      ) => {
+        parser = z.object(cfg.inputSchema);
         h = cb;
       },
     } as never,

@@ -14,8 +14,12 @@ function capture(
   let handler: ToolHandler | null = null;
   let parser: z.ZodObject<ZodRawShape> | null = null;
   const server = {
-    tool: (_n: string, _d: string, schema: ZodRawShape, h: ToolHandler) => {
-      parser = z.object(schema);
+    registerTool: (
+      _n: string,
+      cfg: { inputSchema: ZodRawShape },
+      h: ToolHandler,
+    ) => {
+      parser = z.object(cfg.inputSchema);
       handler = h;
     },
   };

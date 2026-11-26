@@ -11,6 +11,7 @@ import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { requireConfirm } from "../confirm.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 import { actionResponse } from "../format.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { planWrite } from "./guard.js";
@@ -75,7 +76,7 @@ export const registerRestWrite = defineTool({
     let res;
     try {
       res = await tm1Client.rest.send(method, plan.path, plan.body, {
-        signal: extra?.signal,
+        signal: extraSignal(extra),
         ...(timeoutMs === undefined ? {} : { timeoutMs }),
       });
     } catch (err) {

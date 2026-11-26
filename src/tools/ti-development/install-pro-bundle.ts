@@ -16,6 +16,7 @@ import {
 } from "./preflight.js";
 import { backupProcess, type ProcessBackup } from "./process-backup.js";
 import { jsonResult } from "../format.js";
+import { extraMeta, extraNotify } from "../context.js";
 
 interface FileResult {
   file: string;
@@ -102,19 +103,19 @@ export const registerInstallProBundle = defineTool({
     // client opted in by passing _meta.progressToken in the tool call;
     // sendNotification is fire-and-forget so a non-progress-aware client
     // can't break the install loop.
-    const progressToken = extra?._meta?.progressToken;
+    const progressToken = extraMeta(extra)?.progressToken as
+      string | number | undefined;
+    const notify = extraNotify(extra);
     const sendProgress = (
       progress: number,
       total: number,
       message: string,
     ): void => {
-      if (progressToken === undefined) return;
-      void extra
-        .sendNotification({
-          method: "notifications/progress",
-          params: { progressToken, progress, total, message },
-        })
-        .catch(() => undefined);
+      if (progressToken === undefined || notify === undefined) return;
+      void notify({
+        method: "notifications/progress",
+        params: { progressToken, progress, total, message },
+      }).catch(() => undefined);
     };
 
     const safeDir = resolveLocalPath(directory, "directory");

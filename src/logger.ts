@@ -1,5 +1,6 @@
 import pino from "pino";
 import type { TM1Config } from "./config.js";
+import { traceLogBindings } from "./lib/trace-context.js";
 
 // "Cookie"/"cookie" are defensive: the TM1SessionId travels as a Cookie header
 // VALUE, which path-based redaction of the field name would miss. No code logs
@@ -41,6 +42,7 @@ export function createLogger(
       paths: redactPaths(),
       censor: MASK_VALUE,
     },
+    mixin: () => traceLogBindings(),
     timestamp: pino.stdTimeFunctions.isoTime,
   };
 

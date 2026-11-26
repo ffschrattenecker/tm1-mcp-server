@@ -8,7 +8,7 @@
 // uniform shape, parsing existing JSON when present and falling back to
 // treating plain-text bodies as TM1_ERROR messages.
 import { TM1Error, TM1ErrorCode, hintForCode } from "../types.js";
-import { maskSecretValues } from "../lib/mask-secrets.js";
+import { MASK, isSecretName, maskSecretValues } from "../lib/mask-secrets.js";
 
 interface UniformErrorPayload {
   // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- TM1ErrorCode | string is intentional: documents known codes while accepting arbitrary strings for forward-compat
@@ -23,7 +23,7 @@ interface UniformErrorPayload {
 
 interface McpToolResult {
   content: Array<{ type: "text"; text: string }>;
-  isError?: boolean;
+  isError?: boolean | undefined;
   structuredContent?: unknown;
 }
 
@@ -70,6 +70,19 @@ export function formatTm1ErrorResult(err: unknown): McpToolResult {
   };
 }
 
+function maskErrorValue(value: unknown): unknown {
+  if (typeof value === "string") return maskSecretValues(value);
+  if (Array.isArray(value)) return value.map(maskErrorValue);
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = isSecretName(k) ? MASK : maskErrorValue(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 // Re-shape an isError result that came back from a tool's own try/catch.
 // Returns the original result unchanged when it's not safe to rewrite
 // (no content, non-text content, etc.) so we never mangle good data.
@@ -97,18 +110,28 @@ export function normalizeErrorResult(result: McpToolResult): McpToolResult {
   }
 
   if (parsed) {
-    // Already JSON. Add hint if missing; preserve any extra fields the tool
-    // attached (e.g. upsert_process attaches partialApply/failedStep).
-    const code = (parsed.code as string | undefined) ?? DEFAULT_CODE;
+    // Already JSON. Mask secret values across fields (excluding code/hint)
+    // before adding the fallback message/hint, so tool-emitted isError results
+    // (e.g. execute_process / jsonError) get the same redaction net as thrown errors.
+    const masked: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (k === "code" || k === "hint") {
+        masked[k] = v;
+      } else {
+        masked[k] = isSecretName(k) ? MASK : maskErrorValue(v);
+      }
+    }
+    const code = (masked.code as string | undefined) ?? DEFAULT_CODE;
     const enriched = {
-      ...parsed,
+      ...masked,
       code,
       // Payload fields are preserved via the spread — falling back to `raw`
       // here would duplicate the entire JSON body inside `message`.
       message:
-        (parsed.message as string | undefined) ??
-        "Tool reported an error — see the payload fields for detail.",
-      hint: (parsed.hint as string | undefined) ?? hintForCode(code),
+        typeof masked.message === "string"
+          ? masked.message
+          : "Tool reported an error — see the payload fields for detail.",
+      hint: (masked.hint as string | undefined) ?? hintForCode(code),
     };
     return {
       isError: true,
@@ -116,13 +139,13 @@ export function normalizeErrorResult(result: McpToolResult): McpToolResult {
     };
   }
 
-  // Plain-text error body — wrap into uniform shape.
+  // Plain-text error body — wrap into uniform shape and mask secret values.
   const stripped = raw.replace(/^TM1 error:\s*/i, "");
-  const payload: UniformErrorPayload = {
+  const payload = sanitize({
     code: DEFAULT_CODE,
     message: stripped,
     hint: hintForCode(DEFAULT_CODE),
-  };
+  });
   return {
     isError: true,
     content: [{ type: "text", text: JSON.stringify(payload) }],

@@ -1,5 +1,4 @@
 import { TI_ARG_IDX } from "./tiArgIndex.js";
-import { neutralizeLine } from "./rulesLinter.js";
 import { extractBracketLists } from "../feeders/brackets.js";
 import { findDbCalls } from "../rules-db-check.js";
 import { joinContinuationLines } from "./tiParser.js";
@@ -14,9 +13,12 @@ import { extractSubsetUsage, type SubsetUsage } from "./subsetUsage.js";
 import {
   ASSIGNMENT_RE,
   SECTION_MARKER_RE,
+  isCommentLine,
   matchParen,
+  neutralizeLine,
   quotedLiteral,
   splitTopLevel,
+  stripLineComment,
   truncateSnippet,
 } from "../ti-lex.js";
 
@@ -455,7 +457,7 @@ interface RawRuleRef {
   snippet: string;
 }
 
-const FEEDERS_MARKER_RE = /^\s*FEEDERS\s*;/i;
+const FEEDERS_MARKER_RE = /^\s*FEEDERS\s*;?\s*(?:#.*)?$/i;
 
 /**
  * Extracts cube (from DB()) and dimension (from [...] refs) references
@@ -481,7 +483,7 @@ function extractRulesReferences(text: string): RawRuleRef[] {
       section = "feeders";
       continue;
     }
-    if (trimmed === "" || trimmed.startsWith("#")) {
+    if (trimmed === "" || isCommentLine(trimmed)) {
       continue;
     }
 
@@ -500,7 +502,7 @@ function extractRulesReferences(text: string): RawRuleRef[] {
 
     // [...] → dimension references: every entry that names its dimension.
     // The trailing comment is cut first, so `# ['B':'c']` is not a reference.
-    const code = line.slice(0, neutralizeLine(line).length);
+    const code = stripLineComment(line);
     for (const list of extractBracketLists(code)) {
       for (const entry of list.entries) {
         if (entry.dim === undefined) continue;

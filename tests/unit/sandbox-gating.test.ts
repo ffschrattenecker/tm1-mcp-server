@@ -3,9 +3,8 @@
 // connections. A call on a server without sandboxes answers with the reason,
 // so the caller learns what to fix rather than seeing a bare refusal.
 import { describe, it, expect, vi } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { McpServer, InMemoryTransport } from "@modelcontextprotocol/server";
+import { Client } from "@modelcontextprotocol/client";
 import type pino from "pino";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import { registerAllTools } from "../../src/tools/index.js";

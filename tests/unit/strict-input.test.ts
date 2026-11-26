@@ -4,10 +4,8 @@
 // go through a real in-memory MCP client, because the rejection happens in the
 // SDK's argument validation, before any handler is reached.
 import { describe, it, expect } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { McpServer, InMemoryTransport } from "@modelcontextprotocol/server";
+import { Client } from "@modelcontextprotocol/client";
 import type { TM1Client } from "../../src/tm1-client.js";
 import type { RestBody } from "../../src/tm1-client/services/rest-service.js";
 import { ConnectionRegistry } from "../../src/connections.js";
@@ -83,7 +81,7 @@ describe("unknown tool arguments are rejected", () => {
       query: "$select=Name",
     });
 
-    expect(text).toContain(`MCP error ${ErrorCode.InvalidParams}`);
+    expect(text).toContain("Input validation error");
     expect(text).toMatch(/Unknown parameter\(s\): query/);
     expect(text).toContain("Accepted: path, maxChars, connection.");
     expect(sent).toEqual([]);
@@ -207,8 +205,10 @@ describe("single connection: connection is optional and pinned to that name", ()
       path: "Dimensions",
     });
 
-    expect(text).toContain(`MCP error ${ErrorCode.InvalidParams}`);
-    expect(text).toContain("connection");
+    expect(text).toContain("VALIDATION_ERROR");
+    expect(text).toContain("Unknown connection");
+    expect(text).toContain("nope");
+    expect(text).toContain("default");
     expect(sent).toEqual([]);
     await client.close();
     await server.close();

@@ -3,6 +3,7 @@ import { withToolHint } from "../error-format.js";
 import { READ_ONLY } from "../annotations.js";
 import { TraceFeedersResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 import { COORD_ELEMENTS_DESCRIPTION } from "./member-ref.js";
 import { jsonResult } from "../format.js";
 
@@ -31,7 +32,7 @@ export const registerTraceFeeders = defineTool({
   handler: async ({ cubeName, elements, timeoutMs }, tm1Client, extra) => {
     const result = await withToolHint(
       tm1Client.cells.traceFeeders(cubeName, elements, {
-        signal: extra?.signal,
+        signal: extraSignal(extra),
         ...(timeoutMs ? { timeoutMs } : {}),
       }),
       `TraceFeeders failed for cube '${cubeName}'. Verify dimension order/elements via tm1_rest_read Cubes('${cubeName}')/Dimensions?$select=Name.`,

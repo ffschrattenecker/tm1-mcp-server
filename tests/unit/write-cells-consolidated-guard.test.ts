@@ -17,13 +17,12 @@ function makeFakeServer() {
   let captured: ToolHandler | null = null;
   let parser: z.ZodObject<ZodRawShape> | null = null;
   const server = {
-    tool: (
+    registerTool: (
       _name: string,
-      _desc: string,
-      schema: ZodRawShape,
+      cfg: { inputSchema: ZodRawShape },
       handler: ToolHandler,
     ) => {
-      parser = z.object(schema);
+      parser = z.object(cfg.inputSchema);
       captured = handler;
     },
   };

@@ -1,36 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 // Output schemas come from the defineTool() specs; the barrel import runs them.
 import "../../src/tools/index.js";
 import { specFor } from "../../src/tools/define-tool.js";
 import { asOutputSchema } from "../../src/tools/schemas/output-schema.js";
 
-// Regression guard for the "data must NOT have additional properties" bug.
-//
-// Several mutation tools return more fields than their MutationResultSchema
-// envelope explicitly lists (e.g. processName, parameterCount, updatedTabs).
-// MutationResultSchema is declared with `.passthrough()` to allow this, but
-// extracting `.shape` discarded the passthrough flag. The SDK then rebuilt
-// a strict z.object(), and the published JSON Schema set
-// `additionalProperties: false` — causing the client to reject every call.
-//
-// This test asserts that for tools whose runtime payload includes extras,
-// the published JSON Schema must allow additional properties.
-
-// `zod-to-json-schema` ships types built against zod 3, while this project is
-// on zod 4 — the two `ZodType` declarations are structurally incompatible even
-// though the runtime objects interoperate (that interop is exactly what the
-// MCP SDK relies on). Convert at this one seam so the cast is named and
-// contained rather than sprinkled over every call site.
-type JsonSchemaInput = Parameters<typeof zodToJsonSchema>[0];
-
-function asSchema(entry: ZodRawShape | ZodTypeAny): JsonSchemaInput {
-  const schema =
-    typeof entry === "object" && entry !== null && "_def" in entry
-      ? (entry as ZodTypeAny)
-      : z.object(entry);
-  return schema as unknown as JsonSchemaInput;
+function asSchema(entry: ZodRawShape | ZodTypeAny): ZodTypeAny {
+  return typeof entry === "object" && entry !== null && "_def" in entry
+    ? (entry as ZodTypeAny)
+    : z.object(entry);
 }
 
 const TOOLS_WITH_EXTRAS: string[] = [
@@ -39,11 +17,12 @@ const TOOLS_WITH_EXTRAS: string[] = [
   "tm1_update_element_attribute_value",
   "tm1_write_cells",
   // Bespoke schemas that also rely on .passthrough()
+  // (CallgraphResultSchema in items-analysis.ts:210 intentionally enumerates all
+  // fields without .passthrough() and is covered by output-schema-payload-roundtrip.test.ts.)
   "tm1_upsert_process",
   "tm1_diff_process_with_file",
   "tm1_install_pro_bundle",
   "tm1_check_writable_coords",
-  "tm1_analyze_callgraph",
 ];
 
 describe("output schemas — JSON Schema additionalProperties", () => {
@@ -53,7 +32,10 @@ describe("output schemas — JSON Schema additionalProperties", () => {
       expect(entry, `missing schema for ${toolName}`).toBeDefined();
       if (entry === undefined) return;
       const schema = asSchema(entry);
-      const json = zodToJsonSchema(schema, { strictUnions: true }) as {
+      const json = z.toJSONSchema(schema, {
+        target: "draft-2020-12",
+        io: "output",
+      }) as {
         additionalProperties?: boolean | object;
       };
       // additionalProperties may be either `true` or an object schema (both

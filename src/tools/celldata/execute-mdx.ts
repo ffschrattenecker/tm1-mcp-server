@@ -7,6 +7,7 @@ import { clipAxesToWindow } from "../../tm1-client/services/cellset-transform.js
 import { MdxResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 import { cleanSandboxName } from "../../lib/sandbox-policy.js";
 
 export interface MdxEnvelope {
@@ -143,7 +144,7 @@ export const registerExecuteMdx = defineTool({
         top,
         skip,
         {
-          signal: extra?.signal,
+          signal: extraSignal(extra),
           ...(timeoutMs ? { timeoutMs } : {}),
         },
         cleanSandboxName(sandbox),

@@ -1,3 +1,6 @@
+import type { StandardSchemaWithJSON } from "@modelcontextprotocol/server";
+import type { ZodTypeAny } from "zod";
+
 /**
  * Strip information-free noise from a serialized JSON Schema.
  *
@@ -78,6 +81,57 @@ export function stripDefaultPhrase(
 
 export function slimJsonSchema(schema: unknown): unknown {
   return slimNode(schema, false);
+}
+
+const SLIM_JSON_CACHE = new WeakMap<
+  object,
+  Map<string, Record<string, unknown>>
+>();
+
+/**
+ * Wrap a Zod v4 schema so its StandardJSONSchemaV1 emitter runs once per
+ * `(io, target)` and caches the `slimJsonSchema()` output, avoiding repeated
+ * Zod→JSON Schema serialization and tree-cloning across `tools/list` calls.
+ */
+export function withSlimJsonSchema<S extends ZodTypeAny>(
+  schema: S,
+): StandardSchemaWithJSON<unknown, unknown> {
+  const std = (schema as unknown as StandardSchemaWithJSON)["~standard"];
+  const jsonConverter = std.jsonSchema;
+  let byKey = SLIM_JSON_CACHE.get(schema);
+  if (!byKey) {
+    byKey = new Map();
+    SLIM_JSON_CACHE.set(schema, byKey);
+  }
+  const cache = byKey;
+  const convert = (
+    io: "input" | "output",
+    options: { target: string },
+  ): Record<string, unknown> => {
+    const key = `${io}:${options.target}`;
+    const hit = cache.get(key);
+    if (hit !== undefined) return hit;
+    const raw = jsonConverter[io](
+      options as Parameters<typeof jsonConverter.input>[0],
+    );
+    const slimmed = slimJsonSchema(raw) as Record<string, unknown>;
+    cache.set(key, slimmed);
+    return slimmed;
+  };
+  const shape =
+    "shape" in schema ? (schema as { shape: unknown }).shape : undefined;
+  return {
+    ...(shape !== undefined ? { shape } : {}),
+    "~standard": {
+      version: 1,
+      vendor: std.vendor,
+      validate: std.validate.bind(std),
+      jsonSchema: {
+        input: (opts) => convert("input", opts),
+        output: (opts) => convert("output", opts),
+      },
+    },
+  };
 }
 
 // `nameKeyed` = this node is a map of field-name → subschema, so its own keys

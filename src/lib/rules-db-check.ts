@@ -9,8 +9,12 @@
 import { TM1Error, TM1ErrorCode } from "../types.js";
 import { mapSettledWithConcurrency } from "./concurrency.js";
 import { elementResolves } from "./process-refs.js";
-import { callArgs, quotedLiteral } from "./ti-lex.js";
-import { neutralizeLine } from "./callgraph/rulesLinter.js";
+import {
+  callArgs,
+  neutralizeLine,
+  quotedLiteral,
+  stripLineComment,
+} from "./ti-lex.js";
 import { withoutSandboxes } from "./tm1-name.js";
 
 export interface DbCheckIssue {
@@ -48,7 +52,7 @@ export function findDbCalls(rulesText: string): DbCall[] {
   // Strings blanked and comments cut, offsets unchanged: DB( is searched here.
   const neutral = lines.map(neutralizeLine);
   // The same lines with only the comment cut, for reading the arguments.
-  const code = lines.map((l, i) => l.slice(0, neutral[i]!.length)).join("\n");
+  const code = lines.map(stripLineComment).join("\n");
   const searched = neutral.join("\n");
   const calls: DbCall[] = [];
   const re = /\bDB\s*\(/gi;

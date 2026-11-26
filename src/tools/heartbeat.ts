@@ -1,8 +1,4 @@
-import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import type {
-  ServerNotification,
-  ServerRequest,
-} from "@modelcontextprotocol/sdk/types.js";
+import { extraMeta, extraNotify, type ToolCallExtra } from "./context.js";
 
 const HEARTBEAT_MS = 5000;
 
@@ -17,24 +13,24 @@ const HEARTBEAT_MS = 5000;
  * No-op without a progressToken. Returns the stop function for `finally`.
  */
 export function startHeartbeat(
-  extra: RequestHandlerExtra<ServerRequest, ServerNotification> | undefined,
+  extra: ToolCallExtra | undefined,
   label: string,
 ): () => void {
-  const progressToken = extra?._meta?.progressToken;
-  if (extra === undefined || progressToken === undefined) return () => {};
+  const meta = extraMeta(extra);
+  const progressToken = meta?.progressToken as string | number | undefined;
+  const notify = extraNotify(extra);
+  if (progressToken === undefined || notify === undefined) return () => {};
   const start = Date.now();
   const timer = setInterval(() => {
     const elapsedSec = Math.round((Date.now() - start) / 1000);
-    void extra
-      .sendNotification({
-        method: "notifications/progress",
-        params: {
-          progressToken,
-          progress: elapsedSec,
-          message: `${label} still running (${elapsedSec}s elapsed)`,
-        },
-      })
-      .catch(() => undefined);
+    void notify({
+      method: "notifications/progress",
+      params: {
+        progressToken,
+        progress: elapsedSec,
+        message: `${label} still running (${elapsedSec}s elapsed)`,
+      },
+    }).catch(() => undefined);
   }, HEARTBEAT_MS);
   return () => clearInterval(timer);
 }

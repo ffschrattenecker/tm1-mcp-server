@@ -125,6 +125,56 @@ describe("normalizeErrorResult", () => {
     const empty = { isError: true, content: [] };
     expect(normalizeErrorResult(empty)).toEqual(empty);
   });
+
+  it("masks secret values in plain-text error results", () => {
+    const result = normalizeErrorResult({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: "TM1 error: ODBC failed PWD=hunter2;UID=admin; token=tok123",
+        },
+      ],
+    });
+    const payload = parsePayload(result);
+    expect(payload.message).not.toContain("hunter2");
+    expect(payload.message).not.toContain("admin");
+    expect(payload.message).not.toContain("tok123");
+    expect(payload.message).toContain("PWD=***");
+    expect(payload.message).toContain("UID=***");
+    expect(payload.message).toContain("token=***");
+  });
+
+  it("masks secret values and secret-named fields in JSON error results without mangling hints", () => {
+    const result = normalizeErrorResult({
+      isError: true,
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            code: "AUTH_FAILED",
+            message: "Login failed with password=mysecret",
+            details: "api_key=abc999",
+            processErrorStatus: "ODBCOpen PWD=secret123;",
+            password: "raw-password",
+            errorLog: {
+              content: "Error: token=secretTok",
+            },
+          }),
+        },
+      ],
+    });
+    const payload = parsePayload(result);
+    const wire = JSON.stringify(payload);
+    expect(wire).not.toContain("mysecret");
+    expect(wire).not.toContain("abc999");
+    expect(wire).not.toContain("secret123");
+    expect(wire).not.toContain("raw-password");
+    expect(wire).not.toContain("secretTok");
+    expect(payload.password).toBe("***");
+    expect(payload.errorLog.content).toBe("Error: token=***");
+    expect(payload.hint).toContain("TM1_USER and the password: in");
+  });
 });
 
 describe("withToolHint", () => {

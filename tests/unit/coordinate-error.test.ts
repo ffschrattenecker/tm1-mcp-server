@@ -30,8 +30,12 @@ describe("tm1_write_cells short tuple", () => {
     const writes: unknown[] = [];
     registerWriteCells(
       {
-        tool: (_n: string, _d: string, s: never, cb: typeof h) => {
-          shape = s;
+        registerTool: (
+          _n: string,
+          cfg: { inputSchema: never },
+          cb: typeof h,
+        ) => {
+          shape = cfg.inputSchema;
           h = cb;
         },
       } as never,

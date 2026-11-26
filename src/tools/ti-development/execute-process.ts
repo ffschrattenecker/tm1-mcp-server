@@ -6,9 +6,11 @@ import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { ProcessResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 import { startHeartbeat } from "../heartbeat.js";
 import { tailLines } from "../operations/error-log-helpers.js";
 import type { TM1Client } from "../../tm1-client.js";
+import type { ProcessResult } from "../../types.js";
 
 /**
  * Client-abort recovery hint, branched by TM1 major version: v11 exposes
@@ -57,6 +59,22 @@ async function fetchErrorLog(tm1Client: TM1Client, filename: string) {
   }
 }
 
+export async function formatProcessExecutionResult(
+  result: ProcessResult,
+  tm1Client: TM1Client,
+) {
+  const errorLog = result.errorLogFile
+    ? await fetchErrorLog(tm1Client, result.errorLogFile)
+    : undefined;
+  return {
+    ...jsonResult({
+      ...result,
+      ...(errorLog ? { errorLog } : {}),
+    }),
+    ...(result.success === false ? { isError: true as const } : {}),
+  };
+}
+
 export const registerExecuteProcess = defineTool({
   name: "tm1_execute_process",
   description: [
@@ -66,6 +84,7 @@ export const registerExecuteProcess = defineTool({
     "When TM1 wrote an error log for the run (failure or minor errors), its last 40 lines come back as errorLog. For cascade siblings and older logs use tm1_diagnose_process_error.",
   ],
   annotations: DESTRUCTIVE,
+  taskSupport: "optional",
   output: ProcessResultSchema,
   input: {
     processName: z.string().describe("Name of the TI process to execute"),
@@ -94,11 +113,12 @@ export const registerExecuteProcess = defineTool({
     // speculatively — NOT a security control: whatever can call the tool can
     // also supply `confirm`.
     requireConfirm(confirm, processName, "process");
+    const signal = extraSignal(extra);
     const stopHeartbeat = startHeartbeat(extra, processName);
     try {
       const result = await withToolHint(
         tm1Client.processes.execute(processName, parameters, {
-          signal: extra?.signal,
+          signal,
           ...(timeoutMs ? { timeoutMs } : {}),
         }),
         `Process '${processName}' failed at runtime. Inspect cascade with tm1_diagnose_process_error(processName='${processName}', includeRelated=true). Verify parameter shape via tm1_get_process; compile it with tm1_rest_read Processes('${processName}')/tm1.Compile before re-running.`,
@@ -106,27 +126,13 @@ export const registerExecuteProcess = defineTool({
       );
       // TM1 names the run's own error log when it wrote one (minor errors
       // included). Attach its tail so judging the run takes no extra call.
-      const errorLog = result.errorLogFile
-        ? await fetchErrorLog(tm1Client, result.errorLogFile)
-        : undefined;
-      return {
-        ...jsonResult({
-          ...result,
-          ...(errorLog ? { errorLog } : {}),
-        }),
-        // A TI process that ran but reported failure is a tool failure, not a
-        // successful call carrying success:false. Flag isError so agents that
-        // branch on the MCP error signal don't silently treat it as success;
-        // the full payload (processErrorStatus, errorLogFile) is preserved by
-        // normalizeErrorResult for diagnosis.
-        ...(result.success === false ? { isError: true as const } : {}),
-      };
+      return await formatProcessExecutionResult(result, tm1Client);
     } catch (err) {
       // Client-side cancellation (notifications/cancelled) aborts the
       // polling, and http.ts DELETEs the async operation, which cancels the
       // run on the server. withToolHint's runtime-failure hint ("diagnose then
       // re-run") is wrong here: the run did not fail, it was stopped.
-      if (extra?.signal?.aborted) {
+      if (signal?.aborted) {
         throw new TM1Error({
           code: TM1ErrorCode.TM1_ERROR,
           message: `Execution of '${processName}' was cancelled client-side before it returned; TM1 was told to cancel the run.`,

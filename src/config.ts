@@ -1,4 +1,5 @@
 import { SANDBOX_PREFIX_PATTERN } from "./lib/sandbox-policy.js";
+import { parseToolsets, type ToolsetName } from "./tools/toolsets.js";
 
 export interface TM1Config {
   baseUrl: string;
@@ -31,6 +32,9 @@ export interface TM1Config {
   // protection is enabled. Defaults to loopback origins; extend via env when
   // serving from an explicit hostname.
   httpAllowedOrigins: string[];
+  // Extra Host headers (hostname or host:port) accepted by the Streamable HTTP
+  // transport past DNS-rebinding protection (TM1_MCP_HTTP_ALLOWED_HOSTS).
+  httpAllowedHosts: string[];
   // Optional bearer token for the Streamable HTTP transport. When set, every
   // incoming /mcp request must carry `Authorization: Bearer <token>`. Unset
   // (default) means no transport-level auth — only safe behind loopback or a
@@ -74,6 +78,9 @@ export interface TM1Config {
   // says how to narrow the call — a client that truncates or offloads an
   // oversized result instead hands the model broken JSON or nothing at all.
   maxResponseChars: number;
+  // Optional subset of tool categories/presets enabled for tools/list
+  // (TM1_TOOLSETS). Undefined = register all toolsets.
+  toolsets?: ReadonlySet<ToolsetName> | undefined;
   // v12 (Planning Analytics Engine). version===12 selects the v12 connection
   // profile (URL reroot + POST /{instance}/auth/v1/session login). Selected
   // when instance+database are set, or TM1_VERSION major is 12.
@@ -134,9 +141,11 @@ export type ServerSettings = Pick<
   | "httpHost"
   | "httpPort"
   | "httpAllowedOrigins"
+  | "httpAllowedHosts"
   | "httpToken"
   | "responseMode"
   | "maxResponseChars"
+  | "toolsets"
 >;
 
 export function loadServerSettings(
@@ -206,6 +215,18 @@ export function loadServerSettings(
     new Set([...defaultOrigins, ...extraOrigins]),
   );
 
+  const extraHostsRaw = env.TM1_MCP_HTTP_ALLOWED_HOSTS;
+  const httpAllowedHosts = extraHostsRaw
+    ? Array.from(
+        new Set(
+          extraHostsRaw
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        ),
+      )
+    : [];
+
   const httpToken = env.TM1_MCP_HTTP_TOKEN || undefined;
 
   // Refuse a non-loopback HTTP bind without transport auth: TM1_MCP_HTTP_HOST=0.0.0.0
@@ -250,6 +271,8 @@ export function loadServerSettings(
     DEFAULT_MAX_RESPONSE_CHARS,
   );
 
+  const toolsets = parseToolsets(env.TM1_TOOLSETS);
+
   return {
     logLevel,
     logFile,
@@ -257,9 +280,11 @@ export function loadServerSettings(
     httpHost,
     httpPort,
     httpAllowedOrigins,
+    httpAllowedHosts,
     httpToken,
     responseMode,
     maxResponseChars,
+    ...(toolsets !== undefined ? { toolsets } : {}),
   };
 }
 

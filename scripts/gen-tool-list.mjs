@@ -36,6 +36,47 @@ for (const t of scanTools(toolsDir)) {
 }
 const sorted = [...groups.entries()].sort();
 
+const ABBREVIATIONS = /(?:e\.g|i\.e|etc|vs|incl|excl|approx|fig|no|ref)$/i;
+
+/**
+ * Extract the first sentence from a tool description without splitting inside
+ * parentheses, decimal/version numbers (`11.8`), dotted extensions (`.env`),
+ * or Latin/common abbreviations (`e.g.`, `i.e.`, `etc.`, `vs.`), and without
+ * chopping mid-word when truncating to `maxLen`.
+ */
+function firstSentenceOf(desc, maxLen = 160) {
+  const clean = desc.replace(/\s+/g, " ").trim();
+  let depth = 0;
+  let sentenceEnd = -1;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i];
+    if (ch === "(") {
+      depth++;
+    } else if (ch === ")" && depth > 0) {
+      depth--;
+    } else if (ch === "." && depth === 0) {
+      const next = clean[i + 1];
+      const atEnd = next === undefined;
+      const followedBySpace = next === " ";
+      if (!atEnd && !followedBySpace) continue;
+      const before = clean.slice(0, i);
+      if (/\d$/.test(before) && /^\d/.test(clean[i + 1] ?? "")) continue;
+      if (ABBREVIATIONS.test(before)) continue;
+      // Avoid ending right after a bare single-letter token or dotted filename.
+      const prevChar = clean[i - 1] ?? "";
+      if (prevChar === " " || prevChar === ".") continue;
+      sentenceEnd = i;
+      break;
+    }
+  }
+  const sentence = sentenceEnd === -1 ? clean : clean.slice(0, sentenceEnd);
+  if (sentence.length <= maxLen) return sentence;
+  const budget = maxLen - 1;
+  const lastSpace = sentence.lastIndexOf(" ", budget);
+  const cut = lastSpace > Math.floor(maxLen * 0.4) ? lastSpace : budget;
+  return sentence.slice(0, cut).replace(/[\s,;:\-—(]+$/, "") + "…";
+}
+
 /** Full list: every tool with its first description sentence, grouped. */
 function render(headingLevel = "#") {
   const lines = [];
@@ -43,10 +84,7 @@ function render(headingLevel = "#") {
   for (const [group, tools] of sorted) {
     lines.push(`${headingLevel}# ${group} (${tools.length})`, "");
     for (const t of tools.sort((a, b) => a.name.localeCompare(b.name))) {
-      // .trim(): the 160-char slice can land mid-space, and a trailing space
-      // would make the generated file fail `prettier --check`.
-      const firstSentence = t.desc.split(". ")[0].slice(0, 160).trim();
-      lines.push(`- \`${t.name}\` — ${firstSentence}`);
+      lines.push(`- \`${t.name}\` — ${firstSentenceOf(t.desc, 160)}`);
     }
     lines.push("");
   }

@@ -7,7 +7,10 @@
 // entry, including the readonly-mode filter.
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { defineTool, specFor } from "../../src/tools/define-tool.js";
 import { READ_ONLY, DESTRUCTIVE } from "../../src/tools/annotations.js";
@@ -82,10 +85,10 @@ describe("defineTool", () => {
   it("supplies annotations and outputSchema to the registration Proxy", () => {
     const server = new McpServer({ name: "t", version: "0.0.0" });
     let config: Record<string, unknown> | undefined;
-    server.registerTool = ((...args: unknown[]) => {
+    server.registerTool = (...args: unknown[]) => {
       config = args[1] as Record<string, unknown>;
       return {} as ReturnType<typeof server.registerTool>;
-    }) as typeof server.registerTool;
+    };
 
     const register = defineTool({
       name: "tm1_spec_wired",
@@ -105,10 +108,10 @@ describe("defineTool", () => {
   it("hands the shared TM1 client to the handler", async () => {
     const server = new McpServer({ name: "t", version: "0.0.0" });
     let cb: ((...a: unknown[]) => unknown) | undefined;
-    server.registerTool = ((...args: unknown[]) => {
+    server.registerTool = (...args: unknown[]) => {
       cb = args[2] as (...a: unknown[]) => unknown;
       return {} as ReturnType<typeof server.registerTool>;
-    }) as typeof server.registerTool;
+    };
 
     let seen: TM1Client | undefined;
     const register = defineTool({
@@ -130,10 +133,10 @@ describe("defineTool", () => {
   it("is filtered out of readonly mode when the spec is not read-only", () => {
     const server = new McpServer({ name: "t", version: "0.0.0" });
     const registered: string[] = [];
-    server.registerTool = ((...args: unknown[]) => {
+    server.registerTool = (...args: unknown[]) => {
       registered.push(args[0] as string);
       return {} as ReturnType<typeof server.registerTool>;
-    }) as typeof server.registerTool;
+    };
     const wrapped = withAnnotations(server, mockLogger, "readonly");
 
     defineTool({
@@ -157,10 +160,10 @@ describe("defineTool", () => {
   it("in sandbox mode keeps reads and sandboxScoped writes, drops other writes", () => {
     const server = new McpServer({ name: "t", version: "0.0.0" });
     const registered: string[] = [];
-    server.registerTool = ((...args: unknown[]) => {
+    server.registerTool = (...args: unknown[]) => {
       registered.push(args[0] as string);
       return {} as ReturnType<typeof server.registerTool>;
-    }) as typeof server.registerTool;
+    };
     const wrapped = withAnnotations(server, mockLogger, "sandbox");
 
     defineTool({
@@ -207,13 +210,13 @@ describe("defineTool with several connections", () => {
       string,
       { config: Record<string, unknown>; cb: (...a: unknown[]) => unknown }
     >();
-    server.registerTool = ((...args: unknown[]) => {
+    server.registerTool = (...args: unknown[]) => {
       tools.set(args[0] as string, {
         config: args[1] as Record<string, unknown>,
         cb: args[2] as (...a: unknown[]) => unknown,
       });
       return {} as ReturnType<typeof server.registerTool>;
-    }) as typeof server.registerTool;
+    };
     return { wrapped: withAnnotations(server, mockLogger, "readwrite"), tools };
   }
 
@@ -237,9 +240,8 @@ describe("defineTool with several connections", () => {
     const tool = tools.get("tm1_spec_multi_route")!;
     const input = shapeOf(tool.config.inputSchema);
     expect(Object.keys(input)).toEqual(["cubeName", "connection"]);
-    expect(
-      (input.connection as unknown as { options: string[] }).options,
-    ).toEqual(["dev", "prod"]);
+    expect(input.connection).toBeInstanceOf(z.ZodString);
+    expect(input.connection.description).toContain("dev, prod");
 
     await tool.cb({ cubeName: "C", connection: "prod" });
     expect(seen?.client).toBe(v12);
@@ -556,11 +558,11 @@ describe("connectionless tools", () => {
     const server = new McpServer({ name: "t", version: "0.0.0" });
     let config: Record<string, unknown> | undefined;
     let cb: ((...a: unknown[]) => unknown) | undefined;
-    server.registerTool = ((...args: unknown[]) => {
+    server.registerTool = (...args: unknown[]) => {
       config = args[1] as Record<string, unknown>;
       cb = args[2] as (...a: unknown[]) => unknown;
       return {} as ReturnType<typeof server.registerTool>;
-    }) as typeof server.registerTool;
+    };
     const registry = ConnectionRegistry.of([
       { name: "a", client: fakeClient },
       { name: "b", client: fakeClient },
@@ -582,5 +584,67 @@ describe("connectionless tools", () => {
     expect(Object.keys(shapeOf(config?.inputSchema))).toEqual([]);
     await cb?.({});
     expect(seen).toBe(registry);
+  });
+});
+
+describe("dynamic connection refresh", () => {
+  it("accepts a connection folder added after initial tool registration", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "tm1-dyn-conn-"));
+    try {
+      const mkEnv = (port: number) =>
+        [
+          `TM1_BASE_URL=http://127.0.0.1:${port}`,
+          "TM1_USER=admin",
+          "TM1_PASSWORD=secret",
+          "TM1_MODE=readwrite",
+        ].join("\n");
+      mkdirSync(join(dir, "alpha"));
+      writeFileSync(join(dir, "alpha", ".env"), mkEnv(8001));
+      mkdirSync(join(dir, "beta"));
+      writeFileSync(join(dir, "beta", ".env"), mkEnv(8002));
+
+      const registry = ConnectionRegistry.fromEnvironment(
+        { TM1_CONNECTIONS_DIR: dir },
+        mockLogger,
+      );
+      const server = new McpServer({ name: "t", version: "0.0.0" });
+      let cb: ((args: Record<string, unknown>) => Promise<unknown>) | undefined;
+      let inputSchema: unknown;
+      server.registerTool = (...args: unknown[]) => {
+        const cfg = args[1] as { inputSchema: unknown };
+        inputSchema = cfg.inputSchema;
+        cb = args[2] as typeof cb;
+        return {} as ReturnType<typeof server.registerTool>;
+      };
+
+      let routedConnectionId: string | undefined;
+      defineTool({
+        name: "tm1_spec_dynamic_conn",
+        description: "fixture",
+        annotations: READ_ONLY,
+        input: {},
+        handler: (_args, client) => {
+          routedConnectionId = client.connectionId;
+          return ok();
+        },
+      })(withAnnotations(server, mockLogger, "readwrite"), registry);
+
+      // Simulate adding a third connection folder AFTER tools/list was built.
+      mkdirSync(join(dir, "gamma"));
+      writeFileSync(join(dir, "gamma", ".env"), mkEnv(8003));
+      registry.refresh();
+
+      const parsed = z.object(shapeOf(inputSchema)).safeParse({
+        connection: "gamma",
+      });
+      expect(parsed.success).toBe(true);
+
+      await cb?.({ connection: "gamma" });
+      expect(routedConnectionId).toBe(
+        registry.resolveInfo("gamma").connectionId,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

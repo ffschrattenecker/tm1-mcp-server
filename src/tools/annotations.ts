@@ -1,6 +1,6 @@
 // MCP tool annotations. Hints to clients about tool behavior — not security
 // guarantees. See https://modelcontextprotocol.io/specification on annotations.
-import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import type { ToolAnnotations } from "@modelcontextprotocol/server";
 
 // TM1-specific annotation extension carrying machine-readable v11/v12
 // compatibility metadata. MCP's ToolAnnotationsSchema is a non-strict z.object,

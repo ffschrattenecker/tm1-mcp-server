@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [11.1.0] - 2026-11-26
+
+### Added
+
+- **`TM1_TOOLSETS` server-level filter** accepts presets (`all`, `core`, `dev`, `audit`), any of the 11 category names, or short aliases (`ti`, `dimensions`, `rules`, `chores`, `ops`, `files`) to trim `tools/list` context cost; `tm1_list_connections` always remains registered.
+- **`TM1_MCP_HTTP_ALLOWED_HOSTS`** allows extra reverse-proxy or container `Host` header values (hostname or exact `host:port`) past DNS-rebinding protection in HTTP mode.
+- **MCP Tasks (`io.modelcontextprotocol/tasks`)** for `tm1_execute_process` and `tm1_execute_chore`, backed directly by TM1 `/_async('id')` handles (`tasks/get`, `tasks/cancel`) over stateless HTTP when the client advertises task support, with synchronous execution fallback otherwise.
+- **OpenTelemetry W3C trace context propagation** (`traceparent`, `tracestate`, `baggage`) from MCP request `_meta` (with HTTP header fallback) into pino log bindings (`trace_id`, `span_id`, `traceparent`) and outbound TM1 HTTP requests.
+
+### Changed
+
+- **Migrated from `@modelcontextprotocol/sdk` v1 to `@modelcontextprotocol/server` v2** (`2026-07-28` stateless spec with automatic `2025-*` stateless fallback via `createMcpHandler` and `serveStdio`), removing the `logging` capability and the `setRequestHandler` monkey-patch.
+- **Memoized compiled tool validators and the slimmed `tools/list` payload** per `(registry.revision, mode, toolsets, responseMode, maxResponseChars)` instead of re-serializing 67 Zod schemas on every stateless HTTP request.
+- **Unified HTTP timeout, header, and re-auth handling**: `RequestOptions` (`signal`, `timeoutMs`) now flow into `requestBinary()` and `requestRawBytes()`, while shared TM1 headers and 401 re-authentication are consolidated across `http.ts` and `session-manager.ts`.
+- **Consolidated duplicate TI/rule comment lexing** by folding `rulesLinter.ts` into `src/lib/ti-lex.ts`.
+- **Replaced hardcoded package-name references** in CLI hints with `NAME` from `version.ts`.
+- **Updated documentation** in `docs/ARCHITECTURE.md`, `docs/CONFIGURATION.md`, `docs/TOOLS.md`, `.env.example`, and `README.md`.
+
+### Fixed
+
+- **Secret masking in `normalizeErrorResult`**: recursively masks secret-named keys and secret values across structured and plain-text error results while preserving `code` and `hint`.
+- **Dynamic connection refresh**: `connection` / `connectionB` validate as dynamic strings (`z.string().min(1)`) rather than a stale startup `z.enum`, so newly added connection folders work after `registry.refresh()` without restarting.
+- **TI & rules comment edge cases**: `FEEDSTRINGS;` and `FEEDERS;` markers with trailing `#` comments are recognized in `rulesParser.ts` / `referenceIndex.ts`, and `#` inside single-quoted TI string literals is preserved in `tiParser.ts`.
+- **Tool doc generator sentence splitting** (`scripts/gen-tool-list.mjs`) no longer splits on abbreviations (`e.g.`) or chops mid-word.
+
 ## [11.0.0] - 2026-11-18
 
 ### Added
@@ -524,7 +549,8 @@ response-size guard, the per-connection caches) are unchanged.
 Older history (before 8.0.0): see the git tags and the upstream repository,
 https://github.com/flameY3T1/tm1-mcp-server.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.0.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.1.0...HEAD
+[11.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.0.0...v11.1.0
 [11.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.6.0...v11.0.0
 [10.6.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.5.1...v10.6.0
 [10.5.1]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.5.0...v10.5.1

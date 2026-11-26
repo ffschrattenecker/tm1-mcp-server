@@ -7,9 +7,8 @@ import {
   ObjectUsageResultSchema,
   SearchCodeResultSchema,
 } from "../../src/tools/schemas/items.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { McpServer, InMemoryTransport } from "@modelcontextprotocol/server";
+import { Client } from "@modelcontextprotocol/client";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 import { registerListErrorLogs } from "../../src/tools/operations/list-error-logs.js";

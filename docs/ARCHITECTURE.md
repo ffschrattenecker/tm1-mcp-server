@@ -8,13 +8,14 @@ truth for any contributor adding TM1 calls or new tools.
 ```
 ┌──────────────────────────────────────────────┐
 │  src/index.ts            MCP server + wiring │  stdio + Streamable HTTP
-│  - registers tools                           │  TM1_MODE gate (see below)
+│  - compiled tool surface & TM1_MODE gate     │  (v2 2026-07-28 + 2025)
+│  - src/tasks/            MCP Tasks /_async   │
 └──────────────────────┬───────────────────────┘
-                       │ tools call
+                       │ tools call / tasks/*
                        ▼
 ┌──────────────────────────────────────────────┐
 │  src/tools/**            MCP tool surface     │  one file per tool
-│  (Zod schemas, MCP envelopes, validation)     │
+│  (Zod schemas, compiled surface cache, hints) │
 └──────────────────────┬───────────────────────┘
                        │ uses
                        ▼
@@ -22,7 +23,7 @@ truth for any contributor adding TM1 calls or new tools.
 │  src/tm1-client.ts       TM1Client facade     │  connection lifecycle only
 │  - readonly cubes:     CubeService            │  (connect / disconnect)
 │  - readonly dimensions:DimensionService …     │  everything else delegated
-│  - 14 services (see below)                    │  to a service
+│  - 15 services (see below)                    │  to a service
 └──────────────────────┬───────────────────────┘
                        │ delegates to
                        ▼
@@ -72,18 +73,34 @@ enforces that, and fails when a new interface starts duplicating a tool schema.
 
 ## Transports and the readonly/readwrite gate
 
-`src/index.ts` is the entry point. It builds an `McpServer` (one for stdio, a
-fresh one per request for HTTP; see `src/http-transport.ts`), registers the
-tools, and connects it to a transport:
+`src/index.ts` and `src/build-mcp-server.ts` construct an `McpServer` from
+`@modelcontextprotocol/server` v2 (supporting the stateless `2026-07-28` MCP
+specification with automatic `2025-*` stateless fallback via
+`createMcpHandler` in `src/http-transport.ts`, plus `serveStdio` for local
+CLI sessions). Instead of rebuilding and re-serializing 67 Zod schemas on every
+HTTP POST, `src/tools/compiled-surface.ts` memoizes the compiled validators and
+slimmed `tools/list` payload per `(registry.revision, mode, toolsets,
+responseMode, maxResponseChars)`.
 
-| Transport           | When                               | Notes                                                     |
-| ------------------- | ---------------------------------- | --------------------------------------------------------- |
-| **stdio** (default) | local Claude Code / Claude Desktop | `StdioServerTransport`                                    |
-| **Streamable HTTP** | `TM1_MCP_TRANSPORT=http`           | stateless JSON, single `POST /mcp`, optional bearer token |
+- **`io.modelcontextprotocol/tasks`**: `src/tasks/tm1-task-manager.ts` backs
+  `tm1_execute_process` and `tm1_execute_chore` with TM1's `/_async('id')`
+  handles when the client advertises task support, enabling durable
+  `tasks/get` polling and `tasks/cancel` cancellation over stateless HTTP (and
+  falling back to synchronous blocking execution otherwise).
+- **Trace propagation**: `src/lib/trace-context.ts` extracts W3C
+  `traceparent` / `tracestate` / `baggage` from MCP request `_meta` (or HTTP
+  headers) into an `AsyncLocalStorage` context automatically attached to pino
+  child logs (`src/logger.ts`) and forwarded on outbound TM1 HTTP requests.
 
-Tool registration is gated by `config.mode` (env `TM1_MODE`); with several
-connections, write tools are registered when any connection is readwrite and
-refused per call against a readonly or sandbox one (see Connections below):
+| Transport           | When                               | Notes                                                            |
+| ------------------- | ---------------------------------- | ---------------------------------------------------------------- |
+| **stdio** (default) | local Claude Code / Claude Desktop | `serveStdio` (`StdioServerTransport`)                            |
+| **Streamable HTTP** | `TM1_MCP_TRANSPORT=http`           | stateless JSON `POST /mcp`, bearer token, host/origin allowlists |
+
+Tool registration is gated by `config.mode` (env `TM1_MODE`) and narrowed when
+`TM1_TOOLSETS` is set (`src/tools/toolsets.ts`). With several connections, write
+tools are registered when any connection is readwrite and refused per call
+against a readonly or sandbox one (see Connections below):
 
 - **`readonly` (default)** — write and destructive tools are never registered,
   so the server cannot mutate or delete anything.
@@ -102,8 +119,11 @@ what to register.
 `src/connections.ts` owns a `ConnectionRegistry`: one entry per TM1 connection
 (a `<name>/.env` folder, or the legacy single `TM1_BASE_URL` config). Each
 entry builds its own `TM1Client` + `SessionManager` on first use. Tools never see
-the registry: `defineTool` adds a `connection` enum to the input shape when
-there is more than one connection, strips it before the handler runs, applies
+the registry: `defineTool` adds a dynamic `connection` string parameter to the
+input shape when there is more than one connection (listing currently
+configured names in its description so connections added after startup via
+`registry.refresh()` are accepted without rejecting a stale enum), strips it
+before the handler runs, applies
 the per-connection readonly and version gates, and hands the handler the
 resolved client — so a tool file is written exactly as for one server.
 `connectionless: true` tools (`tm1_list_connections`, the callgraph-cache reset)
@@ -134,9 +154,9 @@ class holds a single `TM1HttpClient` reference and exposes domain methods
 as plain async functions. The pattern follows TM1py's `RestService` +
 domain services (`CubeService`, `DimensionService`, `ProcessService`, …).
 
-The 14 services wired into `TM1Client`: `batch`, `cubes`, `dimensions`,
+The 15 services wired into `TM1Client`: `batch`, `cubes`, `dimensions`,
 `hierarchies`, `cells`, `views`, `subsets`, `elements`, `processes`, `chores`,
-`security`, `server`, `files`, `rest`.
+`security`, `server`, `files`, `sandboxes`, `rest`.
 
 `rest` is the guarded generic passthrough behind `tm1_rest_read` /
 `tm1_rest_write`: it carries a caller-supplied path to the transport and does

@@ -1,24 +1,28 @@
 #!/usr/bin/env node
 import "./load-env.js";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import type { McpServer } from "@modelcontextprotocol/server";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import type pino from "pino";
 import { loadServerSettings } from "./config.js";
 import { ConnectionRegistry } from "./connections.js";
 import { buildMcpServer } from "./build-mcp-server.js";
 import { createLogger } from "./logger.js";
 import { startHttpTransport } from "./http-transport.js";
+import { Tm1TaskManager } from "./tasks/tm1-task-manager.js";
 
-// stdio transport: existing Claude-Code/Desktop entry path.
-async function startStdioTransport(
-  server: McpServer,
+// stdio transport: serves both 2026-07-28 and 2025-era MCP clients.
+function startStdioTransport(
+  buildServer: () => McpServer,
   logger: pino.Logger,
-): Promise<() => Promise<void>> {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+): () => Promise<void> {
+  const handle = serveStdio(() => buildServer(), {
+    onerror: (err) => {
+      logger.error({ err }, "MCP stdio transport error");
+    },
+  });
   logger.info("MCP server listening on stdio");
   return async () => {
-    await transport.close();
+    await handle.close();
   };
 }
 
@@ -63,29 +67,18 @@ async function main(): Promise<void> {
     }
   }
 
-  // A single connection logs in at startup, in the background: request()
-  // re-authenticates on every call anyway, so a failed login here only delays
-  // the error to the first tool call.
   if (registry.isSingle) {
     void registry.get(undefined);
   }
 
-  // Branch on transport. stdio is the default for local MCP-client setups
-  // (Claude Code, Claude Desktop) and gets one long-lived server. http
-  // (Streamable HTTP, stateless) is for remote/multi-client deploys and builds a
-  // fresh server per request (single-use transport); binds to 127.0.0.1 by
-  // default with DNS-rebinding protection per MCP spec recommendation.
-  const httpCloser =
+  const taskManager = new Tm1TaskManager(registry, settings, logger);
+  const buildServer = () =>
+    buildMcpServer(registry, settings, logger, taskManager);
+
+  const closer =
     settings.transport === "http"
-      ? await startHttpTransport(
-          () => buildMcpServer(registry, settings, logger),
-          settings,
-          logger,
-        )
-      : await startStdioTransport(
-          buildMcpServer(registry, settings, logger),
-          logger,
-        );
+      ? await startHttpTransport(buildServer, settings, logger)
+      : startStdioTransport(buildServer, logger);
   logger.info(
     `MCP server configured (connections: ${registry.names.join(", ")}, transport: ${settings.transport})`,
   );
@@ -97,7 +90,7 @@ async function main(): Promise<void> {
     shuttingDown = true;
     logger.info({ signal }, "Shutting down TM1 MCP Server");
     try {
-      await httpCloser?.();
+      await closer?.();
     } catch (err) {
       logger.error({ err }, "Error closing transport");
     }
@@ -115,9 +108,6 @@ async function main(): Promise<void> {
     void shutdown("SIGHUP");
   });
 
-  // Parent process death — only meaningful on stdio (Claude spawns us as a
-  // child). For http we ignore stdin events since the process lifecycle is
-  // independent.
   if (settings.transport === "stdio") {
     process.stdin.on("end", () => {
       logger.info("stdin ended (parent process gone), shutting down");
@@ -129,11 +119,8 @@ async function main(): Promise<void> {
     });
   }
 
-  // Last resort — try to clean up the TM1 session on uncaught errors.
   process.on("uncaughtException", (err) => {
     logger.error({ err }, "Uncaught exception, attempting cleanup");
-    // Exit non-zero: a crash must not look like a clean shutdown to a
-    // supervisor/systemd, which would otherwise not restart or would mask it.
     void shutdown("uncaughtException", 1);
   });
   process.on("unhandledRejection", (reason) => {

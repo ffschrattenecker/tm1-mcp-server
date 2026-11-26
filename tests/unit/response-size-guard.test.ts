@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { defineTool } from "../../src/tools/define-tool.js";
@@ -41,10 +41,10 @@ function wire(
 ) {
   const server = new McpServer({ name: "t", version: "0.0.0" });
   let cb: ((args: unknown, extra: unknown) => Promise<Result>) | undefined;
-  server.registerTool = ((...args: unknown[]) => {
+  server.registerTool = (...args: unknown[]) => {
     cb = args[2] as typeof cb;
     return {} as ReturnType<typeof server.registerTool>;
-  }) as typeof server.registerTool;
+  };
   register(
     withAnnotations(server, mockLogger, "readwrite", responseMode, maxChars),
     {} as TM1Client,

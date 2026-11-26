@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
 // A real tool name is used below so its defineTool() spec resolves; the barrel
 // import is what runs the spec definitions.
@@ -54,10 +54,9 @@ function captureWrapped(
       ? withAnnotations(server, mockLogger, "readwrite")
       : withAnnotations(server, mockLogger, "readwrite", responseMode);
 
-  proxied.tool(
+  (proxied.registerTool as (...a: unknown[]) => unknown)(
     "tm1_get_server_state",
-    "desc",
-    {},
+    { description: "desc", inputSchema: {} },
     () =>
       result ?? {
         content: [{ type: "text" as const, text: JSON.stringify(PAYLOAD) }],

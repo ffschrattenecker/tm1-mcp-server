@@ -1,4 +1,5 @@
 // ── Error codes ──────────────────────────────────────────────────────────────
+import { NAME } from "./version.js";
 
 export const TM1ErrorCode = {
   CONNECTION_FAILED: "CONNECTION_FAILED",
@@ -80,7 +81,7 @@ export class TM1Error extends Error {
 export function hintForCode(code: TM1ErrorCode | string): string {
   switch (code) {
     case TM1ErrorCode.AUTH_FAILED:
-      return "TM1 rejected the credentials. Fix TM1_USER and the password: in the connection's .env, or in the OS keychain (`npx -y @ffschrattenecker/tm1-mcp-server secrets set <connection>`) when it sets TM1_SECRETS=keychain. A rejected login is not retried, so restart the MCP server afterwards.";
+      return `TM1 rejected the credentials. Fix TM1_USER and the password: in the connection's .env, or in the OS keychain (\`npx -y ${NAME} secrets set <connection>\`) when it sets TM1_SECRETS=keychain. A rejected login is not retried, so restart the MCP server afterwards.`;
     case TM1ErrorCode.PERMISSION_DENIED:
       return `Caller lacks rights for this object/operation. Inspect membership with tm1_rest_read ActiveUser/Groups?$select=Name; assign with tm1_rest_write POST Users('<user>')/Groups/$ref and body {"@odata.id":"Groups('<group>')"}.`;
     case TM1ErrorCode.NOT_FOUND:

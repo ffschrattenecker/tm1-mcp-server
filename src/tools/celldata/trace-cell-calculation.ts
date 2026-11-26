@@ -3,6 +3,7 @@ import { withToolHint } from "../error-format.js";
 import { CalculationTraceResultSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 import { COORD_ELEMENTS_DESCRIPTION } from "./member-ref.js";
 import type { CalculationTraceNode } from "../../types.js";
 import { jsonResult } from "../format.js";
@@ -73,7 +74,7 @@ export const registerTraceCellCalculation = defineTool({
         maxDepth,
         maxComponents,
         {
-          signal: extra?.signal,
+          signal: extraSignal(extra),
           ...(timeoutMs ? { timeoutMs } : {}),
         },
       ),

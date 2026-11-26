@@ -5,7 +5,7 @@ import {
   type ConnectionProfile,
 } from "./tm1-client/connection/profile.js";
 import { getTm1Dispatcher, tm1Fetch } from "./tm1-client/dispatcher.js";
-import { USER_AGENT } from "./tm1-client/http.js";
+import { tm1SessionHeaders } from "./tm1-client/http.js";
 import { TM1Error, TM1ErrorCode } from "./types.js";
 import type pino from "pino";
 
@@ -151,13 +151,10 @@ export class SessionManager {
       (signal) =>
         tm1Fetch(loginReq.url, {
           method: loginReq.method,
-          headers: {
+          headers: tm1SessionHeaders({
             ...loginReq.headers,
             Accept: "application/json",
-            "User-Agent": USER_AGENT,
-            "TM1-SessionContext": USER_AGENT,
-            "TM1-Session-Context": USER_AGENT,
-          },
+          }),
           body: loginReq.body,
           signal,
           dispatcher: getTm1Dispatcher(this.config),
@@ -247,12 +244,9 @@ export class SessionManager {
         (signal) =>
           tm1Fetch(url, {
             method: "GET",
-            headers: {
+            headers: tm1SessionHeaders({
               Cookie: this.cookieHeader(usedCookie),
-              "User-Agent": USER_AGENT,
-              "TM1-SessionContext": USER_AGENT,
-              "TM1-Session-Context": USER_AGENT,
-            },
+            }),
             signal,
             dispatcher: getTm1Dispatcher(this.config),
           } as unknown as RequestInit).then(drained),
@@ -392,13 +386,10 @@ export class SessionManager {
           tm1Fetch(url, {
             method: "POST",
             body: "{}",
-            headers: {
+            headers: tm1SessionHeaders({
               "Content-Type": "application/json",
               Cookie: this.cookieHeader(cookie),
-              "User-Agent": USER_AGENT,
-              "TM1-SessionContext": USER_AGENT,
-              "TM1-Session-Context": USER_AGENT,
-            },
+            }),
             dispatcher: getTm1Dispatcher(this.config),
             signal,
           } as unknown as RequestInit).then(drained),

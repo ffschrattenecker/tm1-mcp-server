@@ -3,7 +3,7 @@
 // comments before matching; inline comments are uncommon in TI but accepted as
 // a small false-positive surface in exchange for simplicity.
 import { V12_DEPRECATED_TI, V12_DEPRECATED_TI_REGEX } from "./deprecated-ti.js";
-import { truncateSnippet } from "../ti-lex.js";
+import { isCommentLine, truncateSnippet } from "../ti-lex.js";
 
 export interface ScanHit {
   line: number; // 1-based line number
@@ -22,8 +22,7 @@ export function scanForDeprecatedTi(text: string): ScanHit[] {
   const lines = text.split(/\r?\n/);
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
-    const trimmed = raw.trimStart();
-    if (trimmed.startsWith("#")) continue;
+    if (isCommentLine(raw)) continue;
     const seenOnThisLine = new Set<string>();
     V12_DEPRECATED_TI_REGEX.lastIndex = 0;
     let m: RegExpExecArray | null;

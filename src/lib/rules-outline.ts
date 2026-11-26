@@ -3,6 +3,8 @@
 // client's result cap three times in recorded usage; the outline plus one or
 // two slices is what an edit actually needs.
 
+import { isCommentLine } from "./ti-lex.js";
+
 /** Upper bound on outline entries; a rule file of 5000 one-line comments must not become a 5000-entry outline. */
 export const OUTLINE_MAX_ENTRIES = 200;
 const OUTLINE_TEXT_MAX = 100;
@@ -50,7 +52,7 @@ export function outlineRules(text: string): {
   };
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
-    const isComment = /^\s*#/.test(line);
+    const isComment = isCommentLine(line);
     if (!isComment) {
       inBlock = false;
       if (DIRECTIVE.test(line)) push(i);

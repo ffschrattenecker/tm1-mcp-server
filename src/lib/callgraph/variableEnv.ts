@@ -14,10 +14,10 @@ import { TI_VAR } from "../ti-identifier.js";
 import {
   ASSIGNMENT_RE,
   SECTION_MARKER_RE,
+  neutralizeLine,
   quotedLiteral,
   splitTopLevel,
 } from "../ti-lex.js";
-import { neutralizeLine } from "./rulesLinter.js";
 
 export type VarBinding =
   | { kind: "literal"; value: string } // resolved literal value (string content without quotes, or numeric text)

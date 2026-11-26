@@ -114,17 +114,34 @@ connection. Keep production folders `TM1_MODE=readonly` unless writes there are
 intended: the per-call refusal is then the barrier, not the approval prompt.
 
 With more than one connection every tool gains a required `connection`
-argument (an enum of the folder names); with one, the tool schemas have no
-`connection` argument. `tm1_list_connections` reports each connection's mode,
-TM1 version, whether a session is open, and any configuration error. It makes
-no TM1 call.
+argument (a string listing configured names in its description so newly added
+connection folders work without a restart); with one, `connection` is
+optional and defaults to that single connection. `tm1_list_connections` reports
+each connection's mode, TM1 version, whether a session is open, and any
+configuration error. It makes no TM1 call.
 
 **Per-connection settings come from the folder only.** Connection keys
 (`TM1_BASE_URL`, `TM1_USER`, `TM1_MODE`, `TM1_VERSION`, the v12 and CAM keys, …)
 in the server's own environment are not inherited, so a `TM1_MODE=readwrite` in
 the launching shell cannot arm a folder that does not set it. Server-level keys
-(`TM1_LOG_*`, `TM1_MCP_*`, `TM1_RESPONSE_MODE`, `TM1_MAX_RESPONSE_CHARS`) are read
-from the process environment and cannot be overridden by a folder.
+(`TM1_LOG_*`, `TM1_MCP_*`, `TM1_TOOLSETS`, `TM1_RESPONSE_MODE`,
+`TM1_MAX_RESPONSE_CHARS`) are read from the process environment and cannot be
+overridden by a folder.
+
+### Filtering registered tools (`TM1_TOOLSETS`)
+
+To reduce `tools/list` prompt/context size when a session only needs a slice of
+the surface, set `TM1_TOOLSETS` to a comma-separated list of presets, categories,
+or aliases (`tm1_list_connections` is always included):
+
+- **Presets**: `all` (default, everything), `core` (`rest`, `metadata`,
+  `celldata`, `operations`), `dev` (`core` + `ti-development`, `model-building`,
+  `dimension-management`, `scheduling`), `audit` (`rest`, `metadata`,
+  `operations`, `analysis`).
+- **Categories**: `analysis`, `celldata`, `dimension-management`, `fileops`,
+  `metadata`, `model-building`, `operations`, `rest`, `sandboxes`, `scheduling`,
+  `ti-development` (aliases: `ti`, `dimensions`, `rules`, `chores`, `ops`,
+  `files`).
 
 **Mode is enforced per call.** Write tools are listed when at least one
 connection is readwrite, and the sandbox tools when one is in sandbox mode.
@@ -445,13 +462,20 @@ TM1_MCP_TRANSPORT=http
 TM1_MCP_HTTP_HOST=127.0.0.1   # default — bind loopback only
 TM1_MCP_HTTP_PORT=3000        # default
 TM1_MCP_HTTP_ALLOWED_ORIGINS= # optional, comma-separated extra Origins past DNS-rebinding protection
+TM1_MCP_HTTP_ALLOWED_HOSTS=   # optional, comma-separated extra Host headers (e.g. reverse proxy or container DNS names)
 TM1_MCP_HTTP_TOKEN=           # optional, require "Authorization: Bearer <token>" on every /mcp request
 ```
 
-Then `npm start` exposes a single `POST /mcp` endpoint speaking JSON-RPC
-(stateless mode, no session IDs). DNS-rebinding protection is on by default and
-`Host`/`Origin` are validated against `allowedHosts: [host:port, 127.0.0.1,
-localhost]`.
+Then `npm start` exposes a single `POST /mcp` endpoint speaking stateless
+JSON-RPC for both MCP `2026-07-28` (`server/discover` + `_meta` envelope) and
+`2025-*` (`initialize` fallback). Long-running `tm1_execute_process` and
+`tm1_execute_chore` calls also support `io.modelcontextprotocol/tasks` backed by
+TM1 `/_async('id')` handles (`tasks/get`, `tasks/cancel`). DNS-rebinding
+protection is on by default: `Host` is validated against loopback (`localhost`,
+`127.0.0.1`, `[::1]`), `TM1_MCP_HTTP_HOST`, and any entries in
+`TM1_MCP_HTTP_ALLOWED_HOSTS` (with exact `host:port` matching when a port is
+specified); `Origin` is validated against loopback and
+`TM1_MCP_HTTP_ALLOWED_ORIGINS`.
 
 Smoke test:
 
@@ -532,7 +556,8 @@ non-numeric or non-positive value. Fix the value or unset it to use the default.
 **HTTP transport: `401 Unauthorized` on `/mcp`:** `TM1_MCP_HTTP_TOKEN` is
 set — send `Authorization: Bearer <token>`.
 
-**HTTP transport: connection refused / origin rejected:** the server binds
-`127.0.0.1` by default and validates `Host`/`Origin`; add your origin to
-`TM1_MCP_HTTP_ALLOWED_ORIGINS`, or set `TM1_MCP_HTTP_HOST` (loopback only
-unless fronted by an authenticating proxy).
+**HTTP transport: connection refused / origin or host rejected:** the server binds
+`127.0.0.1` by default and validates `Host`/`Origin`; add external origins to
+`TM1_MCP_HTTP_ALLOWED_ORIGINS`, reverse-proxy/container hostnames to
+`TM1_MCP_HTTP_ALLOWED_HOSTS`, or set `TM1_MCP_HTTP_HOST` (loopback only unless
+fronted by an authenticating proxy).

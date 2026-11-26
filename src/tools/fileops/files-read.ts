@@ -12,6 +12,7 @@ import {
 } from "../format.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { CONTAINER_SCHEMA } from "./container.js";
 import { FilenameItemSchema } from "../schemas/items.js";
@@ -148,8 +149,10 @@ export const registerFilesRead = defineTool({
     ...PAGINATION_SCHEMA,
     ...FORMAT_SCHEMA,
   },
-  handler: async (args, tm1Client) => {
+  handler: async (args, tm1Client, extra) => {
     const { op, container } = args;
+    const signal = extraSignal(extra);
+    const reqOpts = signal ? { signal } : undefined;
     for (const [field, ops] of Object.entries(OWNED_BY)) {
       if (args[field as keyof typeof args] !== undefined && !ops.includes(op)) {
         throw validationError(
@@ -231,7 +234,11 @@ export const registerFilesRead = defineTool({
       }
       // Confined before the download, so a refused path costs no request.
       const target = resolveLocalPath(writeToFile, "writeToFile");
-      const bytes = await tm1Client.files.getContentBytes(fileName, container);
+      const bytes = await tm1Client.files.getContentBytes(
+        fileName,
+        container,
+        ...(reqOpts ? [reqOpts] : []),
+      );
       await fs.mkdir(nodePath.dirname(target), { recursive: true });
       await fs.writeFile(target, bytes);
       return jsonResult({
@@ -244,7 +251,11 @@ export const registerFilesRead = defineTool({
     const maxBytes =
       requestedMaxBytes ??
       (encoding === "base64" ? DEFAULT_BASE64_MAX_BYTES : DEFAULT_MAX_BYTES);
-    const bytes = await tm1Client.files.getContentBytes(fileName, container);
+    const bytes = await tm1Client.files.getContentBytes(
+      fileName,
+      container,
+      ...(reqOpts ? [reqOpts] : []),
+    );
     const totalBytes = bytes.byteLength;
 
     let body: string;

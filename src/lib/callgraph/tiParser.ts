@@ -7,7 +7,13 @@ import {
   type TiFunctionCall,
 } from "./types.js";
 import { TI_VAR } from "../ti-identifier.js";
-import { keywordPositions, matchParen, splitTopLevel } from "../ti-lex.js";
+import {
+  isCommentLine,
+  keywordPositions,
+  matchParen,
+  splitTopLevel,
+  stripLineComment,
+} from "../ti-lex.js";
 
 const ASSIGN_RE = new RegExp(`^(${TI_VAR})\\s*=\\s*(.+?)\\s*;?\\s*$`);
 const EMPTY_ASSIGN_RE = new RegExp(`^${TI_VAR}\\s*=\\s*;$`);
@@ -83,7 +89,7 @@ export function joinContinuationLines(lines: string[]): string[] {
       continue;
     }
 
-    if (trimmed === "" || trimmed.startsWith("#")) {
+    if (trimmed === "" || isCommentLine(trimmed)) {
       if (pendingIdx !== -1) {
         result[i] = ""; // absorb blank/comment into the pending multi-line statement
       }
@@ -112,7 +118,7 @@ export function joinContinuationLines(lines: string[]): string[] {
     // Detect trailing operator that requires a RHS on the next line.
     // Ignores comparison/logical operators that could end a sub-expression
     // (==, <>, <=, >=, !=) and lone `<` / `>`.
-    const noComment = trimmed.replace(/#.*$/, "").trim();
+    const noComment = stripLineComment(trimmed).trim();
     const endsWithContinuingOp =
       // bare `=` (not `==`, not `<=`, not `>=`, not `<>`, not `!=`)
       /(?:^|[^=<>!])=\s*$/.test(noComment) ||
@@ -167,7 +173,7 @@ function parseBlock(
     const trimmed = rawLine.trim();
 
     // Skip blank lines and comments
-    if (trimmed === "" || trimmed.startsWith("#")) {
+    if (trimmed === "" || isCommentLine(trimmed)) {
       i++;
       continue;
     }

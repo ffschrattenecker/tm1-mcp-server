@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { z, type ZodRawShape } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { requireConfirm, CONFIRM_SCHEMA } from "../../src/tools/confirm.js";
 import { registerAllTools } from "../../src/tools/index.js";
 import { withAnnotations } from "../../src/tools/with-annotations.js";
@@ -126,8 +126,12 @@ function call(register: Reg, c: unknown, args: Record<string, unknown>) {
   let parser: z.ZodObject<ZodRawShape> | null = null;
   register(
     {
-      tool: (_n: string, _d: string, s: ZodRawShape, cb: typeof h) => {
-        parser = z.object(s);
+      registerTool: (
+        _n: string,
+        cfg: { inputSchema: ZodRawShape },
+        cb: typeof h,
+      ) => {
+        parser = z.object(cfg.inputSchema);
         h = cb;
       },
     } as never,

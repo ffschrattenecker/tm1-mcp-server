@@ -141,6 +141,47 @@ type RawCallgraphProcess = {
   }>;
 };
 
+interface RawExecuteResponse {
+  ProcessExecuteStatusCode?: string;
+  ErrorLogFile?: { Filename?: string } | null;
+}
+
+function buildExecuteRequest(
+  processName: string,
+  params?: Record<string, string | number>,
+): {
+  path: string;
+  body: { Parameters?: Array<{ Name: string; Value: string | number }> };
+} {
+  const path = `/api/v1/Processes('${odataKey(processName)}')/tm1.ExecuteWithReturn?$expand=ErrorLogFile`;
+  const body: {
+    Parameters?: Array<{ Name: string; Value: string | number }>;
+  } = {};
+  if (params && Object.keys(params).length > 0) {
+    body.Parameters = Object.entries(params).map(([name, value]) => ({
+      Name: name,
+      Value: value,
+    }));
+  }
+  return { path, body };
+}
+
+function mapExecuteError(error: unknown): ProcessResult {
+  // Systemic transport/auth failures (LOCK_TIMEOUT, CONNECTION_FAILED,
+  // AUTH_FAILED) must propagate: a timed-out TI run is still executing
+  // server-side, so reporting {success:false} would invite a duplicate run.
+  rethrowIfSystemic(error);
+  if (error instanceof TM1Error) {
+    return {
+      success: false,
+      outcome: "indeterminate",
+      processErrorStatus: error.details ?? error.message,
+      errorLogFile: undefined,
+    };
+  }
+  throw error;
+}
+
 export class ProcessService {
   /**
    * Index into `CALLGRAPH_QUERY_SHAPES` that this connection answered, or
@@ -206,50 +247,97 @@ export class ProcessService {
     // on 11.8.02900.8 and 12.5.9 — both omit the key entirely without it, and both
     // return {"Filename": ...} with it (v11 `TM1ProcessError_*.log`, v12
     // `ProcessLog_*.jsonl`).
-    const path = `/api/v1/Processes('${odataKey(processName)}')/tm1.ExecuteWithReturn?$expand=ErrorLogFile`;
-    const body: {
-      Parameters?: Array<{ Name: string; Value: string | number }>;
-    } = {};
-    if (params && Object.keys(params).length > 0) {
-      body.Parameters = Object.entries(params).map(([name, value]) => ({
-        Name: name,
-        Value: value,
-      }));
-    }
+    const { path, body } = buildExecuteRequest(processName, params);
 
     try {
       // ExecuteWithReturn returns HTTP 200 even when the process aborts; the
       // real outcome is in ProcessExecuteStatusCode. The plain tm1.Execute
       // action also 2xx-es on CompletedWithMinorErrors/HasMinorErrors, which
       // made partial failures (bad records + error log) invisible.
-      const response = await this.http.request<{
-        ProcessExecuteStatusCode?: string;
-        ErrorLogFile?: { Filename?: string } | null;
-      }>("POST", path, body, { ...opts, async: true });
+      const response = await this.http.request<RawExecuteResponse>(
+        "POST",
+        path,
+        body,
+        { ...opts, async: true },
+      );
       return classifyExecution(
         response?.ProcessExecuteStatusCode,
         response?.ErrorLogFile?.Filename,
       );
     } catch (error) {
-      // Systemic transport/auth failures (LOCK_TIMEOUT, CONNECTION_FAILED,
-      // AUTH_FAILED) must propagate: a timed-out TI run is still executing
-      // server-side, so reporting {success:false} would invite a duplicate run.
-      rethrowIfSystemic(error);
-      // The call itself errored, so TM1 never reported a status — and an error
-      // raised mid-run says nothing about whether the run committed. That is
-      // `indeterminate` by definition, not a rollback we can promise; the
-      // server's own text rides along in processErrorStatus so the caller still
-      // sees WHY.
-      if (error instanceof TM1Error) {
-        return {
-          success: false,
-          outcome: "indeterminate",
-          processErrorStatus: error.details ?? error.message,
-          errorLogFile: undefined,
-        };
-      }
-      throw error;
+      return mapExecuteError(error);
     }
+  }
+
+  /**
+   * Non-blocking start of a TI execution for MCP Tasks (`io.modelcontextprotocol/tasks`).
+   * Returns `{ kind: "async", asyncId, path }` when TM1 answers 202, or
+   * `{ kind: "completed", result }` when TM1 completes synchronously.
+   */
+  async startExecute(
+    processName: string,
+    params?: Record<string, string | number>,
+    opts?: RequestOptions,
+  ): Promise<
+    | { kind: "async"; asyncId: string; path: string }
+    | { kind: "completed"; result: ProcessResult }
+  > {
+    const { path, body } = buildExecuteRequest(processName, params);
+    try {
+      const started = await this.http.startAsync<RawExecuteResponse>(
+        "POST",
+        path,
+        body,
+        opts,
+      );
+      if (started.status === "accepted") {
+        return { kind: "async", asyncId: started.asyncId, path };
+      }
+      return {
+        kind: "completed",
+        result: classifyExecution(
+          started.result?.ProcessExecuteStatusCode,
+          started.result?.ErrorLogFile?.Filename,
+        ),
+      };
+    } catch (error) {
+      return { kind: "completed", result: mapExecuteError(error) };
+    }
+  }
+
+  /** Single non-blocking poll of an async TI execution started via `startExecute()`. */
+  async pollExecute(
+    asyncId: string,
+    path: string,
+    opts?: RequestOptions,
+  ): Promise<
+    { kind: "working" } | { kind: "completed"; result: ProcessResult }
+  > {
+    try {
+      const polled = await this.http.pollAsyncOnce<RawExecuteResponse>(
+        asyncId,
+        path,
+        "POST",
+        opts,
+      );
+      if (polled.status === "working") {
+        return { kind: "working" };
+      }
+      return {
+        kind: "completed",
+        result: classifyExecution(
+          polled.result?.ProcessExecuteStatusCode,
+          polled.result?.ErrorLogFile?.Filename,
+        ),
+      };
+    } catch (error) {
+      return { kind: "completed", result: mapExecuteError(error) };
+    }
+  }
+
+  /** Cancel an active async TI execution via `DELETE /_async('id')`. */
+  async cancelExecute(asyncId: string, path: string): Promise<boolean> {
+    return this.http.cancelAsyncById(asyncId, path);
   }
 
   /**

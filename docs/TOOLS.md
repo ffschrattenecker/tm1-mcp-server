@@ -11,7 +11,12 @@ the model sees.
 Two things the raw list does not show:
 
 - **No single server exposes all of them.** `TM1_MODE=readonly` (the default)
-  registers read tools only. `tm1_save_data` is v11-only.
+  registers read tools only, `TM1_TOOLSETS` narrows registered categories
+  (presets `core`, `dev`, `audit`, `all`), and `tm1_save_data` is v11-only.
+- **Long-running execution (`tm1_execute_process`, `tm1_execute_chore`)**
+  supports `io.modelcontextprotocol/tasks` backed by TM1 `/_async('id')` handles
+  for non-blocking status polling and cancellation over stateless HTTP when the
+  client advertises task support.
 - **Object CRUD goes through `tm1_rest_read` / `tm1_rest_write`**: any path
   relative to `/api/v1/`, narrowed with `$select`/`$filter`/`$top`. Collections
   include `}` control objects (`$filter=not startswith(Name,'}')`) and OData
@@ -52,20 +57,20 @@ datasource (562-589).
 - `tm1_audit_feeders` — Static heuristics (S1–S5) scan cube rules for overfeeding: wildcard brackets, feeders into consolidated
 - `tm1_audit_naming` — Bulk-scan TM1 objects against IBM PA 2.0/3.1 naming conventions; reports hard violations only
 - `tm1_check_v12_readiness` — Static gap-analysis against the TM1 / Planning Analytics v12 (Cloud Native) deprecation list
-- `tm1_compare_environments` — Drift overview of connection vs connectionB (e.g
-- `tm1_diff_cube_rules` — Diff a cube's rules across connections (connectionB) or against cubeB, as unified hunks; also compares the dimension lists and SKIPCHECK/FEEDERS presence.
+- `tm1_compare_environments` — Drift overview of connection vs connectionB (e.g. PROD vs DEV): per object type, objects on one side only and objects that differ, with the differing aspects
+- `tm1_diff_cube_rules` — Diff a cube's rules across connections (connectionB) or against cubeB, as unified hunks; also compares the dimension lists and SKIPCHECK/FEEDERS presence
 - `tm1_diff_hierarchy` — Diff a hierarchy across connections (connectionB) or against dimensionB: elements, edges, weights, reparented children, attributes
 - `tm1_trace_data_flow` — Trace data flow into and out of a cube in one call
 
 ### celldata (8)
 
-- `tm1_check_feeders` — Check the feeders of a cell: verifies feeder coverage for the cells underlying this cell and returns the problematic ones with a fed flag — fed=false marks a br
+- `tm1_check_feeders` — Check the feeders of a cell: verifies feeder coverage for the cells underlying this cell and returns the problematic ones with a fed flag — fed=false marks a…
 - `tm1_check_writable_coords` — Pre-flight check before CellPutN/CellPutS
 - `tm1_execute_mdx` — Execute an MDX query against the TM1 server and return structured cell data with axes
 - `tm1_get_view` — Execute a named cube view and return structured cell data with axes
 - `tm1_sample_cells` — Return up to maxCells populated cells from a cube without guessing coordinates — builds a NON EMPTY CROSSJOIN MDX over the cube's dimensions and HEAD-limits it
-- `tm1_trace_cell_calculation` — Trace how a cell value is calculated: recursive component tree with per-component type (Consolidation/Rule/Simple), status (Null/Data/Error), value, and the rul
-- `tm1_trace_feeders` — Trace the feeders of a cell: returns the cells this cell feeds plus the feeder statements involved — answers 'which feeder statement fires from this cell, and w
+- `tm1_trace_cell_calculation` — Trace how a cell value is calculated: recursive component tree with per-component type (Consolidation/Rule/Simple), status (Null/Data/Error), value, and the…
+- `tm1_trace_feeders` — Trace the feeders of a cell: returns the cells this cell feeds plus the feeder statements involved — answers 'which feeder statement fires from this cell, and…
 - `tm1_write_cells` — Write one or more cell values directly to a TM1 cube via REST
 
 ### dimension-management (3)
@@ -98,18 +103,18 @@ datasource (562-589).
 
 ### operations (7)
 
-- `tm1_diagnose_process_error` — One-call error diagnosis for a failed TI process: lists matching error logs, fetches their content, and optionally includes cascade-related sibling logs (same t
+- `tm1_diagnose_process_error` — One-call error diagnosis for a failed TI process: lists matching error logs, fetches their content, and optionally includes cascade-related sibling logs (same…
 - `tm1_get_cube_stats` — Read }StatsByCube metrics for one or more cubes (memory, populated cells, fed cells, feeder efficiency)
 - `tm1_get_error_log_content` — Fetch the raw text of one TI error log file produced by a failed process run
 - `tm1_get_server_state` — Health-check style snapshot of the TM1 server in one call
-- `tm1_list_connections` — List the TM1 connections this server can reach (rescans the connections folder first, so new or changed ones show up without a restart): name (the `connection`
+- `tm1_list_connections` — List the TM1 connections this server can reach (rescans the connections folder first, so new or changed ones show up without a restart): name (the `connection`…
 - `tm1_list_error_logs` — List TI process error log files on the TM1 server, newest first
 - `tm1_save_data` — Persist in-memory cube data to disk: SaveDataAll (all cubes) or CubeSaveData when `cube` is given
 
 ### rest (2)
 
 - `tm1_rest_read` — GET any TM1 REST path (relative to /api/v1/), plus POST Processes('P')/tm1.Compile and the function Cubes('C')/tm1.DimensionsStorageOrder()
-- `tm1_rest_write` — POST/PATCH/PUT/DELETE a TM1 REST path (relative to /api/v1/), e.g
+- `tm1_rest_write` — POST/PATCH/PUT/DELETE a TM1 REST path (relative to /api/v1/), e.g. POST Dimensions, PATCH Chores('X') {Active}, POST Cubes('C')/tm1.Unload, DELETE…
 
 ### sandboxes (6)
 
@@ -130,17 +135,17 @@ datasource (562-589).
 - `tm1_check_process_code` — Validate TI process code WITHOUT saving it on the server
 - `tm1_copy_process` — Copy a TI process to a new name
 - `tm1_diff_process_with_file` — Compare an installed TI process on the server against a local .pro file
-- `tm1_diff_processes` — Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog), on one connection or across two (connectionB, e.g
+- `tm1_diff_processes` — Compare two installed TI processes tab-by-tab (Prolog/Metadata/Data/Epilog), on one connection or across two (connectionB, e.g. DEV vs PROD)
 - `tm1_execute_process` — Execute a TurboIntegrator process on the TM1 server with optional parameters
-- `tm1_export_process_to_git` — Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' — the server's own REST payload for the process without the code (Name, HasSecurityAcces
+- `tm1_export_process_to_git` — Serialize a TM1 process to the tm1-git two-file layout: a '{name}.json' — the server's own REST payload for the process without the code (Name…
 - `tm1_export_process_to_pro` — Reverse of tm1_import_pro_file: serialize a TM1 process back to a .pro file body
-- `tm1_get_all_processes_code` — Bulk-load source code (Prolog/Metadata/Data/Epilog) of every TI process in one call, plus each process's HasSecurityAccess elevation flag (hasSecurityAccess) fo
+- `tm1_get_all_processes_code` — Bulk-load source code (Prolog/Metadata/Data/Epilog) of every TI process in one call, plus each process's HasSecurityAccess elevation flag (hasSecurityAccess)…
 - `tm1_get_process` — Native full read of a TI process — the read-twin of tm1_upsert_process
 - `tm1_import_pro_file` — Parse a TM1 .pro file (Tabs / Parameters / Variables / DataSource) and deploy the process in one call
 - `tm1_import_process_from_git` — Deploy a TM1 process from the tm1-git two-file layout ('{name}.json' + '{name}.ti')
 - `tm1_install_pro_bundle` — Install all .pro files from a directory in one call
 - `tm1_search_code` — Regex search across all TI process code (Prolog/Metadata/Data/Epilog)
 - `tm1_upsert_process` — Create-or-update for a TI process: createProcess (if missing), then code, parameters, variables and datasource
-- `tm1_validate_process_refs` — Scan a TI process (live, by name, or from .pro) for cube/dimension references in well-known TI functions (CellGetN/S, CellPutN/S, ViewCreate, DimensionElementIn
+- `tm1_validate_process_refs` — Scan a TI process (live, by name, or from .pro) for cube/dimension references in well-known TI functions (CellGetN/S, CellPutN/S, ViewCreate…
 
 <!-- TOOLS-AUTOGEN:END -->

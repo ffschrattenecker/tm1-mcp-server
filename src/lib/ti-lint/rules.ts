@@ -7,7 +7,7 @@ import type { TiStatement } from "../callgraph/types.js";
 import type { Finding } from "../complexity/antipatterns.js";
 import type { TiTab } from "../complexity/process-metrics.js";
 import { walkStatements } from "../complexity/walk.js";
-import { quotedLiteral } from "../ti-lex.js";
+import { commentColumn, isCommentLine, quotedLiteral } from "../ti-lex.js";
 import { FUNCTION_SECTIONS } from "./function-sections.js";
 
 interface Ctx {
@@ -164,18 +164,8 @@ function hardcodedSecret(ast: TiStatement[], ctx: Ctx): void {
  * (`Syntax error on or before …`) does not say why.
  */
 function trailingCommentAt(line: string): number {
-  if (line.trimStart().startsWith("#")) return -1;
-  let inString = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === "'") {
-      if (inString && line[i + 1] === "'") i++;
-      else inString = !inString;
-    } else if (c === "#" && !inString) {
-      return i;
-    }
-  }
-  return -1;
+  if (isCommentLine(line)) return -1;
+  return commentColumn(line);
 }
 
 /** Runs on the raw text, so it also covers a tab the parser rejects. */

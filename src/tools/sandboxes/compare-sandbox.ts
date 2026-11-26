@@ -4,6 +4,7 @@ import type { SandboxDifference } from "../../schemas/sandboxes.js";
 import { SandboxCompareSchema } from "../schemas/items.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { cleanSandboxName, sandboxingOff } from "../../lib/sandbox-policy.js";
 import { SANDBOX_DIMENSION, tm1NameEquals } from "../../lib/tm1-name.js";
@@ -114,7 +115,7 @@ export const registerCompareSandbox = defineTool({
         message: "Name the sandbox to compare.",
       });
     }
-    const opts = { signal: extra?.signal };
+    const opts = { signal: extraSignal(extra) };
     const base = await tm1Client.cells.executeMdx(mdx, maxCells, 0, opts);
     const inSandbox = await tm1Client.cells.executeMdx(
       mdx,

@@ -3,7 +3,7 @@
 import { vi } from "vitest";
 import type pino from "pino";
 import { z, ZodObject, type ZodRawShape, type ZodTypeAny } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { TM1Config } from "../../src/config.js";
 import { SessionManager } from "../../src/session-manager.js";
 import { TM1Client } from "../../src/tm1-client.js";
@@ -60,7 +60,7 @@ export function stubbedClient(config: TM1Config, cookie?: string): TM1Client {
   return new TM1Client(config, stubSession(config, cookie), mockLogger);
 }
 
-/** A tool handler as registered through `server.tool(name, desc, schema, cb)`. */
+/** A tool handler as registered through `server.registerTool(name, config, cb)`. */
 export type ToolCb<A = Record<string, unknown>> = (
   args: A,
   extra: Record<string, unknown>,
@@ -70,20 +70,19 @@ export type ToolCb<A = Record<string, unknown>> = (
 }>;
 
 /**
- * The raw shape behind a registered input. withAnnotations hands the SDK a
- * strict z.object (unknown keys are rejected), so a test that reads a
- * registration unwraps it here rather than reading the object's own fields.
+ * The raw shape behind a registered input.
  */
 export function shapeOf(input: unknown): Record<string, ZodTypeAny> {
-  return input instanceof ZodObject
-    ? input.shape
-    : (input as Record<string, ZodTypeAny>);
+  if (input instanceof ZodObject) return input.shape;
+  if (input && typeof input === "object" && "shape" in input) {
+    return (input as { shape: Record<string, ZodTypeAny> }).shape;
+  }
+  return input as Record<string, ZodTypeAny>;
 }
 
 /**
  * Register one tool against a fake server and hand back what the SDK would
- * hold: its raw input shape and its handler. The handler gets args exactly as
- * passed — run them through `z.object(schema)` first when defaults matter.
+ * hold: its raw input shape and its handler.
  */
 export function captureTool<A = Record<string, unknown>, S = ClientSource>(
   register: (server: McpServer, source: S) => void,
@@ -91,8 +90,12 @@ export function captureTool<A = Record<string, unknown>, S = ClientSource>(
 ): { schema: ZodRawShape; cb: ToolCb<A> } {
   let captured: { schema: ZodRawShape; cb: ToolCb<A> } | undefined;
   const server = {
-    tool: (_n: string, _d: string, schema: ZodRawShape, cb: ToolCb<A>) => {
-      captured = { schema, cb };
+    registerTool: (
+      _n: string,
+      cfg: { inputSchema: ZodRawShape },
+      cb: ToolCb<A>,
+    ) => {
+      captured = { schema: cfg.inputSchema, cb };
     },
   } as unknown as McpServer;
   register(server, source);

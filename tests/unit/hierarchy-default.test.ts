@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import type { ZodTypeAny } from "zod";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerAllTools } from "../../src/tools/index.js";

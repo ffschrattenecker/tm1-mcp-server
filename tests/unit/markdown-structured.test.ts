@@ -12,9 +12,8 @@
 // schema is the loosened one, and the strict shapes are re-applied by our own
 // guard in with-annotations.ts.
 import { describe, it, expect } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { McpServer, InMemoryTransport } from "@modelcontextprotocol/server";
+import { Client } from "@modelcontextprotocol/client";
 import { z } from "zod";
 import {
   markdownCapable,
@@ -149,10 +148,9 @@ describe("end-to-end over the SDK", () => {
   async function callTool(result: unknown) {
     const server = new McpServer({ name: "t", version: "0.0.0" });
     const wrapped = withAnnotations(server, mockLogger, "readwrite");
-    (wrapped.tool as (...a: unknown[]) => unknown)(
+    (wrapped.registerTool as (...a: unknown[]) => unknown)(
       PAGE_TOOL,
-      "fixture",
-      {},
+      { description: "fixture", inputSchema: {} },
       () => result,
     );
     const [ct, st] = InMemoryTransport.createLinkedPair();

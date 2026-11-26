@@ -22,6 +22,7 @@
 // backed up, committed, pasted or read into an agent's context. What it does
 // not: any process running as the same OS user can read the store too.
 import { TM1Error, TM1ErrorCode } from "./types.js";
+import { NAME } from "./version.js";
 
 /** Every `.env` key that holds a credential. */
 export const SECRET_KEYS = [
@@ -155,6 +156,6 @@ export async function withKeychainSecrets(
 export function keychainHint(connection: string): string {
   return (
     ` The secrets of "${connection}" are read from the OS keychain; store the ` +
-    `missing one with \`npx -y @ffschrattenecker/tm1-mcp-server secrets set ${connection} <KEY>\`.`
+    `missing one with \`npx -y ${NAME} secrets set ${connection} <KEY>\`.`
   );
 }

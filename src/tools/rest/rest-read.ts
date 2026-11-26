@@ -9,6 +9,7 @@ import { z } from "zod";
 import { DEFAULT_MAX_RESPONSE_CHARS } from "../../config.js";
 import { READ_ONLY } from "../annotations.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 import { planRead } from "./guard.js";
 import { dataBudget, ENVELOPE_CHARS, shapeBody } from "./shape.js";
 import { jsonResult } from "../format.js";
@@ -62,7 +63,7 @@ export const registerRestRead = defineTool({
   },
   handler: async ({ path, maxChars }, tm1Client, extra) => {
     const plan = planRead(path);
-    const opts = { signal: extra?.signal };
+    const opts = { signal: extraSignal(extra) };
     const body =
       plan.method === "POST"
         ? await tm1Client.rest.send("POST", plan.path, undefined, opts)

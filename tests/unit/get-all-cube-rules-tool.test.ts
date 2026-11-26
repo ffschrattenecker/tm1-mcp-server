@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { contractCheckedClient } from "../helpers/service-contract.js";
 import { z, type ZodRawShape } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { TM1Client } from "../../src/tm1-client.js";
 import type { CubeRules } from "../../src/types.js";
 import { registerGetAllCubeRules } from "../../src/tools/model-building/get-all-cube-rules.js";
@@ -21,8 +21,12 @@ function capture(client: TM1Client): { schema: ZodRawShape; handler: Handler } {
   let schema: ZodRawShape | undefined;
   let handler: Handler | undefined;
   const server = {
-    tool: (_name: string, _desc: string, s: ZodRawShape, h: Handler) => {
-      schema = s;
+    registerTool: (
+      _name: string,
+      cfg: { inputSchema: ZodRawShape },
+      h: Handler,
+    ) => {
+      schema = cfg.inputSchema;
       handler = h;
     },
   } as unknown as McpServer;

@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import type { TM1Client } from "../../src/tm1-client.js";
 import type { RestBody } from "../../src/tm1-client/services/rest-service.js";
 import { ConnectionRegistry } from "../../src/connections.js";
@@ -27,10 +27,10 @@ function wire(register: ToolRegistrar, limit: number, body: RestBody) {
   } as unknown as TM1Client;
   const server = new McpServer({ name: "t", version: "0.0.0" });
   let cb: ((args: unknown, extra: unknown) => Promise<Result>) | undefined;
-  server.registerTool = ((...args: unknown[]) => {
+  server.registerTool = (...args: unknown[]) => {
     cb = args[2] as typeof cb;
     return {} as ReturnType<typeof server.registerTool>;
-  }) as typeof server.registerTool;
+  };
   register(
     withAnnotations(server, mockLogger, "readwrite", "legacy", limit),
     ConnectionRegistry.of([{ name: "default", client, mode: "readwrite" }]),

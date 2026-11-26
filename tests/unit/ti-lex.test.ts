@@ -3,9 +3,12 @@ import {
   ASSIGNMENT_RE,
   SECTION_MARKER_RE,
   callArgs,
+  isCommentLine,
   matchParen,
+  neutralizeLine,
   quotedLiteral,
   splitTopLevel,
+  stripLineComment,
   truncateSnippet,
 } from "../../src/lib/ti-lex.js";
 import { parseTiCode } from "../../src/lib/callgraph/tiParser.js";
@@ -259,5 +262,44 @@ describe("intended behaviour changes", () => {
   it("DB(): '' inside the cube name is an escaped quote", () => {
     const calls = findDbCalls("x = DB('a''b', 'E');");
     expect(calls.map((c) => c.cube)).toEqual(["a'b"]);
+  });
+});
+
+describe("comment helpers", () => {
+  it("isCommentLine detects indented and unindented # comments", () => {
+    expect(isCommentLine("# hello")).toBe(true);
+    expect(isCommentLine("   # hello")).toBe(true);
+    expect(isCommentLine("x = 1; # trailing")).toBe(false);
+    expect(isCommentLine("")).toBe(false);
+  });
+
+  it("stripLineComment keeps # inside single-quoted strings and strips trailing comments", () => {
+    expect(stripLineComment("s = 'A#B'; # note")).toBe("s = 'A#B'; ");
+    expect(stripLineComment("s = 'it''s #1';")).toBe("s = 'it''s #1';");
+    expect(stripLineComment("x = 1;")).toBe("x = 1;");
+  });
+
+  it("neutralizeLine blanks string literals with same-length spaces and strips trailing comments", () => {
+    expect(neutralizeLine("['A'] = S: 'STET #1'; # STET")).toBe(
+      "[   ] = S:          ; ",
+    );
+    expect(neutralizeLine("s = 'it''s # ok';")).toBe("s =             ;");
+  });
+
+  it("parseTiCode handles # inside string literals and continuation lines", () => {
+    const r = parseTiCode("s = 'a#b' |\n  'c#d';\nx = 1;");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.ast).toHaveLength(2);
+    expect(r.ast[0]).toMatchObject({
+      type: "assignment",
+      variable: "s",
+      expression: "'a#b' | 'c#d'",
+    });
+
+    const r2 = parseTiCode("s = 'Total = #1';\nx = 2;");
+    expect(r2.ok).toBe(true);
+    if (!r2.ok) return;
+    expect(r2.ast).toHaveLength(2);
   });
 });

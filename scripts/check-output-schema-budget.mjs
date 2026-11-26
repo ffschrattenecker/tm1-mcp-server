@@ -23,6 +23,7 @@ import { existsSync, statSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { z } from "zod";
 
 // Current total is ~43.9KB (67 schemas, 43,904 bytes after the six sandbox
 // tools), measured AFTER slimJsonSchema() — i.e. these are the bytes
@@ -39,15 +40,6 @@ const root = join(here, "..");
 const toolsIndexPath = join(root, "dist", "tools", "index.js");
 const defineToolPath = join(root, "dist", "tools", "define-tool.js");
 const slimPath = join(root, "dist", "lib", "slim-json-schema.js");
-const sdkServerDir = join(
-  root,
-  "node_modules",
-  "@modelcontextprotocol",
-  "sdk",
-  "dist",
-  "esm",
-  "server",
-);
 
 // The gate executes compiled schemas, so it needs dist to reflect current src.
 // `npm run verify` typechecks with --noEmit (never emits), so a plain `tsc` edit
@@ -98,23 +90,6 @@ for (const p of [slimPath, toolsIndexPath, defineToolPath]) {
   }
 }
 
-let normalizeObjectSchema, toJsonSchemaCompat;
-try {
-  ({ normalizeObjectSchema } = await import(
-    pathToFileURL(join(sdkServerDir, "zod-compat.js")).href
-  ));
-  ({ toJsonSchemaCompat } = await import(
-    pathToFileURL(join(sdkServerDir, "zod-json-schema-compat.js")).href
-  ));
-} catch (err) {
-  console.error(
-    "check-output-schema-budget: could not load the SDK schema serializers — the " +
-      "@modelcontextprotocol/sdk internal layout likely changed. Update the import " +
-      "paths in this script to match the new SDK version.",
-  );
-  console.error(String(err?.message ?? err));
-  process.exit(1);
-}
 const { slimJsonSchema } = await import(pathToFileURL(slimPath).href);
 await import(pathToFileURL(toolsIndexPath).href);
 const { allSpecs } = await import(pathToFileURL(defineToolPath).href);
@@ -126,14 +101,14 @@ for (const [name, spec] of allSpecs()) {
   }
 }
 
-// Same options McpServer passes when it serializes outputSchema for tools/list.
-const JSON_SCHEMA_OPTS = { strictUnions: true, pipeStrategy: "output" };
+// Same options @modelcontextprotocol/server v2 passes when serializing outputSchema.
+const JSON_SCHEMA_OPTS = { target: "draft-2020-12", io: "output" };
 
 const rows = [];
 let total = 0;
 for (const [name, schema] of publishedSchemas) {
-  const obj = normalizeObjectSchema(schema);
-  const jsonSchema = slimJsonSchema(toJsonSchemaCompat(obj, JSON_SCHEMA_OPTS));
+  const obj = "_def" in schema ? schema : z.object(schema);
+  const jsonSchema = slimJsonSchema(z.toJSONSchema(obj, JSON_SCHEMA_OPTS));
   const bytes = Buffer.byteLength(JSON.stringify(jsonSchema), "utf8");
   rows.push({ name, bytes });
   total += bytes;

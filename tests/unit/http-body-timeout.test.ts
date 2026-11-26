@@ -258,6 +258,11 @@ describe("a body the reader leaves alone is released", () => {
   it.each([
     ["request", () => client.request("GET", "/api/v1/x")],
     ["requestRaw", () => client.requestRaw("GET", "/api/v1/x")],
+    ["requestRawBytes", () => client.requestRawBytes("GET", "/api/v1/x")],
+    [
+      "requestBinary",
+      () => client.requestBinary("PUT", "/api/v1/x", new Uint8Array([1])),
+    ],
   ])("cancels the 401 body before the re-auth (%s)", async (_name, call) => {
     const cancelled = vi.fn();
     vi.stubGlobal(

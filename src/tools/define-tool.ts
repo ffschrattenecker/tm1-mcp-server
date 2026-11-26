@@ -16,7 +16,8 @@
 import type {
   McpServer,
   ToolCallback,
-} from "@modelcontextprotocol/sdk/server/mcp.js";
+  ServerContext,
+} from "@modelcontextprotocol/server";
 import { z, type ZodObject, type ZodRawShape, type ZodTypeAny } from "zod";
 import type { TM1Client } from "../tm1-client.js";
 import { ConnectionRegistry } from "../connections.js";
@@ -24,6 +25,7 @@ import { TM1Error, TM1ErrorCode } from "../types.js";
 import type { Tm1ToolAnnotations } from "./annotations.js";
 import { asOutputSchema } from "./schemas/output-schema.js";
 import { markdownCapable } from "./schemas/markdown-capable.js";
+import type { McpToolResult } from "./error-format.js";
 
 /**
  * Where a tool gets its client from: the multi-connection registry in
@@ -39,6 +41,22 @@ export function asRegistry(source: ClientSource): ConnectionRegistry {
   return source instanceof ConnectionRegistry
     ? source
     : ConnectionRegistry.single(source);
+}
+
+function registerOnServer(
+  server: McpServer,
+  name: string,
+  description: string,
+  inputSchema: ZodRawShape,
+  cb: unknown,
+): void {
+  (
+    server.registerTool as unknown as (
+      n: string,
+      cfg: { description: string; inputSchema: ZodRawShape },
+      fn: unknown,
+    ) => unknown
+  )(name, { description, inputSchema }, cb);
 }
 
 interface ToolSpecBase<I extends ZodRawShape> {
@@ -76,6 +94,11 @@ interface ToolSpecBase<I extends ZodRawShape> {
    */
   sandboxScoped?: boolean;
   /**
+   * MCP Tasks extension support (`execution.taskSupport`). Enabled for
+   * long-running TI/chore executions backed by TM1 `/_async('id')`.
+   */
+  taskSupport?: "optional" | "required";
+  /**
    * Runtime gate, asked on every call against the connection it targets: the
    * reason the tool cannot be used there now, or undefined. It may read what
    * TM1 reports after login (`tm1Client.sandboxingDisabled`), which is unknown
@@ -85,19 +108,22 @@ interface ToolSpecBase<I extends ZodRawShape> {
   unavailable?: (tm1Client: TM1Client) => string | undefined;
 }
 
+type ToolArgsOf<I extends ZodRawShape> = z.infer<z.ZodObject<I>>;
+type ToolHandlerResult = McpToolResult | Promise<McpToolResult>;
+
 /** A tool that acts on one TM1 connection — every tool but a handful. */
 interface ConnectionToolSpec<I extends ZodRawShape> extends ToolSpecBase<I> {
   connectionless?: false;
   peer?: false;
   /**
    * Handler. Receives the parsed args, the client of the connection the call
-   * targets, and the SDK's per-call extra (abort signal, request metadata).
+   * targets, and the SDK's per-call ServerContext (abort signal, request metadata).
    */
   handler: (
-    args: Parameters<ToolCallback<I>>[0],
+    args: ToolArgsOf<I>,
     tm1Client: TM1Client,
-    extra: Parameters<ToolCallback<I>>[1],
-  ) => ReturnType<ToolCallback<I>>;
+    extra: ServerContext,
+  ) => ToolHandlerResult;
 }
 
 /**
@@ -111,10 +137,10 @@ interface ConnectionlessToolSpec<
   connectionless: true;
   peer?: false;
   handler: (
-    args: Parameters<ToolCallback<I>>[0],
+    args: ToolArgsOf<I>,
     registry: ConnectionRegistry,
-    extra: Parameters<ToolCallback<I>>[1],
-  ) => ReturnType<ToolCallback<I>>;
+    extra: ServerContext,
+  ) => ToolHandlerResult;
 }
 
 /** One side of a two-connection comparison. */
@@ -134,16 +160,16 @@ interface PeerToolSpec<I extends ZodRawShape> extends ToolSpecBase<I> {
   connectionless?: false;
   peer: true;
   handler: (
-    args: Parameters<ToolCallback<I>>[0],
+    args: ToolArgsOf<I>,
     sides: { a: PeerSide; b: PeerSide },
-    extra: Parameters<ToolCallback<I>>[1],
-  ) => ReturnType<ToolCallback<I>>;
+    extra: ServerContext,
+  ) => ToolHandlerResult;
 }
 
 export type ToolSpec<I extends ZodRawShape> =
   ConnectionToolSpec<I> | ConnectionlessToolSpec<I> | PeerToolSpec<I>;
 
-/** What ./with-annotations.ts needs at registration time. */
+/** What ./with-annotations.ts and ./compiled-surface.ts need at registration time. */
 export interface ResolvedSpec {
   name: string;
   annotations: Tm1ToolAnnotations;
@@ -151,6 +177,8 @@ export interface ResolvedSpec {
   outputSchema?: ZodRawShape | ZodTypeAny;
   /** See ToolSpecBase.sandboxScoped. */
   sandboxScoped: boolean;
+  /** See ToolSpecBase.taskSupport. */
+  taskSupport?: "optional" | "required";
 }
 
 // Populated at module-load time, when a tool file's top-level defineTool()
@@ -209,6 +237,9 @@ export function defineTool<I extends ZodRawShape>(
     name: spec.name,
     annotations: spec.annotations,
     sandboxScoped: spec.sandboxScoped === true,
+    ...(spec.taskSupport !== undefined
+      ? { taskSupport: spec.taskSupport }
+      : {}),
     // Built conditionally: exactOptionalPropertyTypes rejects an explicit
     // `outputSchema: undefined` for an optional property.
     ...(outputSchema === undefined ? {} : { outputSchema }),
@@ -218,11 +249,9 @@ export function defineTool<I extends ZodRawShape>(
     const registry = asRegistry(source);
     if (spec.connectionless) {
       const handler = spec.handler;
-      const cb = ((
-        args: Parameters<ToolCallback<I>>[0],
-        extra: Parameters<ToolCallback<I>>[1],
-      ) => handler(args, registry, extra)) as unknown as ToolCallback<I>;
-      server.tool(spec.name, description, spec.input, cb);
+      const cb = ((args: ToolArgsOf<I>, extra: ServerContext) =>
+        handler(args, registry, extra)) as unknown as ToolCallback;
+      registerOnServer(server, spec.name, description, spec.input, cb);
       return;
     }
     // An empty registry (no connection yet) lists every tool: connections
@@ -236,29 +265,36 @@ export function defineTool<I extends ZodRawShape>(
     ) {
       return;
     }
-    // More than one: every tool takes a `connection` naming the target.
-    // One: `connection` is optional, but the enum still pins it to that name.
-    // Callers often pass the name anyway, and a strict input would reject that.
-    // Empty at startup: a plain string, since the enum cannot be empty and
-    // would go stale once a connection is added.
-    const names = registry.usableNames as [string, ...string[]];
-    const connectionSchema = empty ? z.string() : z.enum(names);
+    // Keep `connection` as a dynamic string (not a static z.enum) so folders
+    // added after startup via registry.refresh() are accepted by input validation
+    // instead of failing before the handler can rescan. Currently configured
+    // names are surfaced in the description for model discoverability.
+    const names = registry.usableNames;
+    const connectionSchema = z.string().min(1);
+    const knownList =
+      names.length > 0
+        ? ` (configured: ${names.join(", ")}; call tm1_list_connections for newly added ones)`
+        : "";
     const peerConnection = connectionSchema
       .optional()
       .describe(
-        "Second connection to compare against (e.g. PROD vs DEV). Default: the same as connection.",
+        `Second connection to compare against${knownList}. Default: the same as connection.`,
       );
     const input = registry.isSingle
       ? {
           ...spec.input,
           connection: connectionSchema
             .optional()
-            .describe("Target TM1 connection (optional: there is only one)."),
+            .describe(
+              `Target TM1 connection (optional: there is only one${names[0] ? `, "${names[0]}"` : ""}).`,
+            ),
           ...(spec.peer ? { connectionB: peerConnection } : {}),
         }
       : {
           ...spec.input,
-          connection: connectionSchema.describe("Target TM1 connection."),
+          connection: connectionSchema.describe(
+            `Target TM1 connection${knownList}.`,
+          ),
           ...(spec.peer ? { connectionB: peerConnection } : {}),
         };
     const gate = (connection: string | undefined) => {
@@ -297,11 +333,11 @@ export function defineTool<I extends ZodRawShape>(
     if (spec.peer) {
       const handler = spec.handler;
       const cb = (async (
-        args: Parameters<ToolCallback<I>>[0] & {
+        args: ToolArgsOf<I> & {
           connection?: string;
           connectionB?: string;
         },
-        extra: Parameters<ToolCallback<I>>[1],
+        extra: ServerContext,
       ) => {
         const { connection, connectionB, ...rest } = args;
         const infoA = gate(connection);
@@ -311,24 +347,21 @@ export function defineTool<I extends ZodRawShape>(
           registry.get(infoB.name),
         ]);
         return handler(
-          rest,
+          rest as unknown as ToolArgsOf<I>,
           {
             a: { name: infoA.name, client: clientA },
             b: { name: infoB.name, client: clientB },
           },
           extra,
         );
-      }) as unknown as ToolCallback<I>;
-      server.tool(spec.name, description, input, cb);
+      }) as unknown as ToolCallback;
+      registerOnServer(server, spec.name, description, input, cb);
       return;
     }
     const handler = spec.handler;
-    // ToolCallback<I> is a conditional type over an unresolved generic, so TS
-    // cannot check the lambda against it — the cast asserts what the
-    // ToolSpec.handler signature already pins down (same args, same return).
     const cb = (async (
-      args: Parameters<ToolCallback<I>>[0] & { connection?: string },
-      extra: Parameters<ToolCallback<I>>[1],
+      args: ToolArgsOf<I> & { connection?: string },
+      extra: ServerContext,
     ) => {
       const { connection, ...rest } = args;
       const info = gate(connection);
@@ -341,8 +374,8 @@ export function defineTool<I extends ZodRawShape>(
           hint: "Retrying cannot succeed until the cause named in the message is fixed.",
         });
       }
-      return handler(rest, tm1Client, extra);
-    }) as unknown as ToolCallback<I>;
-    server.tool(spec.name, description, input, cb);
+      return handler(rest as unknown as ToolArgsOf<I>, tm1Client, extra);
+    }) as unknown as ToolCallback;
+    registerOnServer(server, spec.name, description, input, cb);
   };
 }

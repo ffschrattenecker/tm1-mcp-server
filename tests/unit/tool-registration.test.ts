@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { contractCheckedClient } from "../helpers/service-contract.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { registerAllTools } from "../../src/tools/index.js";
 // Every tool declares its annotation and output schema in its defineTool()
@@ -76,13 +76,13 @@ function captureRegistrations(): Map<
     string,
     { config: Record<string, unknown>; cb: (...a: unknown[]) => unknown }
   >();
-  server.registerTool = ((...args: unknown[]) => {
+  server.registerTool = (...args: unknown[]) => {
     captured.set(args[0] as string, {
       config: args[1] as Record<string, unknown>,
       cb: args[2] as (...a: unknown[]) => unknown,
     });
     return {} as ReturnType<typeof server.registerTool>;
-  }) as typeof server.registerTool;
+  };
   const wrapped = withAnnotations(server, mockLogger, "readwrite");
   registerAllTools(wrapped, {} as TM1Client);
   return captured;
@@ -121,16 +121,20 @@ describe("L9 output-schema drift guard", () => {
     let captured:
       | { config: Record<string, unknown>; cb: (...a: unknown[]) => unknown }
       | undefined;
-    server.registerTool = ((...args: unknown[]) => {
+    server.registerTool = (...args: unknown[]) => {
       captured = {
         config: args[1] as Record<string, unknown>,
         cb: args[2] as (...a: unknown[]) => unknown,
       };
       return {} as ReturnType<typeof server.registerTool>;
-    }) as typeof server.registerTool;
+    };
     const wrapped = withAnnotations(server, mockLogger, "readwrite");
     // Real tool name so its declared annotation + outputSchema resolve.
-    (wrapped.tool as (...a: unknown[]) => unknown)(name, "fake", {}, handler);
+    (wrapped.registerTool as (...a: unknown[]) => unknown)(
+      name,
+      { description: "fake", inputSchema: {} },
+      handler,
+    );
     if (!captured) throw new Error("tool was not registered");
     return captured;
   }

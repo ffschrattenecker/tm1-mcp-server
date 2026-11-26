@@ -25,6 +25,7 @@ import { join } from "node:path";
 import { parse as parseDotenv } from "dotenv";
 import pino from "pino";
 import { connectionIdOf, loadConfig, type TM1Config } from "./config.js";
+import { NAME } from "./version.js";
 import {
   keychainHint,
   plaintextSecretKeys,
@@ -52,6 +53,7 @@ const SERVER_LEVEL_KEYS = new Set([
   "TM1_LOCAL_FILE_ROOT",
   "TM1_PROCESS_BACKUP_DIR",
   "TM1_ALLOW_UNMASKED_SECRETS",
+  "TM1_TOOLSETS",
 ]);
 
 function isServerLevelKey(key: string): boolean {
@@ -154,6 +156,8 @@ export interface ConnectionStatus extends ConnectionInfo {
 
 export class ConnectionRegistry {
   private readonly entries = new Map<string, Entry>();
+  /** Monotonically incremented whenever discovered connections change. */
+  private _revision = 0;
   /** Folder (and process env) discovery runs against; unset for single/of(). */
   private discoveryDir: string | undefined;
   private discoveryEnv: NodeJS.ProcessEnv = {};
@@ -319,7 +323,7 @@ export class ConnectionRegistry {
     this.logger.warn(
       { connections: plaintext },
       "plaintext secrets in .env — move them to the OS keychain with " +
-        "`npx -y @ffschrattenecker/tm1-mcp-server secrets migrate <connection>`",
+        `\`npx -y ${NAME} secrets migrate <connection>\``,
     );
   }
 
@@ -347,12 +351,14 @@ export class ConnectionRegistry {
   refresh(): void {
     const dir = this.discoveryDir;
     if (dir === undefined) return;
+    let changed = false;
     const found = this.scan(dir, this.discoveryEnv);
     const foundSet = new Set(found);
     for (const [name, entry] of [...this.entries]) {
       if (entry.info.dir !== undefined && !foundSet.has(name)) {
         this.entries.delete(name);
         this.dispose(entry);
+        changed = true;
         this.logger.info({ connection: name }, "connection folder removed");
       }
     }
@@ -369,6 +375,7 @@ export class ConnectionRegistry {
       if (this.loadFolder(name, folder, this.discoveryEnv)) {
         plaintext.push(name);
       }
+      changed = true;
       this.logger.info({ connection: name }, "connection folder (re)loaded");
     }
     this.warnPlaintext(plaintext);
@@ -376,6 +383,12 @@ export class ConnectionRegistry {
     const sorted = [...this.entries].sort(([a], [b]) => a.localeCompare(b));
     this.entries.clear();
     for (const [name, entry] of sorted) this.entries.set(name, entry);
+    if (changed) this._revision++;
+  }
+
+  /** Revision counter incremented when discovered connections change. */
+  get revision(): number {
+    return this._revision;
   }
 
   /** A login is in flight or a session is open; a latched one is neither. */
@@ -552,6 +565,7 @@ export class ConnectionRegistry {
       this.entries.delete(entry.info.name);
       this.dispose(entry);
       this.loadFolder(entry.info.name, entry.info.dir, this.discoveryEnv);
+      this._revision++;
       entry = this.entryFor(entry.info.name);
     }
     if (!entry.client && entry.env) {

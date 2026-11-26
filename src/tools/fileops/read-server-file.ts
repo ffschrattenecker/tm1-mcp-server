@@ -3,6 +3,7 @@ import { ServerFileReadResultSchema } from "../schemas/items.js";
 import { IDEMPOTENT_WRITE, withVersion } from "../annotations.js";
 import { jsonResult } from "../format.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 
 const DEFAULT_LINES = 1000;
 const HARD_MAX_LINES = 20000;
@@ -38,8 +39,13 @@ export const registerReadServerFile = defineTool({
         `Return at most N lines (default ${DEFAULT_LINES}, hard max ${HARD_MAX_LINES}).`,
       ),
   },
-  handler: async ({ path, maxLines }, tm1Client) => {
-    const r = await tm1Client.files.readViaTi(path, maxLines);
+  handler: async ({ path, maxLines }, tm1Client, extra) => {
+    const signal = extraSignal(extra);
+    const r = await tm1Client.files.readViaTi(
+      path,
+      maxLines,
+      ...(signal ? [{ signal }] : []),
+    );
     return jsonResult({
       path,
       lineCount: r.lines.length,

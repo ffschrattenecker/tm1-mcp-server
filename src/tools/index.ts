@@ -1,5 +1,6 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { ClientSource, ToolRegistrar } from "./define-tool.js";
+import type { ToolsetName } from "./toolsets.js";
 
 // Metadata tools
 import { registerResolveDefaultMembers } from "./metadata/resolve-default-members.js";
@@ -95,102 +96,141 @@ import { registerPublishSandbox } from "./sandboxes/publish-sandbox.js";
 // previous design kept a second hand-ordered call block that drifted from the
 // import order; this array is the only call site. check-conventions.mjs
 // fails the build if a `register*` export under src/tools/ is missing here.
-const REGISTRARS: ToolRegistrar[] = [
-  // Metadata
-  registerResolveDefaultMembers,
-  registerSearchElements,
-  registerListProcessesGrouped,
-
-  // Cell data
-  registerExecuteMdx,
-  registerGetView,
-  registerSampleCells,
-  registerWriteCells,
-  registerCheckFeeders,
-  registerTraceFeeders,
-  registerTraceCellCalculation,
-  registerCheckWritableCoords,
-
-  // TI development — writes go through registerUpsertProcess and reads
-  // through registerGetProcess (include-flags pick the parts).
-  registerExecuteProcess,
-  registerGetProcess,
-  registerCopyProcess,
-  registerCheckProcessCode,
-  registerGetAllProcessesCode,
-  registerSearchCode,
-  registerImportProFile,
-  registerExportProcessToPro,
-  registerDiffProcessWithFile,
-  registerDiffProcesses,
-  registerValidateProcessRefs,
-  registerUpsertProcess,
-  registerInstallProBundle,
-  registerExportProcessToGit,
-  registerImportProcessFromGit,
-
-  // Dimension management
-  registerBulkUpsertElements,
-  registerDeleteElements,
-  registerUpdateElementAttributeValue,
-
-  // Model building
-  registerGetCubeRules,
-  registerSetCubeRules,
-  registerClearCube,
-  registerGetAllCubeRules,
-  registerCheckAllCubeRules,
-  registerCheckCubeRule,
-  registerSearchRules,
-
-  // Scheduling
-  registerExecuteChore,
-  registerUpdateChore,
-
-  // Operations
-  registerListConnections,
-  registerGetServerState,
-  registerListErrorLogs,
-  registerGetErrorLogContent,
-  registerDiagnoseProcessError,
-  registerGetCubeStats,
-  registerSaveData,
-
-  // File operations
-  registerFilesRead,
-  registerFilesWrite,
-  registerReadServerFile,
-
-  // Generic REST
-  registerRestRead,
-  registerRestWrite,
-
-  // Analysis
-  registerAnalyzeCallgraph,
-  registerAnalyzeObjectUsage,
-  registerTraceDataFlow,
-  registerAnalyzeChoreGraph,
-  registerDiffCubeRules,
-  registerDiffHierarchy,
-  registerCompareEnvironments,
-  registerCheckV12Readiness,
-  registerAuditNaming,
-  registerAuditComplexity,
-  registerAuditFeeders,
-
-  // Sandboxes — create/discard/delete are sandboxScoped (registered in
-  // TM1_MODE=sandbox); publish writes base data and stays readwrite-only.
-  registerListSandboxes,
-  registerCreateSandbox,
-  registerCompareSandbox,
-  registerDiscardSandbox,
-  registerDeleteSandbox,
-  registerPublishSandbox,
+const TOOLSET_GROUPS: ReadonlyArray<{
+  toolset: ToolsetName;
+  registrars: readonly ToolRegistrar[];
+}> = [
+  {
+    toolset: "metadata",
+    registrars: [
+      registerResolveDefaultMembers,
+      registerSearchElements,
+      registerListProcessesGrouped,
+    ],
+  },
+  {
+    toolset: "celldata",
+    registrars: [
+      registerExecuteMdx,
+      registerGetView,
+      registerSampleCells,
+      registerWriteCells,
+      registerCheckFeeders,
+      registerTraceFeeders,
+      registerTraceCellCalculation,
+      registerCheckWritableCoords,
+    ],
+  },
+  {
+    toolset: "ti-development",
+    // TI development — writes go through registerUpsertProcess and reads
+    // through registerGetProcess (include-flags pick the parts).
+    registrars: [
+      registerExecuteProcess,
+      registerGetProcess,
+      registerCopyProcess,
+      registerCheckProcessCode,
+      registerGetAllProcessesCode,
+      registerSearchCode,
+      registerImportProFile,
+      registerExportProcessToPro,
+      registerDiffProcessWithFile,
+      registerDiffProcesses,
+      registerValidateProcessRefs,
+      registerUpsertProcess,
+      registerInstallProBundle,
+      registerExportProcessToGit,
+      registerImportProcessFromGit,
+    ],
+  },
+  {
+    toolset: "dimension-management",
+    registrars: [
+      registerBulkUpsertElements,
+      registerDeleteElements,
+      registerUpdateElementAttributeValue,
+    ],
+  },
+  {
+    toolset: "model-building",
+    registrars: [
+      registerGetCubeRules,
+      registerSetCubeRules,
+      registerClearCube,
+      registerGetAllCubeRules,
+      registerCheckAllCubeRules,
+      registerCheckCubeRule,
+      registerSearchRules,
+    ],
+  },
+  {
+    toolset: "scheduling",
+    registrars: [registerExecuteChore, registerUpdateChore],
+  },
+  {
+    toolset: "operations",
+    registrars: [
+      registerListConnections,
+      registerGetServerState,
+      registerListErrorLogs,
+      registerGetErrorLogContent,
+      registerDiagnoseProcessError,
+      registerGetCubeStats,
+      registerSaveData,
+    ],
+  },
+  {
+    toolset: "fileops",
+    registrars: [registerFilesRead, registerFilesWrite, registerReadServerFile],
+  },
+  {
+    toolset: "rest",
+    registrars: [registerRestRead, registerRestWrite],
+  },
+  {
+    toolset: "analysis",
+    registrars: [
+      registerAnalyzeCallgraph,
+      registerAnalyzeObjectUsage,
+      registerTraceDataFlow,
+      registerAnalyzeChoreGraph,
+      registerDiffCubeRules,
+      registerDiffHierarchy,
+      registerCompareEnvironments,
+      registerCheckV12Readiness,
+      registerAuditNaming,
+      registerAuditComplexity,
+      registerAuditFeeders,
+    ],
+  },
+  {
+    toolset: "sandboxes",
+    // Sandboxes — create/discard/delete are sandboxScoped (registered in
+    // TM1_MODE=sandbox); publish writes base data and stays readwrite-only.
+    registrars: [
+      registerListSandboxes,
+      registerCreateSandbox,
+      registerCompareSandbox,
+      registerDiscardSandbox,
+      registerDeleteSandbox,
+      registerPublishSandbox,
+    ],
+  },
 ];
 
 export function registerAllTools(
   server: McpServer,
   source: ClientSource,
+  toolsets?: ReadonlySet<ToolsetName>,
 ): void {
-  for (const register of REGISTRARS) register(server, source);
+  for (const group of TOOLSET_GROUPS) {
+    if (toolsets && !toolsets.has(group.toolset)) {
+      // Keep connection discovery available even when "operations" is omitted.
+      if (group.toolset === "operations") {
+        registerListConnections(server, source);
+      }
+      continue;
+    }
+    for (const register of group.registrars) register(server, source);
+  }
 }

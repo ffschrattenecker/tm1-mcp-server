@@ -67,4 +67,40 @@ describe("AbortSignal propagation through HTTP layer", () => {
     await expect(promise).rejects.toThrow();
     expect(capturedSignal?.aborted).toBe(true);
   });
+
+  it("propagates RequestOptions signal through requestRawBytes and requestBinary", async () => {
+    const captured: AbortSignal[] = [];
+    const fetchSpy = vi
+      .fn()
+      .mockImplementation((_url: string, init: RequestInit) => {
+        captured.push(init.signal as AbortSignal);
+        return Promise.resolve(
+          new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
+        );
+      });
+    stubContractCheckedFetch(fetchSpy);
+
+    const ctl1 = new AbortController();
+    const bytes = await client.requestRawBytes(
+      "GET",
+      "/api/v1/Contents('a')/Content",
+      {
+        signal: ctl1.signal,
+        timeoutMs: 1234,
+      },
+    );
+    expect(bytes).toEqual(Buffer.from([1, 2, 3]));
+
+    const ctl2 = new AbortController();
+    await client.requestBinary(
+      "PUT",
+      "/api/v1/Contents('a')/Content",
+      new Uint8Array([4, 5]),
+      "application/octet-stream",
+      { signal: ctl2.signal, timeoutMs: 2345 },
+    );
+    expect(captured).toHaveLength(2);
+    expect(captured[0]).toBeInstanceOf(AbortSignal);
+    expect(captured[1]).toBeInstanceOf(AbortSignal);
+  });
 });

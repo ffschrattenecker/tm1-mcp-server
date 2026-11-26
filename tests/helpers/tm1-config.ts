@@ -32,6 +32,7 @@ export const baseTestConfig: TM1Config = {
   httpHost: "127.0.0.1",
   httpPort: 3000,
   httpAllowedOrigins: ["http://127.0.0.1:3000", "http://localhost:3000"],
+  httpAllowedHosts: [],
   mode: "readonly",
   sandboxPrefix: "mcp-",
   responseMode: "legacy",

@@ -6,6 +6,7 @@ import { clipAxesToWindow } from "../../tm1-client/services/cellset-transform.js
 import { READ_ONLY } from "../annotations.js";
 import { ViewResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 
 interface ViewEnvelope extends MdxEnvelope {
   cubeName: string;
@@ -43,7 +44,7 @@ export const registerGetView = defineTool({
       top,
       skip,
       {
-        signal: extra?.signal,
+        signal: extraSignal(extra),
       },
     );
 

@@ -5,6 +5,7 @@ import { jsonResult } from "../format.js";
 import { IDEMPOTENT_WRITE, withVersion } from "../annotations.js";
 import { MutationResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 import { startHeartbeat } from "../heartbeat.js";
 
 export const registerSaveData = defineTool({
@@ -42,7 +43,7 @@ export const registerSaveData = defineTool({
     try {
       result = await withToolHint(
         tm1Client.processes.saveData(cube, {
-          signal: extra?.signal,
+          signal: extraSignal(extra),
           ...(timeoutMs ? { timeoutMs } : {}),
         }),
         "SaveData failed. On v12 this tool is unsupported (SaveDataAll removed). Check the version with tm1_get_server_state; for a single cube verify the name with tm1_rest_read Cubes('<name>')?$select=Name.",

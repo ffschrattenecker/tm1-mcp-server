@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createServer, request as httpRequest } from "node:http";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import pino from "pino";
 import { startHttpTransport } from "../../src/http-transport.js";
 import type { TM1Config } from "../../src/config.js";
@@ -32,6 +32,7 @@ function makeConfig(port: number, token?: string): TM1Config {
     httpHost: "127.0.0.1",
     httpPort: port,
     httpAllowedOrigins: [],
+    httpAllowedHosts: [],
     httpToken: token,
     mode: "readonly",
     sandboxPrefix: "mcp-",
@@ -43,10 +44,7 @@ function makeConfig(port: number, token?: string): TM1Config {
 
 // Minimal MCP server — no TM1 client needed. initialize is answered by the SDK.
 function buildServer(): McpServer {
-  return new McpServer(
-    { name: "test-server", version: "0.0.0" },
-    { capabilities: { logging: {} } },
-  );
+  return new McpServer({ name: "test-server", version: "0.0.0" });
 }
 
 const INIT = {
@@ -296,4 +294,82 @@ describe("startHttpTransport (stateless, per-request)", () => {
       expect(status).toBe(200);
     },
   );
+
+  it("enforces TM1_MCP_HTTP_ALLOWED_HOSTS (allows listed host and rejects 403 otherwise)", async () => {
+    const port = await freePort();
+    const cfg = {
+      ...makeConfig(port),
+      httpAllowedHosts: ["mcp.internal"],
+    };
+    close = await startHttpTransport(buildServer, cfg, silentLogger);
+
+    const sendWithHost = (hostHeader: string) =>
+      new Promise<number>((resolve, reject) => {
+        const body = JSON.stringify(INIT);
+        const req = httpRequest(
+          {
+            host: "127.0.0.1",
+            port,
+            path: "/mcp",
+            method: "POST",
+            headers: {
+              Host: hostHeader,
+              "Content-Type": "application/json",
+              Accept: "application/json, text/event-stream",
+              "Content-Length": String(Buffer.byteLength(body)),
+            },
+          },
+          (res) => {
+            res.resume();
+            resolve(res.statusCode ?? 0);
+          },
+        );
+        req.on("error", reject);
+        req.end(body);
+      });
+
+    expect(await sendWithHost(`mcp.internal:${port}`)).toBe(200);
+    expect(await sendWithHost(`evil.example:${port}`)).toBe(403);
+  });
+
+  it("answers 2026-07-28 server/discover over stateless HTTP", async () => {
+    const port = await freePort();
+    close = await startHttpTransport(
+      buildServer,
+      makeConfig(port),
+      silentLogger,
+    );
+
+    const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+        "MCP-Protocol-Version": "2026-07-28",
+        "Mcp-Method": "server/discover",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "server/discover",
+        params: {
+          _meta: {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities": {},
+          },
+        },
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      result: {
+        supportedVersions: string[];
+        _meta?: Record<string, { name?: string }>;
+      };
+    };
+    expect(body.result.supportedVersions).toContain("2026-07-28");
+    expect(
+      body.result._meta?.["io.modelcontextprotocol/serverInfo"]?.name,
+    ).toBe("test-server");
+  });
 });

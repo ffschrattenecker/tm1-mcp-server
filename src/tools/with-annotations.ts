@@ -1,8 +1,17 @@
 import type pino from "pino";
-import { type McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+import {
+  type McpServer,
+  type StandardSchemaWithJSON,
+  type ToolAnnotations,
+} from "@modelcontextprotocol/server";
 import { z, type ZodRawShape, type ZodTypeAny } from "zod";
-import { slimJsonSchema } from "../lib/slim-json-schema.js";
+import { slimJsonSchema, withSlimJsonSchema } from "../lib/slim-json-schema.js";
+import {
+  extractTraceContext,
+  runWithTraceContext,
+  traceLogBindings,
+} from "../lib/trace-context.js";
+import { extraHttpHeaders, extraMeta } from "./context.js";
 import { specFor, type ResolvedSpec } from "./define-tool.js";
 import { DEFAULT_MAX_RESPONSE_CHARS } from "../config.js";
 import { TM1Error, TM1ErrorCode } from "../types.js";
@@ -39,10 +48,8 @@ function asZodSchema(entry: ZodRawShape | ZodTypeAny): ZodTypeAny {
 }
 
 // The SDK wraps a raw input shape in a plain z.object, which drops unknown keys
-// without an error. A misspelt or misplaced argument then runs the call with
-// the argument ignored, so the caller gets an unfiltered result and no reason.
-// Reject unknown keys instead, and name the ones that are accepted.
-function strictInputSchema(shape: ZodRawShape): ZodTypeAny {
+// without an error. Reject unknown keys instead, and name the ones accepted.
+export function strictInputSchema(shape: ZodRawShape): ZodTypeAny {
   const accepted = Object.keys(shape);
   const list = accepted.length > 0 ? accepted.join(", ") : "none";
   return z.strictObject(shape, {
@@ -96,12 +103,7 @@ function isPagePayload(value: unknown): value is PagePayload {
 }
 
 /**
- * Cut an oversized page down to the longest prefix of its items that fits,
- * turning it into an ordinary shorter page: count, has_more and next_offset
- * are rewritten so the caller walks on from exactly where it stopped. The
- * result is still valid JSON of the declared shape — unlike a text cut — and
- * the call is not wasted. Returns undefined when not even one item fits (or
- * the payload is not a page), leaving the caller to report the overflow.
+ * Cut an oversized page down to the longest prefix of its items that fits.
  */
 export function trimPageToFit(
   result: McpToolResult,
@@ -126,7 +128,6 @@ export function trimPageToFit(
       structuredContent: trimmed,
     };
   };
-  // Largest n in [1, items.length) whose serialization fits.
   let lo = 0;
   let hi = page.items.length - 1;
   while (lo < hi) {
@@ -137,8 +138,7 @@ export function trimPageToFit(
   return lo > 0 ? build(lo) : undefined;
 }
 
-// How to narrow a call, derived from the tool's own input keys so a new tool
-// gets a correct hint without a per-tool table to keep in step.
+// How to narrow a call, derived from the tool's own input keys.
 export function narrowingHint(inputKeys: ReadonlySet<string>): string {
   const ways: string[] = [];
   if (inputKeys.has("outline"))
@@ -160,303 +160,280 @@ export function narrowingHint(inputKeys: ReadonlySet<string>): string {
   return `${tail} Raise TM1_MAX_RESPONSE_CHARS only if the client can take the full payload.`;
 }
 
-// Rewrite a tools/list response so every advertised schema is slimmed.
-function slimToolsListResult(result: unknown): unknown {
-  if (!result || typeof result !== "object") return result;
-  const listing = result as { tools?: unknown };
-  if (!Array.isArray(listing.tools)) return result;
-  // Array.isArray widens an `unknown` to `any[]`; name the element type so the
-  // map below stays checked.
-  const tools = listing.tools as unknown[];
-  return {
-    ...listing,
-    tools: tools.map((entry) => {
-      if (!entry || typeof entry !== "object") return entry;
-      const tool: Record<string, unknown> = {
-        ...(entry as Record<string, unknown>),
-      };
-      if (tool.inputSchema !== undefined) {
-        tool.inputSchema = slimJsonSchema(tool.inputSchema);
-      }
-      if (tool.outputSchema !== undefined) {
-        tool.outputSchema = slimJsonSchema(tool.outputSchema);
-      }
-      return tool;
-    }),
-  };
-}
+export type ToolCallback = (...cbArgs: unknown[]) => unknown;
 
-// SDK REACH — isolated here on purpose.
-//
-// The zod→JSON-Schema conversion happens inside the SDK: McpServer's
-// setToolRequestHandlers() serializes tool.inputSchema/outputSchema at
-// tools/list time, and it is installed lazily on the FIRST registerTool call.
-// There is no public hook between that conversion and the wire, so the only
-// place to slim the payload is the tools/list handler itself.
-//
-// Rather than dig into the handler registry (a private Map), we intercept the
-// SDK's own `setRequestHandler` call on the low-level Server and wrap the
-// handler it is trying to install. Public method, public request schema
-// (imported from the SDK, matched by reference — same module instance the SDK
-// itself imports), no private state touched. Must be installed BEFORE the first
-// tool registration, which is why it runs inside withAnnotations().
-//
-// If a future SDK stops routing tools/list through setRequestHandler, or hands
-// it a different schema object, this becomes a silent no-op — the sentinels
-// would simply reappear on the wire. tests/unit/slim-json-schema.test.ts does a
-// real end-to-end tools/list over an in-memory transport and fails loudly in
-// that case.
-function installToolsListSlimming(server: McpServer): void {
-  const lowLevel = server.server as unknown as {
-    setRequestHandler: (
-      schema: unknown,
-      handler: (...args: unknown[]) => unknown,
-    ) => void;
-  };
-  // The SDK installs tools/list in the McpServer constructor when the options
-  // declare `capabilities.tools`, so the handler would exist before the wrap
-  // below and ship unslimmed. Refuse that case up front rather than let it pass.
-  try {
-    server.server.assertCanSetRequestHandler("tools/list");
-  } catch {
-    throw new Error(
-      "tools/list was installed before withAnnotations() ran, so schema slimming would be off. " +
-        "Do not declare `capabilities.tools` on the McpServer — the SDK adds it on the first registration.",
+const SLOW_TOOL_MS = 5000;
+
+/**
+ * Shared post-processing for any tool result (used by both synchronous tool
+ * calls and MCP Tasks completion): normalizes errors, attaches structuredContent,
+ * validates against strict outputSchema, and enforces TM1_MAX_RESPONSE_CHARS.
+ */
+export function postProcessToolResult(
+  toolName: string,
+  result: McpToolResult | undefined,
+  opts: {
+    outputSchema?: ZodRawShape | ZodTypeAny | undefined;
+    responseMode: "legacy" | "structured";
+    maxResponseChars: number;
+    sizeHint: string;
+    logger: pino.Logger;
+  },
+): McpToolResult | undefined {
+  if (!result) return result;
+  if (result.isError) {
+    return normalizeErrorResult(result);
+  }
+  const schema = opts.outputSchema ? asZodSchema(opts.outputSchema) : undefined;
+  if (!schema) {
+    return guardResponseSize(
+      toolName,
+      result,
+      opts.maxResponseChars,
+      opts.sizeHint,
+      opts.logger,
     );
   }
-  const originalSetRequestHandler = lowLevel.setRequestHandler.bind(lowLevel);
-  lowLevel.setRequestHandler = (schema, handler) => {
-    if (schema !== ListToolsRequestSchema) {
-      originalSetRequestHandler(schema, handler);
-      return;
+
+  const withStructured = attachStructuredContent(result, opts.responseMode);
+  if (withStructured.structuredContent !== undefined) {
+    const variants = strictVariants(opts.outputSchema);
+    const effectiveSchema = variants
+      ? isMarkdownPayload(withStructured.structuredContent)
+        ? variants.markdown
+        : variants.json
+      : schema;
+    const parsed = effectiveSchema.safeParse(withStructured.structuredContent);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const detail = issue
+        ? `${issue.path.join(".") || "(root)"}: ${issue.message}`
+        : "unknown issue";
+      opts.logger.warn(
+        { tool: toolName, issues: parsed.error.issues.slice(0, 5) },
+        "output schema drift",
+      );
+      return formatTm1ErrorResult(
+        new Error(`output schema drift in ${toolName}: ${detail}`),
+      );
     }
-    originalSetRequestHandler(schema, async (...args: unknown[]) =>
-      slimToolsListResult(await handler(...args)),
+  }
+  return guardResponseSize(
+    toolName,
+    withStructured,
+    opts.maxResponseChars,
+    opts.sizeHint,
+    opts.logger,
+  );
+}
+
+function attachStructuredContent(
+  result: McpToolResult,
+  responseMode: "legacy" | "structured",
+): McpToolResult {
+  const first = result.content?.[0];
+  if (!first || first.type !== "text" || typeof first.text !== "string") {
+    return result;
+  }
+  const raw = first.text.trim();
+  if (!raw.startsWith("{") && !raw.startsWith("[")) return result;
+  try {
+    const parsed = JSON.parse(raw) as McpToolResult["structuredContent"];
+    return responseMode === "structured"
+      ? { ...result, content: [], structuredContent: parsed }
+      : { ...result, structuredContent: parsed };
+  } catch {
+    return result;
+  }
+}
+
+function guardResponseSize(
+  toolName: string,
+  result: McpToolResult,
+  maxResponseChars: number,
+  hint: string,
+  logger: pino.Logger,
+): McpToolResult {
+  const size = responseChars(result);
+  if (size <= maxResponseChars) return result;
+  const trimmed = trimPageToFit(result, maxResponseChars);
+  if (trimmed) {
+    logger.info(
+      { tool: toolName, size, maxResponseChars },
+      "page trimmed to fit the response limit",
     );
+    return trimmed;
+  }
+  logger.warn({ tool: toolName, size, maxResponseChars }, "response too large");
+  return formatTm1ErrorResult(
+    new TM1Error({
+      code: TM1ErrorCode.RESPONSE_TOO_LARGE,
+      message: `${toolName} produced ${size} characters, over the ${maxResponseChars}-character response limit. Nothing was returned.`,
+      hint,
+      details: JSON.stringify({ size, limit: maxResponseChars }),
+    }),
+  );
+}
+
+export interface PreparedToolRegistration {
+  name: string;
+  title: string;
+  description: string;
+  annotations: ToolAnnotations;
+  taskSupport?: "optional" | "required";
+  strictInput: ZodTypeAny;
+  slimInputSchema: StandardSchemaWithJSON<unknown, unknown>;
+  outputSchema?: ZodRawShape | ZodTypeAny;
+  slimOutputSchema?: StandardSchemaWithJSON<unknown, unknown>;
+  outputSchemaJson?: Record<string, unknown>;
+  sizeHint: string;
+  wrappedCb: ToolCallback;
+}
+
+/**
+ * Prepare a tool registration with strict input validation, slimmed JSON
+ * Schemas, OTel trace propagation, slow-call logging, output-schema guard,
+ * response size guard, and uniform error formatting.
+ */
+export function prepareToolRegistration(
+  name: string,
+  description: string,
+  rawInputShape: ZodRawShape,
+  rawCb: ToolCallback,
+  opts: {
+    logger: pino.Logger;
+    mode: "readwrite" | "sandbox" | "readonly";
+    responseMode: "legacy" | "structured";
+    maxResponseChars: number;
+  },
+): PreparedToolRegistration | undefined {
+  const spec = specFor(name) as ResolvedSpec;
+  const annot = spec.annotations;
+  if (opts.mode === "readonly" && !annot.readOnlyHint) {
+    return undefined;
+  }
+  if (opts.mode === "sandbox" && !annot.readOnlyHint && !spec.sandboxScoped) {
+    return undefined;
+  }
+
+  const outputSchema = spec.outputSchema;
+  const inputKeys = new Set(Object.keys(rawInputShape));
+  const sizeHint = narrowingHint(inputKeys);
+  const strictInput = strictInputSchema(rawInputShape);
+  const slimInputSchema = withSlimJsonSchema(strictInput);
+  const slimOutputSchema = outputSchema
+    ? withSlimJsonSchema(asZodSchema(outputSchema))
+    : undefined;
+  const outputSchemaJson = slimOutputSchema
+    ? (slimJsonSchema(
+        slimOutputSchema["~standard"].jsonSchema.output({
+          target: "draft-2020-12",
+        }),
+      ) as Record<string, unknown>)
+    : undefined;
+
+  const wrappedCb: ToolCallback = async (...cbArgs: unknown[]) => {
+    const extra = cbArgs[1];
+    const trace = extractTraceContext(
+      extraMeta(extra),
+      extraHttpHeaders(extra),
+    );
+    const callLogger = opts.logger.child({
+      tool: name,
+      ...traceLogBindings(trace),
+    });
+
+    return runWithTraceContext(trace, async () => {
+      const start = Date.now();
+      try {
+        const result = (await rawCb(...cbArgs)) as McpToolResult | undefined;
+        const durationMs = Date.now() - start;
+        if (durationMs >= SLOW_TOOL_MS) {
+          callLogger.warn(
+            { tool: name, durationMs },
+            `slow tool call: ${name} took ${durationMs}ms`,
+          );
+        }
+        return postProcessToolResult(name, result, {
+          outputSchema,
+          responseMode: opts.responseMode,
+          maxResponseChars: opts.maxResponseChars,
+          sizeHint,
+          logger: callLogger,
+        });
+      } catch (err) {
+        callLogger.error({ err, tool: name }, "Tool handler threw");
+        return formatTm1ErrorResult(err);
+      }
+    });
+  };
+
+  return {
+    name,
+    title: deriveTitle(name),
+    description,
+    annotations: annot,
+    ...(spec.taskSupport !== undefined
+      ? { taskSupport: spec.taskSupport }
+      : {}),
+    strictInput,
+    slimInputSchema,
+    ...(outputSchema !== undefined ? { outputSchema } : {}),
+    ...(slimOutputSchema !== undefined ? { slimOutputSchema } : {}),
+    ...(outputSchemaJson !== undefined ? { outputSchemaJson } : {}),
+    sizeHint,
+    wrappedCb,
   };
 }
 
-// Wrap McpServer so every server.tool(name, desc, schema, cb) call:
-//   1) injects the annotation declared in the tool's defineTool() spec
-//   2) wraps the callback so thrown errors become uniform JSON results
-//      and existing isError results get reshaped to include `hint`
-//   3) when the tool declares an outputSchema, attaches it
-//   4) when mode="readonly", silently skips tools without readOnlyHint; when
-//      mode="sandbox", also skips write tools that are not sandboxScoped
-// Also installs the tools/list schema slimmer (see installToolsListSlimming) —
-// it has to be in place before the first registration triggers the SDK's lazy
-// handler setup.
+// Wrap McpServer so every server.registerTool(name, config, cb) call:
+//   1) injects title and the annotation declared in the tool's defineTool() spec
+//   2) wraps input/output schemas with strict input + cached slimJsonSchema
+//   3) wraps the callback with OTel trace context, error normalization, output
+//      schema validation, and response size guard
+//   4) filters write/destructive tools according to `mode`
 export function withAnnotations(
   server: McpServer,
   logger: pino.Logger,
   mode: "readwrite" | "sandbox" | "readonly",
-  // Matches the shipped default (config.responseMode, see config.ts), so direct
-  // callers — the live harness and the unit tests, which read content[0].text —
-  // exercise the same wire shape real clients get.
   responseMode: "legacy" | "structured" = "legacy",
   maxResponseChars: number = DEFAULT_MAX_RESPONSE_CHARS,
 ): McpServer {
-  installToolsListSlimming(server);
-
   const originalRegisterTool = server.registerTool.bind(server) as (
     ...args: unknown[]
   ) => unknown;
 
-  type ToolCallback = (...cbArgs: unknown[]) => unknown;
-
-  // Handlers return their payload as a JSON string in content[0].text. Parsing
-  // it into structuredContent satisfies the declared outputSchema, but leaving
-  // the text block in place sends the same JSON twice. In "structured" mode the
-  // text block is dropped: spec-legal only because an outputSchema is declared
-  // (CallToolResult.content may then be empty). Why "legacy" is the default:
-  // see responseMode in src/config.ts.
-  //
-  // A non-JSON text block (markdown mode, where the handler already attached
-  // structuredContent itself) is left alone in both modes: there the text is
-  // the point, not a duplicate.
-  const attachStructured = (result: McpToolResult): McpToolResult => {
-    const first = result.content?.[0];
-    if (!first || first.type !== "text" || typeof first.text !== "string") {
-      return result;
-    }
-    const raw = first.text.trim();
-    if (!raw.startsWith("{") && !raw.startsWith("[")) return result;
-    try {
-      // Deliberately not narrowed to an object: a handler may serialize a
-      // top-level array, and this wrapper's job is to pass the payload
-      // through unchanged, not to re-decide its shape.
-      const parsed = JSON.parse(raw) as McpToolResult["structuredContent"];
-      return responseMode === "structured"
-        ? { ...result, content: [], structuredContent: parsed }
-        : { ...result, structuredContent: parsed };
-    } catch {
-      return result;
-    }
-  };
-
-  const SLOW_TOOL_MS = 5000;
-
-  // An oversized page is cut to the items that fit (see trimPageToFit).
-  // Anything else becomes an error that says how to narrow the call — never a
-  // truncated text: a cut JSON payload is worse than none.
-  const guardSize = (
-    toolName: string,
-    result: McpToolResult,
-    hint: string,
-  ): McpToolResult => {
-    const size = responseChars(result);
-    if (size <= maxResponseChars) return result;
-    const trimmed = trimPageToFit(result, maxResponseChars);
-    if (trimmed) {
-      logger.info(
-        { tool: toolName, size, maxResponseChars },
-        "page trimmed to fit the response limit",
-      );
-      return trimmed;
-    }
-    logger.warn(
-      { tool: toolName, size, maxResponseChars },
-      "response too large",
-    );
-    return formatTm1ErrorResult(
-      new TM1Error({
-        code: TM1ErrorCode.RESPONSE_TOO_LARGE,
-        message: `${toolName} produced ${size} characters, over the ${maxResponseChars}-character response limit. Nothing was returned.`,
-        hint,
-        details: JSON.stringify({ size, limit: maxResponseChars }),
-      }),
-    );
-  };
-
-  const wrapCb = (
-    toolName: string,
-    cb: ToolCallback,
-    outputSchema: ZodRawShape | ZodTypeAny | undefined,
-    sizeHint: string,
-  ): ToolCallback => {
-    // Normalize once per tool, not per call.
-    const schema = outputSchema ? asZodSchema(outputSchema) : undefined;
-    // Tools offering format:"markdown" publish a loosened schema (top-level
-    // keys optional, plus `markdown`) because the SDK cannot express "either
-    // shape" — see ./schemas/markdown-capable.ts. Validating against that
-    // loosened schema would forfeit top-level drift detection on the JSON
-    // path, so we pick the matching strict variant per response instead.
-    const variants = strictVariants(outputSchema);
-    return async (...cbArgs: unknown[]) => {
-      const start = Date.now();
-      try {
-        const result = (await cb(...cbArgs)) as McpToolResult | undefined;
-        const durationMs = Date.now() - start;
-        if (durationMs >= SLOW_TOOL_MS) {
-          void server.server
-            .sendLoggingMessage({
-              level: "warning",
-              logger: "tm1-mcp",
-              data: {
-                tool: toolName,
-                durationMs,
-                message: `slow tool call: ${toolName} took ${durationMs}ms`,
-              },
-            })
-            .catch(() => undefined);
-        }
-        if (result && result.isError) {
-          return normalizeErrorResult(result);
-        }
-        if (result && schema) {
-          const withStructured = attachStructured(result);
-          if (withStructured.structuredContent !== undefined) {
-            // Pre-validate against the outputSchema HERE so drift surfaces as
-            // a graceful isError result. The SDK validates structuredContent
-            // AFTER the callback returns and turns a mismatch into a raw
-            // JSON-RPC protocol error; it skips that validation for isError
-            // results (validateToolOutput returns early on result.isError),
-            // so the error envelope below — which carries no
-            // structuredContent — passes through cleanly.
-            //
-            // COVERAGE BOUNDARY: this guard only bites schemas that can actually
-            // fail safeParse. A `.passthrough()` object or a `z.unknown()` field
-            // accepts anything, so permissive output schemas (e.g.
-            // MutationResultSchema.passthrough(), audit/feeder schemas) get no
-            // structural drift protection here — extra/renamed fields slip
-            // through silently. Prefer a strict, fully-modelled schema for any
-            // new output whose shape you want enforced.
-            //
-            // Variant pick is made from the RESPONSE, not from the requested
-            // `format`: a handler may legitimately fall back to JSON while
-            // format:"markdown" was asked for (unavailable stats, empty
-            // result), and branching on the input would reject that. No JSON
-            // payload carries a top-level `markdown` string, so the
-            // discriminator is unambiguous.
-            const effectiveSchema = variants
-              ? isMarkdownPayload(withStructured.structuredContent)
-                ? variants.markdown
-                : variants.json
-              : schema;
-            const parsed = effectiveSchema.safeParse(
-              withStructured.structuredContent,
-            );
-            if (!parsed.success) {
-              const issue = parsed.error.issues[0];
-              const detail = issue
-                ? `${issue.path.join(".") || "(root)"}: ${issue.message}`
-                : "unknown issue";
-              logger.warn(
-                { tool: toolName, issues: parsed.error.issues.slice(0, 5) },
-                "output schema drift",
-              );
-              return formatTm1ErrorResult(
-                new Error(`output schema drift in ${toolName}: ${detail}`),
-              );
-            }
-          }
-          return guardSize(toolName, withStructured, sizeHint);
-        }
-        return result ? guardSize(toolName, result, sizeHint) : result;
-      } catch (err) {
-        logger.error({ err, tool: toolName }, "Tool handler threw");
-        return formatTm1ErrorResult(err);
-      }
-    };
-  };
-
   return new Proxy(server, {
     get(target, prop, receiver) {
-      if (prop !== "tool")
+      if (prop !== "registerTool") {
         return Reflect.get(target, prop, receiver) as unknown;
-      return (...args: unknown[]) => {
-        const name = args[0] as string;
-        const description = args[1] as string;
-        const inputSchema = args[2];
-        // defineTool() stores the spec before it calls server.tool, so it is always there.
-        const spec = specFor(name) as ResolvedSpec;
-        const annot = spec.annotations;
-        if (mode === "readonly" && !annot.readOnlyHint) {
-          return;
-        }
-        if (mode === "sandbox" && !annot.readOnlyHint && !spec.sandboxScoped) {
-          return;
-        }
-        const outputSchema = spec.outputSchema;
-        const inputKeys = new Set(
-          inputSchema && typeof inputSchema === "object"
-            ? Object.keys(inputSchema)
-            : [],
-        );
-        const wrappedCb = wrapCb(
+      }
+      return (
+        name: string,
+        rawConfig: {
+          description?: string;
+          inputSchema?: ZodRawShape;
+        },
+        rawCb: ToolCallback,
+      ) => {
+        const prepared = prepareToolRegistration(
           name,
-          args[3] as ToolCallback,
-          outputSchema,
-          narrowingHint(inputKeys),
+          rawConfig.description ?? "",
+          rawConfig.inputSchema ?? {},
+          rawCb,
+          { logger, mode, responseMode, maxResponseChars },
         );
+        if (!prepared) return undefined;
         const config: Record<string, unknown> = {
-          title: deriveTitle(name),
-          description,
-          inputSchema: strictInputSchema(inputSchema as ZodRawShape),
-          annotations: annot,
+          title: prepared.title,
+          description: prepared.description,
+          inputSchema: prepared.slimInputSchema,
+          annotations: prepared.annotations,
         };
-        if (outputSchema) config.outputSchema = outputSchema;
-        return originalRegisterTool(name, config, wrappedCb);
+        if (prepared.slimOutputSchema) {
+          config.outputSchema = prepared.slimOutputSchema;
+        }
+        return originalRegisterTool(name, config, prepared.wrappedCb);
       };
     },
   });

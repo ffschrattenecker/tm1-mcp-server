@@ -13,7 +13,7 @@
 // run can never touch real model objects, and sweepSandbox() removes leftovers.
 import "./load-env.js";
 import { z, type ZodRawShape } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import { loadConfig, type TM1Config } from "../../src/config.js";
 import { SessionManager } from "../../src/session-manager.js";
 import { TM1Client } from "../../src/tm1-client.js";

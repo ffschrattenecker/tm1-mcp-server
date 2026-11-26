@@ -2,7 +2,7 @@
 // against a two-client registry, parse the input through its zod shape so
 // defaults apply, and return the parsed JSON payload.
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { TM1Client } from "../../src/tm1-client.js";
 import { ConnectionRegistry } from "../../src/connections.js";
 import type { ClientSource } from "../../src/tools/define-tool.js";

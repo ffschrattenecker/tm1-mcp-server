@@ -35,10 +35,7 @@ describe("startHeartbeat", () => {
   it("does nothing without a progress token", () => {
     vi.useFakeTimers();
     const sendNotification = vi.fn();
-    const stop = startHeartbeat(
-      { sendNotification } as unknown as Extra,
-      "Nightly",
-    );
+    const stop = startHeartbeat({ sendNotification }, "Nightly");
     vi.advanceTimersByTime(10_000);
     stop();
     expect(sendNotification).not.toHaveBeenCalled();

@@ -113,6 +113,55 @@ export function quotedLiteral(argText: string): string | null {
   return m ? m[1]!.replace(/''/g, "'") : null;
 }
 
+/**
+ * Column of the first `#` outside single-quoted string literals, or -1 if none.
+ * Respects `''` escaped quotes and stops strings at `\n` like `stringEnd()`.
+ */
+export function commentColumn(line: string): number {
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === "'") {
+      i = stringEnd(line, i);
+    } else if (c === "#") {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/** True when the line is a full-line `#` comment (optional leading whitespace). */
+export function isCommentLine(line: string): boolean {
+  return line.trimStart().startsWith("#");
+}
+
+/** Strips any trailing `#` comment outside single-quoted string literals. */
+export function stripLineComment(line: string): string {
+  const col = commentColumn(line);
+  return col === -1 ? line : line.slice(0, col);
+}
+
+/**
+ * Replaces single-quoted string literals with same-length spaces and strips
+ * any trailing `#` comment outside strings, keeping code offsets unchanged.
+ */
+export function neutralizeLine(line: string): string {
+  let out = "";
+  let pos = 0;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === "'") {
+      const end = stringEnd(line, i);
+      out += line.slice(pos, i) + " ".repeat(end - i + 1);
+      i = end;
+      pos = end + 1;
+    } else if (c === "#") {
+      out += line.slice(pos, i);
+      return out;
+    }
+  }
+  return out + line.slice(pos);
+}
+
 /** A section header line in a TI tab: `572,` / `573,n` / `574,n` / `575,n`. */
 export const SECTION_MARKER_RE = /^57[2345],\d*$/;
 

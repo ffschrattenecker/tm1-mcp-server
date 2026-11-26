@@ -3,9 +3,20 @@ import { CONFIRM_SCHEMA, requireConfirm } from "../confirm.js";
 import { DESTRUCTIVE } from "../annotations.js";
 import { ChoreResultSchema } from "../schemas/items.js";
 import { defineTool } from "../define-tool.js";
+import { extraSignal } from "../context.js";
 import { jsonResult } from "../format.js";
 import { startHeartbeat } from "../heartbeat.js";
 import { isOutcomeUnknown, unknownOutcomeHint } from "../error-format.js";
+import type { ChoreResult } from "../../types.js";
+
+export function formatChoreExecutionResult(result: ChoreResult) {
+  return {
+    ...jsonResult(result),
+    ...(result.success === false && result.statusUnavailable !== true
+      ? { isError: true as const }
+      : {}),
+  };
+}
 
 export const registerExecuteChore = defineTool({
   name: "tm1_execute_chore",
@@ -18,6 +29,7 @@ export const registerExecuteChore = defineTool({
     "On failure: tm1_diagnose_process_error for the failing step.",
   ],
   annotations: DESTRUCTIVE,
+  taskSupport: "optional",
   output: ChoreResultSchema,
   input: {
     choreName: z.string().describe("Chore name (case-sensitive)"),
@@ -40,7 +52,7 @@ export const registerExecuteChore = defineTool({
     let result;
     try {
       result = await tm1Client.chores.execute(choreName, {
-        signal: extra?.signal,
+        signal: extraSignal(extra),
         ...(timeoutMs ? { timeoutMs } : {}),
       });
     } catch (err) {
@@ -54,18 +66,6 @@ export const registerExecuteChore = defineTool({
     } finally {
       stopHeartbeat();
     }
-    return {
-      ...jsonResult(result),
-      // Same rule as tm1_execute_process: a chore that ran and reported failure
-      // is a tool failure, not a successful call carrying success:false.
-      //
-      // `statusUnavailable` is the exception and must NOT flag. It also has
-      // success:false, but it means "this build cannot report chore status" —
-      // on v11 that is EVERY chore run. Flagging it would turn a known API
-      // limitation into an error on every single call.
-      ...(result.success === false && result.statusUnavailable !== true
-        ? { isError: true as const }
-        : {}),
-    };
+    return formatChoreExecutionResult(result);
   },
 });

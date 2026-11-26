@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import pino from "pino";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { ConnectionRegistry } from "../../src/connections.js";
 import { defineTool } from "../../src/tools/define-tool.js";
 import { DESTRUCTIVE } from "../../src/tools/annotations.js";
@@ -20,10 +20,10 @@ const logger = pino({ level: "silent" });
 function capture() {
   const server = new McpServer({ name: "t", version: "0.0.0" });
   const tools = new Map<string, (...a: unknown[]) => unknown>();
-  server.registerTool = ((...args: unknown[]) => {
+  server.registerTool = (...args: unknown[]) => {
     tools.set(args[0] as string, args[2] as (...a: unknown[]) => unknown);
     return {} as ReturnType<typeof server.registerTool>;
-  }) as typeof server.registerTool;
+  };
   return { wrapped: withAnnotations(server, logger, "readwrite"), tools };
 }
 

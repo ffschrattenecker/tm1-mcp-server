@@ -5,8 +5,7 @@
 // commented-out dead code that waste an agent's context. These helpers collapse
 // long runs of full-line comments and report comment density for discoverability.
 
-/** A full-line comment is a line that is only a comment (optional indent + `#`). */
-const isFullCommentLine = (line: string): boolean => /^\s*#/.test(line);
+import { isCommentLine } from "./ti-lex.js";
 
 /** Runs of this many or more consecutive full-comment lines are collapsed. */
 export const COLLAPSE_MIN = 4;
@@ -22,7 +21,7 @@ export function commentStats(src: string): CommentStats {
   const lines = src.split(/\r?\n/);
   let commentLines = 0;
   for (const line of lines) {
-    if (isFullCommentLine(line)) commentLines++;
+    if (isCommentLine(line)) commentLines++;
   }
   return { totalLines: lines.length, commentLines };
 }
@@ -53,9 +52,9 @@ export function stripCommentBlocks(
 
   let i = 0;
   while (i < lines.length) {
-    if (isFullCommentLine(lines[i]!)) {
+    if (isCommentLine(lines[i]!)) {
       let j = i;
-      while (j < lines.length && isFullCommentLine(lines[j]!)) j++;
+      while (j < lines.length && isCommentLine(lines[j]!)) j++;
       const runLength = j - i;
       if (runLength >= minRun) {
         out.push(`# [... ${runLength} lines commented out ...]`);

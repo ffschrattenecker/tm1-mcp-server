@@ -21,7 +21,7 @@
 //
 // See docs/ARCHITECTURE.md for the layering.
 import { randomUUID } from "node:crypto";
-import type { TM1HttpClient } from "../http.js";
+import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import { rethrowIfSystemic } from "./fallback.js";
 import { escapeOdataLiteral, odataKey } from "./odata-page.js";
@@ -195,11 +195,16 @@ export class FileService {
   async getContentBytes(
     fileName: string,
     container: FileContainer = "files",
+    opts?: RequestOptions,
   ): Promise<Buffer> {
     const parts = splitPath(fileName);
     if (container === "applications") {
       const { url, entry } = await this.appsResolve(parts);
-      return this.http.requestRawBytes("GET", this.appsContentUrl(url, entry));
+      return this.http.requestRawBytes(
+        "GET",
+        this.appsContentUrl(url, entry),
+        opts,
+      );
     }
     const buildUrl = (root: string): string => {
       let url = `/api/v1/Contents('${odataKey(root)}')`;
@@ -210,10 +215,10 @@ export class FileService {
       return url;
     };
     try {
-      return await this.http.requestRawBytes("GET", buildUrl("Files"));
+      return await this.http.requestRawBytes("GET", buildUrl("Files"), opts);
     } catch (e) {
       rethrowIfSystemic(e);
-      return await this.http.requestRawBytes("GET", buildUrl("Blobs"));
+      return await this.http.requestRawBytes("GET", buildUrl("Blobs"), opts);
     }
   }
 
@@ -264,6 +269,7 @@ export class FileService {
     container: FileContainer = "files",
     // Applications only: false refuses a document that is already there.
     overwrite = true,
+    opts?: RequestOptions,
   ): Promise<{ created: boolean; root: "Files" | "Blobs" | "Applications" }> {
     const parts = splitPath(fileName);
     if (parts.length === 0) {
@@ -273,7 +279,7 @@ export class FileService {
       });
     }
     if (container === "applications")
-      return this.uploadToApplications(parts, content, overwrite);
+      return this.uploadToApplications(parts, content, overwrite, opts);
     // parts.length > 0 is guarded above
     const leaf = parts[parts.length - 1]!;
     const parentSegs = parts
@@ -289,14 +295,25 @@ export class FileService {
 
       const existed = await this.exists(fileName).catch(() => false);
       if (!existed) {
-        await this.http.request("POST", parentUrl, {
-          "@odata.type": "#ibm.tm1.api.v1.Document",
-          ID: leaf,
-          Name: leaf,
-        });
+        await this.http.request(
+          "POST",
+          parentUrl,
+          {
+            "@odata.type": "#ibm.tm1.api.v1.Document",
+            ID: leaf,
+            Name: leaf,
+          },
+          opts,
+        );
       }
       try {
-        await this.http.requestBinary("PUT", contentUrl, content);
+        await this.http.requestBinary(
+          "PUT",
+          contentUrl,
+          content,
+          "application/octet-stream",
+          opts,
+        );
       } catch (e) {
         // Same two-request split as the Applications path: an entry this call
         // created and could not fill is removed again, so a failed upload does
@@ -571,6 +588,7 @@ export class FileService {
   async readViaTi(
     path: string,
     maxLines: number,
+    opts?: RequestOptions,
   ): Promise<{
     lines: string[];
     truncated: boolean;
@@ -614,13 +632,18 @@ export class FileService {
       const r = await this.http.request<{
         ProcessExecuteStatusCode?: string;
         ErrorLogFile?: { Filename?: string } | null;
-      }>("POST", "/api/v1/ExecuteProcessWithReturn?$expand=ErrorLogFile", body);
+      }>(
+        "POST",
+        "/api/v1/ExecuteProcessWithReturn?$expand=ErrorLogFile",
+        body,
+        opts,
+      );
       const status = r?.ProcessExecuteStatusCode;
       if (status !== "CompletedSuccessfully") {
         const logName = r?.ErrorLogFile?.Filename;
         const logUrl = `/api/v1/ErrorLogFiles('${odataKey(logName ?? "")}')`;
         const log = logName
-          ? await this.http.requestRaw("GET", `${logUrl}/Content`)
+          ? await this.http.requestRaw("GET", `${logUrl}/Content`, opts)
           : "";
         // The log of this throwaway process is in `details`; do not keep it.
         if (logName)
@@ -637,7 +660,11 @@ export class FileService {
       }
       let bytes: Buffer;
       try {
-        bytes = await this.http.requestRawBytes("GET", `${copyUrl}/Content`);
+        bytes = await this.http.requestRawBytes(
+          "GET",
+          `${copyUrl}/Content`,
+          opts,
+        );
       } catch (err) {
         // No record, no copy: the source is empty.
         if (err instanceof TM1Error && err.code === TM1ErrorCode.NOT_FOUND) {
@@ -679,6 +706,7 @@ export class FileService {
     parts: string[],
     content: Uint8Array,
     overwrite: boolean,
+    opts?: RequestOptions,
   ): Promise<{ created: boolean; root: "Applications" }> {
     const leaf = parts[parts.length - 1]!;
     const parentParts = parts.slice(0, -1);
@@ -703,10 +731,15 @@ export class FileService {
       });
     }
     if (existing === undefined) {
-      await this.http.request("POST", `${parentUrl}/Contents`, {
-        "@odata.type": "#ibm.tm1.api.v1.Document",
-        Name: leaf,
-      });
+      await this.http.request(
+        "POST",
+        `${parentUrl}/Contents`,
+        {
+          "@odata.type": "#ibm.tm1.api.v1.Document",
+          Name: leaf,
+        },
+        opts,
+      );
     }
 
     const { url, entry } = await this.appsResolve([...parentParts, leaf]);
@@ -715,6 +748,8 @@ export class FileService {
         "PUT",
         this.appsContentUrl(url, entry),
         content,
+        "application/octet-stream",
+        opts,
       );
     } catch (e) {
       // Create and write are two requests. If the write fails on an entry this

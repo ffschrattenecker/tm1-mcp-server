@@ -97,4 +97,25 @@ describe("parseRules — hasSkipcheck", () => {
       false,
     );
   });
+
+  it("accepts FEEDERS; and FEEDSTRINGS; with trailing comments", () => {
+    const ast = parseRules(
+      [
+        "SKIPCHECK; # skip",
+        "FEEDSTRINGS; # strings",
+        "['A'] = S: 'x';",
+        "FEEDERS; # start feeders",
+        "['A'] => ['B'];",
+      ].join("\n"),
+    );
+    expect(ast.hasSkipcheck).toBe(true);
+    expect(ast.hasFeedstrings).toBe(true);
+    expect(ast.feedstringsLine).toBe(1);
+    expect(ast.feedersCount).toBe(1);
+    expect(ast.feedersLineIndex).toBe(3);
+    expect(ast.lines[1].isFeedstrings).toBe(true);
+    expect(ast.lines[3].isFeedersMarker).toBe(true);
+    expect(ast.lines[3].section).toBe("rules");
+    expect(ast.lines[4].section).toBe("feeders");
+  });
 });

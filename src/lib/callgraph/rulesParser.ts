@@ -1,4 +1,4 @@
-import { neutralizeLine } from "./rulesLinter.js";
+import { isCommentLine, neutralizeLine } from "../ti-lex.js";
 
 interface ParsedRulesLine {
   lineIndex: number;
@@ -38,11 +38,11 @@ export function parseRules(text: string): RulesAst {
 
   const lines: ParsedRulesLine[] = rawLines.map((raw, lineIndex) => {
     const trimmed = raw.replace(/\r$/, "").trim();
-    const isComment = trimmed.startsWith("#");
+    const isComment = isCommentLine(trimmed);
     const isBlank = trimmed === "";
     const isSkipcheck = /^skipcheck\s*;?\s*(?:#.*)?$/i.test(trimmed);
-    const isFeedstrings = /^feedstrings\s*;?\s*$/i.test(trimmed);
-    const isFeedersMarker = /^feeders\s*;?\s*$/i.test(trimmed);
+    const isFeedstrings = /^feedstrings\s*;?\s*(?:#.*)?$/i.test(trimmed);
+    const isFeedersMarker = /^feeders\s*;?\s*(?:#.*)?$/i.test(trimmed);
     const neutralized = isComment || isBlank ? "" : neutralizeLine(trimmed);
     const hasStet = /\bstet\b/i.test(neutralized);
     const hasIfGuard = /\bif\s*\(/i.test(neutralized);
