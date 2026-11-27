@@ -25,12 +25,13 @@ import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { z } from "zod";
 
-// Current total is ~43.9KB (67 schemas, 43,904 bytes after the six sandbox
-// tools), measured AFTER slimJsonSchema() — i.e. these are the bytes
-// that actually reach the wire. Budget = round number ~10% above that, so
-// ordinary additions pass but a runaway new schema (or a sloppy .describe()
-// spree) trips the gate. Re-baseline deliberately when a real feature needs it.
-const BUDGET_BYTES = 48_000;
+// Current total is ~52.9KB (72 schemas, 52,902 bytes after adding the five new
+// tools and cell-metadata/dimension-order fields), measured AFTER
+// slimJsonSchema() — i.e. these are the bytes that actually reach the wire.
+// Budget = round number ~10% above that, so ordinary additions pass but a
+// runaway new schema (or a sloppy .describe() spree) trips the gate.
+// Re-baseline deliberately when a real feature needs it.
+const BUDGET_BYTES = 58_000;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");

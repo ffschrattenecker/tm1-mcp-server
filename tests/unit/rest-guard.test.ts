@@ -129,7 +129,7 @@ describe("planRead", () => {
     ["CELLSETS('abc')", "tm1_execute_mdx"],
     ["Cubes('c')/Views('v')/tm1.Execute", "tm1_get_view"],
     ["ExecuteMDX", "tm1_execute_mdx"],
-    ["ExecuteMDXSetExpression", "tm1_execute_mdx"],
+    ["ExecuteMDXSetExpression", "tm1_execute_mdx_set"],
     ["Processes('P')/tm1.ExecuteWithReturn", "tm1_execute_process"],
     ["$batch", "one at a time"],
     ["Cubes('c')/tm1.Unload", "tm1_rest_write"],
@@ -192,7 +192,7 @@ describe("planWrite: blocklist", () => {
     ["POST", "Chores('C')/tm1.Execute", undefined, "tm1_execute_chore"],
     ["POST", "Chores('C')/TM1.EXECUTECHORE", undefined, "tm1_execute_chore"],
     ["POST", "ExecuteMDX", { MDX: "SELECT" }, "tm1_execute_mdx"],
-    ["POST", "ExecuteMDXSetExpression", { MDX: "{}" }, "tm1_execute_mdx"],
+    ["POST", "ExecuteMDXSetExpression", { MDX: "{}" }, "tm1_execute_mdx_set"],
     ["POST", "Cubes('C')/Views('V')/tm1.Execute", {}, "tm1_get_view"],
     ["POST", "Cubes('C')/PrivateViews('V')/tm1.Execute", {}, "tm1_get_view"],
     // Rules → tm1_set_cube_rules

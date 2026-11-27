@@ -9,6 +9,7 @@ import { registerListProcessesGrouped } from "./metadata/list-processes-grouped.
 
 // Cell data tools
 import { registerExecuteMdx } from "./celldata/execute-mdx.js";
+import { registerExecuteMdxSet } from "./celldata/execute-mdx-set.js";
 import { registerGetView } from "./celldata/get-view.js";
 import { registerSampleCells } from "./celldata/sample-cells.js";
 import { registerWriteCells } from "./celldata/write-cells.js";
@@ -42,6 +43,7 @@ import { registerUpdateElementAttributeValue } from "./dimension-management/upda
 // Model building tools
 import { registerGetCubeRules } from "./model-building/get-cube-rules.js";
 import { registerSetCubeRules } from "./model-building/set-cube-rules.js";
+import { registerReorderCubeDimensions } from "./model-building/reorder-cube-dimensions.js";
 import { registerClearCube } from "./model-building/clear-cube.js";
 import { registerGetAllCubeRules } from "./model-building/get-all-cube-rules.js";
 import { registerCheckAllCubeRules } from "./model-building/check-all-cube-rules.js";
@@ -55,10 +57,13 @@ import { registerUpdateChore } from "./scheduling/update-chore.js";
 // Operations tools
 import { registerListConnections } from "./operations/list-connections.js";
 import { registerGetServerState } from "./operations/get-server-state.js";
+import { registerGetActivity } from "./operations/get-activity.js";
+import { registerInspectSecurity } from "./operations/inspect-security.js";
 import { registerListErrorLogs } from "./operations/list-error-logs.js";
 import { registerGetErrorLogContent } from "./operations/get-error-log-content.js";
 import { registerDiagnoseProcessError } from "./operations/diagnose-process-error.js";
 import { registerGetCubeStats } from "./operations/get-cube-stats.js";
+import { registerQueryLogs } from "./operations/query-logs.js";
 import { registerSaveData } from "./operations/save-data.js";
 
 // File operations tools
@@ -112,6 +117,7 @@ const TOOLSET_GROUPS: ReadonlyArray<{
     toolset: "celldata",
     registrars: [
       registerExecuteMdx,
+      registerExecuteMdxSet,
       registerGetView,
       registerSampleCells,
       registerWriteCells,
@@ -161,6 +167,7 @@ const TOOLSET_GROUPS: ReadonlyArray<{
       registerCheckAllCubeRules,
       registerCheckCubeRule,
       registerSearchRules,
+      registerReorderCubeDimensions,
     ],
   },
   {
@@ -172,10 +179,13 @@ const TOOLSET_GROUPS: ReadonlyArray<{
     registrars: [
       registerListConnections,
       registerGetServerState,
+      registerGetActivity,
+      registerInspectSecurity,
       registerListErrorLogs,
       registerGetErrorLogContent,
       registerDiagnoseProcessError,
       registerGetCubeStats,
+      registerQueryLogs,
       registerSaveData,
     ],
   },

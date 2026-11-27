@@ -122,6 +122,41 @@
       "endpoint": "POST /api/v1/ExecuteMDXSetExpression",
       "path": "$.Tuples[].Members[].Attributes.Site",
       "reason": "Attributes holds one key per attribute named in the Properties() list of the MDX. The recorded search matched on names and the Caption alias only, so only Caption appeared; searching a String attribute adds that attribute name as a key."
+    },
+    {
+      "endpoint": "POST /api/v1/ExecuteMDXSetExpression",
+      "path": "$.Tuples[].Members[].UniqueName",
+      "reason": "UniqueName is a standard Member property selected by CellService.executeMdxSet; the recorded searchElements call selected Name,Attributes only."
+    },
+    {
+      "endpoint": "POST /api/v1/ExecuteMDX",
+      "path": "$.Cells[].RuleDerived",
+      "reason": "RuleDerived is a standard Cell property returned when cellProperties includes RuleDerived; recorded ExecuteMDX calls selected Value,FormattedValue only."
+    },
+    {
+      "endpoint": "POST /api/v1/ExecuteMDX",
+      "path": "$.Cells[].Updateable",
+      "reason": "Updateable is a standard Cell property (Edm.Int32 bitmask) returned when cellProperties includes Updateable; recorded ExecuteMDX calls selected Value,FormattedValue only."
+    },
+    {
+      "endpoint": "POST /api/v1/ExecuteMDX",
+      "path": "$.Cells[].HasPicklist",
+      "reason": "HasPicklist is a standard Cell property returned when cellProperties includes HasPicklist; recorded ExecuteMDX calls selected Value,FormattedValue only."
+    },
+    {
+      "endpoint": "POST /api/v1/Cubes('*')/Views('*')/tm1.Execute",
+      "path": "$.Cells[].RuleDerived",
+      "reason": "RuleDerived is a standard Cell property returned when cellProperties includes RuleDerived; recorded view executions selected Value,FormattedValue only."
+    },
+    {
+      "endpoint": "POST /api/v1/Cubes('*')/Views('*')/tm1.Execute",
+      "path": "$.Cells[].Updateable",
+      "reason": "Updateable is a standard Cell property (Edm.Int32 bitmask) returned when cellProperties includes Updateable; recorded view executions selected Value,FormattedValue only."
+    },
+    {
+      "endpoint": "POST /api/v1/Cubes('*')/Views('*')/tm1.Execute",
+      "path": "$.Cells[].HasPicklist",
+      "reason": "HasPicklist is a standard Cell property returned when cellProperties includes HasPicklist; recorded view executions selected Value,FormattedValue only."
     }
   ]
 }

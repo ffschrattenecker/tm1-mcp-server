@@ -6,6 +6,7 @@
 // See docs/ARCHITECTURE.md for the layering.
 import type { Client } from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
+import { odataKey } from "./odata-page.js";
 
 export class SecurityService {
   constructor(private readonly http: TM1HttpClient) {}
@@ -20,5 +21,16 @@ export class SecurityService {
       "/api/v1/Users?$select=Name,FriendlyName,Type,Enabled&$expand=Groups",
     );
     return res.value;
+  }
+
+  /**
+   * Fetch a single TM1 user with group memberships, or the currently
+   * authenticated user (`ActiveUser`) when `userName` is omitted.
+   */
+  async getUser(userName?: string): Promise<Client> {
+    const path = userName
+      ? `/api/v1/Users('${odataKey(userName)}')?$select=Name,FriendlyName,Type,Enabled&$expand=Groups($select=Name)`
+      : "/api/v1/ActiveUser?$select=Name,FriendlyName,Type,Enabled&$expand=Groups($select=Name)";
+    return this.http.request<Client>("GET", path);
   }
 }

@@ -32,7 +32,7 @@ Everything below describes this fork's state. For the real project, read the
 
 ## Features
 
-67 tools across 11 categories — every one listed in
+72 tools across 11 categories — every one listed in
 [docs/TOOLS.md](docs/TOOLS.md). Past plain CRUD over the REST API:
 
 - **Bulk reads instead of N round-trips.** Pull every process's source or every
@@ -204,24 +204,24 @@ HTTP; setup and security notes are in
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (67)
+## Tools (72)
 
 Names and one-line descriptions: [docs/TOOLS.md](docs/TOOLS.md).
 
 | Category | Tools |
 |---|---|
 | analysis | 11 |
-| celldata | 8 |
+| celldata | 9 |
 | dimension-management | 3 |
 | fileops | 3 |
 | metadata | 3 |
-| model-building | 7 |
-| operations | 7 |
+| model-building | 8 |
+| operations | 10 |
 | rest | 2 |
 | sandboxes | 6 |
 | scheduling | 2 |
 | ti-development | 15 |
-| **Total** | **67** |
+| **Total** | **72** |
 
 <!-- TOOLS-AUTOGEN:END -->
 

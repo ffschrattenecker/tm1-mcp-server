@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [11.2.0] - 2026-11-27
+
+### Added
+
+- **`tm1_execute_mdx_set`** (`ExecuteMDXSetExpression`): evaluates standalone MDX set expressions and returns paginated tuples with member `uniqueName`, element `type`/`level`, and optional `attributes`.
+- **Cell metadata flags on `tm1_execute_mdx` and `tm1_get_view`**: optional `cellProperties` (`RuleDerived`, `Updateable` decoded from bit 29 alongside raw `updateableBitmask`, `HasPicklist`) plus `private` (`PrivateViews`), `sandbox`, and `timeoutMs` support on `tm1_get_view`.
+- **`tm1_get_activity`**: live activity and lock-contention snapshot normalizing v11 `Threads` and v12 `Jobs` alongside `Sessions`, highlighting waiters, lock holders, and longest elapsed/wait times.
+- **`tm1_inspect_security`**: effective security inspector resolving a user (or `ActiveUser`) -> groups -> additive effective rights (`NONE < READ < WRITE < RESERVE < LOCK < ADMIN`) across `}CubeSecurity`, `}DimensionSecurity`, `}ElementSecurity_<dim>`, and `}ProcessSecurity`, and flagging `}CellSecurity_<cube>` / `}SecurityOverlayGlobal_<cube>`.
+- **`tm1_query_logs`**: time-bounded `TransactionLogEntries` (cube/user/element filters) and `MessageLogEntries` (level/logger/search filters, secret-masked) queries on v11, with explicit `unavailable` reporting on v12.
+- **Dimension storage order & `tm1_reorder_cube_dimensions`**: paired `includeDimensionOrder` (`displayOrder`, `storageOrder`, `storageMatchesDisplay`) on `tm1_get_cube_stats` and a safe `tm1_reorder_cube_dimensions` helper (default `dryRun=true`, size heuristics, `Sandboxes` validation, `percentMemoryChange` and before/after memory delta).
+
+### Changed
+
+- **`tm1_rest_read` / `tm1_rest_write` guard**: `ExecuteMDXSetExpression` refusals now point to `tm1_execute_mdx_set`.
+- **Output schema budget**: re-baselined to `58_000` bytes (`52,902` bytes across 72 schemas).
+
 ## [11.1.0] - 2026-11-26
 
 ### Added
@@ -549,7 +565,8 @@ response-size guard, the per-connection caches) are unchanged.
 Older history (before 8.0.0): see the git tags and the upstream repository,
 https://github.com/flameY3T1/tm1-mcp-server.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.1.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.2.0...HEAD
+[11.2.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.1.0...v11.2.0
 [11.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.0.0...v11.1.0
 [11.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.6.0...v11.0.0
 [10.6.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.5.1...v10.6.0

@@ -11,3 +11,24 @@ export const ClientSchema = z.object({
   Groups: z.array(z.object({ Name: z.string() })).optional(),
 });
 export type Client = z.infer<typeof ClientSchema>;
+
+export const SecurityRightSchema = z.enum([
+  "NONE",
+  "READ",
+  "WRITE",
+  "RESERVE",
+  "LOCK",
+  "ADMIN",
+  "UNRESTRICTED",
+]);
+export type SecurityRight = z.infer<typeof SecurityRightSchema>;
+
+export const ObjectSecurityRightSchema = z.object({
+  objectName: z.string(),
+  effective: SecurityRightSchema,
+  grantedBy: z.array(z.string()),
+  byGroup: z.record(z.string(), z.string()),
+  cellSecurityActive: z.boolean().optional(),
+  securityOverlayActive: z.boolean().optional(),
+});
+export type ObjectSecurityRight = z.infer<typeof ObjectSecurityRightSchema>;

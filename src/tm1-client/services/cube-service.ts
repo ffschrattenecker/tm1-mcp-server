@@ -72,6 +72,44 @@ export class CubeService {
   }
 
   /**
+   * Return the cube's internal storage dimension order (which excludes
+   * `Sandboxes` and may differ from the display order after a reorder).
+   * GET /api/v1/Cubes('{name}')/tm1.DimensionsStorageOrder()?$select=Name
+   */
+  async getDimensionsStorageOrder(cubeName: string): Promise<string[]> {
+    const response = await this.http.request<{
+      value?: Array<{ Name: string }>;
+    }>(
+      "GET",
+      `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.DimensionsStorageOrder()?$select=Name`,
+    );
+    return (response.value ?? []).map((d) => d.Name);
+  }
+
+  /**
+   * Reorder a cube's internal storage dimensions and return the server-reported
+   * memory change in percent (positive = memory increase, negative = savings).
+   * POST /api/v1/Cubes('{name}')/tm1.ReorderDimensions
+   */
+  async reorderDimensions(
+    cubeName: string,
+    dimensionOrder: string[],
+    opts?: RequestOptions,
+  ): Promise<number> {
+    const response = await this.http.request<{ value?: number }>(
+      "POST",
+      `/api/v1/Cubes('${odataKey(cubeName)}')/tm1.ReorderDimensions`,
+      {
+        "Dimensions@odata.bind": dimensionOrder.map(
+          (d) => `Dimensions('${odataKey(d)}')`,
+        ),
+      },
+      opts,
+    );
+    return typeof response?.value === "number" ? response.value : 0;
+  }
+
+  /**
    * Cheap existence probe: a single GET with $select=Name (404 → false)
    * instead of list(), which pulls every cube plus its dimensions just to
    * check one name. Rethrows anything that isn't NOT_FOUND — in particular a

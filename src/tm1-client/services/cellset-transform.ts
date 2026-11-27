@@ -1,9 +1,48 @@
 // Shared cellset → MdxResult mapper. Used by both CellService.executeMdx and
 // ViewService.getView; lifted out of TM1Client so neither service has to depend
 // on the other.
-import type { CellValue, MdxAxis, MdxResult } from "../../types.js";
+import type {
+  CellItem,
+  CellMetadataProperty,
+  CellValue,
+  MdxAxis,
+  MdxResult,
+} from "../../types.js";
 import type { TM1HttpClient } from "../http.js";
 import { withSandboxParam } from "../../lib/sandbox-policy.js";
+
+/** Bit 29 (1 << 28 = 268435456) in TM1's Updateable bitmask = NOT updateable. */
+export const CELL_NOT_UPDATEABLE_BIT = 0x10000000;
+
+/**
+ * Decode TM1's `Updateable` cell bitmask (or boolean) into a plain boolean.
+ * TM1 sets bit 29 (0x10000000) when the cell cannot be updated.
+ */
+export function decodeUpdateable(raw: number | boolean): boolean {
+  if (typeof raw === "boolean") return raw;
+  return (raw & CELL_NOT_UPDATEABLE_BIT) === 0;
+}
+
+/**
+ * Build the OData `$expand=Cells(...)` clause with optional `$top`, `$skip`, and
+ * cell metadata properties (`RuleDerived`, `Updateable`, `HasPicklist`).
+ */
+export function buildCellsExpand(
+  top?: number,
+  skip?: number,
+  cellProperties?: readonly CellMetadataProperty[],
+): string {
+  const fields = ["Value", "FormattedValue"];
+  if (cellProperties && cellProperties.length > 0) {
+    for (const prop of cellProperties) {
+      if (!fields.includes(prop)) fields.push(prop);
+    }
+  }
+  const opts = [`$select=${fields.join(",")}`];
+  if (top !== undefined) opts.push(`$top=${top}`);
+  if (skip !== undefined) opts.push(`$skip=${skip}`);
+  return `Cells(${opts.join(";")})`;
+}
 
 // TM1 escaping: `]` inside a bracketed identifier is doubled. Cellset IDs are
 // server-generated GUIDs so this is defensive, but keeps the pattern uniform.
@@ -41,8 +80,14 @@ export async function freeCellset(
   }
 }
 
-interface RawCellsetResponse {
-  Cells: Array<{ Value: CellValue; FormattedValue: string }>;
+export interface RawCellsetResponse {
+  Cells: Array<{
+    Value: CellValue;
+    FormattedValue: string;
+    RuleDerived?: boolean;
+    Updateable?: number | boolean;
+    HasPicklist?: boolean;
+  }>;
   Axes: Array<{
     Tuples: Array<{
       Members: Array<{
@@ -98,10 +143,21 @@ export function clipAxesToWindow(
 export function transformCellsetResponse(
   response: RawCellsetResponse,
 ): MdxResult {
-  const cells = (response.Cells ?? []).map((c) => ({
-    value: c.Value,
-    formattedValue: c.FormattedValue,
-  }));
+  const cells: CellItem[] = (response.Cells ?? []).map((c) => {
+    const item: CellItem = {
+      value: c.Value,
+      formattedValue: c.FormattedValue,
+    };
+    if (c.RuleDerived !== undefined) item.ruleDerived = c.RuleDerived;
+    if (c.Updateable !== undefined) {
+      item.updateable = decodeUpdateable(c.Updateable);
+      if (typeof c.Updateable === "number") {
+        item.updateableBitmask = c.Updateable;
+      }
+    }
+    if (c.HasPicklist !== undefined) item.hasPicklist = c.HasPicklist;
+    return item;
+  });
 
   const axes: MdxAxis[] = (response.Axes ?? []).map((axis) => ({
     tuples: axis.Tuples.map((tuple) => ({

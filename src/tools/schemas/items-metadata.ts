@@ -48,6 +48,11 @@ const CubeStatsItemSchema = z
     cacheMissRate: z.number().optional(),
     // Derived
     feederEfficiency: z.number().optional(),
+    // Dimension storage-order comparison (when includeDimensionOrder=true)
+    displayOrder: z.array(z.string()).optional(),
+    storageOrder: z.array(z.string()).optional(),
+    storageMatchesDisplay: z.boolean().optional(),
+    dimensionOrderError: z.string().optional(),
     // Always present: full element-name → value map (carries everything,
     // including v12-only or new-build metrics that aren't in KNOWN_METRICS).
     raw: z.record(z.string(), z.union([z.number(), z.null()])),

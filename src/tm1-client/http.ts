@@ -225,6 +225,10 @@ export class TM1HttpClient {
     this.profile = createConnectionProfile(config);
   }
 
+  get version(): 11 | 12 {
+    return this.config.version;
+  }
+
   private readonly mutationListeners: Array<(e: Tm1MutationEvent) => void> = [];
 
   /**

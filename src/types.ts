@@ -112,6 +112,9 @@ export function hintForCode(code: TM1ErrorCode | string): string {
 // are imported here (other declarations below build on them) and re-exported,
 // because every consumer already imports them from this module.
 import type {
+  ActivityItem,
+  CellItem,
+  CellMetadataProperty,
   CellValue,
   Chore,
   Client,
@@ -123,15 +126,25 @@ import type {
   HierarchyElement,
   IgnoredColumn,
   MdxAxis,
+  MdxSetMember,
+  MdxSetTuple,
+  MessageLogEntry,
+  ObjectSecurityRight,
   Process,
   ProcessCode,
   ProcessParameter,
   ProcessVariable,
+  SecurityRight,
+  SessionItem,
   Subset,
+  TransactionLogEntry,
   ViewAxisSubsetRef,
 } from "./schemas/index.js";
 
 export type {
+  ActivityItem,
+  CellItem,
+  CellMetadataProperty,
   CellValue,
   Chore,
   Client,
@@ -143,11 +156,18 @@ export type {
   HierarchyElement,
   IgnoredColumn,
   MdxAxis,
+  MdxSetMember,
+  MdxSetTuple,
+  MessageLogEntry,
+  ObjectSecurityRight,
   Process,
   ProcessCode,
   ProcessParameter,
   ProcessVariable,
+  SecurityRight,
+  SessionItem,
   Subset,
+  TransactionLogEntry,
 };
 
 // NOT derived from a Zod schema, on purpose. The similarly-named schemas in
@@ -165,7 +185,7 @@ export type {
 // Anything else belongs in src/schemas/ — see the single-source test in
 // tests/unit/schema-single-source.test.ts.
 export interface MdxResult {
-  cells: Array<{ value: CellValue; formattedValue: string }>;
+  cells: CellItem[];
   axes: MdxAxis[];
   totalCellCount: number;
 }
@@ -193,7 +213,8 @@ export interface CalculationTraceNode {
 export interface ViewResult {
   cubeName: string;
   viewName: string;
-  cells: Array<{ value: CellValue; formattedValue: string }>;
+  private?: boolean;
+  cells: CellItem[];
   axes: MdxAxis[];
   totalCellCount: number;
 }

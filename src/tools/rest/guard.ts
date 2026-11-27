@@ -235,6 +235,9 @@ function hintForExecute(p: ParsedPath, op: string): string {
   if (has(p, (s) => s.name.endsWith("views"))) {
     return "Read views with tm1_get_view.";
   }
+  if (op === "executemdxsetexpression") {
+    return "Evaluate MDX set expressions with tm1_execute_mdx_set.";
+  }
   if (op.startsWith("executemdx")) {
     return "Run MDX with tm1_execute_mdx.";
   }

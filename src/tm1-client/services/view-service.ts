@@ -7,13 +7,19 @@
 // See docs/ARCHITECTURE.md for the layering.
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type {
-  CellValue,
+  CellMetadataProperty,
   CubeView,
   ViewDefinition,
   ViewResult,
 } from "../../types.js";
 import type { RequestOptions, TM1HttpClient } from "../http.js";
-import { freeCellset, transformCellsetResponse } from "./cellset-transform.js";
+import { withSandboxParam } from "../../lib/sandbox-policy.js";
+import {
+  buildCellsExpand,
+  freeCellset,
+  transformCellsetResponse,
+  type RawCellsetResponse,
+} from "./cellset-transform.js";
 import { rethrowIfSystemicOrDenied } from "./fallback.js";
 import { odataKey } from "./odata-page.js";
 
@@ -70,11 +76,11 @@ export class ViewService {
   }
 
   /**
-   * Execute a named view and return its cells + axes. Cells paginate
-   * server-side via $top/$skip (mirrors CellService.executeMdx) so wide/tall
-   * views don't dump their whole cellset; totalCellCount stays exact (product
-   * of axis tuple counts) regardless of the slice.
-   * POST /api/v1/Cubes('{c}')/Views('{v}')/tm1.Execute
+   * Execute a named public or private view and return its cells + axes. Cells
+   * paginate server-side via $top/$skip (mirrors CellService.executeMdx) so
+   * wide/tall views don't dump their whole cellset; totalCellCount stays exact
+   * (product of axis tuple counts) regardless of the slice.
+   * POST /api/v1/Cubes('{c}')/(Views|PrivateViews)('{v}')/tm1.Execute
    */
   async getView(
     cubeName: string,
@@ -82,28 +88,25 @@ export class ViewService {
     top?: number,
     skip?: number,
     opts?: RequestOptions,
+    viewOpts?: {
+      isPrivate?: boolean;
+      sandbox?: string;
+      cellProperties?: readonly CellMetadataProperty[];
+    },
   ): Promise<ViewResult> {
-    let cellsExpand = "Cells($select=Value,FormattedValue";
-    if (top !== undefined) cellsExpand += `;$top=${top}`;
-    if (skip !== undefined) cellsExpand += `;$skip=${skip}`;
-    cellsExpand += ")";
+    const cellsExpand = buildCellsExpand(top, skip, viewOpts?.cellProperties);
+    const collection = viewOpts?.isPrivate ? "PrivateViews" : "Views";
 
     const axesExpand =
       "Axes($expand=Tuples($expand=Members($select=Name;$expand=Hierarchy($select=Name))))";
-    const path = `/api/v1/Cubes('${odataKey(cubeName)}')/Views('${odataKey(viewName)}')/tm1.Execute?$expand=${cellsExpand},${axesExpand}`;
+    const path = withSandboxParam(
+      `/api/v1/Cubes('${odataKey(cubeName)}')/${collection}('${odataKey(viewName)}')/tm1.Execute?$expand=${cellsExpand},${axesExpand}`,
+      viewOpts?.sandbox,
+    );
 
-    const response = await this.http.request<{
-      ID: string;
-      Cells: Array<{ Value: CellValue; FormattedValue: string }>;
-      Axes: Array<{
-        Tuples: Array<{
-          Members: Array<{
-            Name: string;
-            Hierarchy: { Name: string };
-          }>;
-        }>;
-      }>;
-    }>("POST", path, undefined, { ...opts, cancellable: true });
+    const response = await this.http.request<
+      RawCellsetResponse & { ID: string }
+    >("POST", path, undefined, { ...opts, cancellable: true });
 
     try {
       const mdxResult = transformCellsetResponse(response);
@@ -111,6 +114,7 @@ export class ViewService {
       return {
         cubeName,
         viewName,
+        ...(viewOpts?.isPrivate ? { private: true } : {}),
         cells: mdxResult.cells,
         axes: mdxResult.axes,
         totalCellCount: mdxResult.totalCellCount,
@@ -119,7 +123,7 @@ export class ViewService {
       // Cellsets are session-scoped and never auto-expire while keep-alive holds
       // the session open; free the read-path cellset best-effort so it doesn't
       // leak TM1 server memory indefinitely (mirrors TM1py's delete_cellset).
-      await freeCellset(this.http, response.ID);
+      await freeCellset(this.http, response.ID, viewOpts?.sandbox);
     }
   }
 

@@ -46,7 +46,7 @@ datasource (562-589).
 
 <!-- TOOLS-AUTOGEN:START -->
 
-## Tools (67)
+## Tools (72)
 
 ### analysis (11)
 
@@ -62,12 +62,13 @@ datasource (562-589).
 - `tm1_diff_hierarchy` — Diff a hierarchy across connections (connectionB) or against dimensionB: elements, edges, weights, reparented children, attributes
 - `tm1_trace_data_flow` — Trace data flow into and out of a cube in one call
 
-### celldata (8)
+### celldata (9)
 
 - `tm1_check_feeders` — Check the feeders of a cell: verifies feeder coverage for the cells underlying this cell and returns the problematic ones with a fed flag — fed=false marks a…
 - `tm1_check_writable_coords` — Pre-flight check before CellPutN/CellPutS
 - `tm1_execute_mdx` — Execute an MDX query against the TM1 server and return structured cell data with axes
-- `tm1_get_view` — Execute a named cube view and return structured cell data with axes
+- `tm1_execute_mdx_set` — Evaluate an MDX set expression against TM1 (ExecuteMDXSetExpression) and return paginated tuples with member metadata
+- `tm1_get_view` — Execute a named public or private cube view and return structured cell data with axes
 - `tm1_sample_cells` — Return up to maxCells populated cells from a cube without guessing coordinates — builds a NON EMPTY CROSSJOIN MDX over the cube's dimensions and HEAD-limits it
 - `tm1_trace_cell_calculation` — Trace how a cell value is calculated: recursive component tree with per-component type (Consolidation/Rule/Simple), status (Null/Data/Error), value, and the…
 - `tm1_trace_feeders` — Trace the feeders of a cell: returns the cells this cell feeds plus the feeder statements involved — answers 'which feeder statement fires from this cell, and…
@@ -91,24 +92,28 @@ datasource (562-589).
 - `tm1_resolve_default_members` — Resolve N hierarchies' effective default members in parallel from one tool call; pass items:[{dimensionName}] with a single entry for a one-off lookup
 - `tm1_search_elements` — Find elements by a business term instead of guessing names: case-insensitive substring match on names and Alias values
 
-### model-building (7)
+### model-building (8)
 
 - `tm1_check_all_cube_rules` — Run tm1_check_cube_rule's checks on the stored rules of every cube; returns only the cubes with errors
 - `tm1_check_cube_rule` — Validate the syntax of a TM1 cube rule WITHOUT applying it
 - `tm1_clear_cube` — Wipe every cell in a cube
 - `tm1_get_all_cube_rules` — Bulk-load rules text for every cube in one call
 - `tm1_get_cube_rules` — Get the current rules text for a TM1 cube
+- `tm1_reorder_cube_dimensions` — Inspect or reorder a cube's internal storage dimensions (tm1.DimensionsStorageOrder / tm1.ReorderDimensions)
 - `tm1_search_rules` — Regex search across cube rules text
 - `tm1_set_cube_rules` — Create or replace the rules for a TM1 cube
 
-### operations (7)
+### operations (10)
 
 - `tm1_diagnose_process_error` — One-call error diagnosis for a failed TI process: lists matching error logs, fetches their content, and optionally includes cascade-related sibling logs (same…
+- `tm1_get_activity` — Snapshot live TM1 server activity and lock contention (Threads on v11, Jobs on v12) plus active Sessions
 - `tm1_get_cube_stats` — Read }StatsByCube metrics for one or more cubes (memory, populated cells, fed cells, feeder efficiency)
 - `tm1_get_error_log_content` — Fetch the raw text of one TI error log file produced by a failed process run
 - `tm1_get_server_state` — Health-check style snapshot of the TM1 server in one call
+- `tm1_inspect_security` — Inspect effective TM1 security rights for a user (or the current ActiveUser) across groups, cubes, dimensions, elements, and processes
 - `tm1_list_connections` — List the TM1 connections this server can reach (rescans the connections folder first, so new or changed ones show up without a restart): name (the `connection`…
 - `tm1_list_error_logs` — List TI process error log files on the TM1 server, newest first
+- `tm1_query_logs` — Query time-bounded TM1 TransactionLogEntries (cube/user/element cell changes) or MessageLogEntries (server/process log) on v11
 - `tm1_save_data` — Persist in-memory cube data to disk: SaveDataAll (all cubes) or CubeSaveData when `cube` is given
 
 ### rest (2)

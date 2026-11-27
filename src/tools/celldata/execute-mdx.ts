@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { MdxAxis, CellValue } from "../../types.js";
+import type { CellItem, CellValue, MdxAxis } from "../../types.js";
+import { CellMetadataPropertySchema } from "../../schemas/cells.js";
 import { PAGINATION_SCHEMA, UNBOUNDED_MAX_ITEMS } from "../pagination.js";
 import { FORMAT_SCHEMA, mdEscape, payloadResponse } from "../format.js";
 import { withToolHint } from "../error-format.js";
@@ -21,7 +22,7 @@ export interface MdxEnvelope {
   // the omitted tuples address cells outside the page. `total` stays the full
   // cell count. Absent for full/small results so their output is unchanged.
   axes_clipped?: boolean;
-  items: Array<{ value: CellValue; formattedValue: string }>;
+  items: CellItem[];
 }
 
 const tupleLabel = (tuple: MdxAxis["tuples"][number]): string =>
@@ -56,10 +57,16 @@ export function renderMdxMarkdown(env: MdxEnvelope): string {
     return `${meta}\n\n**Value:** ${scalar}`;
   }
 
+  const hasRuleDerived = items.some((c) => c.ruleDerived !== undefined);
+  const hasUpdateable = items.some((c) => c.updateable !== undefined);
+  const hasPicklist = items.some((c) => c.hasPicklist !== undefined);
+  const hasMeta = hasRuleDerived || hasUpdateable || hasPicklist;
+
   const contextAxes = axes.slice(2);
   const fullSet =
     items.length === axes.reduce((a, ax) => a * ax.tuples.length, 1);
   const isGrid =
+    !hasMeta &&
     axes.length >= 2 &&
     offset === 0 &&
     fullSet &&
@@ -87,8 +94,13 @@ export function renderMdxMarkdown(env: MdxEnvelope): string {
 
   // Flat fallback: decode each cell's coordinate from its global ordinal.
   const radices = axes.map((a) => a.tuples.length);
-  const header = `| ${[...axes.map((a) => mdEscape(axisHeader(a))), "Value"].join(" | ")} |`;
-  const sep = `| ${[...axes.map(() => "---"), "---"].join(" | ")} |`;
+  const metaHeaders = [
+    ...(hasRuleDerived ? ["RuleDerived"] : []),
+    ...(hasUpdateable ? ["Updateable"] : []),
+    ...(hasPicklist ? ["HasPicklist"] : []),
+  ];
+  const header = `| ${[...axes.map((a) => mdEscape(axisHeader(a))), "Value", ...metaHeaders].join(" | ")} |`;
+  const sep = `| ${[...axes.map(() => "---"), "---", ...metaHeaders.map(() => "---")].join(" | ")} |`;
   const body = items.map((cell, i) => {
     let ord = offset + i;
     const coords = radices.map((n, k) => {
@@ -96,7 +108,12 @@ export function renderMdxMarkdown(env: MdxEnvelope): string {
       ord = Math.floor(ord / n);
       return mdEscape(tupleLabel(axes[k]!.tuples[idx]!));
     });
-    return `| ${[...coords, mdEscape(cellText(cell))].join(" | ")} |`;
+    const metaVals = [
+      ...(hasRuleDerived ? [mdEscape(cell.ruleDerived ?? "")] : []),
+      ...(hasUpdateable ? [mdEscape(cell.updateable ?? "")] : []),
+      ...(hasPicklist ? [mdEscape(cell.hasPicklist ?? "")] : []),
+    ];
+    return `| ${[...coords, mdEscape(cellText(cell)), ...metaVals].join(" | ")} |`;
   });
   return [meta, "", header, sep, ...body].join("\n");
 }
@@ -126,9 +143,15 @@ export const registerExecuteMdx = defineTool({
       .string()
       .optional()
       .describe("Evaluate the MDX in this sandbox instead of base data"),
+    cellProperties: z
+      .array(CellMetadataPropertySchema)
+      .optional()
+      .describe(
+        "Optional cell metadata flags to return per cell: RuleDerived, Updateable (decoded boolean + raw bitmask), HasPicklist.",
+      ),
   },
   handler: async (
-    { mdx, limit, offset, format, timeoutMs, sandbox },
+    { mdx, limit, offset, format, timeoutMs, sandbox, cellProperties },
     tm1Client,
     extra,
   ) => {
@@ -148,6 +171,7 @@ export const registerExecuteMdx = defineTool({
           ...(timeoutMs ? { timeoutMs } : {}),
         },
         cleanSandboxName(sandbox),
+        cellProperties,
       ),
       "MDX execution failed. Common causes: missing brackets around member names ([Dim].[Hier].[Member]), unbalanced FROM/SELECT, unknown cube. Inspect details; cross-check member names with tm1_rest_read (Cubes('C')/Dimensions, Dimensions('D')/Hierarchies('D')/Elements).",
     );

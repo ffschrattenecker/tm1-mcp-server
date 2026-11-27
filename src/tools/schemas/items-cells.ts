@@ -1,9 +1,14 @@
-// Cell-data schemas: MDX axes, execute_mdx / get_view page envelopes,
+// Cell-data schemas: MDX axes, execute_mdx / get_view / execute_mdx_set page envelopes,
 // sample_cells and check_writable_coords results.
 import { z } from "zod";
 
 import { CellValueSchema } from "./items-common.js";
-import { MdxAxisSchema } from "../../schemas/cells.js";
+import { pageShapeFor } from "./common.js";
+import {
+  CellItemSchema,
+  MdxAxisSchema,
+  MdxSetTupleSchema,
+} from "../../schemas/cells.js";
 
 // tm1_get_view returns the same page-envelope shape as tm1_execute_mdx
 // (axes + paginated cell `items`), plus the cube/view it executed. Cells
@@ -11,6 +16,7 @@ import { MdxAxisSchema } from "../../schemas/cells.js";
 export const ViewResultSchema = z.object({
   cubeName: z.string(),
   viewName: z.string(),
+  private: z.boolean().optional(),
   axes: z.array(MdxAxisSchema),
   total: z.number().int().nullable(),
   count: z.number().int(),
@@ -19,9 +25,7 @@ export const ViewResultSchema = z.object({
   next_offset: z.number().int().nullable(),
   // Set only when axes were clipped to the returned cell page (see MdxResultSchema).
   axes_clipped: z.boolean().optional(),
-  items: z.array(
-    z.object({ value: CellValueSchema, formattedValue: z.string() }),
-  ),
+  items: z.array(CellItemSchema),
 });
 
 export const SampleCellsResultSchema = z.object({
@@ -72,7 +76,7 @@ export const MdxResultSchema = z.object({
   next_offset: z.number().int().nullable(),
   // True only when `axes` were clipped to this page's cells; `total` stays full.
   axes_clipped: z.boolean().optional(),
-  items: z.array(
-    z.object({ value: CellValueSchema, formattedValue: z.string() }),
-  ),
+  items: z.array(CellItemSchema),
 });
+
+export const MdxSetResultSchema = z.object(pageShapeFor(MdxSetTupleSchema));

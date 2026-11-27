@@ -7,10 +7,13 @@
 import { TM1Error, TM1ErrorCode } from "../../types.js";
 import type {
   CalculationTraceNode,
+  CellMetadataProperty,
   CellValue,
   FedCellDescriptor,
   FeederTraceResult,
   MdxResult,
+  MdxSetMember,
+  MdxSetTuple,
 } from "../../types.js";
 import type { RequestOptions, TM1HttpClient } from "../http.js";
 import { escapeMdxName } from "../../lib/mdx.js";
@@ -18,7 +21,12 @@ import { dimensionCountMismatch } from "../../lib/coordinate-error.js";
 import { bindLeftOutSandbox } from "../../lib/cell-address.js";
 import { withSandboxParam } from "../../lib/sandbox-policy.js";
 import { mapSettledWithConcurrency } from "../../lib/concurrency.js";
-import { freeCellset, transformCellsetResponse } from "./cellset-transform.js";
+import {
+  buildCellsExpand,
+  freeCellset,
+  transformCellsetResponse,
+  type RawCellsetResponse,
+} from "./cellset-transform.js";
 import { odataKey } from "./odata-page.js";
 import { DimensionOrderCache } from "./dimension-order.js";
 
@@ -160,15 +168,9 @@ export class CellService {
     skip?: number,
     opts?: RequestOptions,
     sandbox?: string,
+    cellProperties?: readonly CellMetadataProperty[],
   ): Promise<MdxResult> {
-    let cellsExpand = "Cells($select=Value,FormattedValue";
-    if (top !== undefined) {
-      cellsExpand += `;$top=${top}`;
-    }
-    if (skip !== undefined) {
-      cellsExpand += `;$skip=${skip}`;
-    }
-    cellsExpand += ")";
+    const cellsExpand = buildCellsExpand(top, skip, cellProperties);
 
     const axesExpand =
       "Axes($expand=Tuples($expand=Members($select=Name;$expand=Hierarchy($select=Name))))";
@@ -177,18 +179,9 @@ export class CellService {
       sandbox,
     );
 
-    const response = await this.http.request<{
-      ID: string;
-      Cells: Array<{ Value: CellValue; FormattedValue: string }>;
-      Axes: Array<{
-        Tuples: Array<{
-          Members: Array<{
-            Name: string;
-            Hierarchy: { Name: string };
-          }>;
-        }>;
-      }>;
-    }>("POST", path, { MDX: mdx }, { ...opts, cancellable: true });
+    const response = await this.http.request<
+      RawCellsetResponse & { ID: string }
+    >("POST", path, { MDX: mdx }, { ...opts, cancellable: true });
 
     try {
       return transformCellsetResponse(response);
@@ -198,6 +191,77 @@ export class CellService {
       // memory indefinitely. Free it best-effort (mirrors TM1py's delete_cellset).
       await freeCellset(this.http, response.ID, sandbox);
     }
+  }
+
+  /**
+   * Evaluate a standalone MDX set expression (without a cube/cellset) and
+   * return cardinality + paginated tuples.
+   * POST /api/v1/ExecuteMDXSetExpression
+   */
+  async executeMdxSet(
+    mdx: string,
+    opts: {
+      top?: number;
+      skip?: number;
+      includeElementInfo?: boolean;
+      includeAttributes?: boolean;
+      request?: RequestOptions;
+    } = {},
+  ): Promise<{ cardinality: number; tuples: MdxSetTuple[] }> {
+    const memberSelect = [
+      "Name",
+      "UniqueName",
+      ...(opts.includeAttributes ? ["Attributes"] : []),
+    ].join(",");
+    const memberExpand =
+      opts.includeElementInfo !== false
+        ? ";$expand=Element($select=Type,Level)"
+        : "";
+    const tupleOpts: string[] = [];
+    if (opts.top !== undefined) tupleOpts.push(`$top=${opts.top}`);
+    if (opts.skip !== undefined && opts.skip > 0) {
+      tupleOpts.push(`$skip=${opts.skip}`);
+    }
+    tupleOpts.push(`$expand=Members($select=${memberSelect}${memberExpand})`);
+
+    const path = `/api/v1/ExecuteMDXSetExpression?$select=Cardinality&$expand=Tuples(${tupleOpts.join(";")})`;
+    const response = await this.http.request<{
+      Cardinality?: number;
+      Tuples?: Array<{
+        Ordinal?: number;
+        Members?: Array<{
+          Name: string;
+          UniqueName?: string;
+          Attributes?: Record<string, unknown>;
+          Element?: { Type?: string; Level?: number };
+        }>;
+      }>;
+    }>("POST", path, { MDX: mdx }, { ...opts.request, cancellable: true });
+
+    const rawTuples = response.Tuples ?? [];
+    const baseOffset = opts.skip ?? 0;
+    const tuples: MdxSetTuple[] = rawTuples.map((t, i) => ({
+      ordinal: t.Ordinal ?? baseOffset + i,
+      members: (t.Members ?? []).map((m): MdxSetMember => {
+        const member: MdxSetMember = { name: m.Name };
+        if (m.UniqueName !== undefined) member.uniqueName = m.UniqueName;
+        if (m.Element?.Type !== undefined) member.type = m.Element.Type;
+        if (m.Element?.Level !== undefined) member.level = m.Element.Level;
+        if (
+          opts.includeAttributes &&
+          m.Attributes !== undefined &&
+          Object.keys(m.Attributes).length > 0
+        ) {
+          member.attributes = m.Attributes;
+        }
+        return member;
+      }),
+    }));
+
+    return {
+      cardinality: response.Cardinality ?? rawTuples.length,
+      tuples,
+    };
   }
 
   /**
