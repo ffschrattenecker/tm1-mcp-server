@@ -1,17 +1,12 @@
 # tm1-mcp-server
 
 > [!IMPORTANT]
-> **This is a personal testing fork, not the project.** The author of
-> tm1-mcp-server is **flameY3T1**. The project to use, cite, link to and report
-> issues against is **[flameY3T1/tm1-mcp-server](https://github.com/flameY3T1/tm1-mcp-server)**,
-> published on npm as [`tm1-mcp-server`](https://www.npmjs.com/package/tm1-mcp-server).
+> **This is a fork of [flameY3T1/tm1-mcp-server](https://github.com/flameY3T1/tm1-mcp-server)**,
+> created by **flameY3T1** and published on npm as
+> [`tm1-mcp-server`](https://www.npmjs.com/package/tm1-mcp-server).
 >
-> I (ffschrattenecker) use this fork only to try out changes for myself. It
-> comes with no support and no stability promise, and it may change, break
-> or disappear at any time. The scoped package
-> `@ffschrattenecker/tm1-mcp-server` exists only so my own machines can
-> `npx` it. Its version numbers are counted separately and **do not** mean it
-> is newer than the original. Anything worth keeping is offered upstream.
+> Version numbers on the scoped package `@ffschrattenecker/tm1-mcp-server` are
+> counted separately and **do not** mean it is newer than the original.
 
 Model Context Protocol (MCP) server for IBM Planning Analytics / TM1.
 Exposes the full TM1 model lifecycle — metadata, dimensions, cubes, cell I/O,
