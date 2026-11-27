@@ -124,9 +124,9 @@ configuration error. It makes no TM1 call.
 (`TM1_BASE_URL`, `TM1_USER`, `TM1_MODE`, `TM1_VERSION`, the v12 and CAM keys, …)
 in the server's own environment are not inherited, so a `TM1_MODE=readwrite` in
 the launching shell cannot arm a folder that does not set it. Server-level keys
-(`TM1_LOG_*`, `TM1_MCP_*`, `TM1_TOOLSETS`, `TM1_RESPONSE_MODE`,
-`TM1_MAX_RESPONSE_CHARS`) are read from the process environment and cannot be
-overridden by a folder.
+(`TM1_LOG_*`, `TM1_MCP_*`, `TM1_TOOLSETS`, `TM1_TOOL_DISCOVERY`,
+`TM1_RESPONSE_MODE`, `TM1_MAX_RESPONSE_CHARS`) are read from the process
+environment and cannot be overridden by a folder.
 
 ### Filtering registered tools (`TM1_TOOLSETS`)
 
@@ -142,6 +142,28 @@ or aliases (`tm1_list_connections` is always included):
   `metadata`, `model-building`, `operations`, `rest`, `sandboxes`, `scheduling`,
   `ti-development` (aliases: `ti`, `dimensions`, `rules`, `chores`, `ops`,
   `files`).
+
+### On-demand tool search (`TM1_TOOL_DISCOVERY`)
+
+Default `full` exposes every enabled tool at top level (recommended for clients
+like Claude Code that perform native client-side deferred tool search).
+
+Set `TM1_TOOL_DISCOVERY=search` for clients that load every `tools/list` schema
+upfront:
+
+- **Pinned top-level tools**: `tm1_list_connections`, `tm1_rest_read`,
+  `tm1_execute_mdx`, plus any enabled `execution.taskSupport` tools
+  (`tm1_execute_process`, `tm1_execute_chore`) so MCP Tasks negotiation works
+  on top-level tools.
+- **Meta-tools**: `tm1_search_tools` (field-weighted BM25F ranking across
+  title, name, toolset, keywords, params, and description with TM1 jargon
+  expansion and a 70% relative score cutoff), `tm1_describe_tool` (full
+  `inputSchema` on demand), `tm1_call_read_tool` (`readOnlyHint: true`), and
+  `tm1_call_write_tool` (`destructiveHint: true`).
+- **Read/write approval split**: `tm1_call_write_tool` is omitted completely in
+  `readonly` mode (and when `TM1_TOOLSETS` has no write tools), and read vs.
+  write dispatch is enforced per call so clients can auto-approve reads while
+  prompting on writes.
 
 **Mode is enforced per call.** Write tools are listed when at least one
 connection is readwrite, and the sandbox tools when one is in sandbox mode.

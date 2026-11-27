@@ -27,8 +27,12 @@ import {
   Tm1TaskManager,
 } from "../tasks/tm1-task-manager.js";
 import { extraHttpHeaders, extraMeta, extraSignal } from "./context.js";
+import {
+  buildSearchSurfaceProjection,
+  type SearchSurfaceProjection,
+} from "./discovery/search-surface.js";
 import { registerAllTools } from "./index.js";
-import { toolsetsCacheKey } from "./toolsets.js";
+import { toolsetsCacheKey, type ToolsetName } from "./toolsets.js";
 import {
   prepareToolRegistration,
   type PreparedToolRegistration,
@@ -37,13 +41,17 @@ import {
 
 export interface CompiledTool {
   prepared: PreparedToolRegistration;
+  toolDef: Tool;
+  toolset: ToolsetName;
 }
 
 export interface CompiledToolSurface {
   revision: number;
   mode: "readwrite" | "sandbox" | "readonly";
+  discovery: "full" | "search";
   toolsListResult: { tools: Tool[] };
   toolsByName: ReadonlyMap<string, CompiledTool>;
+  searchProjection?: SearchSurfaceProjection;
 }
 
 const SURFACE_CACHE = new WeakMap<
@@ -71,6 +79,7 @@ function compileSurface(
   const mode = modeForRegistry(registry);
   const toolsByName = new Map<string, CompiledTool>();
   const listedTools: Tool[] = [];
+  let currentToolset: ToolsetName = "operations";
 
   const collector = {
     registerTool(
@@ -91,7 +100,6 @@ function compileSurface(
         },
       );
       if (!prepared) return undefined;
-      toolsByName.set(name, { prepared });
       const inputJson = prepared.slimInputSchema["~standard"].jsonSchema.input({
         target: "draft-2020-12",
       }) as Tool["inputSchema"];
@@ -108,16 +116,38 @@ function compileSurface(
           ? { outputSchema: prepared.outputSchemaJson }
           : {}),
       };
+      toolsByName.set(name, { prepared, toolDef, toolset: currentToolset });
       listedTools.push(toolDef);
       return undefined;
     },
   } as unknown as McpServer;
 
-  registerAllTools(collector, registry, settings.toolsets);
+  registerAllTools(collector, registry, settings.toolsets, (toolset) => {
+    currentToolset = toolset;
+  });
+
+  if (settings.toolDiscovery === "search") {
+    const searchProjection = buildSearchSurfaceProjection({
+      mode,
+      toolsByName,
+      responseMode: settings.responseMode,
+      maxResponseChars: settings.maxResponseChars,
+      logger,
+    });
+    return {
+      revision: registry.revision,
+      mode,
+      discovery: "search",
+      toolsListResult: { tools: searchProjection.exposedTools },
+      toolsByName,
+      searchProjection,
+    };
+  }
 
   return {
     revision: registry.revision,
     mode,
+    discovery: "full",
     toolsListResult: { tools: listedTools },
     toolsByName,
   };
@@ -138,7 +168,7 @@ export function getCompiledToolSurface(
     bySettings = new Map();
     SURFACE_CACHE.set(registry, bySettings);
   }
-  const key = `${modeForRegistry(registry)}|${toolsetsCacheKey(settings.toolsets)}|${settings.responseMode}|${settings.maxResponseChars}`;
+  const key = `${modeForRegistry(registry)}|${toolsetsCacheKey(settings.toolsets)}|${settings.toolDiscovery}|${settings.responseMode}|${settings.maxResponseChars}`;
   const cached = bySettings.get(key);
   if (cached && cached.revision === registry.revision) {
     return cached;
@@ -175,6 +205,42 @@ export function attachCompiledSurface(
     "tools/call",
     async (request, ctx: ServerContext) => {
       const toolName = request.params.name;
+      if (surface.searchProjection) {
+        const metaTool = surface.searchProjection.metaTools.get(toolName);
+        if (metaTool) {
+          const validation = await metaTool.strictInput["~standard"].validate(
+            request.params.arguments ?? {},
+          );
+          if ("issues" in validation && validation.issues) {
+            const msg = validation.issues.map((i) => i.message).join("; ");
+            throw new ProtocolError(
+              ProtocolErrorCode.InvalidParams,
+              `Input validation error: Invalid arguments for tool ${toolName}: ${msg}`,
+            );
+          }
+          const args = validation.value as Record<string, unknown>;
+          const meta = extraMeta(ctx);
+          const trace = extractTraceContext(meta, extraHttpHeaders(ctx));
+          return metaTool.invoke(args, ctx, lowLevel, trace);
+        }
+        if (!surface.searchProjection.pinnedNames.has(toolName)) {
+          const hidden = surface.toolsByName.get(toolName);
+          if (hidden) {
+            const via = hidden.prepared.annotations.readOnlyHint
+              ? "tm1_call_read_tool"
+              : "tm1_call_write_tool";
+            throw new ProtocolError(
+              ProtocolErrorCode.InvalidParams,
+              `Tool ${toolName} is not directly exposed in search discovery mode; invoke it via ${via}`,
+            );
+          }
+          throw new ProtocolError(
+            ProtocolErrorCode.InvalidParams,
+            `Tool ${toolName} not found`,
+          );
+        }
+      }
+
       const entry = surface.toolsByName.get(toolName);
       if (!entry) {
         throw new ProtocolError(

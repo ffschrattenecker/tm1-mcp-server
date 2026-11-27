@@ -281,6 +281,7 @@ export interface PreparedToolRegistration {
   description: string;
   annotations: ToolAnnotations;
   taskSupport?: "optional" | "required";
+  keywords?: readonly string[];
   strictInput: ZodTypeAny;
   slimInputSchema: StandardSchemaWithJSON<unknown, unknown>;
   outputSchema?: ZodRawShape | ZodTypeAny;
@@ -376,6 +377,7 @@ export function prepareToolRegistration(
     ...(spec.taskSupport !== undefined
       ? { taskSupport: spec.taskSupport }
       : {}),
+    ...(spec.keywords !== undefined ? { keywords: spec.keywords } : {}),
     strictInput,
     slimInputSchema,
     ...(outputSchema !== undefined ? { outputSchema } : {}),

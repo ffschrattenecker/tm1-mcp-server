@@ -232,15 +232,18 @@ export function registerAllTools(
   server: McpServer,
   source: ClientSource,
   toolsets?: ReadonlySet<ToolsetName>,
+  onToolset?: (toolset: ToolsetName) => void,
 ): void {
   for (const group of TOOLSET_GROUPS) {
     if (toolsets && !toolsets.has(group.toolset)) {
       // Keep connection discovery available even when "operations" is omitted.
       if (group.toolset === "operations") {
+        onToolset?.("operations");
         registerListConnections(server, source);
       }
       continue;
     }
+    onToolset?.(group.toolset);
     for (const register of group.registrars) register(server, source);
   }
 }

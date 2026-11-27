@@ -99,6 +99,10 @@ interface ToolSpecBase<I extends ZodRawShape> {
    */
   taskSupport?: "optional" | "required";
   /**
+   * Optional domain keywords / jargon terms indexed for `TM1_TOOL_DISCOVERY=search`.
+   */
+  keywords?: readonly string[];
+  /**
    * Runtime gate, asked on every call against the connection it targets: the
    * reason the tool cannot be used there now, or undefined. It may read what
    * TM1 reports after login (`tm1Client.sandboxingDisabled`), which is unknown
@@ -179,6 +183,8 @@ export interface ResolvedSpec {
   sandboxScoped: boolean;
   /** See ToolSpecBase.taskSupport. */
   taskSupport?: "optional" | "required";
+  /** See ToolSpecBase.keywords. */
+  keywords?: readonly string[];
 }
 
 // Populated at module-load time, when a tool file's top-level defineTool()
@@ -240,6 +246,7 @@ export function defineTool<I extends ZodRawShape>(
     ...(spec.taskSupport !== undefined
       ? { taskSupport: spec.taskSupport }
       : {}),
+    ...(spec.keywords !== undefined ? { keywords: spec.keywords } : {}),
     // Built conditionally: exactOptionalPropertyTypes rejects an explicit
     // `outputSchema: undefined` for an optional property.
     ...(outputSchema === undefined ? {} : { outputSchema }),

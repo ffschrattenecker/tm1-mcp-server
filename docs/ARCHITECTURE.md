@@ -98,7 +98,13 @@ responseMode, maxResponseChars)`.
 | **Streamable HTTP** | `TM1_MCP_TRANSPORT=http`           | stateless JSON `POST /mcp`, bearer token, host/origin allowlists |
 
 Tool registration is gated by `config.mode` (env `TM1_MODE`) and narrowed when
-`TM1_TOOLSETS` is set (`src/tools/toolsets.ts`). With several connections, write
+`TM1_TOOLSETS` is set (`src/tools/toolsets.ts`). When
+`TM1_TOOL_DISCOVERY=search` is enabled, `src/tools/discovery/` layers a
+field-weighted BM25F search index and split read/write dispatch projection
+(`tm1_search_tools`, `tm1_describe_tool`, `tm1_call_read_tool`,
+`tm1_call_write_tool`) directly on top of `CompiledToolSurface`, reusing the
+same Zod validation, mode gates, trace propagation, and `projectCallToolResult`
+pipeline. With several connections, write
 tools are registered when any connection is readwrite and refused per call
 against a readonly or sandbox one (see Connections below):
 

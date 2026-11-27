@@ -29,4 +29,24 @@ describe("serverInstructions", () => {
     );
     expect(multi.length).toBeLessThan(500);
   });
+
+  it("includes search discovery guidance only when search mode is active and stays under 500 chars", () => {
+    const multiReg = ConnectionRegistry.of([
+      { name: "a", client },
+      { name: "b", client },
+    ]);
+    const ro = serverInstructions(multiReg, {
+      toolDiscovery: "search",
+      hasWriteTools: false,
+    });
+    const rw = serverInstructions(multiReg, {
+      toolDiscovery: "search",
+      hasWriteTools: true,
+    });
+    expect(ro).toContain("tm1_search_tools");
+    expect(ro).toContain("tm1_call_read_tool");
+    expect(ro).not.toContain("tm1_call_write_tool");
+    expect(rw).toContain("tm1_call_write_tool");
+    expect(rw.length).toBeLessThan(500);
+  });
 });

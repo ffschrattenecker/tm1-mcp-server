@@ -20,20 +20,23 @@ export function buildMcpServer(
   logger: pino.Logger,
   taskManager: Tm1TaskManager = new Tm1TaskManager(registry, settings, logger),
 ): McpServer {
+  const surface = getCompiledToolSurface(registry, settings, logger);
   const server = new McpServer(
     {
       name: NAME,
       version: VERSION,
     },
     {
-      instructions: serverInstructions(registry),
+      instructions: serverInstructions(registry, {
+        toolDiscovery: settings.toolDiscovery,
+        hasWriteTools: surface.searchProjection?.hasWriteTools ?? false,
+      }),
     },
   );
 
-  const surface = getCompiledToolSurface(registry, settings, logger);
   attachCompiledSurface(server, surface, taskManager);
   logger.debug(
-    `All MCP tools attached (mode: ${surface.mode}, tools: ${surface.toolsListResult.tools.length})`,
+    `All MCP tools attached (mode: ${surface.mode}, discovery: ${surface.discovery}, tools: ${surface.toolsListResult.tools.length})`,
   );
 
   return server;

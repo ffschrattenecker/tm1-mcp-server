@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [11.3.0] - 2026-11-27
+
+### Added
+
+- **Opt-in search-mode tool discovery (`TM1_TOOL_DISCOVERY=search`)**: exposes a small pinned top-level set (`tm1_list_connections`, `tm1_rest_read`, `tm1_execute_mdx`, plus `execution.taskSupport` tools `tm1_execute_process` and `tm1_execute_chore` when enabled) alongside `tm1_search_tools`, `tm1_describe_tool`, `tm1_call_read_tool`, and `tm1_call_write_tool`, cutting initial `tools/list` payload size by >10x while keeping all 72 tools reachable on demand.
+- **Zero-dependency field-weighted BM25F ranking (`src/tools/discovery/search-index.ts`)**: ranks `title > name > toolset > keywords > params > description` with TM1 jargon expansion (`TI` / `TurboIntegrator`, `SaveDataAll`, `ZeroOut`, `overfeeding`, `lock contention`, `PAE` / `v12`, etc.) and a 70% relative score cutoff.
+- **Split read vs. write dispatch (`tm1_call_read_tool` / `tm1_call_write_tool`)**: preserves MCP `readOnlyHint` / `destructiveHint` approval UX for clients and omits `tm1_call_write_tool` completely in `readonly` mode or read-only toolset slices.
+
 ## [11.2.0] - 2026-11-27
 
 ### Added
@@ -565,7 +573,8 @@ response-size guard, the per-connection caches) are unchanged.
 Older history (before 8.0.0): see the git tags and the upstream repository,
 https://github.com/flameY3T1/tm1-mcp-server.
 
-[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.2.0...HEAD
+[Unreleased]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.3.0...HEAD
+[11.3.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.2.0...v11.3.0
 [11.2.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.1.0...v11.2.0
 [11.1.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v11.0.0...v11.1.0
 [11.0.0]: https://github.com/ffschrattenecker/tm1-mcp-server/compare/v10.6.0...v11.0.0

@@ -3,7 +3,10 @@ import type { ConnectionRegistry } from "./connections.js";
 // Sent once per session (MCP `instructions`), so every sentence here is paid
 // for by every conversation — keep it to what a model cannot infer from the
 // tool list itself.
-export function serverInstructions(registry: ConnectionRegistry): string {
+export function serverInstructions(
+  registry: ConnectionRegistry,
+  opts?: { toolDiscovery?: "full" | "search"; hasWriteTools?: boolean },
+): string {
   const lines = ["TM1 / IBM Planning Analytics server."];
   if (!registry.isSingle) {
     lines.push(
@@ -13,5 +16,12 @@ export function serverInstructions(registry: ConnectionRegistry): string {
   lines.push(
     "Keep tm1_rest_read results small with $select, $filter, $top and $count. Collections include '}' control objects (filter not startswith(Name,'}')); name matches are case-sensitive, use tolower().",
   );
+  if (opts?.toolDiscovery === "search") {
+    lines.push(
+      opts.hasWriteTools
+        ? "Use tm1_search_tools, tm1_describe_tool, tm1_call_read_tool / tm1_call_write_tool."
+        : "Use tm1_search_tools, tm1_describe_tool, tm1_call_read_tool.",
+    );
+  }
   return lines.join(" ");
 }

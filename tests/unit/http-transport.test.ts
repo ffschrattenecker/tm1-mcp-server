@@ -38,6 +38,7 @@ function makeConfig(port: number, token?: string): TM1Config {
     sandboxPrefix: "mcp-",
     responseMode: "legacy",
     maxResponseChars: 80_000,
+    toolDiscovery: "full",
     version: 11,
   };
 }

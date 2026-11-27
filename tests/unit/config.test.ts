@@ -348,5 +348,15 @@ describe("loadConfig", () => {
         parseToolsets("core,ti"),
       );
     });
+
+    it("parses TM1_TOOL_DISCOVERY, defaults to full, and rejects invalid values", () => {
+      expect(loadServerSettings({}).toolDiscovery).toBe("full");
+      expect(
+        loadServerSettings({ TM1_TOOL_DISCOVERY: "Search" }).toolDiscovery,
+      ).toBe("search");
+      expect(() => loadServerSettings({ TM1_TOOL_DISCOVERY: "lazy" })).toThrow(
+        /Invalid TM1_TOOL_DISCOVERY/,
+      );
+    });
   });
 });

@@ -17,7 +17,7 @@ export type ToolsetName = (typeof TOOLSET_NAMES)[number];
 
 const TOOLSET_SET: ReadonlySet<string> = new Set(TOOLSET_NAMES);
 
-const TOOLSET_ALIASES: Readonly<Record<string, ToolsetName>> = {
+export const TOOLSET_ALIASES: Readonly<Record<string, ToolsetName>> = {
   ti: "ti-development",
   dimensions: "dimension-management",
   rules: "model-building",
@@ -25,6 +25,15 @@ const TOOLSET_ALIASES: Readonly<Record<string, ToolsetName>> = {
   ops: "operations",
   files: "fileops",
 };
+
+/** Return every short alias that resolves to `toolset`. */
+export function aliasesForToolset(toolset: ToolsetName): readonly string[] {
+  const aliases: string[] = [];
+  for (const [alias, target] of Object.entries(TOOLSET_ALIASES)) {
+    if (target === toolset) aliases.push(alias);
+  }
+  return aliases;
+}
 
 export const TOOLSET_PRESETS: Readonly<Record<string, readonly ToolsetName[]>> =
   {

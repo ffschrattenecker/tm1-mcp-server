@@ -29,6 +29,7 @@ function makeV12Config(): TM1Config {
     sandboxPrefix: "mcp-",
     responseMode: "structured",
     maxResponseChars: 80_000,
+    toolDiscovery: "full",
     version: 12,
     instance: "tm1",
     database: "db1",

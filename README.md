@@ -57,7 +57,9 @@ Everything below describes this fork's state. For the real project, read the
 > **Token tip:** every registered tool's name + input schema costs context on
 > *each* turn, so exposing every tool is wasteful when a session needs a slice.
 > Set `TM1_TOOLSETS` (e.g. `core`, `dev`, `audit`, or comma-separated categories)
-> to trim `tools/list`; `TM1_MODE=readonly` already omits write tools.
+> to trim `tools/list`, or set `TM1_TOOL_DISCOVERY=search` for on-demand BM25F
+> tool search (`tm1_search_tools` / `tm1_describe_tool` / split read/write
+> dispatch); `TM1_MODE=readonly` already omits write tools.
 
 ## Install
 

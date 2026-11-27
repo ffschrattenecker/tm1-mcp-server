@@ -81,6 +81,11 @@ export interface TM1Config {
   // Optional subset of tool categories/presets enabled for tools/list
   // (TM1_TOOLSETS). Undefined = register all toolsets.
   toolsets?: ReadonlySet<ToolsetName> | undefined;
+  // Tool discovery mode (TM1_TOOL_DISCOVERY):
+  //   "full"   (default) — register every enabled tool at top level.
+  //   "search"           — expose a small pinned set plus search/describe/call
+  //                        meta-tools to cut initial tools/list context cost.
+  toolDiscovery: "full" | "search";
   // v12 (Planning Analytics Engine). version===12 selects the v12 connection
   // profile (URL reroot + POST /{instance}/auth/v1/session login). Selected
   // when instance+database are set, or TM1_VERSION major is 12.
@@ -103,6 +108,7 @@ const VALID_TRANSPORTS = ["stdio", "http"] as const;
 const VALID_MODES = ["readwrite", "sandbox", "readonly"] as const;
 const VALID_ENVIRONMENTS = ["dev", "test", "prod"] as const;
 const VALID_RESPONSE_MODES = ["legacy", "structured"] as const;
+const VALID_TOOL_DISCOVERY = ["full", "search"] as const;
 const VALID_AUTH_MODES = [
   "s2s",
   "basic",
@@ -146,6 +152,7 @@ export type ServerSettings = Pick<
   | "responseMode"
   | "maxResponseChars"
   | "toolsets"
+  | "toolDiscovery"
 >;
 
 export function loadServerSettings(
@@ -273,6 +280,20 @@ export function loadServerSettings(
 
   const toolsets = parseToolsets(env.TM1_TOOLSETS);
 
+  const toolDiscoveryRaw = (env.TM1_TOOL_DISCOVERY ?? "full")
+    .trim()
+    .toLowerCase();
+  if (
+    !VALID_TOOL_DISCOVERY.includes(
+      toolDiscoveryRaw as (typeof VALID_TOOL_DISCOVERY)[number],
+    )
+  ) {
+    throw new Error(
+      `Invalid TM1_TOOL_DISCOVERY: "${env.TM1_TOOL_DISCOVERY}". Expected "full" or "search".`,
+    );
+  }
+  const toolDiscovery = toolDiscoveryRaw as TM1Config["toolDiscovery"];
+
   return {
     logLevel,
     logFile,
@@ -285,6 +306,7 @@ export function loadServerSettings(
     responseMode,
     maxResponseChars,
     ...(toolsets !== undefined ? { toolsets } : {}),
+    toolDiscovery,
   };
 }
 
